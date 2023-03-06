@@ -19,7 +19,20 @@ Browser::App::App() {
 	this->cef_app.get_resource_bundle_handler = Browser::ResourceBundleHandler;
 	this->cef_app.get_browser_process_handler = Browser::BrowserProcessHandler;
 	this->cef_app.get_render_process_handler = Browser::RenderProcessHandler;
-	this->refcount = 0;
+	this->refcount = 1;
+}
+
+void Browser::App::AddRef() {
+	this->refcount += 1;
+}
+
+int Browser::App::Release() {
+	this->refcount -= 1;
+	if (this->refcount == 0) {
+		this->Destroy();
+		return 1;
+	}
+	return 0;
 }
 
 void Browser::App::Destroy() {
@@ -27,24 +40,16 @@ void Browser::App::Destroy() {
 }
 
 cef_app_t* Browser::App::app() {
-	this->refcount += 1;
+	this->AddRef();
 	return &this->cef_app;
 }
 
 void Browser::AddRef(cef_base_ref_counted_t* app) {
-	resolve_base(app)->refcount += 1;
+	resolve_base(app)->AddRef();
 }
 
 int Browser::Release(cef_base_ref_counted_t* app) {
-	Browser::App* _app = resolve_base(app);
-	_app->refcount -= 1;
-
-	if (_app->refcount == 0) {
-		_app->Destroy();
-		return 1;
-	}
-
-	return 0;
+	return resolve_base(app)->Release();
 }
 
 int Browser::HasOneRef(cef_base_ref_counted_t* app) {

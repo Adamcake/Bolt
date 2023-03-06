@@ -32,10 +32,14 @@ int main(int argc, char* argv[]) {
 	main_args.argc = argc;
 	main_args.argv = argv;
 
+	// Set up our app struct
+	Browser::App cef_app;
+
 	// CEF applications have multiple sub-processes (render, GPU, etc) that share the same executable.
 	// This function checks the command-line and, if this is a sub-process, executes the appropriate logic.
-	int exit_code = cef_execute_process(&main_args, nullptr, nullptr);
+	int exit_code = cef_execute_process(&main_args, cef_app.app(), nullptr);
 	if (exit_code >= 0) {
+		cef_app.Release();
 		return exit_code;
 	}
 
@@ -59,19 +63,22 @@ int main(int argc, char* argv[]) {
 	settings.command_line_args_disabled = true;
 	settings.uncaught_exception_stack_size = 16;
 
-	Browser::App cef_app;
-
-	// Initialize CEF
+	// Initialize CEF, then release our ownership of the app
 	exit_code = cef_initialize(&main_args, &settings, cef_app.app(), nullptr);
 	if (exit_code == 0) {
-		fmt::print("Exiting: cef_initialize exit_code {}\n", exit_code);
+		fmt::print("Exiting with error: cef_initialize exit_code {}\n", exit_code);
+		cef_app.Release();
 		return exit_code;
 	}
 
 	// Run the CEF message loop
-	cef_run_message_loop();
+	//cef_run_message_loop();
+	for(unsigned int i = 0; i < 500000; i += 1) {
+		cef_do_message_loop_work();
+	}
 
 	// Shut down CEF
+	cef_app.Release();
 	cef_shutdown();
 
 	return 0;
