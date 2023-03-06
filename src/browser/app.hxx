@@ -3,7 +3,7 @@
 
 #include "include/capi/cef_app_capi.h"
 
-namespace Cef {
+namespace Browser {
 	struct App {
 		cef_app_t cef_app;
 		unsigned int refcount;

@@ -1,6 +1,6 @@
 #include <fmt/core.h>
 
-#include "cef/app.hxx"
+#include "browser/app.hxx"
 
 #ifdef WIN32
 #include <windows.h>
@@ -59,7 +59,7 @@ int main(int argc, char* argv[]) {
 	settings.command_line_args_disabled = true;
 	settings.uncaught_exception_stack_size = 16;
 
-	Cef::App cef_app;
+	Browser::App cef_app;
 
 	// Initialize CEF
 	exit_code = cef_initialize(&main_args, &settings, cef_app.app(), nullptr);
