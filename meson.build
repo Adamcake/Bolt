@@ -3,7 +3,7 @@ libcef = custom_target('libcef', output: 'libcef.so', command: ['./cef/install.s
 meson.add_install_script('cef/install.sh')
 executable(
     'bolt',
-    'src/main.cxx',
+    'src/main.cxx', 'src/cef/app.cxx',
     dependencies: [dependency('fmt'), dependency('tesseract'), dependency('x11')],
     include_directories: 'cef/dist',
     install: true,

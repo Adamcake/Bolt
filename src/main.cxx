@@ -1,6 +1,6 @@
 #include <fmt/core.h>
 
-#include "include/capi/cef_app_capi.h"
+#include "cef/app.hxx"
 
 #ifdef WIN32
 #include <windows.h>
@@ -36,7 +36,6 @@ int main(int argc, char* argv[]) {
 	// This function checks the command-line and, if this is a sub-process, executes the appropriate logic.
 	int exit_code = cef_execute_process(&main_args, nullptr, nullptr);
 	if (exit_code >= 0) {
-		fmt::print("Exiting: cef_execute_process exit_code {}\n", exit_code);
 		return exit_code;
 	}
 
@@ -56,9 +55,14 @@ int main(int argc, char* argv[]) {
 
 	cef_settings_t settings = {0};
 	settings.size = sizeof settings;
+	//settings.external_message_pump = true;
+	settings.command_line_args_disabled = true;
+	settings.uncaught_exception_stack_size = 16;
 
-	// Initialize CEF for the browser process
-	exit_code = cef_initialize(&main_args, &settings, nullptr, nullptr);
+	Cef::App cef_app;
+
+	// Initialize CEF
+	exit_code = cef_initialize(&main_args, &settings, cef_app.app(), nullptr);
 	if (exit_code == 0) {
 		fmt::print("Exiting: cef_initialize exit_code {}\n", exit_code);
 		return exit_code;
