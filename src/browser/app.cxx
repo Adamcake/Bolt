@@ -27,8 +27,9 @@ void Browser::App::AddRef() {
 }
 
 int Browser::App::Release() {
-	this->refcount -= 1;
-	if (this->refcount == 0) {
+	// Since this->refcount is atomic, the operation of decrementing it and checking if the result
+	// is 0 must only access the value once. Accessing it twice would cause a race condition.
+	if (--this->refcount == 0) {
 		this->Destroy();
 		return 1;
 	}
