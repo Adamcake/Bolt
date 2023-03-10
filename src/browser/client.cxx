@@ -2,10 +2,6 @@
 
 #include <fmt/core.h>
 
-void add_ref(cef_base_ref_counted_t*);
-int release(cef_base_ref_counted_t*);
-int has_one_ref(cef_base_ref_counted_t*);
-int has_any_refs(cef_base_ref_counted_t*);
 void CEF_CALLBACK add_ref(cef_base_ref_counted_t*);
 int CEF_CALLBACK release(cef_base_ref_counted_t*);
 int CEF_CALLBACK has_one_ref(cef_base_ref_counted_t*);
