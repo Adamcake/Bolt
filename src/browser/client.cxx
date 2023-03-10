@@ -2,10 +2,10 @@
 
 #include <fmt/core.h>
 
-void CEF_CALLBACK add_ref(cef_base_ref_counted_t*);
-int CEF_CALLBACK release(cef_base_ref_counted_t*);
-int CEF_CALLBACK has_one_ref(cef_base_ref_counted_t*);
-int CEF_CALLBACK has_any_refs(cef_base_ref_counted_t*);
+void CEF_CALLBACK add_ref_client(cef_base_ref_counted_t*);
+int CEF_CALLBACK release_client(cef_base_ref_counted_t*);
+int CEF_CALLBACK has_one_ref_client(cef_base_ref_counted_t*);
+int CEF_CALLBACK has_any_refs_client(cef_base_ref_counted_t*);
 cef_audio_handler_t* CEF_CALLBACK get_audio_handler(cef_client_t*);
 cef_command_handler_t* CEF_CALLBACK get_command_handler(cef_client_t*);
 cef_context_menu_handler_t* CEF_CALLBACK get_context_menu_handler(cef_client_t*);
@@ -39,10 +39,10 @@ Browser::Client::Client(LifeSpanHandler* life_span_handler) {
     life_span_handler->add_ref();
     this->life_span_handler = life_span_handler;
 	this->cef_client.base.size = sizeof(cef_base_ref_counted_t);
-	this->cef_client.base.add_ref = ::add_ref;
-    this->cef_client.base.release = ::release;
-    this->cef_client.base.has_one_ref = ::has_one_ref;
-    this->cef_client.base.has_at_least_one_ref = ::has_any_refs;
+	this->cef_client.base.add_ref = ::add_ref_client;
+    this->cef_client.base.release = ::release_client;
+    this->cef_client.base.has_one_ref = ::has_one_ref_client;
+    this->cef_client.base.has_at_least_one_ref = ::has_any_refs_client;
     this->cef_client.get_audio_handler = ::get_audio_handler;
     this->cef_client.get_command_handler = ::get_command_handler;
     this->cef_client.get_context_menu_handler = ::get_context_menu_handler;
@@ -87,19 +87,19 @@ cef_client_t* Browser::Client::client() {
 	return &this->cef_client;
 }
 
-void CEF_CALLBACK add_ref(cef_base_ref_counted_t* client) {
+void CEF_CALLBACK add_ref_client(cef_base_ref_counted_t* client) {
 	resolve_client_base(client)->add_ref();
 }
 
-int CEF_CALLBACK release(cef_base_ref_counted_t* client) {
+int CEF_CALLBACK release_client(cef_base_ref_counted_t* client) {
 	return resolve_client_base(client)->release();
 }
 
-int CEF_CALLBACK has_one_ref(cef_base_ref_counted_t* client) {
+int CEF_CALLBACK has_one_ref_client(cef_base_ref_counted_t* client) {
 	return (resolve_client_base(client)->refcount == 1) ? 1 : 0;
 }
 
-int CEF_CALLBACK has_any_refs(cef_base_ref_counted_t* client) {
+int CEF_CALLBACK has_any_refs_client(cef_base_ref_counted_t* client) {
 	return (resolve_client_base(client)->refcount >= 1) ? 1 : 0;
 }
 

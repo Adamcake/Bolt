@@ -2,10 +2,10 @@
 
 #include <fmt/core.h>
 
-void CEF_CALLBACK add_ref(cef_base_ref_counted_t*);
-int CEF_CALLBACK release(cef_base_ref_counted_t*);
-int CEF_CALLBACK has_one_ref(cef_base_ref_counted_t*);
-int CEF_CALLBACK has_any_refs(cef_base_ref_counted_t*);
+void CEF_CALLBACK add_ref_lifespanhandler(cef_base_ref_counted_t*);
+int CEF_CALLBACK release_lifespanhandler(cef_base_ref_counted_t*);
+int CEF_CALLBACK has_one_ref_lifespanhandler(cef_base_ref_counted_t*);
+int CEF_CALLBACK has_any_refs_lifespanhandler(cef_base_ref_counted_t*);
 int CEF_CALLBACK on_before_popup(
     cef_life_span_handler_t*,
     cef_browser_t*,
@@ -35,10 +35,10 @@ Browser::LifeSpanHandler* resolve_lifespanhandler_base(cef_base_ref_counted_t* b
 
 Browser::LifeSpanHandler::LifeSpanHandler() {
     this->cef_handler.base.size = sizeof(cef_base_ref_counted_t);
-	this->cef_handler.base.add_ref = ::add_ref;
-    this->cef_handler.base.release = ::release;
-    this->cef_handler.base.has_one_ref = ::has_one_ref;
-    this->cef_handler.base.has_at_least_one_ref = ::has_any_refs;
+	this->cef_handler.base.add_ref = ::add_ref_lifespanhandler;
+    this->cef_handler.base.release = ::release_lifespanhandler;
+    this->cef_handler.base.has_one_ref = ::has_one_ref_lifespanhandler;
+    this->cef_handler.base.has_at_least_one_ref = ::has_any_refs_lifespanhandler;
     this->cef_handler.on_before_popup = ::on_before_popup;
     this->cef_handler.on_after_created = ::on_after_created;
     this->cef_handler.do_close = ::do_close;
@@ -69,19 +69,19 @@ cef_life_span_handler_t* Browser::LifeSpanHandler::handler() {
 	return &this->cef_handler;
 }
 
-void CEF_CALLBACK add_ref(cef_base_ref_counted_t* base) {
+void CEF_CALLBACK add_ref_lifespanhandler(cef_base_ref_counted_t* base) {
 	resolve_lifespanhandler_base(base)->add_ref();
 }
 
-int CEF_CALLBACK release(cef_base_ref_counted_t* base) {
+int CEF_CALLBACK release_lifespanhandler(cef_base_ref_counted_t* base) {
 	return resolve_lifespanhandler_base(base)->release();
 }
 
-int CEF_CALLBACK has_one_ref(cef_base_ref_counted_t* base) {
+int CEF_CALLBACK has_one_ref_lifespanhandler(cef_base_ref_counted_t* base) {
 	return (resolve_lifespanhandler_base(base)->refcount == 1) ? 1 : 0;
 }
 
-int CEF_CALLBACK has_any_refs(cef_base_ref_counted_t* base) {
+int CEF_CALLBACK has_any_refs_lifespanhandler(cef_base_ref_counted_t* base) {
 	return (resolve_lifespanhandler_base(base)->refcount >= 1) ? 1 : 0;
 }
 
