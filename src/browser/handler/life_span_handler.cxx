@@ -25,11 +25,11 @@ void CEF_CALLBACK on_after_created(cef_life_span_handler_t*, cef_browser_t*);
 int CEF_CALLBACK do_close(cef_life_span_handler_t*, cef_browser_t*);
 void CEF_CALLBACK on_before_close(cef_life_span_handler_t*, cef_browser_t*);
 
-Browser::LifeSpanHandler* resolve_handler(cef_client_t* handler) {
+Browser::LifeSpanHandler* resolve_lifespanhandler(cef_client_t* handler) {
 	return reinterpret_cast<Browser::LifeSpanHandler*>(reinterpret_cast<size_t>(handler) - offsetof(Browser::LifeSpanHandler, cef_handler));
 }
 
-Browser::LifeSpanHandler* resolve_base(cef_base_ref_counted_t* base) {
+Browser::LifeSpanHandler* resolve_lifespanhandler_base(cef_base_ref_counted_t* base) {
 	return reinterpret_cast<Browser::LifeSpanHandler*>(reinterpret_cast<size_t>(base) - (offsetof(Browser::LifeSpanHandler, cef_handler) + offsetof(cef_client_t, base)));
 }
 
@@ -70,19 +70,19 @@ cef_life_span_handler_t* Browser::LifeSpanHandler::handler() {
 }
 
 void CEF_CALLBACK add_ref(cef_base_ref_counted_t* base) {
-	resolve_base(base)->add_ref();
+	resolve_lifespanhandler_base(base)->add_ref();
 }
 
 int CEF_CALLBACK release(cef_base_ref_counted_t* base) {
-	return resolve_base(base)->release();
+	return resolve_lifespanhandler_base(base)->release();
 }
 
 int CEF_CALLBACK has_one_ref(cef_base_ref_counted_t* base) {
-	return (resolve_base(base)->refcount == 1) ? 1 : 0;
+	return (resolve_lifespanhandler_base(base)->refcount == 1) ? 1 : 0;
 }
 
 int CEF_CALLBACK has_any_refs(cef_base_ref_counted_t* base) {
-	return (resolve_base(base)->refcount >= 1) ? 1 : 0;
+	return (resolve_lifespanhandler_base(base)->refcount >= 1) ? 1 : 0;
 }
 
 int CEF_CALLBACK on_before_popup(

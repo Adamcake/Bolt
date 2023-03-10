@@ -31,7 +31,7 @@ Browser::Client* resolve_client(cef_client_t* client) {
 	return reinterpret_cast<Browser::Client*>(reinterpret_cast<size_t>(client) - offsetof(Browser::Client, cef_client));
 }
 
-Browser::Client* resolve_base(cef_base_ref_counted_t* base) {
+Browser::Client* resolve_client_base(cef_base_ref_counted_t* base) {
 	return reinterpret_cast<Browser::Client*>(reinterpret_cast<size_t>(base) - (offsetof(Browser::Client, cef_client) + offsetof(cef_client_t, base)));
 }
 
@@ -88,19 +88,19 @@ cef_client_t* Browser::Client::client() {
 }
 
 void CEF_CALLBACK add_ref(cef_base_ref_counted_t* client) {
-	resolve_base(client)->add_ref();
+	resolve_client_base(client)->add_ref();
 }
 
 int CEF_CALLBACK release(cef_base_ref_counted_t* client) {
-	return resolve_base(client)->release();
+	return resolve_client_base(client)->release();
 }
 
 int CEF_CALLBACK has_one_ref(cef_base_ref_counted_t* client) {
-	return (resolve_base(client)->refcount == 1) ? 1 : 0;
+	return (resolve_client_base(client)->refcount == 1) ? 1 : 0;
 }
 
 int CEF_CALLBACK has_any_refs(cef_base_ref_counted_t* client) {
-	return (resolve_base(client)->refcount >= 1) ? 1 : 0;
+	return (resolve_client_base(client)->refcount >= 1) ? 1 : 0;
 }
 
 cef_audio_handler_t* CEF_CALLBACK get_audio_handler(cef_client_t* self) {

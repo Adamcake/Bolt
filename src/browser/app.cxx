@@ -16,7 +16,7 @@ Browser::App* resolve_app(cef_app_t* app) {
 	return reinterpret_cast<Browser::App*>(reinterpret_cast<size_t>(app) - offsetof(Browser::App, cef_app));
 }
 
-Browser::App* resolve_base(cef_base_ref_counted_t* base) {
+Browser::App* resolve_app_base(cef_base_ref_counted_t* base) {
 	return reinterpret_cast<Browser::App*>(reinterpret_cast<size_t>(base) - (offsetof(Browser::App, cef_app) + offsetof(cef_app_t, base)));
 }
 
@@ -58,19 +58,19 @@ cef_app_t* Browser::App::app() {
 }
 
 void CEF_CALLBACK add_ref(cef_base_ref_counted_t* app) {
-	resolve_base(app)->add_ref();
+	resolve_app_base(app)->add_ref();
 }
 
 int CEF_CALLBACK release(cef_base_ref_counted_t* app) {
-	return resolve_base(app)->release();
+	return resolve_app_base(app)->release();
 }
 
 int CEF_CALLBACK has_one_ref(cef_base_ref_counted_t* app) {
-	return (resolve_base(app)->refcount == 1) ? 1 : 0;
+	return (resolve_app_base(app)->refcount == 1) ? 1 : 0;
 }
 
 int CEF_CALLBACK has_any_refs(cef_base_ref_counted_t* app) {
-	return (resolve_base(app)->refcount >= 1) ? 1 : 0;
+	return (resolve_app_base(app)->refcount >= 1) ? 1 : 0;
 }
 
 void CEF_CALLBACK on_before_command_line_processing(cef_app_t*, const cef_string_t*, cef_command_line_t*) {
