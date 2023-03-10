@@ -57,41 +57,41 @@ cef_app_t* Browser::App::app() {
 	return &this->cef_app;
 }
 
-void AddRef(cef_base_ref_counted_t* app) {
+void CEF_CALLBACK AddRef(cef_base_ref_counted_t* app) {
 	resolve_base(app)->add_ref();
 }
 
-int Release(cef_base_ref_counted_t* app) {
+int CEF_CALLBACK Release(cef_base_ref_counted_t* app) {
 	return resolve_base(app)->release();
 }
 
-int HasOneRef(cef_base_ref_counted_t* app) {
+int CEF_CALLBACK HasOneRef(cef_base_ref_counted_t* app) {
 	return (resolve_base(app)->refcount == 1) ? 1 : 0;
 }
 
-int HasAnyRefs(cef_base_ref_counted_t* app) {
+int CEF_CALLBACK HasAnyRefs(cef_base_ref_counted_t* app) {
 	return (resolve_base(app)->refcount >= 1) ? 1 : 0;
 }
 
-void OnBeforeCommandLineProcessing(cef_app_t*, const cef_string_t*, cef_command_line_t*) {
+void CEF_CALLBACK OnBeforeCommandLineProcessing(cef_app_t*, const cef_string_t*, cef_command_line_t*) {
 	fmt::print("OnBeforeCommandLineProcessing\n");
 }
 
-void OnRegisterCustomSchemes(cef_app_t*, cef_scheme_registrar_t*) {
+void CEF_CALLBACK OnRegisterCustomSchemes(cef_app_t*, cef_scheme_registrar_t*) {
 	fmt::print("OnRegisterCustomSchemes\n");
 }
 
-cef_resource_bundle_handler_t* ResourceBundleHandler(cef_app_t*) {
+cef_resource_bundle_handler_t* CEF_CALLBACK ResourceBundleHandler(cef_app_t*) {
 	fmt::print("ResourceBundleHandler\n");
 	return nullptr;
 }
 
-cef_browser_process_handler_t* BrowserProcessHandler(cef_app_t*) {
+cef_browser_process_handler_t* CEF_CALLBACK BrowserProcessHandler(cef_app_t*) {
 	fmt::print("BrowserProcessHandler\n");
 	return nullptr;
 }
 
-cef_render_process_handler_t* RenderProcessHandler(cef_app_t*) {
+cef_render_process_handler_t* CEF_CALLBACK RenderProcessHandler(cef_app_t*) {
 	fmt::print("RenderProcessHandler\n");
 	return nullptr;
 }
