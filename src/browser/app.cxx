@@ -2,15 +2,15 @@
 
 #include <fmt/core.h>
 
-void add_ref(cef_base_ref_counted_t*);
-int release(cef_base_ref_counted_t*);
-int has_one_ref(cef_base_ref_counted_t*);
-int has_any_refs(cef_base_ref_counted_t*);
-void on_before_command_line_processing(cef_app_t*, const cef_string_t*, cef_command_line_t*);
-void on_register_custom_schemes(cef_app_t*, cef_scheme_registrar_t*);
-cef_resource_bundle_handler_t* resource_bundle_handler(cef_app_t*);
-cef_browser_process_handler_t* browser_process_handler(cef_app_t*);
-cef_render_process_handler_t* render_process_handler(cef_app_t*);
+void CEF_CALLBACK add_ref(cef_base_ref_counted_t*);
+int CEF_CALLBACK release(cef_base_ref_counted_t*);
+int CEF_CALLBACK has_one_ref(cef_base_ref_counted_t*);
+int CEF_CALLBACK has_any_refs(cef_base_ref_counted_t*);
+void CEF_CALLBACK on_before_command_line_processing(cef_app_t*, const cef_string_t*, cef_command_line_t*);
+void CEF_CALLBACK on_register_custom_schemes(cef_app_t*, cef_scheme_registrar_t*);
+cef_resource_bundle_handler_t* CEF_CALLBACK resource_bundle_handler(cef_app_t*);
+cef_browser_process_handler_t* CEF_CALLBACK browser_process_handler(cef_app_t*);
+cef_render_process_handler_t* CEF_CALLBACK render_process_handler(cef_app_t*);
 
 Browser::App* resolve_app(cef_app_t* app) {
 	return reinterpret_cast<Browser::App*>(reinterpret_cast<size_t>(app) - offsetof(Browser::App, cef_app));
@@ -74,24 +74,24 @@ int CEF_CALLBACK has_any_refs(cef_base_ref_counted_t* app) {
 }
 
 void CEF_CALLBACK on_before_command_line_processing(cef_app_t*, const cef_string_t*, cef_command_line_t*) {
-	fmt::print("OnBeforeCommandLineProcessing\n");
+	fmt::print("on_before_command_line_processing\n");
 }
 
 void CEF_CALLBACK on_register_custom_schemes(cef_app_t*, cef_scheme_registrar_t*) {
-	fmt::print("OnRegisterCustomSchemes\n");
+	fmt::print("on_register_custom_schemes\n");
 }
 
 cef_resource_bundle_handler_t* CEF_CALLBACK resource_bundle_handler(cef_app_t*) {
-	fmt::print("ResourceBundleHandler\n");
+	fmt::print("resource_bundle_handler\n");
 	return nullptr;
 }
 
 cef_browser_process_handler_t* CEF_CALLBACK browser_process_handler(cef_app_t*) {
-	fmt::print("BrowserProcessHandler\n");
+	fmt::print("browser_process_handler\n");
 	return nullptr;
 }
 
 cef_render_process_handler_t* CEF_CALLBACK render_process_handler(cef_app_t*) {
-	fmt::print("RenderProcessHandler\n");
+	fmt::print("render_process_handler\n");
 	return nullptr;
 }
