@@ -16,9 +16,8 @@ namespace Browser {
 		void Destroy();
 		cef_app_t* app();
 
-		private:
-			App(const App&) = delete;
-			App& operator=(const App&) = delete;
+		App(const App&) = delete;
+		App& operator=(const App&) = delete;
 	};
 
 	void AddRef(cef_base_ref_counted_t*);
