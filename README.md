@@ -1,7 +1,7 @@
 # Bolt
 An alternative, CEF-based client for running your favourite helper applications for your favourite MMO.
 
-# Building
+## Building
 If you just want to get Bolt installed then you don't need to build it from source! Check the "Releases" section on the right.
 
 But if you do want to build from source, the first thing you should know is that Bolt is based on [Chromium Embedded Framework](https://bitbucket.org/chromiumembedded/cef) (CEF), so to build it, you'll first need to build or otherwise obtain a binary distribution of Chromium. Place the entire distribution folder into the `cef` directory and rename it to `dist`. Alternatively you can put a symbolic link with the name `dist` if you prefer.
