@@ -1,5 +1,17 @@
 #include "app.hxx"
 
+#include <fmt/core.h>
+
+void AddRef(cef_base_ref_counted_t*);
+int Release(cef_base_ref_counted_t*);
+int HasOneRef(cef_base_ref_counted_t*);
+int HasAnyRefs(cef_base_ref_counted_t*);
+void OnBeforeCommandLineProcessing(cef_app_t*, const cef_string_t*, cef_command_line_t*);
+void OnRegisterCustomSchemes(cef_app_t*, cef_scheme_registrar_t*);
+cef_resource_bundle_handler_t* ResourceBundleHandler(cef_app_t*);
+cef_browser_process_handler_t* BrowserProcessHandler(cef_app_t*);
+cef_render_process_handler_t* RenderProcessHandler(cef_app_t*);
+
 Browser::App* resolve_app(cef_app_t* app) {
 	return reinterpret_cast<Browser::App*>(reinterpret_cast<size_t>(app) - offsetof(Browser::App, cef_app));
 }
@@ -10,15 +22,15 @@ Browser::App* resolve_base(cef_base_ref_counted_t* base) {
 
 Browser::App::App() {
 	this->cef_app.base.size = sizeof(cef_base_ref_counted_t);
-	this->cef_app.base.add_ref = Browser::AddRef;
-	this->cef_app.base.release = Browser::Release;
-	this->cef_app.base.has_one_ref = Browser::HasOneRef;
-	this->cef_app.base.has_at_least_one_ref = Browser::HasAnyRefs;
-	this->cef_app.on_before_command_line_processing = Browser::OnBeforeCommandLineProcessing;
-	this->cef_app.on_register_custom_schemes = Browser::OnRegisterCustomSchemes;
-	this->cef_app.get_resource_bundle_handler = Browser::ResourceBundleHandler;
-	this->cef_app.get_browser_process_handler = Browser::BrowserProcessHandler;
-	this->cef_app.get_render_process_handler = Browser::RenderProcessHandler;
+	this->cef_app.base.add_ref = ::AddRef;
+	this->cef_app.base.release = ::Release;
+	this->cef_app.base.has_one_ref = ::HasOneRef;
+	this->cef_app.base.has_at_least_one_ref = ::HasAnyRefs;
+	this->cef_app.on_before_command_line_processing = ::OnBeforeCommandLineProcessing;
+	this->cef_app.on_register_custom_schemes = ::OnRegisterCustomSchemes;
+	this->cef_app.get_resource_bundle_handler = ::ResourceBundleHandler;
+	this->cef_app.get_browser_process_handler = ::BrowserProcessHandler;
+	this->cef_app.get_render_process_handler = ::RenderProcessHandler;
 	this->refcount = 1;
 }
 
@@ -45,34 +57,41 @@ cef_app_t* Browser::App::app() {
 	return &this->cef_app;
 }
 
-void Browser::AddRef(cef_base_ref_counted_t* app) {
+void AddRef(cef_base_ref_counted_t* app) {
 	resolve_base(app)->AddRef();
 }
 
-int Browser::Release(cef_base_ref_counted_t* app) {
+int Release(cef_base_ref_counted_t* app) {
 	return resolve_base(app)->Release();
 }
 
-int Browser::HasOneRef(cef_base_ref_counted_t* app) {
+int HasOneRef(cef_base_ref_counted_t* app) {
 	return (resolve_base(app)->refcount == 1) ? 1 : 0;
 }
 
-int Browser::HasAnyRefs(cef_base_ref_counted_t* app) {
+int HasAnyRefs(cef_base_ref_counted_t* app) {
 	return (resolve_base(app)->refcount >= 1) ? 1 : 0;
 }
 
-void Browser::OnBeforeCommandLineProcessing(cef_app_t*, const cef_string_t*, cef_command_line_t*) { }
+void OnBeforeCommandLineProcessing(cef_app_t*, const cef_string_t*, cef_command_line_t*) {
+	fmt::print("OnBeforeCommandLineProcessing\n");
+}
 
-void Browser::OnRegisterCustomSchemes(cef_app_t*, cef_scheme_registrar_t*) { }
+void OnRegisterCustomSchemes(cef_app_t*, cef_scheme_registrar_t*) {
+	fmt::print("OnRegisterCustomSchemes\n");
+}
 
-cef_resource_bundle_handler_t* Browser::ResourceBundleHandler(cef_app_t*) {
+cef_resource_bundle_handler_t* ResourceBundleHandler(cef_app_t*) {
+	fmt::print("ResourceBundleHandler\n");
 	return nullptr;
 }
 
-cef_browser_process_handler_t* Browser::BrowserProcessHandler(cef_app_t*) {
+cef_browser_process_handler_t* BrowserProcessHandler(cef_app_t*) {
+	fmt::print("BrowserProcessHandler\n");
 	return nullptr;
 }
 
-cef_render_process_handler_t* Browser::RenderProcessHandler(cef_app_t*) {
+cef_render_process_handler_t* RenderProcessHandler(cef_app_t*) {
+	fmt::print("RenderProcessHandler\n");
 	return nullptr;
 }
