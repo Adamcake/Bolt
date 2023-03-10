@@ -7,10 +7,10 @@
 #include "include/capi/cef_client_capi.h"
 
 namespace Browser {
-    struct Client {
-        cef_client_t cef_client;
+	struct Client {
+		cef_client_t cef_client;
 		std::atomic_ulong refcount;
-        LifeSpanHandler* life_span_handler;
+		LifeSpanHandler* life_span_handler;
 		
 		Client(LifeSpanHandler*);
 		void add_ref();
@@ -20,7 +20,7 @@ namespace Browser {
 
 		Client(const Client&) = delete;
 		Client& operator=(const Client&) = delete;
-    };
+	};
 }
 
 #endif
