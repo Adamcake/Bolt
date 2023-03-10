@@ -13,11 +13,11 @@ cef_browser_process_handler_t* CEF_CALLBACK browser_process_handler(cef_app_t*);
 cef_render_process_handler_t* CEF_CALLBACK render_process_handler(cef_app_t*);
 
 Browser::App* resolve_app(cef_app_t* app) {
-	return reinterpret_cast<Browser::App*>(reinterpret_cast<size_t>(app) - offsetof(Browser::App, cef_app));
+	return reinterpret_cast<Browser::App*>(reinterpret_cast<uintptr_t>(app) - offsetof(Browser::App, cef_app));
 }
 
 Browser::App* resolve_app_base(cef_base_ref_counted_t* base) {
-	return reinterpret_cast<Browser::App*>(reinterpret_cast<size_t>(base) - (offsetof(Browser::App, cef_app) + offsetof(cef_app_t, base)));
+	return reinterpret_cast<Browser::App*>(reinterpret_cast<uintptr_t>(base) - (offsetof(Browser::App, cef_app) + offsetof(cef_app_t, base)));
 }
 
 Browser::App::App() {

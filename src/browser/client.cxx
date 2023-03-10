@@ -28,11 +28,11 @@ int CEF_CALLBACK on_process_message_received(cef_client_t*, cef_browser_t*, cef_
 
 
 Browser::Client* resolve_client(cef_client_t* client) {
-	return reinterpret_cast<Browser::Client*>(reinterpret_cast<size_t>(client) - offsetof(Browser::Client, cef_client));
+	return reinterpret_cast<Browser::Client*>(reinterpret_cast<uintptr_t>(client) - offsetof(Browser::Client, cef_client));
 }
 
 Browser::Client* resolve_client_base(cef_base_ref_counted_t* base) {
-	return reinterpret_cast<Browser::Client*>(reinterpret_cast<size_t>(base) - (offsetof(Browser::Client, cef_client) + offsetof(cef_client_t, base)));
+	return reinterpret_cast<Browser::Client*>(reinterpret_cast<uintptr_t>(base) - (offsetof(Browser::Client, cef_client) + offsetof(cef_client_t, base)));
 }
 
 Browser::Client::Client(LifeSpanHandler* life_span_handler) {

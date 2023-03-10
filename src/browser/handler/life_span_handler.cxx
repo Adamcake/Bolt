@@ -26,11 +26,11 @@ int CEF_CALLBACK do_close(cef_life_span_handler_t*, cef_browser_t*);
 void CEF_CALLBACK on_before_close(cef_life_span_handler_t*, cef_browser_t*);
 
 Browser::LifeSpanHandler* resolve_lifespanhandler(cef_client_t* handler) {
-	return reinterpret_cast<Browser::LifeSpanHandler*>(reinterpret_cast<size_t>(handler) - offsetof(Browser::LifeSpanHandler, cef_handler));
+	return reinterpret_cast<Browser::LifeSpanHandler*>(reinterpret_cast<uintptr_t>(handler) - offsetof(Browser::LifeSpanHandler, cef_handler));
 }
 
 Browser::LifeSpanHandler* resolve_lifespanhandler_base(cef_base_ref_counted_t* base) {
-	return reinterpret_cast<Browser::LifeSpanHandler*>(reinterpret_cast<size_t>(base) - (offsetof(Browser::LifeSpanHandler, cef_handler) + offsetof(cef_client_t, base)));
+	return reinterpret_cast<Browser::LifeSpanHandler*>(reinterpret_cast<uintptr_t>(base) - (offsetof(Browser::LifeSpanHandler, cef_handler) + offsetof(cef_client_t, base)));
 }
 
 Browser::LifeSpanHandler::LifeSpanHandler() {
