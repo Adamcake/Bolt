@@ -34,35 +34,35 @@ Browser::App::App() {
 	this->refcount = 1;
 }
 
-void Browser::App::AddRef() {
+void Browser::App::add_ref() {
 	this->refcount += 1;
 }
 
-int Browser::App::Release() {
+int Browser::App::release() {
 	// Since this->refcount is atomic, the operation of decrementing it and checking if the result
 	// is 0 must only access the value once. Accessing it twice would cause a race condition.
 	if (--this->refcount == 0) {
-		this->Destroy();
+		this->destroy();
 		return 1;
 	}
 	return 0;
 }
 
-void Browser::App::Destroy() {
+void Browser::App::destroy() {
 	// Any self-cleanup should be done here
 }
 
 cef_app_t* Browser::App::app() {
-	this->AddRef();
+	this->add_ref();
 	return &this->cef_app;
 }
 
 void AddRef(cef_base_ref_counted_t* app) {
-	resolve_base(app)->AddRef();
+	resolve_base(app)->add_ref();
 }
 
 int Release(cef_base_ref_counted_t* app) {
-	return resolve_base(app)->Release();
+	return resolve_base(app)->release();
 }
 
 int HasOneRef(cef_base_ref_counted_t* app) {

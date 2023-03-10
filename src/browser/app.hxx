@@ -11,9 +11,9 @@ namespace Browser {
 		std::atomic_ulong refcount;
 		
 		App();
-		void AddRef();
-		int Release();
-		void Destroy();
+		void add_ref();
+		int release();
+		void destroy();
 		cef_app_t* app();
 
 		App(const App&) = delete;

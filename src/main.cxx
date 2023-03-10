@@ -39,7 +39,7 @@ int main(int argc, char* argv[]) {
 	// This function checks the command-line and, if this is a sub-process, executes the appropriate logic.
 	int exit_code = cef_execute_process(&main_args, cef_app.app(), nullptr);
 	if (exit_code >= 0) {
-		cef_app.Release();
+		cef_app.release();
 		return exit_code;
 	}
 
@@ -67,7 +67,7 @@ int main(int argc, char* argv[]) {
 	exit_code = cef_initialize(&main_args, &settings, cef_app.app(), nullptr);
 	if (exit_code == 0) {
 		fmt::print("Exiting with error: cef_initialize exit_code {}\n", exit_code);
-		cef_app.Release();
+		cef_app.release();
 		return exit_code;
 	}
 
@@ -78,7 +78,7 @@ int main(int argc, char* argv[]) {
 	}
 
 	// Shut down CEF
-	cef_app.Release();
+	cef_app.release();
 	cef_shutdown();
 
 	return 0;
