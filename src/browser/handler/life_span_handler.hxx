@@ -1,3 +1,5 @@
+#ifndef _BOLT_LIFE_SPAN_HANDLER_HXX_
+#define _BOLT_LIFE_SPAN_HANDLER_HXX_
 #include <atomic>
 
 #include "include/capi/cef_client_capi.h"
@@ -17,3 +19,5 @@ namespace Browser {
 		LifeSpanHandler& operator=(const LifeSpanHandler&) = delete;
     };
 }
+
+#endif
