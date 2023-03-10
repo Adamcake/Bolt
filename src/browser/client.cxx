@@ -35,7 +35,8 @@ Browser::Client* resolve_base(cef_base_ref_counted_t* base) {
 	return reinterpret_cast<Browser::Client*>(reinterpret_cast<size_t>(base) - (offsetof(Browser::Client, cef_client) + offsetof(cef_client_t, base)));
 }
 
-Browser::Client::Client(cef_life_span_handler_t* life_span_handler) {
+Browser::Client::Client(LifeSpanHandler* life_span_handler) {
+    life_span_handler->add_ref();
     this->life_span_handler = life_span_handler;
 	this->cef_client.base.size = sizeof(cef_base_ref_counted_t);
 	this->cef_client.base.add_ref = ::add_ref;
@@ -78,7 +79,7 @@ int Browser::Client::release() {
 }
 
 void Browser::Client::destroy() {
-	// Any self-cleanup should be done here
+	this->life_span_handler->release();
 }
 
 cef_client_t* Browser::Client::client() {

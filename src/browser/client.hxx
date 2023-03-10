@@ -3,15 +3,16 @@
 
 #include <atomic>
 
+#include "handler/life_span_handler.hxx"
 #include "include/capi/cef_client_capi.h"
 
 namespace Browser {
     struct Client {
         cef_client_t cef_client;
 		std::atomic_ulong refcount;
-        cef_life_span_handler_t* life_span_handler;
+        LifeSpanHandler* life_span_handler;
 		
-		Client(cef_life_span_handler_t*);
+		Client(LifeSpanHandler*);
 		void add_ref();
 		int release();
 		void destroy();
