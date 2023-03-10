@@ -165,8 +165,7 @@ cef_keyboard_handler_t* CEF_CALLBACK get_keyboard_handler(cef_client_t* self) {
 
 cef_life_span_handler_t* CEF_CALLBACK get_life_span_handler(cef_client_t* self) {
 	fmt::print("get_life_span_handler\n");
-	// TODO: this needs to be implemented
-	return nullptr;
+	return resolve_client(self)->life_span_handler->handler();
 }
 
 cef_load_handler_t* CEF_CALLBACK get_load_handler(cef_client_t* self) {
