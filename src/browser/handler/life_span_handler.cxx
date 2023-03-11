@@ -36,7 +36,7 @@ Browser::LifeSpanHandler* resolve_lifespanhandler_base(cef_base_ref_counted_t* b
 }
 
 Browser::LifeSpanHandler::LifeSpanHandler() {
-	this->cef_handler.base.size = sizeof(cef_base_ref_counted_t);
+	this->cef_handler.base.size = sizeof(cef_life_span_handler_t);
 	this->cef_handler.base.add_ref = ::add_ref_lifespanhandler;
 	this->cef_handler.base.release = ::release_lifespanhandler;
 	this->cef_handler.base.has_one_ref = ::has_one_ref_lifespanhandler;

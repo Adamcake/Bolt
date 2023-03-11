@@ -38,7 +38,7 @@ Browser::Client* resolve_client_base(cef_base_ref_counted_t* base) {
 Browser::Client::Client(LifeSpanHandler* life_span_handler) {
 	life_span_handler->add_ref();
 	this->life_span_handler = life_span_handler;
-	this->cef_client.base.size = sizeof(cef_base_ref_counted_t);
+	this->cef_client.base.size = sizeof(cef_client_t);
 	this->cef_client.base.add_ref = ::add_ref_client;
 	this->cef_client.base.release = ::release_client;
 	this->cef_client.base.has_one_ref = ::has_one_ref_client;

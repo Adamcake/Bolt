@@ -21,7 +21,7 @@ Browser::App* resolve_app_base(cef_base_ref_counted_t* base) {
 }
 
 Browser::App::App() {
-	this->cef_app.base.size = sizeof(cef_base_ref_counted_t);
+	this->cef_app.base.size = sizeof(cef_app_t);
 	this->cef_app.base.add_ref = ::add_ref_app;
 	this->cef_app.base.release = ::release_app;
 	this->cef_app.base.has_one_ref = ::has_one_ref_app;
