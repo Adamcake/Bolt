@@ -2,6 +2,8 @@
 
 #include <fmt/core.h>
 
+#include "include/capi/cef_app_capi.h"
+
 void CEF_CALLBACK add_ref_lifespanhandler(cef_base_ref_counted_t*);
 int CEF_CALLBACK release_lifespanhandler(cef_base_ref_counted_t*);
 int CEF_CALLBACK has_one_ref_lifespanhandler(cef_base_ref_counted_t*);
@@ -30,7 +32,7 @@ Browser::LifeSpanHandler* resolve_lifespanhandler(cef_client_t* handler) {
 }
 
 Browser::LifeSpanHandler* resolve_lifespanhandler_base(cef_base_ref_counted_t* base) {
-	return reinterpret_cast<Browser::LifeSpanHandler*>(reinterpret_cast<uintptr_t>(base) - (offsetof(Browser::LifeSpanHandler, cef_handler) + offsetof(cef_client_t, base)));
+	return reinterpret_cast<Browser::LifeSpanHandler*>(reinterpret_cast<uintptr_t>(base) - (offsetof(Browser::LifeSpanHandler, cef_handler) + offsetof(cef_life_span_handler_t, base)));
 }
 
 Browser::LifeSpanHandler::LifeSpanHandler() {
@@ -119,4 +121,5 @@ int CEF_CALLBACK do_close(cef_life_span_handler_t*, cef_browser_t*) {
 
 void CEF_CALLBACK on_before_close(cef_life_span_handler_t*, cef_browser_t*) {
 	fmt::print("on_before_close\n");
+	cef_quit_message_loop();
 }
