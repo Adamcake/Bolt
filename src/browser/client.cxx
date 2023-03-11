@@ -61,6 +61,7 @@ Browser::Client::Client(LifeSpanHandler* life_span_handler) {
 	this->cef_client.get_print_handler = ::get_print_handler;
 	this->cef_client.get_render_handler = ::get_render_handler;
 	this->cef_client.get_request_handler = ::get_request_handler;
+	this->cef_client.on_process_message_received = ::on_process_message_received;
 	this->refcount = 1;
 }
 
