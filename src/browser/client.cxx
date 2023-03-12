@@ -180,7 +180,7 @@ cef_permission_handler_t* CEF_CALLBACK get_permission_handler(cef_client_t* self
 }
 
 cef_print_handler_t* CEF_CALLBACK get_print_handler(cef_client_t* self) {
-	fmt::print("get_render_handler\n");
+	fmt::print("get_print_handler\n");
 	return nullptr;
 }
 
