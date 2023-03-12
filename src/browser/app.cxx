@@ -2,30 +2,44 @@
 
 #include <fmt/core.h>
 
-void CEF_CALLBACK add_ref_app(cef_base_ref_counted_t*);
-int CEF_CALLBACK release_app(cef_base_ref_counted_t*);
-int CEF_CALLBACK has_one_ref_app(cef_base_ref_counted_t*);
-int CEF_CALLBACK has_any_refs_app(cef_base_ref_counted_t*);
 void CEF_CALLBACK on_before_command_line_processing(cef_app_t*, const cef_string_t*, cef_command_line_t*);
 void CEF_CALLBACK on_register_custom_schemes(cef_app_t*, cef_scheme_registrar_t*);
 cef_resource_bundle_handler_t* CEF_CALLBACK resource_bundle_handler(cef_app_t*);
 cef_browser_process_handler_t* CEF_CALLBACK browser_process_handler(cef_app_t*);
 cef_render_process_handler_t* CEF_CALLBACK render_process_handler(cef_app_t*);
 
-Browser::App* resolve_app(cef_app_t* app) {
-	return reinterpret_cast<Browser::App*>(reinterpret_cast<uintptr_t>(app) - offsetof(Browser::App, cef_app));
-}
+namespace App {
+	Browser::App* resolve(cef_app_t* app) {
+		return reinterpret_cast<Browser::App*>(reinterpret_cast<uintptr_t>(app) - offsetof(Browser::App, cef_app));
+	}
 
-Browser::App* resolve_app_base(cef_base_ref_counted_t* base) {
-	return reinterpret_cast<Browser::App*>(reinterpret_cast<uintptr_t>(base) - (offsetof(Browser::App, cef_app) + offsetof(cef_app_t, base)));
+	Browser::App* resolve_base(cef_base_ref_counted_t* base) {
+		return reinterpret_cast<Browser::App*>(reinterpret_cast<uintptr_t>(base) - (offsetof(Browser::App, cef_app) + offsetof(cef_app_t, base)));
+	}
+
+	void CEF_CALLBACK add_ref(cef_base_ref_counted_t* app) {
+		resolve_base(app)->add_ref();
+	}
+
+	int CEF_CALLBACK release(cef_base_ref_counted_t* app) {
+		return resolve_base(app)->release();
+	}
+
+	int CEF_CALLBACK has_one_ref(cef_base_ref_counted_t* app) {
+		return (resolve_base(app)->refcount == 1) ? 1 : 0;
+	}
+
+	int CEF_CALLBACK has_any_refs(cef_base_ref_counted_t* app) {
+		return (resolve_base(app)->refcount >= 1) ? 1 : 0;
+	}
 }
 
 Browser::App::App() {
 	this->cef_app.base.size = sizeof(cef_app_t);
-	this->cef_app.base.add_ref = ::add_ref_app;
-	this->cef_app.base.release = ::release_app;
-	this->cef_app.base.has_one_ref = ::has_one_ref_app;
-	this->cef_app.base.has_at_least_one_ref = ::has_any_refs_app;
+	this->cef_app.base.add_ref = ::App::add_ref;
+	this->cef_app.base.release = ::App::release;
+	this->cef_app.base.has_one_ref = ::App::has_one_ref;
+	this->cef_app.base.has_at_least_one_ref = ::App::has_any_refs;
 	this->cef_app.on_before_command_line_processing = ::on_before_command_line_processing;
 	this->cef_app.on_register_custom_schemes = ::on_register_custom_schemes;
 	this->cef_app.get_resource_bundle_handler = ::resource_bundle_handler;
@@ -55,22 +69,6 @@ void Browser::App::destroy() {
 cef_app_t* Browser::App::app() {
 	this->add_ref();
 	return &this->cef_app;
-}
-
-void CEF_CALLBACK add_ref_app(cef_base_ref_counted_t* app) {
-	resolve_app_base(app)->add_ref();
-}
-
-int CEF_CALLBACK release_app(cef_base_ref_counted_t* app) {
-	return resolve_app_base(app)->release();
-}
-
-int CEF_CALLBACK has_one_ref_app(cef_base_ref_counted_t* app) {
-	return (resolve_app_base(app)->refcount == 1) ? 1 : 0;
-}
-
-int CEF_CALLBACK has_any_refs_app(cef_base_ref_counted_t* app) {
-	return (resolve_app_base(app)->refcount >= 1) ? 1 : 0;
 }
 
 void CEF_CALLBACK on_before_command_line_processing(cef_app_t*, const cef_string_t*, cef_command_line_t*) {

@@ -2,10 +2,6 @@
 
 #include <fmt/core.h>
 
-void CEF_CALLBACK add_ref_client(cef_base_ref_counted_t*);
-int CEF_CALLBACK release_client(cef_base_ref_counted_t*);
-int CEF_CALLBACK has_one_ref_client(cef_base_ref_counted_t*);
-int CEF_CALLBACK has_any_refs_client(cef_base_ref_counted_t*);
 cef_audio_handler_t* CEF_CALLBACK get_audio_handler(cef_client_t*);
 cef_command_handler_t* CEF_CALLBACK get_command_handler(cef_client_t*);
 cef_context_menu_handler_t* CEF_CALLBACK get_context_menu_handler(cef_client_t*);
@@ -26,23 +22,40 @@ cef_render_handler_t* CEF_CALLBACK get_render_handler(cef_client_t*);
 cef_request_handler_t* CEF_CALLBACK get_request_handler(cef_client_t*);
 int CEF_CALLBACK on_process_message_received(cef_client_t*, cef_browser_t*, cef_frame_t*, cef_process_id_t, cef_process_message_t*);
 
+namespace Client {
+	Browser::Client* resolve(cef_client_t* client) {
+		return reinterpret_cast<Browser::Client*>(reinterpret_cast<uintptr_t>(client) - offsetof(Browser::Client, cef_client));
+	}
 
-Browser::Client* resolve_client(cef_client_t* client) {
-	return reinterpret_cast<Browser::Client*>(reinterpret_cast<uintptr_t>(client) - offsetof(Browser::Client, cef_client));
-}
+	Browser::Client* resolve_base(cef_base_ref_counted_t* base) {
+		return reinterpret_cast<Browser::Client*>(reinterpret_cast<uintptr_t>(base) - (offsetof(Browser::Client, cef_client) + offsetof(cef_client_t, base)));
+	}
 
-Browser::Client* resolve_client_base(cef_base_ref_counted_t* base) {
-	return reinterpret_cast<Browser::Client*>(reinterpret_cast<uintptr_t>(base) - (offsetof(Browser::Client, cef_client) + offsetof(cef_client_t, base)));
+	void CEF_CALLBACK add_ref(cef_base_ref_counted_t* client) {
+		resolve_base(client)->add_ref();
+	}
+
+	int CEF_CALLBACK release(cef_base_ref_counted_t* client) {
+		return resolve_base(client)->release();
+	}
+
+	int CEF_CALLBACK has_one_ref(cef_base_ref_counted_t* client) {
+		return (resolve_base(client)->refcount == 1) ? 1 : 0;
+	}
+
+	int CEF_CALLBACK has_any_refs(cef_base_ref_counted_t* client) {
+		return (resolve_base(client)->refcount >= 1) ? 1 : 0;
+	}
 }
 
 Browser::Client::Client(LifeSpanHandler* life_span_handler) {
 	life_span_handler->add_ref();
 	this->life_span_handler = life_span_handler;
 	this->cef_client.base.size = sizeof(cef_client_t);
-	this->cef_client.base.add_ref = ::add_ref_client;
-	this->cef_client.base.release = ::release_client;
-	this->cef_client.base.has_one_ref = ::has_one_ref_client;
-	this->cef_client.base.has_at_least_one_ref = ::has_any_refs_client;
+	this->cef_client.base.add_ref = ::Client::add_ref;
+	this->cef_client.base.release = ::Client::release;
+	this->cef_client.base.has_one_ref = ::Client::has_one_ref;
+	this->cef_client.base.has_at_least_one_ref = ::Client::has_any_refs;
 	this->cef_client.get_audio_handler = ::get_audio_handler;
 	this->cef_client.get_command_handler = ::get_command_handler;
 	this->cef_client.get_context_menu_handler = ::get_context_menu_handler;
@@ -86,22 +99,6 @@ void Browser::Client::destroy() {
 cef_client_t* Browser::Client::client() {
 	this->add_ref();
 	return &this->cef_client;
-}
-
-void CEF_CALLBACK add_ref_client(cef_base_ref_counted_t* client) {
-	resolve_client_base(client)->add_ref();
-}
-
-int CEF_CALLBACK release_client(cef_base_ref_counted_t* client) {
-	return resolve_client_base(client)->release();
-}
-
-int CEF_CALLBACK has_one_ref_client(cef_base_ref_counted_t* client) {
-	return (resolve_client_base(client)->refcount == 1) ? 1 : 0;
-}
-
-int CEF_CALLBACK has_any_refs_client(cef_base_ref_counted_t* client) {
-	return (resolve_client_base(client)->refcount >= 1) ? 1 : 0;
 }
 
 cef_audio_handler_t* CEF_CALLBACK get_audio_handler(cef_client_t* self) {
@@ -166,7 +163,7 @@ cef_keyboard_handler_t* CEF_CALLBACK get_keyboard_handler(cef_client_t* self) {
 
 cef_life_span_handler_t* CEF_CALLBACK get_life_span_handler(cef_client_t* self) {
 	fmt::print("get_life_span_handler\n");
-	return resolve_client(self)->life_span_handler->handler();
+	return Client::resolve(self)->life_span_handler->handler();
 }
 
 cef_load_handler_t* CEF_CALLBACK get_load_handler(cef_client_t* self) {
