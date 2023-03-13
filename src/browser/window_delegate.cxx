@@ -159,8 +159,8 @@ int CEF_CALLBACK is_frameless(cef_window_delegate_t* self, cef_window_t*) {
 	return !WindowDelegate::resolve(self)->details.frame;
 }
 
-int CEF_CALLBACK can_resize(cef_window_delegate_t* delegate, cef_window_t*) {
-	return true;
+int CEF_CALLBACK can_resize(cef_window_delegate_t* self, cef_window_t*) {
+	return !WindowDelegate::resolve(self)->details.resizeable;
 }
 
 int CEF_CALLBACK can_maximize(cef_window_delegate_t*, cef_window_t*) {
