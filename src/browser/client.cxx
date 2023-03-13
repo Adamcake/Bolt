@@ -1,7 +1,5 @@
 #include "client.hxx"
 
-#include <fmt/core.h>
-
 cef_audio_handler_t* CEF_CALLBACK get_audio_handler(cef_client_t*);
 cef_command_handler_t* CEF_CALLBACK get_command_handler(cef_client_t*);
 cef_context_menu_handler_t* CEF_CALLBACK get_context_menu_handler(cef_client_t*);
@@ -102,96 +100,77 @@ cef_client_t* Browser::Client::client() {
 }
 
 cef_audio_handler_t* CEF_CALLBACK get_audio_handler(cef_client_t* self) {
-	fmt::print("get_audio_handler\n");
 	return nullptr;
 }
 
 cef_command_handler_t* CEF_CALLBACK get_command_handler(cef_client_t* self) {
-	fmt::print("get_command_handler\n");
 	return nullptr;
 }
 
 cef_context_menu_handler_t* CEF_CALLBACK get_context_menu_handler(cef_client_t* self) {
-	fmt::print("get_context_menu_handler\n");
 	return nullptr;
 }
 
 cef_dialog_handler_t* CEF_CALLBACK get_dialog_handler(cef_client_t* self) {
-	fmt::print("get_dialog_handler\n");
 	return nullptr;
 }
 
 cef_display_handler_t* CEF_CALLBACK get_display_handler(cef_client_t* self) {
-	fmt::print("get_display_handler\n");
 	return nullptr;
 }
 
 cef_download_handler_t* CEF_CALLBACK get_download_handler(cef_client_t* self) {
-	fmt::print("get_download_handler\n");
 	return nullptr;
 }
 
 cef_drag_handler_t* CEF_CALLBACK get_drag_handler(cef_client_t* self) {
-	fmt::print("get_drag_handler\n");
 	return nullptr;
 }
 
 cef_find_handler_t* CEF_CALLBACK get_find_handler(cef_client_t* self) {
-	fmt::print("get_find_handler\n");
 	return nullptr;
 }
 
 cef_frame_handler_t* CEF_CALLBACK get_frame_handler(cef_client_t* self) {
-	fmt::print("get_frame_handler\n");
 	return nullptr;
 }
 
 cef_focus_handler_t* CEF_CALLBACK get_focus_handler(cef_client_t* self) {
-	fmt::print("get_focus_handler\n");
 	return nullptr;
 }
 
 cef_jsdialog_handler_t* CEF_CALLBACK get_jsdialog_handler(cef_client_t* self) {
-	fmt::print("get_jsdialog_handler\n");
 	return nullptr;
 }
 
 cef_keyboard_handler_t* CEF_CALLBACK get_keyboard_handler(cef_client_t* self) {
-	fmt::print("get_keyboard_handler\n");
 	return nullptr;
 }
 
 cef_life_span_handler_t* CEF_CALLBACK get_life_span_handler(cef_client_t* self) {
-	fmt::print("get_life_span_handler\n");
 	return Client::resolve(self)->life_span_handler->handler();
 }
 
 cef_load_handler_t* CEF_CALLBACK get_load_handler(cef_client_t* self) {
-	fmt::print("get_load_handler\n");
 	return nullptr;
 }
 
 cef_permission_handler_t* CEF_CALLBACK get_permission_handler(cef_client_t* self) {
-	fmt::print("get_permission_handler\n");
 	return nullptr;
 }
 
 cef_print_handler_t* CEF_CALLBACK get_print_handler(cef_client_t* self) {
-	fmt::print("get_print_handler\n");
 	return nullptr;
 }
 
 cef_render_handler_t* CEF_CALLBACK get_render_handler(cef_client_t* self) {
-	fmt::print("get_render_handler\n");
 	return nullptr;
 }
 
 cef_request_handler_t* CEF_CALLBACK get_request_handler(cef_client_t* self) {
-	fmt::print("get_request_handler\n");
 	return nullptr;
 }
 
 int CEF_CALLBACK on_process_message_received(cef_client_t* self, cef_browser_t* browser, cef_frame_t* frame, cef_process_id_t source_process, cef_process_message_t* message) {
-	fmt::print("on_process_message_received\n");
 	return 0;
 }

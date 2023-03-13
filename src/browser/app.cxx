@@ -1,7 +1,5 @@
 #include "app.hxx"
 
-#include <fmt/core.h>
-
 void CEF_CALLBACK on_before_command_line_processing(cef_app_t*, const cef_string_t*, cef_command_line_t*);
 void CEF_CALLBACK on_register_custom_schemes(cef_app_t*, cef_scheme_registrar_t*);
 cef_resource_bundle_handler_t* CEF_CALLBACK resource_bundle_handler(cef_app_t*);
@@ -72,24 +70,21 @@ cef_app_t* Browser::App::app() {
 }
 
 void CEF_CALLBACK on_before_command_line_processing(cef_app_t*, const cef_string_t*, cef_command_line_t*) {
-	fmt::print("on_before_command_line_processing\n");
+	
 }
 
 void CEF_CALLBACK on_register_custom_schemes(cef_app_t*, cef_scheme_registrar_t*) {
-	fmt::print("on_register_custom_schemes\n");
+	
 }
 
 cef_resource_bundle_handler_t* CEF_CALLBACK resource_bundle_handler(cef_app_t*) {
-	fmt::print("resource_bundle_handler\n");
 	return nullptr;
 }
 
 cef_browser_process_handler_t* CEF_CALLBACK browser_process_handler(cef_app_t*) {
-	fmt::print("browser_process_handler\n");
 	return nullptr;
 }
 
 cef_render_process_handler_t* CEF_CALLBACK render_process_handler(cef_app_t*) {
-	fmt::print("render_process_handler\n");
 	return nullptr;
 }

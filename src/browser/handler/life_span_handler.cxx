@@ -1,7 +1,5 @@
 #include "life_span_handler.hxx"
 
-#include <fmt/core.h>
-
 #include "include/capi/cef_app_capi.h"
 
 int CEF_CALLBACK on_before_popup(
@@ -100,24 +98,20 @@ int CEF_CALLBACK on_before_popup(
 	cef_dictionary_value_t** extra_info,
 	int* no_javascript_access
 ) {
-	fmt::print("on_before_popup\n");
-
 	// Returning 1 would cancel creation of the popup, 0 allows it
 	return 0;
 }
 
 void CEF_CALLBACK on_after_created(cef_life_span_handler_t*, cef_browser_t*) {
-	fmt::print("on_after_created\n");
+	
 }
 
 int CEF_CALLBACK do_close(cef_life_span_handler_t*, cef_browser_t*) {
-	fmt::print("do_close\n");
 	// Called after JS onunload function. Returning 0 here indicates we want standard behaviour,
 	// returning 1 would indicate that we're going to handle the close-request manually.
 	return 0;
 }
 
 void CEF_CALLBACK on_before_close(cef_life_span_handler_t*, cef_browser_t*) {
-	fmt::print("on_before_close\n");
 	cef_quit_message_loop();
 }
