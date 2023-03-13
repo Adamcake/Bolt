@@ -58,8 +58,8 @@ Browser::WindowDelegate::WindowDelegate(cef_browser_view_t* browser_view, Detail
 	this->cef_delegate.base.base.base.has_one_ref = ::WindowDelegate::has_one_ref;
 	this->cef_delegate.base.base.base.has_at_least_one_ref = ::WindowDelegate::has_any_refs;
 
-	// The `cef_view_delegate_t` functions won't be called here,
-	// implement the ones in browser_view_delegate.cxx instead
+	// The `cef_view_delegate_t` functions
+	// they get called directly in browser_view_delegate.cxx instead
 	this->cef_delegate.base.base.get_preferred_size = nullptr;
 	this->cef_delegate.base.base.get_minimum_size = nullptr;
 	this->cef_delegate.base.base.get_maximum_size = nullptr;
@@ -119,29 +119,32 @@ cef_view_delegate_t* Browser::WindowDelegate::view_delegate() {
 void CEF_CALLBACK on_window_created(cef_window_delegate_t* self, cef_window_t* window) {
 	window->base.add_child_view(&window->base, &WindowDelegate::resolve(self)->browser_view->base);
 	window->show(window);
+	window->base.base.base.release(&window->base.base.base);
 }
 
-void CEF_CALLBACK on_window_closing(cef_window_delegate_t*, cef_window_t*) {
-
+void CEF_CALLBACK on_window_closing(cef_window_delegate_t*, cef_window_t* window) {
+	window->base.base.base.release(&window->base.base.base);
 }
 
-void CEF_CALLBACK on_window_destroyed(cef_window_delegate_t*, cef_window_t*) {
-
+void CEF_CALLBACK on_window_destroyed(cef_window_delegate_t*, cef_window_t* window) {
+	window->base.base.base.release(&window->base.base.base);
 }
 
-void CEF_CALLBACK on_window_activation_changed(cef_window_delegate_t*, cef_window_t*, int) {
-
+void CEF_CALLBACK on_window_activation_changed(cef_window_delegate_t*, cef_window_t* window, int) {
+	window->base.base.base.release(&window->base.base.base);
 }
 
-void CEF_CALLBACK on_window_bounds_changed(cef_window_delegate_t*, cef_window_t*, const cef_rect_t*) {
-
+void CEF_CALLBACK on_window_bounds_changed(cef_window_delegate_t*, cef_window_t* window, const cef_rect_t*) {
+	window->base.base.base.release(&window->base.base.base);
 }
 
-cef_window_t* CEF_CALLBACK get_parent_window(cef_window_delegate_t*, cef_window_t*, int*, int*) {
+cef_window_t* CEF_CALLBACK get_parent_window(cef_window_delegate_t*, cef_window_t* window, int*, int*) {
+	window->base.base.base.release(&window->base.base.base);
 	return nullptr;
 }
 
-cef_rect_t CEF_CALLBACK get_initial_bounds(cef_window_delegate_t* self_, cef_window_t* view) {
+cef_rect_t CEF_CALLBACK get_initial_bounds(cef_window_delegate_t* self_, cef_window_t* window) {
+	window->base.base.base.release(&window->base.base.base);
 	auto self = WindowDelegate::resolve(self_);
 	return cef_rect_t {
 		.x = self->details.startx,
@@ -151,35 +154,42 @@ cef_rect_t CEF_CALLBACK get_initial_bounds(cef_window_delegate_t* self_, cef_win
 	};
 }
 
-cef_show_state_t CEF_CALLBACK get_initial_show_state(cef_window_delegate_t*, cef_window_t*) {
+cef_show_state_t CEF_CALLBACK get_initial_show_state(cef_window_delegate_t*, cef_window_t* window) {
+	window->base.base.base.release(&window->base.base.base);
 	return CEF_SHOW_STATE_NORMAL;
 }
 
-int CEF_CALLBACK is_frameless(cef_window_delegate_t* self, cef_window_t*) {
+int CEF_CALLBACK is_frameless(cef_window_delegate_t* self, cef_window_t* window) {
+	window->base.base.base.release(&window->base.base.base);
 	return !WindowDelegate::resolve(self)->details.frame;
 }
 
-int CEF_CALLBACK can_resize(cef_window_delegate_t* self, cef_window_t*) {
+int CEF_CALLBACK can_resize(cef_window_delegate_t* self, cef_window_t* window) {
+	window->base.base.base.release(&window->base.base.base);
 	return !WindowDelegate::resolve(self)->details.resizeable;
 }
 
-int CEF_CALLBACK can_maximize(cef_window_delegate_t*, cef_window_t*) {
+int CEF_CALLBACK can_maximize(cef_window_delegate_t*, cef_window_t* window) {
+	window->base.base.base.release(&window->base.base.base);
 	return false;
 }
 
-int CEF_CALLBACK can_minimize(cef_window_delegate_t*, cef_window_t*) {
+int CEF_CALLBACK can_minimize(cef_window_delegate_t*, cef_window_t* window) {
+	window->base.base.base.release(&window->base.base.base);
 	return false;
 }
 
-int CEF_CALLBACK can_close(cef_window_delegate_t*, cef_window_t*) {
+int CEF_CALLBACK can_close(cef_window_delegate_t*, cef_window_t* window) {
+	window->base.base.base.release(&window->base.base.base);
 	return true;
 }
 
-int CEF_CALLBACK on_accelerator(cef_window_delegate_t*, cef_window_t*, int) {
+int CEF_CALLBACK on_accelerator(cef_window_delegate_t*, cef_window_t* window, int) {
+	window->base.base.base.release(&window->base.base.base);
 	return false;
 }
 
-int CEF_CALLBACK on_key_event(cef_window_delegate_t*, cef_window_t*, const cef_key_event_t*) {
+int CEF_CALLBACK on_key_event(cef_window_delegate_t*, cef_window_t* window, const cef_key_event_t* event) {
+	window->base.base.base.release(&window->base.base.base);
 	return false;
 }
-

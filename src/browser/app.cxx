@@ -69,8 +69,8 @@ cef_app_t* Browser::App::app() {
 	return &this->cef_app;
 }
 
-void CEF_CALLBACK on_before_command_line_processing(cef_app_t*, const cef_string_t*, cef_command_line_t*) {
-	
+void CEF_CALLBACK on_before_command_line_processing(cef_app_t*, const cef_string_t*, cef_command_line_t* command_line) {
+	command_line->base.release(&command_line->base);
 }
 
 void CEF_CALLBACK on_register_custom_schemes(cef_app_t*, cef_scheme_registrar_t*) {

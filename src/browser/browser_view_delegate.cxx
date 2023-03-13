@@ -2,16 +2,16 @@
 #include "include/capi/views/cef_browser_view_capi.h"
 #include "include/capi/views/cef_view_capi.h"
 
-cef_size_t CEF_CALLBACK get_preferred_size(cef_view_delegate_t*, cef_view_t*);
-cef_size_t CEF_CALLBACK get_minimum_size(cef_view_delegate_t*, cef_view_t*);
-cef_size_t CEF_CALLBACK get_maximum_size(cef_view_delegate_t*, cef_view_t*);
-int CEF_CALLBACK get_height_for_width(cef_view_delegate_t*, cef_view_t*, int);
-void CEF_CALLBACK on_parent_view_changed(cef_view_delegate_t*, cef_view_t*, int, cef_view_t*);
-void CEF_CALLBACK on_child_view_changed(cef_view_delegate_t*, cef_view_t*, int, cef_view_t*);
-void CEF_CALLBACK on_window_changed(cef_view_delegate_t*, cef_view_t*, int);
-void CEF_CALLBACK on_layout_changed(cef_view_delegate_t*, cef_view_t*, const cef_rect_t*);
-void CEF_CALLBACK on_focus(cef_view_delegate_t*, cef_view_t*);
-void CEF_CALLBACK on_blur(cef_view_delegate_t*, cef_view_t*);
+cef_size_t CEF_CALLBACK get_preferred_size(cef_view_delegate_t*, cef_view_t* view);
+cef_size_t CEF_CALLBACK get_minimum_size(cef_view_delegate_t*, cef_view_t* view);
+cef_size_t CEF_CALLBACK get_maximum_size(cef_view_delegate_t*, cef_view_t* view);
+int CEF_CALLBACK get_height_for_width(cef_view_delegate_t*, cef_view_t* view, int);
+void CEF_CALLBACK on_parent_view_changed(cef_view_delegate_t*, cef_view_t* view, int, cef_view_t*);
+void CEF_CALLBACK on_child_view_changed(cef_view_delegate_t*, cef_view_t* view, int, cef_view_t*);
+void CEF_CALLBACK on_window_changed(cef_view_delegate_t*, cef_view_t* view, int);
+void CEF_CALLBACK on_layout_changed(cef_view_delegate_t*, cef_view_t* view, const cef_rect_t*);
+void CEF_CALLBACK on_focus(cef_view_delegate_t*, cef_view_t* view);
+void CEF_CALLBACK on_blur(cef_view_delegate_t*, cef_view_t* view);
 void CEF_CALLBACK on_browser_created(cef_browser_view_delegate_t*, cef_browser_view_t*, cef_browser_t*);
 void CEF_CALLBACK on_browser_destroyed(cef_browser_view_delegate_t*, cef_browser_view_t*, cef_browser_t*);
 cef_browser_view_delegate_t* CEF_CALLBACK get_delegate_for_popup_browser_view(cef_browser_view_delegate_t*, cef_browser_view_t*, const cef_browser_settings_t*, cef_client_t*, int);
@@ -97,68 +97,80 @@ cef_browser_view_delegate_t* Browser::BrowserViewDelegate::delegate() {
 	return &this->cef_delegate;
 }
 
-cef_size_t CEF_CALLBACK get_preferred_size(cef_view_delegate_t* delegate, cef_view_t*) {
+cef_size_t CEF_CALLBACK get_preferred_size(cef_view_delegate_t* delegate, cef_view_t* view) {
+	view->base.release(&view->base);
 	Browser::BrowserViewDelegate* self = BrowserViewDelegate::resolve_view(delegate);
 	return cef_size_t { .width = self->details.preferred_width, .height = self->details.preferred_height };
 }
 
-cef_size_t CEF_CALLBACK get_minimum_size(cef_view_delegate_t* delegate, cef_view_t*) {
+cef_size_t CEF_CALLBACK get_minimum_size(cef_view_delegate_t* delegate, cef_view_t* view) {
+	view->base.release(&view->base);
 	Browser::BrowserViewDelegate* self = BrowserViewDelegate::resolve_view(delegate);
 	return cef_size_t { .width = self->details.min_width, .height = self->details.min_height };
 }
 
-cef_size_t CEF_CALLBACK get_maximum_size(cef_view_delegate_t* delegate, cef_view_t*) {
+cef_size_t CEF_CALLBACK get_maximum_size(cef_view_delegate_t* delegate, cef_view_t* view) {
+	view->base.release(&view->base);
 	Browser::BrowserViewDelegate* self = BrowserViewDelegate::resolve_view(delegate);
 	return cef_size_t { .width = self->details.max_width, .height = self->details.max_height };
 }
 
-int CEF_CALLBACK get_height_for_width(cef_view_delegate_t* delegate, cef_view_t*, int) {
+int CEF_CALLBACK get_height_for_width(cef_view_delegate_t* delegate, cef_view_t* view, int) {
+	view->base.release(&view->base);
 	return BrowserViewDelegate::resolve_view(delegate)->details.preferred_height;
 }
 
-void CEF_CALLBACK on_parent_view_changed(cef_view_delegate_t*, cef_view_t*, int, cef_view_t*) {
-
+void CEF_CALLBACK on_parent_view_changed(cef_view_delegate_t*, cef_view_t* view, int, cef_view_t* parent_view) {
+	view->base.release(&view->base);
+	parent_view->base.release(&parent_view->base);
 }
 
-void CEF_CALLBACK on_child_view_changed(cef_view_delegate_t*, cef_view_t*, int, cef_view_t*) {
-
+void CEF_CALLBACK on_child_view_changed(cef_view_delegate_t*, cef_view_t* view, int, cef_view_t* child_view) {
+	view->base.release(&view->base);
+	child_view->base.release(&child_view->base);
 }
 
-void CEF_CALLBACK on_window_changed(cef_view_delegate_t*, cef_view_t*, int) {
-
+void CEF_CALLBACK on_window_changed(cef_view_delegate_t*, cef_view_t* view, int) {
+	view->base.release(&view->base);
 }
 
-void CEF_CALLBACK on_layout_changed(cef_view_delegate_t*, cef_view_t*, const cef_rect_t*) {
-
+void CEF_CALLBACK on_layout_changed(cef_view_delegate_t*, cef_view_t* view, const cef_rect_t*) {
+	view->base.release(&view->base);
 }
 
-void CEF_CALLBACK on_focus(cef_view_delegate_t*, cef_view_t*) {
-	
+void CEF_CALLBACK on_focus(cef_view_delegate_t*, cef_view_t* view) {
+	view->base.release(&view->base);
 }
 
-void CEF_CALLBACK on_blur(cef_view_delegate_t*, cef_view_t*) {
-
+void CEF_CALLBACK on_blur(cef_view_delegate_t*, cef_view_t* view) {
+	view->base.release(&view->base);
 }
 
-void CEF_CALLBACK on_browser_created(cef_browser_view_delegate_t*, cef_browser_view_t*, cef_browser_t*) {
-
+void CEF_CALLBACK on_browser_created(cef_browser_view_delegate_t*, cef_browser_view_t* browser_view, cef_browser_t* browser) {
+	browser_view->base.base.release(&browser_view->base.base);
+	browser->base.release(&browser->base);
 }
 
-void CEF_CALLBACK on_browser_destroyed(cef_browser_view_delegate_t*, cef_browser_view_t*, cef_browser_t*) {
-
+void CEF_CALLBACK on_browser_destroyed(cef_browser_view_delegate_t*, cef_browser_view_t* browser_view, cef_browser_t* browser) {
+	browser_view->base.base.release(&browser_view->base.base);
+	browser->base.release(&browser->base);
 }
 
 cef_browser_view_delegate_t* CEF_CALLBACK get_delegate_for_popup_browser_view(
 	cef_browser_view_delegate_t* self,
-	cef_browser_view_t*,
-	const cef_browser_settings_t*,
-	cef_client_t*,
-	int
+	cef_browser_view_t* browser_view,
+	const cef_browser_settings_t* browser_settings,
+	cef_client_t* client,
+	int is_devtools
 ) {
+	browser_view->base.base.release(&browser_view->base.base);
+	client->base.release(&client->base);
 	return self;
 }
 
-int CEF_CALLBACK on_popup_browser_view_created(cef_browser_view_delegate_t*, cef_browser_view_t*, cef_browser_view_t*, int) {
+int CEF_CALLBACK on_popup_browser_view_created(cef_browser_view_delegate_t* self, cef_browser_view_t* browser_view, cef_browser_view_t* popup_browser_view, int is_devtools) {
+	browser_view->base.base.release(&browser_view->base.base);
+	popup_browser_view->base.base.release(&popup_browser_view->base.base);
 	return false;
 }
 

@@ -172,5 +172,8 @@ cef_request_handler_t* CEF_CALLBACK get_request_handler(cef_client_t* self) {
 }
 
 int CEF_CALLBACK on_process_message_received(cef_client_t* self, cef_browser_t* browser, cef_frame_t* frame, cef_process_id_t source_process, cef_process_message_t* message) {
+	browser->base.release(&browser->base);
+	frame->base.release(&frame->base);
+	message->base.release(&message->base);
 	return 0;
 }
