@@ -98,20 +98,26 @@ int CEF_CALLBACK on_before_popup(
 	cef_dictionary_value_t** extra_info,
 	int* no_javascript_access
 ) {
+	browser->base.release(&browser->base);
+	frame->base.release(&frame->base);
+
 	// Returning 1 would cancel creation of the popup, 0 allows it
 	return 0;
 }
 
-void CEF_CALLBACK on_after_created(cef_life_span_handler_t*, cef_browser_t*) {
-	
+void CEF_CALLBACK on_after_created(cef_life_span_handler_t*, cef_browser_t* browser) {
+	browser->base.release(&browser->base);
 }
 
-int CEF_CALLBACK do_close(cef_life_span_handler_t*, cef_browser_t*) {
+int CEF_CALLBACK do_close(cef_life_span_handler_t*, cef_browser_t* browser) {
+	browser->base.release(&browser->base);
+
 	// Called after JS onunload function. Returning 0 here indicates we want standard behaviour,
 	// returning 1 would indicate that we're going to handle the close-request manually.
 	return 0;
 }
 
-void CEF_CALLBACK on_before_close(cef_life_span_handler_t*, cef_browser_t*) {
+void CEF_CALLBACK on_before_close(cef_life_span_handler_t*, cef_browser_t* browser) {
+	browser->base.release(&browser->base);
 	cef_quit_message_loop();
 }
