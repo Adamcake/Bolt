@@ -1,5 +1,6 @@
 #include "window_delegate.hxx"
 #include "include/capi/views/cef_window_capi.h"
+#include "src/browser/browser_view_delegate.hxx"
 
 void CEF_CALLBACK on_window_created(cef_window_delegate_t*, cef_window_t*);
 void CEF_CALLBACK on_window_closing(cef_window_delegate_t*, cef_window_t*);
@@ -117,8 +118,12 @@ cef_view_delegate_t* Browser::WindowDelegate::view_delegate() {
 }
 
 void CEF_CALLBACK on_window_created(cef_window_delegate_t* self, cef_window_t* window) {
-	window->base.add_child_view(&window->base, &WindowDelegate::resolve(self)->browser_view->base);
+	cef_browser_view_t* browser_view = WindowDelegate::resolve(self)->browser_view;
+	browser_view->base.base.add_ref(&browser_view->base.base);
+
+	window->base.add_child_view(&window->base, &browser_view->base);
 	window->show(window);
+	
 	window->base.base.base.release(&window->base.base.base);
 }
 
