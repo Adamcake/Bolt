@@ -42,7 +42,8 @@ int main(int argc, char* argv[]) {
 	main_args.argv = argv;
 
 	// Set up our app struct
-	CefRefPtr<CefApp> cef_app = new Browser::App;
+	Browser::App cef_app_;
+	CefRefPtr<CefApp> cef_app = &cef_app_;
 
 	// CEF applications have multiple sub-processes (render, GPU, etc) that share the same executable.
 	// This function checks the command-line and, if this is a sub-process, executes the appropriate logic.
