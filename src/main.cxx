@@ -104,7 +104,7 @@ int main(int argc, char* argv[]) {
 	};
 	CefRefPtr<CefBrowserViewDelegate> bvd = new Browser::BrowserViewDelegate(details);
 	CefRefPtr<CefBrowserView> browser_view = CefBrowserView::CreateBrowserView(client, "https://adamcake.com", browser_settings, nullptr, nullptr, bvd);
-	CefRefPtr<CefWindowDelegate> window_delegate = new Browser::WindowDelegate(browser_view, details);
+	CefRefPtr<CefWindowDelegate> window_delegate = new Browser::WindowDelegate(browser_view, bvd, details);
 	CefWindow::CreateTopLevelWindow(window_delegate);
 
 	// Run the CEF message loop

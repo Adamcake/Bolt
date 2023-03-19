@@ -9,11 +9,13 @@ namespace Browser {
 	/// Implementation of CefWindowDelegate. Create on the heap as CefRefPtr.
 	/// https://github.com/chromiumembedded/cef/blob/5563/include/views/cef_window_delegate.h
 	struct WindowDelegate: public CefWindowDelegate {
-		const CefRefPtr<CefBrowserView> browser_view;
+		CefRefPtr<CefBrowserView> browser_view;
+		CefRefPtr<CefBrowserViewDelegate> browser_view_delegate;
 		const Details details;
 
-		WindowDelegate(CefRefPtr<CefBrowserView>, Details);
+		WindowDelegate(CefRefPtr<CefBrowserView>, CefRefPtr<CefBrowserViewDelegate>, Details);
 		void OnWindowCreated(CefRefPtr<CefWindow>) override;
+		void OnWindowDestroyed(CefRefPtr<CefWindow>) override;
 		CefRect GetInitialBounds(CefRefPtr<CefWindow>) override;
 		cef_show_state_t GetInitialShowState(CefRefPtr<CefWindow>) override;
 		bool IsFrameless(CefRefPtr<CefWindow>) override;
