@@ -4,6 +4,7 @@
 #include "include/cef_life_span_handler.h"
 #include "include/views/cef_window.h"
 
+#include "browser.hxx"
 #include "browser/app.hxx"
 #include "browser/client.hxx"
 #include "browser/details.hxx"
@@ -80,9 +81,6 @@ int main(int argc, char* argv[]) {
 		return exit_code;
 	}
 
-	// Browser settings
-	CefBrowserSettings browser_settings;
-	
 	// Our CEF client and the various things it needs pointers to
 	Browser::LifeSpanHandler life_span_handler_;
 	CefRefPtr<CefLifeSpanHandler> life_span_handler = &life_span_handler_;
@@ -102,10 +100,7 @@ int main(int argc, char* argv[]) {
 		.resizeable = false,
 		.frame = true,
 	};
-	CefRefPtr<CefBrowserViewDelegate> bvd = new Browser::BrowserViewDelegate(details);
-	CefRefPtr<CefBrowserView> browser_view = CefBrowserView::CreateBrowserView(client, "https://adamcake.com", browser_settings, nullptr, nullptr, bvd);
-	CefRefPtr<CefWindowDelegate> window_delegate = new Browser::WindowDelegate(browser_view, bvd, details);
-	CefWindow::CreateTopLevelWindow(window_delegate);
+	Browser::Window win(client, details);
 
 	// Run the CEF message loop
 	// TODO: later this will be replaced with an OS-specific event loop capable of calling
