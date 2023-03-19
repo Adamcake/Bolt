@@ -81,7 +81,7 @@ int main(int argc, char* argv[]) {
 	}
 
 	// Browser settings
-	cef_browser_settings_t browser_settings = {};
+	CefBrowserSettings browser_settings;
 	
 	// Our CEF client and the various things it needs pointers to
 	Browser::LifeSpanHandler life_span_handler_;
