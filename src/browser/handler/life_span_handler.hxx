@@ -10,9 +10,13 @@ namespace Browser {
 
 		void OnBeforeClose(CefRefPtr<CefBrowser>) override;
 
-		private:
-			IMPLEMENT_REFCOUNTING(LifeSpanHandler);
-			DISALLOW_COPY_AND_ASSIGN(LifeSpanHandler);
+		LifeSpanHandler(const LifeSpanHandler&) = delete;
+		LifeSpanHandler& operator=(const LifeSpanHandler&) = delete;
+		void AddRef() const override { this->ref_count.AddRef(); }
+		bool Release() const override { return this->ref_count.Release(); }
+		bool HasOneRef() const override { return this->ref_count.HasOneRef(); }
+		bool HasAtLeastOneRef() const override { return this->ref_count.HasAtLeastOneRef(); }
+		private: CefRefCount ref_count;
 	};
 }
 

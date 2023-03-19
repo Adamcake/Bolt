@@ -84,7 +84,8 @@ int main(int argc, char* argv[]) {
 	cef_browser_settings_t browser_settings = {};
 	
 	// Our CEF client and the various things it needs pointers to
-	CefRefPtr<CefLifeSpanHandler> life_span_handler = new Browser::LifeSpanHandler;
+	Browser::LifeSpanHandler life_span_handler_;
+	CefRefPtr<CefLifeSpanHandler> life_span_handler = &life_span_handler_;
 	Browser::Client client_(life_span_handler);
 	CefRefPtr<CefClient> client = &client_;
 
