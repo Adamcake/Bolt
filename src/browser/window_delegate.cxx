@@ -44,3 +44,14 @@ bool Browser::WindowDelegate::CanClose(CefRefPtr<CefWindow>) {
 	return true;
 }
 
+CefSize Browser::WindowDelegate::GetPreferredSize(CefRefPtr<CefView>) {
+	return CefSize(this->details.preferred_width, this->details.preferred_height);
+}
+
+CefSize Browser::WindowDelegate::GetMinimumSize(CefRefPtr<CefView>) {
+	return CefSize(this->details.min_width, this->details.min_height);
+}
+
+CefSize Browser::WindowDelegate::GetMaximumSize(CefRefPtr<CefView>) {
+	return CefSize(this->details.max_width, this->details.max_height);
+}

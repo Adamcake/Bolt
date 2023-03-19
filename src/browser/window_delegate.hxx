@@ -19,6 +19,9 @@ namespace Browser {
 		bool CanMaximize(CefRefPtr<CefWindow>) override;
 		bool CanMinimize(CefRefPtr<CefWindow>) override;
 		bool CanClose(CefRefPtr<CefWindow>) override;
+		CefSize GetPreferredSize(CefRefPtr<CefView>) override;
+		CefSize GetMinimumSize(CefRefPtr<CefView>) override;
+		CefSize GetMaximumSize(CefRefPtr<CefView>) override;
 
 		private:
 			IMPLEMENT_REFCOUNTING(WindowDelegate);
