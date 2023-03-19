@@ -1,7 +1,6 @@
 #ifndef _BOLT_BROWSER_VIEW_DELEGATE_HXX_
 #define _BOLT_BROWSER_VIEW_DELEGATE_HXX_
 
-#include "include/internal/cef_types.h"
 #include "include/views/cef_browser_view_delegate.h"
 #include "details.hxx"
 
