@@ -79,14 +79,6 @@ int main(int argc, char* argv[]) {
 		return exit_code;
 	}
 
-	// Window title
-	const char* window_title = "Bolt";
-	cef_string_t window_title_cef = {};
-	cef_string_from_utf8(window_title, strlen(window_title), &window_title_cef);
-
-	// Initial URL
-	const char* url = "https://adamcake.com";
-
 	// Browser settings
 	cef_browser_settings_t browser_settings = {};
 	
@@ -108,7 +100,7 @@ int main(int argc, char* argv[]) {
 		.frame = true,
 	};
 	CefRefPtr<CefBrowserViewDelegate> bvd = new Browser::BrowserViewDelegate(details);
-	CefRefPtr<CefBrowserView> browser_view = CefBrowserView::CreateBrowserView(client, url, browser_settings, nullptr, nullptr, bvd);
+	CefRefPtr<CefBrowserView> browser_view = CefBrowserView::CreateBrowserView(client, "https://adamcake.com", browser_settings, nullptr, nullptr, bvd);
 	CefRefPtr<CefWindowDelegate> window_delegate = new Browser::WindowDelegate(browser_view, details);
 	CefWindow::CreateTopLevelWindow(window_delegate);
 
