@@ -1,16 +1,8 @@
 #include <fmt/core.h>
 
-#include "include/cef_app.h"
-#include "include/cef_life_span_handler.h"
-#include "include/views/cef_window.h"
-
 #include "browser.hxx"
 #include "browser/app.hxx"
 #include "browser/client.hxx"
-#include "browser/details.hxx"
-#include "browser/window_delegate.hxx"
-#include "browser/browser_view_delegate.hxx"
-#include "browser/handler/life_span_handler.hxx"
 
 #if defined(OS_WIN)
 #include <windows.h>
