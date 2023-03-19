@@ -5,7 +5,7 @@ libcef = custom_target('libcef', output: 'libcef.so', command: ['./cef/install.s
 meson.add_install_script('cef/install.sh')
 executable(
     'bolt',
-    'src/main.cxx', 'src/browser/app.cxx', 'src/browser/client.cxx', 'src/browser/window_delegate.cxx',
+    'src/main.cxx', 'src/browser/app.cxx', 'src/browser.cxx', 'src/browser/client.cxx', 'src/browser/window_delegate.cxx',
     'src/browser/browser_view_delegate.cxx', 'src/browser/handler/life_span_handler.cxx',
     dependencies: [dependency('fmt'), dependency('tesseract'), dependency('x11'), libcef_dll_wrapper],
     install: true,
