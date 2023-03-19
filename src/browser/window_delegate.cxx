@@ -8,7 +8,6 @@ Browser::WindowDelegate::WindowDelegate(CefRefPtr<CefBrowserView> browser_view, 
 }
 
 void Browser::WindowDelegate::Close() {
-	std::unique_lock _(this->refptr_mutex);
 	if (this->window) {
 		this->window->Close();
 		this->window = nullptr;
@@ -16,14 +15,12 @@ void Browser::WindowDelegate::Close() {
 }
 
 void Browser::WindowDelegate::OnWindowCreated(CefRefPtr<CefWindow> window) {
-	std::unique_lock _(this->refptr_mutex);
 	this->window = std::move(window);
 	this->window->AddChildView(this->browser_view);
 	this->window->Show();
 }
 
 void Browser::WindowDelegate::OnWindowDestroyed(CefRefPtr<CefWindow> window) {
-	std::unique_lock _(this->refptr_mutex);
 	this->window = nullptr;
 	this->browser_view = nullptr;
 	this->browser_view_delegate = nullptr;
