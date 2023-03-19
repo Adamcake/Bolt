@@ -1,6 +1,7 @@
 #ifndef _BOLT_WINDOW_DELEGATE_HXX_
 #define _BOLT_WINDOW_DELEGATE_HXX_
 
+#include "include/views/cef_window.h"
 #include "include/views/cef_window_delegate.h"
 #include "include/views/cef_browser_view.h"
 #include "details.hxx"
@@ -9,6 +10,7 @@ namespace Browser {
 	/// Implementation of CefWindowDelegate. Create on the heap as CefRefPtr.
 	/// https://github.com/chromiumembedded/cef/blob/5563/include/views/cef_window_delegate.h
 	struct WindowDelegate: public CefWindowDelegate {
+		CefRefPtr<CefWindow> window;
 		CefRefPtr<CefBrowserView> browser_view;
 		CefRefPtr<CefBrowserViewDelegate> browser_view_delegate;
 		const Details details;
@@ -26,6 +28,8 @@ namespace Browser {
 		CefSize GetPreferredSize(CefRefPtr<CefView>) override;
 		CefSize GetMinimumSize(CefRefPtr<CefView>) override;
 		CefSize GetMaximumSize(CefRefPtr<CefView>) override;
+
+		void Close();
 
 		private:
 			IMPLEMENT_REFCOUNTING(WindowDelegate);
