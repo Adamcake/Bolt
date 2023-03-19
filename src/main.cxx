@@ -85,7 +85,8 @@ int main(int argc, char* argv[]) {
 	
 	// Our CEF client and the various things it needs pointers to
 	CefRefPtr<CefLifeSpanHandler> life_span_handler = new Browser::LifeSpanHandler;
-	CefRefPtr<CefClient> client = new Browser::Client(life_span_handler);
+	Browser::Client client_(life_span_handler);
+	CefRefPtr<CefClient> client = &client_;
 
 	// Spawn a window using the "views" pipeline
 	Browser::Details details = {
