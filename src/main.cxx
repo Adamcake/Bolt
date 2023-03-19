@@ -1,6 +1,8 @@
 #include <fmt/core.h>
 
-#include "include/capi/views/cef_window_capi.h"
+#include "include/cef_app.h"
+#include "include/cef_life_span_handler.h"
+#include "include/views/cef_window.h"
 
 #include "browser/app.hxx"
 #include "browser/client.hxx"
@@ -40,13 +42,12 @@ int main(int argc, char* argv[]) {
 	main_args.argv = argv;
 
 	// Set up our app struct
-	Browser::App cef_app;
+	CefRefPtr<CefApp> cef_app = new Browser::App;
 
 	// CEF applications have multiple sub-processes (render, GPU, etc) that share the same executable.
 	// This function checks the command-line and, if this is a sub-process, executes the appropriate logic.
-	int exit_code = cef_execute_process(&main_args, cef_app.app(), nullptr);
+	int exit_code = CefExecuteProcess(main_args, cef_app, nullptr);
 	if (exit_code >= 0) {
-		cef_app.release();
 		return exit_code;
 	}
 
@@ -57,26 +58,24 @@ int main(int argc, char* argv[]) {
 #endif
 
 	// Parse command-line arguments
-	cef_command_line_t* command_line = cef_command_line_create();
+	CefRefPtr<CefCommandLine> command_line = CefCommandLine::CreateCommandLine();
 #if defined(OS_WIN)
-	(command_line->init_from_string)(command_line, ::GetCommandLineW());
+	command_line->InitFromString(::GetCommandLineW());
 #else
-	(command_line->init_from_argv)(command_line, argc, argv);
+	command_line->InitFromArgv(argc, argv);
 #endif
 
 	// CEF settings - only set the ones we're interested in
-	cef_settings_t settings = {0};
-	settings.size = sizeof settings;
+	CefSettings settings = CefSettings();
 	settings.log_severity = LOGSEVERITY_WARNING; // Print warnings and errors only
 	//settings.external_message_pump = true;     // Allows us to integrate CEF's event loop into our own
 	settings.command_line_args_disabled = true;  // We don't want our command-line to configure CEF's windows
 	settings.uncaught_exception_stack_size = 8;  // Number of call stack frames given in unhandled exception events
 
 	// Initialize CEF
-	exit_code = cef_initialize(&main_args, &settings, cef_app.app(), nullptr);
+	exit_code = CefInitialize(main_args, settings, cef_app, nullptr);
 	if (exit_code == 0) {
 		fmt::print("Exiting with error: cef_initialize exit_code {}\n", exit_code);
-		cef_app.release();
 		return exit_code;
 	}
 
@@ -87,16 +86,13 @@ int main(int argc, char* argv[]) {
 
 	// Initial URL
 	const char* url = "https://adamcake.com";
-	cef_string_t url_cef = {};
-	cef_string_from_utf8(url, strlen(url), &url_cef);
 
 	// Browser settings
 	cef_browser_settings_t browser_settings = {};
-	browser_settings.size = sizeof browser_settings;
 	
 	// Our CEF client and the various things it needs pointers to
-	Browser::LifeSpanHandler life_span_handler;
-	Browser::Client client(&life_span_handler);
+	CefRefPtr<CefLifeSpanHandler> life_span_handler = new Browser::LifeSpanHandler;
+	CefRefPtr<CefClient> client = new Browser::Client(life_span_handler);
 
 	// Spawn a window using the "views" pipeline
 	Browser::Details details = {
@@ -111,23 +107,18 @@ int main(int argc, char* argv[]) {
 		.resizeable = false,
 		.frame = true,
 	};
-	Browser::BrowserViewDelegate bvd(details);
-	cef_browser_view_t* browser_view = cef_browser_view_create(client.client(), &url_cef, &browser_settings, nullptr, nullptr, bvd.delegate());
-	Browser::WindowDelegate window_delegate(browser_view, details);
-	cef_window_create_top_level(window_delegate.window_delegate());
+	CefRefPtr<CefBrowserViewDelegate> bvd = new Browser::BrowserViewDelegate(details);
+	CefRefPtr<CefBrowserView> browser_view = CefBrowserView::CreateBrowserView(client, url, browser_settings, nullptr, nullptr, bvd);
+	CefRefPtr<CefWindowDelegate> window_delegate = new Browser::WindowDelegate(browser_view, details);
+	CefWindow::CreateTopLevelWindow(window_delegate);
 
 	// Run the CEF message loop
 	// TODO: later this will be replaced with an OS-specific event loop capable of calling
 	// cef_do_message_loop_work() in response to CEF's "message pump"
-	cef_run_message_loop();
+	CefRunMessageLoop();
 
 	// Release things we still own, then shut down CEF
-	bvd.release();
-	client.release();
-	window_delegate.release();
-	life_span_handler.release();
-	cef_app.release();
-	cef_shutdown();
+	CefShutdown();
 
 	return 0;
 }

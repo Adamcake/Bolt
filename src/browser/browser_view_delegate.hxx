@@ -1,25 +1,24 @@
 #ifndef _BOLT_BROWSER_VIEW_DELEGATE_HXX_
 #define _BOLT_BROWSER_VIEW_DELEGATE_HXX_
 
-#include <atomic>
-
-#include "include/capi/views/cef_browser_view_delegate_capi.h"
+#include "include/internal/cef_types.h"
+#include "include/views/cef_browser_view_delegate.h"
 #include "details.hxx"
 
 namespace Browser {
-	struct BrowserViewDelegate {
-		cef_browser_view_delegate_t cef_delegate;
-		std::atomic_ulong refcount;
+	struct BrowserViewDelegate: public CefBrowserViewDelegate {
 		const Details details;
 
 		BrowserViewDelegate(Details);
-		void add_ref();
-		int release();
-		void destroy();
-		cef_browser_view_delegate_t* delegate();
+		CefSize GetPreferredSize(CefRefPtr<CefView>) override;
+		CefSize GetMinimumSize(CefRefPtr<CefView>) override;
+		CefSize GetMaximumSize(CefRefPtr<CefView>) override;
+		//int GetHeightForWidth(CefRefPtr<CefView>, int) override;
+		cef_chrome_toolbar_type_t GetChromeToolbarType() override;
 
-		BrowserViewDelegate(const BrowserViewDelegate&) = delete;
-		BrowserViewDelegate& operator=(const BrowserViewDelegate&) = delete;
+		private:
+			IMPLEMENT_REFCOUNTING(BrowserViewDelegate);
+			DISALLOW_COPY_AND_ASSIGN(BrowserViewDelegate);
 	};
 }
 

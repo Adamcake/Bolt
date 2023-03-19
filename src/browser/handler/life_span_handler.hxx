@@ -1,22 +1,18 @@
 #ifndef _BOLT_LIFE_SPAN_HANDLER_HXX_
 #define _BOLT_LIFE_SPAN_HANDLER_HXX_
-#include <atomic>
 
-#include "include/capi/cef_client_capi.h"
+#include "include/cef_client.h"
+#include "include/cef_life_span_handler.h"
 
 namespace Browser {
-	struct LifeSpanHandler {
-		cef_life_span_handler_t cef_handler;
-		std::atomic_ulong refcount;
-		
+	struct LifeSpanHandler: public CefLifeSpanHandler {
 		LifeSpanHandler();
-		void add_ref();
-		int release();
-		void destroy();
-		cef_life_span_handler_t* handler();
 
-		LifeSpanHandler(const LifeSpanHandler&) = delete;
-		LifeSpanHandler& operator=(const LifeSpanHandler&) = delete;
+		void OnBeforeClose(CefRefPtr<CefBrowser>) override;
+
+		private:
+			IMPLEMENT_REFCOUNTING(LifeSpanHandler);
+			DISALLOW_COPY_AND_ASSIGN(LifeSpanHandler);
 	};
 }
 
