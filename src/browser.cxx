@@ -7,7 +7,7 @@ Browser::Window::Window(CefRefPtr<CefClient> client, Browser::Details details) {
 	CefBrowserSettings browser_settings;
 	CefRefPtr<CefBrowserViewDelegate> bvd = new Browser::BrowserViewDelegate(details);
 	CefRefPtr<CefBrowserView> browser_view = CefBrowserView::CreateBrowserView(client, "https://adamcake.com", browser_settings, nullptr, nullptr, bvd);
-	this->window_delegate = new Browser::WindowDelegate(browser_view, bvd, details);
+	this->window_delegate = new Browser::WindowDelegate(std::move(browser_view), std::move(bvd), details);
 	CefWindow::CreateTopLevelWindow(this->window_delegate);
 }
 
