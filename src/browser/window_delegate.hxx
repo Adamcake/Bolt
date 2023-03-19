@@ -1,6 +1,8 @@
 #ifndef _BOLT_WINDOW_DELEGATE_HXX_
 #define _BOLT_WINDOW_DELEGATE_HXX_
 
+#include <mutex>
+
 #include "include/views/cef_window.h"
 #include "include/views/cef_window_delegate.h"
 #include "include/views/cef_browser_view.h"
@@ -10,9 +12,6 @@ namespace Browser {
 	/// Implementation of CefWindowDelegate. Create on the heap as CefRefPtr.
 	/// https://github.com/chromiumembedded/cef/blob/5563/include/views/cef_window_delegate.h
 	struct WindowDelegate: public CefWindowDelegate {
-		CefRefPtr<CefWindow> window;
-		CefRefPtr<CefBrowserView> browser_view;
-		CefRefPtr<CefBrowserViewDelegate> browser_view_delegate;
 		const Details details;
 
 		WindowDelegate(CefRefPtr<CefBrowserView>, CefRefPtr<CefBrowserViewDelegate>, Details);
@@ -32,6 +31,11 @@ namespace Browser {
 		void Close();
 
 		private:
+			CefRefPtr<CefWindow> window;
+			CefRefPtr<CefBrowserView> browser_view;
+			CefRefPtr<CefBrowserViewDelegate> browser_view_delegate;
+			std::mutex refptr_mutex;
+
 			IMPLEMENT_REFCOUNTING(WindowDelegate);
 			DISALLOW_COPY_AND_ASSIGN(WindowDelegate);
 	};

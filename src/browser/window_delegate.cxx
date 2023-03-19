@@ -3,11 +3,12 @@
 #include "src/browser/browser_view_delegate.hxx"
 
 Browser::WindowDelegate::WindowDelegate(CefRefPtr<CefBrowserView> browser_view, CefRefPtr<CefBrowserViewDelegate> browser_view_delegate, Details details):
-	window(nullptr), browser_view(browser_view), browser_view_delegate(browser_view_delegate), details(details) {
+	details(details), window(nullptr), browser_view(browser_view), browser_view_delegate(browser_view_delegate) {
 	
 }
 
 void Browser::WindowDelegate::Close() {
+	std::unique_lock _(this->refptr_mutex);
 	if (this->window) {
 		this->window->Close();
 		this->window = nullptr;
@@ -15,12 +16,14 @@ void Browser::WindowDelegate::Close() {
 }
 
 void Browser::WindowDelegate::OnWindowCreated(CefRefPtr<CefWindow> window) {
+	std::unique_lock _(this->refptr_mutex);
 	this->window = std::move(window);
 	this->window->AddChildView(this->browser_view);
 	this->window->Show();
 }
 
 void Browser::WindowDelegate::OnWindowDestroyed(CefRefPtr<CefWindow> window) {
+	std::unique_lock _(this->refptr_mutex);
 	this->window = nullptr;
 	this->browser_view = nullptr;
 	this->browser_view_delegate = nullptr;
