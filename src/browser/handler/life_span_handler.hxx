@@ -5,6 +5,8 @@
 #include "include/cef_life_span_handler.h"
 
 namespace Browser {
+	/// Implementation of CefLifeSpanHandler. Store on the stack, but access only via CefRefPtr.
+	/// https://github.com/chromiumembedded/cef/blob/5563/include/cef_life_span_handler.h
 	struct LifeSpanHandler: public CefLifeSpanHandler {
 		LifeSpanHandler();
 

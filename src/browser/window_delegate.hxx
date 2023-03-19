@@ -6,6 +6,8 @@
 #include "details.hxx"
 
 namespace Browser {
+	/// Implementation of CefWindowDelegate. Create on the heap as CefRefPtr.
+	/// https://github.com/chromiumembedded/cef/blob/5563/include/views/cef_window_delegate.h
 	struct WindowDelegate: public CefWindowDelegate {
 		const CefRefPtr<CefBrowserView> browser_view;
 		const Details details;

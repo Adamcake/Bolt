@@ -5,6 +5,8 @@
 #include "details.hxx"
 
 namespace Browser {
+	/// Implementation of CefBrowserViewDelegate. Create on the heap as CefRefPtr.
+	/// https://github.com/chromiumembedded/cef/blob/5563/include/cef_browser_view_delegate.h
 	struct BrowserViewDelegate: public CefBrowserViewDelegate {
 		const Details details;
 
@@ -12,7 +14,6 @@ namespace Browser {
 		CefSize GetPreferredSize(CefRefPtr<CefView>) override;
 		CefSize GetMinimumSize(CefRefPtr<CefView>) override;
 		CefSize GetMaximumSize(CefRefPtr<CefView>) override;
-		//int GetHeightForWidth(CefRefPtr<CefView>, int) override;
 		cef_chrome_toolbar_type_t GetChromeToolbarType() override;
 
 		private:
