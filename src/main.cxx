@@ -91,6 +91,7 @@ int main(int argc, char* argv[]) {
 		.starty = 100,
 		.resizeable = false,
 		.frame = true,
+		.controls_overlay = true,
 	};
 	Browser::Window win(client, details);
 
