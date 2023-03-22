@@ -2,10 +2,12 @@
 #include "include/views/cef_window.h"
 #include "src/browser/browser_view_delegate.hxx"
 
-Browser::WindowDelegate::WindowDelegate(CefRefPtr<CefBrowserView> browser_view, CefRefPtr<CefBrowserViewDelegate> browser_view_delegate, Details details):
-	details(details), window(nullptr), browser_view(browser_view), browser_view_delegate(browser_view_delegate) {
-	
-}
+Browser::WindowDelegate::WindowDelegate(
+	CefRefPtr<CefBrowserView> browser_view,
+	CefRefPtr<CefBrowserViewDelegate> browser_view_delegate,
+	CefRefPtr<CefBrowserView> overlay_view,
+	Details details
+): details(details), window(nullptr), browser_view(browser_view), overlay_view(overlay_view), browser_view_delegate(browser_view_delegate) { }
 
 void Browser::WindowDelegate::Close() {
 	if (this->window) {
@@ -17,6 +19,9 @@ void Browser::WindowDelegate::Close() {
 void Browser::WindowDelegate::OnWindowCreated(CefRefPtr<CefWindow> window) {
 	this->window = std::move(window);
 	this->window->AddChildView(this->browser_view);
+	if (this->overlay_view != nullptr) {
+		this->window->AddOverlayView(this->overlay_view, CEF_DOCKING_MODE_TOP_RIGHT)->SetVisible(true);
+	}
 	this->window->Show();
 }
 

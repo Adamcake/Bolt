@@ -14,6 +14,7 @@ namespace Browser {
 		int starty;
 		bool resizeable;
 		bool frame;
+		bool controls_overlay;
 	};
 }
 
