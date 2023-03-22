@@ -2,7 +2,7 @@
 #define _BOLT_BROWSER_VIEW_DELEGATE_HXX_
 
 #include "include/views/cef_browser_view_delegate.h"
-#include "details.hxx"
+#include "common.hxx"
 
 namespace Browser {
 	/// Implementation of CefBrowserViewDelegate. Create on the heap as CefRefPtr.

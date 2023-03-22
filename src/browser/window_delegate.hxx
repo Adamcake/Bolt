@@ -4,7 +4,7 @@
 #include "include/views/cef_window.h"
 #include "include/views/cef_window_delegate.h"
 #include "include/views/cef_browser_view.h"
-#include "details.hxx"
+#include "common.hxx"
 
 namespace Browser {
 	/// Implementation of CefWindowDelegate. Create on the heap as CefRefPtr.

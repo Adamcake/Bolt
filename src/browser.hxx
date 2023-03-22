@@ -1,7 +1,7 @@
 #ifndef _BOLT_BROWSER_HXX_
 #define _BOLT_BROWSER_HXX_
 
-#include "browser/details.hxx"
+#include "browser/common.hxx"
 #include "browser/window_delegate.hxx"
 
 namespace Browser {
