@@ -3,11 +3,17 @@ cmake = import('cmake')
 libcef_dll_wrapper = cmake.subproject('dist').dependency('libcef_dll_wrapper')
 libcef = custom_target('libcef', output: 'libcef.so', command: ['./cef/install.sh', '@SOURCE_ROOT@', '@OUTDIR@'])
 meson.add_install_script('cef/install.sh')
+
+deps = [libcef_dll_wrapper, dependency('fmt'), dependency('tesseract')]
+if build_machine.system() == 'linux'
+    deps += [dependency('x11')]
+endif
 executable(
     'bolt',
     'src/main.cxx', 'src/browser/app.cxx', 'src/browser.cxx', 'src/browser/client.cxx', 'src/browser/window_delegate.cxx',
     'src/browser/browser_view_delegate.cxx', 'src/browser/handler/life_span_handler.cxx',
-    dependencies: [dependency('fmt'), dependency('tesseract'), dependency('x11'), libcef_dll_wrapper],
+    cpp_args: ['-Wall'],
+    dependencies: deps,
     install: true,
     install_rpath: '.',
     link_with: [libcef]
