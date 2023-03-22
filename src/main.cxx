@@ -3,6 +3,8 @@
 #include "browser.hxx"
 #include "browser/app.hxx"
 #include "browser/client.hxx"
+#include "browser/handler/render_process_handler.hxx"
+#include "include/cef_render_process_handler.h"
 
 #if defined(OS_WIN)
 #include <windows.h>
@@ -35,7 +37,9 @@ int main(int argc, char* argv[]) {
 	main_args.argv = argv;
 
 	// Set up our app struct
-	Browser::App cef_app_;
+	Browser::RenderProcessHandler rph_;
+	CefRefPtr<CefRenderProcessHandler> rph = & rph_;
+	Browser::App cef_app_(rph);
 	CefRefPtr<CefApp> cef_app = &cef_app_;
 
 	// CEF applications have multiple sub-processes (render, GPU, etc) that share the same executable.

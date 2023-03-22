@@ -9,9 +9,7 @@ Browser::Window::Window(CefRefPtr<CefClient> client, Browser::Details details) {
 	CefRefPtr<CefBrowserView> controls_overlay = nullptr;
 	if (details.controls_overlay) {
 		CefRefPtr<CefBrowserViewDelegate> bvd = new Browser::BrowserViewDelegate(details); // TODO: is this line necessary?
-		CefRefPtr<CefDictionaryValue> dict = CefDictionaryValue::Create();
-		dict->SetNull("BoltMakeControlsOverlay");
-		controls_overlay = CefBrowserView::CreateBrowserView(client, "", browser_settings, std::move(dict), nullptr, bvd);
+		controls_overlay = CefBrowserView::CreateBrowserView(client, "", browser_settings, nullptr, nullptr, bvd);
 	}
 	this->window_delegate = new Browser::WindowDelegate(std::move(browser_view), std::move(bvd), std::move(controls_overlay), details);
 	CefWindow::CreateTopLevelWindow(this->window_delegate);
