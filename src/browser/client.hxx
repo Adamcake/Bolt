@@ -9,9 +9,11 @@ namespace Browser {
 	/// https://github.com/chromiumembedded/cef/blob/5563/include/cef_client.h
 	struct Client: public CefClient {
 		CefRefPtr<CefLifeSpanHandler> life_span_handler;
+		CefRefPtr<CefRequestHandler> request_handler;
 
-		Client(CefRefPtr<CefLifeSpanHandler>);
+		Client(CefRefPtr<CefLifeSpanHandler>, CefRefPtr<CefRequestHandler>);
 		CefRefPtr<CefLifeSpanHandler> GetLifeSpanHandler() override;
+		CefRefPtr<CefRequestHandler> GetRequestHandler() override;
 		
 		Client(const Client&) = delete;
 		Client& operator=(const Client&) = delete;
