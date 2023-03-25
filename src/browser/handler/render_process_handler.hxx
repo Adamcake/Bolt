@@ -1,9 +1,6 @@
 #ifndef _BOLT_RENDER_PROCESS_HANDLER_HXX_
 #define _BOLT_RENDER_PROCESS_HANDLER_HXX_
 
-#include <vector>
-
-#include "../common.hxx"
 #include "include/cef_render_process_handler.h"
 
 namespace Browser {
