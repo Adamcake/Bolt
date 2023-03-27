@@ -3,7 +3,7 @@
 
 #include "include/views/cef_window.h"
 #include "include/views/cef_window_delegate.h"
-#include "include/views/cef_browser_view.h"
+#include "include/views/cef_browser_view_delegate.h"
 #include "common.hxx"
 
 namespace Browser {
