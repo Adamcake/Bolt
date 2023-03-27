@@ -1,0 +1,13 @@
+diff --git a/base/memory/ref_counted.h b/base/memory/ref_counted.h
+index 9ef94d84769df..8e5b3a740f253 100644
+--- a/base/memory/ref_counted.h
++++ b/base/memory/ref_counted.h
+@@ -9,6 +9,8 @@
+ 
+ #include <utility>
+ 
++#include <limits>
++
+ #include "base/atomic_ref_count.h"
+ #include "base/base_export.h"
+ #include "base/check.h"

@@ -1,0 +1,318 @@
+diff --git a/include/internal/cef_types.h b/include/internal/cef_types.h
+index 810dc5241..77521dec6 100644
+--- a/cef/include/internal/cef_types.h
++++ b/cef/include/internal/cef_types.h
+@@ -401,8 +401,8 @@ typedef struct _cef_settings_t {
+   /// opaque then the RGB components will be used as the background color. If
+   /// the alpha component is fully transparent for a windowed browser then the
+   /// default value of opaque white be used. If the alpha component is fully
+-  /// transparent for a windowless (off-screen) browser then transparent
+-  /// painting will be enabled.
++  /// transparent for a windowless (off-screen) browser or a frameless window
++  /// using Views framework then transparent painting will be enabled.
+   ///
+   cef_color_t background_color;
+ 
+@@ -627,8 +627,8 @@ typedef struct _cef_browser_settings_t {
+   /// opaque then the RGB components will be used as the background color. If
+   /// the alpha component is fully transparent for a windowed browser then the
+   /// CefSettings.background_color value will be used. If the alpha component is
+-  /// fully transparent for a windowless (off-screen) browser then transparent
+-  /// painting will be enabled.
++  /// fully transparent for a windowless (off-screen) browser or a frameless
++  /// window using Views framework then transparent painting will be enabled.
+   ///
+   cef_color_t background_color;
+ 
+diff --git a/libcef/browser/browser_host_base.cc b/libcef/browser/browser_host_base.cc
+index 990be9722..8a1ee5b6e 100644
+--- a/cef/libcef/browser/browser_host_base.cc
++++ b/cef/libcef/browser/browser_host_base.cc
+@@ -1015,7 +1015,7 @@ int CefBrowserHostBase::browser_id() const {
+ SkColor CefBrowserHostBase::GetBackgroundColor() const {
+   // Don't use |platform_delegate_| because it's not thread-safe.
+   return CefContext::Get()->GetBackgroundColor(
+-      &settings_, IsWindowless() ? STATE_ENABLED : STATE_DISABLED);
++      &settings_, IsWindowless() || is_views_hosted() ? STATE_ENABLED : STATE_DISABLED);
+ }
+ 
+ bool CefBrowserHostBase::IsWindowless() const {
+diff --git a/libcef/browser/browser_platform_delegate_create.cc b/libcef/browser/browser_platform_delegate_create.cc
+index 291b1563a..08c54d412 100644
+--- a/cef/libcef/browser/browser_platform_delegate_create.cc
++++ b/cef/libcef/browser/browser_platform_delegate_create.cc
+@@ -75,8 +75,9 @@ std::unique_ptr<CefBrowserPlatformDelegate> CefBrowserPlatformDelegate::Create(
+       create_params.window_info &&
+       create_params.window_info->windowless_rendering_enabled &&
+       create_params.client && create_params.client->GetRenderHandler().get();
++  const bool is_views_hosted = create_params.browser_view || create_params.popup_with_views_hosted_opener;
+   const SkColor background_color = CefContext::Get()->GetBackgroundColor(
+-      &create_params.settings, is_windowless ? STATE_ENABLED : STATE_DISABLED);
++      &create_params.settings, is_windowless || is_views_hosted ? STATE_ENABLED : STATE_DISABLED);
+ 
+   if (cef::IsChromeRuntimeEnabled()) {
+     CefWindowInfo window_info;
+@@ -93,8 +94,7 @@ std::unique_ptr<CefBrowserPlatformDelegate> CefBrowserPlatformDelegate::Create(
+       return std::make_unique<CefBrowserPlatformDelegateChromeChildWindow>(
+           std::move(native_delegate),
+           static_cast<CefBrowserViewImpl*>(create_params.browser_view.get()));
+-    } else if (create_params.browser_view ||
+-               create_params.popup_with_views_hosted_opener) {
++    } else if (is_views_hosted) {
+       // CefWindowInfo is not used in this case.
+       return std::make_unique<CefBrowserPlatformDelegateChromeViews>(
+           std::move(native_delegate),
+diff --git a/libcef/browser/context.cc b/libcef/browser/context.cc
+index e4539f31a..e93b1f56b 100644
+--- a/cef/libcef/browser/context.cc
++++ b/cef/libcef/browser/context.cc
+@@ -67,14 +67,14 @@ void InitCrashReporter() {
+ 
+ #endif  // BUILDFLAG(IS_WIN)
+ 
+-bool GetColor(const cef_color_t cef_in, bool is_windowless, SkColor* sk_out) {
+-  // Windowed browser colors must be fully opaque.
+-  if (!is_windowless && CefColorGetA(cef_in) != SK_AlphaOPAQUE) {
++bool GetColor(const cef_color_t cef_in, bool is_transparent, SkColor* sk_out) {
++  // Transparent unsupported browser colors must be fully opaque.
++  if (!is_transparent && CefColorGetA(cef_in) != SK_AlphaOPAQUE) {
+     return false;
+   }
+ 
+-  // Windowless browser colors may be fully transparent.
+-  if (is_windowless && CefColorGetA(cef_in) == SK_AlphaTRANSPARENT) {
++  // Transparent supported browser colors may be fully transparent.
++  if (is_transparent && CefColorGetA(cef_in) == SK_AlphaTRANSPARENT) {
+     *sk_out = SK_ColorTRANSPARENT;
+     return true;
+   }
+@@ -513,10 +513,10 @@ bool CefContext::OnInitThread() {
+ 
+ SkColor CefContext::GetBackgroundColor(
+     const CefBrowserSettings* browser_settings,
+-    cef_state_t windowless_state) const {
+-  bool is_windowless = windowless_state == STATE_ENABLED
++    cef_state_t transparent_state) const {
++  bool is_transparent = transparent_state == STATE_ENABLED
+                            ? true
+-                           : (windowless_state == STATE_DISABLED
++                           : (transparent_state == STATE_DISABLED
+                                   ? false
+                                   : !!settings_.windowless_rendering_enabled);
+ 
+@@ -524,8 +524,8 @@ SkColor CefContext::GetBackgroundColor(
+   SkColor sk_color = SK_ColorWHITE;
+ 
+   if (!browser_settings ||
+-      !GetColor(browser_settings->background_color, is_windowless, &sk_color)) {
+-    GetColor(settings_.background_color, is_windowless, &sk_color);
++      !GetColor(browser_settings->background_color, is_transparent, &sk_color)) {
++    GetColor(settings_.background_color, is_transparent, &sk_color);
+   }
+   return sk_color;
+ }
+diff --git a/libcef/browser/context.h b/libcef/browser/context.h
+index 40530c016..97f0177c7 100644
+--- a/cef/libcef/browser/context.h
++++ b/cef/libcef/browser/context.h
+@@ -62,13 +62,14 @@ class CefContext {
+   // Returns the background color for the browser. If |browser_settings| is
+   // nullptr or does not specify a color then the global settings will be used.
+   // The alpha component will be either SK_AlphaTRANSPARENT or SK_AlphaOPAQUE
+-  // (e.g. fully transparent or fully opaque). If |is_windowless| is
++  // (e.g. fully transparent or fully opaque). If |is_transparent| is
+   // STATE_DISABLED then SK_AlphaTRANSPARENT will always be returned. If
+-  // |is_windowless| is STATE_ENABLED then SK_ColorTRANSPARENT may be returned
+-  // to enable transparency for windowless browsers. See additional comments on
+-  // CefSettings.background_color and CefBrowserSettings.background_color.
++  // |transparent_state| is STATE_ENABLED then SK_ColorTRANSPARENT may be
++  // returned to enable transparency for windowless browsers or a frameless
++  // window in Views. See additional comments on CefSettings.background_color
++  // and CefBrowserSettings.background_color.
+   SkColor GetBackgroundColor(const CefBrowserSettings* browser_settings,
+-                             cef_state_t windowless_state) const;
++                             cef_state_t transparent_state) const;
+ 
+   CefTraceSubscriber* GetTraceSubscriber();
+ 
+diff --git a/libcef/browser/views/browser_view_impl.cc b/libcef/browser/views/browser_view_impl.cc
+index 74ccef214..d83e4c007 100644
+--- a/cef/libcef/browser/views/browser_view_impl.cc
++++ b/cef/libcef/browser/views/browser_view_impl.cc
+@@ -241,7 +241,7 @@ void CefBrowserViewImpl::SetPendingBrowserCreateParams(
+ 
+ void CefBrowserViewImpl::SetDefaults(const CefBrowserSettings& settings) {
+   SetBackgroundColor(
+-      CefContext::Get()->GetBackgroundColor(&settings, STATE_DISABLED));
++      CefContext::Get()->GetBackgroundColor(&settings, STATE_ENABLED));
+ }
+ 
+ views::View* CefBrowserViewImpl::CreateRootView() {
+diff --git a/libcef/browser/views/window_view.cc b/libcef/browser/views/window_view.cc
+index 0c5ee9ebc..2526edaf1 100644
+--- a/cef/libcef/browser/views/window_view.cc
++++ b/cef/libcef/browser/views/window_view.cc
+@@ -5,6 +5,7 @@
+ #include "libcef/browser/views/window_view.h"
+ 
+ #include "libcef/browser/chrome/views/chrome_browser_frame.h"
++#include "libcef/browser/context.h"
+ #include "libcef/browser/image_impl.h"
+ #include "libcef/browser/views/window_impl.h"
+ #include "libcef/features/runtime.h"
+@@ -276,6 +277,9 @@ void CefWindowView::CreateWidget(gfx::AcceleratedWidget parent_widget) {
+   bool can_activate = true;
+   bool can_resize = true;
+ 
++  auto color = CefContext::Get()->GetBackgroundColor(nullptr, STATE_ENABLED);
++  bool is_translucent = color == SK_ColorTRANSPARENT;
++
+   const bool has_native_parent = parent_widget != gfx::kNullAcceleratedWidget;
+   if (has_native_parent) {
+     params.parent_widget = parent_widget;
+@@ -294,6 +298,8 @@ void CefWindowView::CreateWidget(gfx::AcceleratedWidget parent_widget) {
+     params.opacity = views::Widget::InitParams::WindowOpacity::kOpaque;
+   } else {
+     params.type = views::Widget::InitParams::TYPE_WINDOW;
++    if (is_translucent)
++      params.opacity = views::Widget::InitParams::WindowOpacity::kTranslucent;
+   }
+ 
+   // WidgetDelegate::DeleteDelegate() will delete |this| after executing the
+@@ -401,6 +407,9 @@ void CefWindowView::CreateWidget(gfx::AcceleratedWidget parent_widget) {
+   }
+ #endif
+ #endif
++
++  if (is_translucent)
++    GetCefWindow()->SetBackgroundColor(SK_ColorTRANSPARENT);
+ }
+ 
+ CefRefPtr<CefWindow> CefWindowView::GetCefWindow() const {
+diff --git a/tests/cefclient/browser/main_context_impl.cc b/tests/cefclient/browser/main_context_impl.cc
+index 46d2db94e..d0d4a5961 100644
+--- a/cef/tests/cefclient/browser/main_context_impl.cc
++++ b/cef/tests/cefclient/browser/main_context_impl.cc
+@@ -65,11 +65,6 @@ MainContextImpl::MainContextImpl(CefRefPtr<CefCommandLine> command_line,
+                  .c_str());
+   }
+ 
+-  // Whether transparent painting is used with windowless rendering.
+-  const bool use_transparent_painting =
+-      use_windowless_rendering_ &&
+-      command_line_->HasSwitch(switches::kTransparentPaintingEnabled);
+-
+ #if defined(OS_WIN)
+   // Shared texture is only supported on Windows.
+   shared_texture_enabled_ =
+@@ -131,6 +126,17 @@ MainContextImpl::MainContextImpl(CefRefPtr<CefCommandLine> command_line,
+     main_url_ = "http://tests/draggable";
+   }
+ 
++  // Whether transparent painting is used with windowless rendering.
++  const bool use_transparent_painting =
++      (use_windowless_rendering_ || use_views_) &&
++      command_line_->HasSwitch(switches::kTransparentPaintingEnabled);
++  if (use_views_ && use_transparent_painting &&
++      command_line->HasSwitch(switches::kHideFrame) &&
++      !command_line_->HasSwitch(switches::kUrl)) {
++    // Use the draggable regions test as the default URL for frameless windows.
++    main_url_ = "http://tests/transparent_views";
++  }
++
+   if (command_line_->HasSwitch(switches::kBackgroundColor)) {
+     // Parse the background color value.
+     background_color_ =
+diff --git a/tests/cefclient/browser/resource.h b/tests/cefclient/browser/resource.h
+index 0bd35c866..088db6c25 100644
+--- a/cef/tests/cefclient/browser/resource.h
++++ b/cef/tests/cefclient/browser/resource.h
+@@ -62,12 +62,13 @@
+ #define IDS_RESPONSE_FILTER_HTML 1016
+ #define IDS_SERVER_HTML 1017
+ #define IDS_TRANSPARENCY_HTML 1018
+-#define IDS_URLREQUEST_HTML 1019
+-#define IDS_WEBSOCKET_HTML 1020
+-#define IDS_WINDOW_HTML 1021
+-#define IDS_WINDOW_ICON_1X_PNG 1022
+-#define IDS_WINDOW_ICON_2X_PNG 1023
+-#define IDS_XMLHTTPREQUEST_HTML 1024
++#define IDS_TRANSPARENT_VIEWS_HTML 1019
++#define IDS_URLREQUEST_HTML 1020
++#define IDS_WEBSOCKET_HTML 1021
++#define IDS_WINDOW_HTML 1022
++#define IDS_WINDOW_ICON_1X_PNG 1023
++#define IDS_WINDOW_ICON_2X_PNG 1024
++#define IDS_XMLHTTPREQUEST_HTML 1025
+ 
+ #define IDS_EXTENSIONS_SET_PAGE_COLOR_ICON_PNG 1030
+ #define IDS_EXTENSIONS_SET_PAGE_COLOR_MANIFEST_JSON 1031
+diff --git a/tests/cefclient/browser/resource_util_win_idmap.cc b/tests/cefclient/browser/resource_util_win_idmap.cc
+index 086932c15..2d2f33834 100644
+--- a/cef/tests/cefclient/browser/resource_util_win_idmap.cc
++++ b/cef/tests/cefclient/browser/resource_util_win_idmap.cc
+@@ -40,6 +40,7 @@ int GetResourceId(const char* resource_name) {
+                       {"response_filter.html", IDS_RESPONSE_FILTER_HTML},
+                       {"server.html", IDS_SERVER_HTML},
+                       {"transparency.html", IDS_TRANSPARENCY_HTML},
++                      {"transparent_views.html", IDS_TRANSPARENT_VIEWS_HTML},
+                       {"urlrequest.html", IDS_URLREQUEST_HTML},
+                       {"websocket.html", IDS_WEBSOCKET_HTML},
+                       {"window.html", IDS_WINDOW_HTML},
+diff --git a/tests/cefclient/resources/win/cefclient.rc b/tests/cefclient/resources/win/cefclient.rc
+index 55a54d021..5e583f722 100644
+--- a/cef/tests/cefclient/resources/win/cefclient.rc
++++ b/cef/tests/cefclient/resources/win/cefclient.rc
+@@ -48,6 +48,7 @@ IDS_PREFERENCES_HTML BINARY "..\\preferences.html"
+ IDS_RESPONSE_FILTER_HTML BINARY "..\\response_filter.html"
+ IDS_SERVER_HTML BINARY "..\\server.html"
+ IDS_TRANSPARENCY_HTML BINARY "..\\transparency.html"
++IDS_TRANSPARENT_VIEWS_HTML BINARY "..\\transparent_views.html"
+ IDS_URLREQUEST_HTML BINARY "..\\urlrequest.html"
+ IDS_WEBSOCKET_HTML BINARY "..\\websocket.html"
+ IDS_WINDOW_HTML BINARY "..\\window.html"
+diff --git a/tests/cefsimple/simple_app.cc b/tests/cefsimple/simple_app.cc
+index 72556cf5a..cf632d2c9 100644
+--- a/cef/tests/cefsimple/simple_app.cc
++++ b/cef/tests/cefsimple/simple_app.cc
+@@ -35,6 +35,12 @@ class SimpleWindowDelegate : public CefWindowDelegate {
+     browser_view_ = nullptr;
+   }
+ 
++  bool IsFrameless(CefRefPtr<CefWindow> window) override {
++    CefRefPtr<CefCommandLine> command_line =
++        CefCommandLine::GetGlobalCommandLine();
++    return command_line->HasSwitch("hide-frame");
++  }
++
+   bool CanClose(CefRefPtr<CefWindow> window) override {
+     // Allow the window to close if the browser says it's OK.
+     CefRefPtr<CefBrowser> browser = browser_view_->GetBrowser();
+diff --git a/tests/ceftests/views/window_unittest.cc b/tests/ceftests/views/window_unittest.cc
+index 0c8d6b824..bc7e23658 100644
+--- a/cef/tests/ceftests/views/window_unittest.cc
++++ b/cef/tests/ceftests/views/window_unittest.cc
+@@ -497,6 +497,18 @@ void WindowAcceleratorImpl(CefRefPtr<CefWaitableEvent> event) {
+   TestWindowDelegate::RunTest(event, std::move(config));
+ }
+ 
++void VerifyWindowTransparentBackground(CefRefPtr<CefWindow> window) {
++  // The transparent background color value from CefSettings.background_color
++  // by set in CefTestSuite::GetSettings() to enable transparent window
++  // in Views framework.
++  EXPECT_EQ(window->GetBackgroundColor(), 0u);
++}
++void WindowCreateTranslucentImpl(CefRefPtr<CefWaitableEvent> event) {
++  auto config = std::make_unique<TestWindowDelegate::Config>();
++  config->on_window_created = base::BindOnce(VerifyWindowTransparentBackground);
++  TestWindowDelegate::RunTest(event, std::move(config));
++}
++
+ }  // namespace
+ 
+ // Test window functionality. This is primarily to exercise exposed CEF APIs
+@@ -518,3 +530,4 @@ WINDOW_TEST_ASYNC(WindowFullscreenFrameless)
+ WINDOW_TEST_ASYNC(WindowIcon)
+ WINDOW_TEST_ASYNC(WindowIconFrameless)
+ WINDOW_TEST_ASYNC(WindowAccelerator)
++WINDOW_TEST_ASYNC(WindowCreateTranslucent)
