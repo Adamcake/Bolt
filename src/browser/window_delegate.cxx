@@ -20,7 +20,7 @@ void Browser::WindowDelegate::OnWindowCreated(CefRefPtr<CefWindow> window) {
 	this->window = std::move(window);
 	this->window->AddChildView(this->browser_view);
 	if (this->overlay_view != nullptr) {
-		this->window->AddOverlayView(this->overlay_view, CEF_DOCKING_MODE_TOP_RIGHT)->SetVisible(true);
+		this->window->AddChildView(this->overlay_view);
 	}
 	this->window->Show();
 }
