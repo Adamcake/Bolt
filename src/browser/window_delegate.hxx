@@ -12,7 +12,7 @@ namespace Browser {
 	struct WindowDelegate: public CefWindowDelegate {
 		const Details details;
 
-		WindowDelegate(CefRefPtr<CefBrowserView>, CefRefPtr<CefBrowserViewDelegate>, CefRefPtr<CefBrowserView>, Details);
+		WindowDelegate(CefRefPtr<CefBrowserView>, CefRefPtr<CefBrowserViewDelegate>, Details);
 		void OnWindowCreated(CefRefPtr<CefWindow>) override;
 		void OnWindowDestroyed(CefRefPtr<CefWindow>) override;
 		CefRect GetInitialBounds(CefRefPtr<CefWindow>) override;
@@ -31,7 +31,6 @@ namespace Browser {
 		private:
 			CefRefPtr<CefWindow> window;
 			CefRefPtr<CefBrowserView> browser_view;
-			CefRefPtr<CefBrowserView> overlay_view;
 			CefRefPtr<CefBrowserViewDelegate> browser_view_delegate;
 
 			IMPLEMENT_REFCOUNTING(WindowDelegate);

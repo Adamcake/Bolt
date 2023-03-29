@@ -88,16 +88,16 @@ int main(int argc, char* argv[]) {
 
 	// Spawn a window using the "views" pipeline
 	Browser::Details details = {
-		.min_width = 800,
-		.min_height = 608,
-		.max_width = 800,
-		.max_height = 608,
-		.preferred_width = 800,
-		.preferred_height = 608,
+		.min_width = 250,
+		.min_height = 180,
+		.max_width = 1000,
+		.max_height = 1000,
+		.preferred_width = 250,
+		.preferred_height = 250,
 		.startx = 100,
 		.starty = 100,
-		.resizeable = false,
-		.frame = true,
+		.resizeable = true,
+		.frame = false,
 		.controls_overlay = true,
 	};
 	Browser::Window win(client, details);

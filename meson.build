@@ -11,8 +11,8 @@ endif
 executable(
     'bolt',
     'src/main.cxx', 'src/browser/app.cxx', 'src/browser.cxx', 'src/browser/client.cxx', 'src/browser/window_delegate.cxx',
-    'src/browser/browser_view_delegate.cxx', 'src/browser/handler/life_span_handler.cxx', 'src/browser/handler/render_process_handler.cxx',
-    'src/browser/handler/request_handler.cxx',
+    'src/browser/browser_view_delegate.cxx', 'src/browser/handler/life_span_handler.cxx', 'src/browser/dom_visitor.cxx',
+    'src/browser/handler/render_process_handler.cxx', 'src/browser/handler/request_handler.cxx',
     cpp_args: ['-Wall'],
     dependencies: deps,
     install: true,

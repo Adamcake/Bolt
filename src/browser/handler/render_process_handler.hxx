@@ -1,6 +1,8 @@
 #ifndef _BOLT_RENDER_PROCESS_HANDLER_HXX_
 #define _BOLT_RENDER_PROCESS_HANDLER_HXX_
 
+#include <map>
+
 #include "include/cef_render_process_handler.h"
 
 namespace Browser {
@@ -21,7 +23,9 @@ namespace Browser {
 		bool Release() const override { return this->ref_count.Release(); }
 		bool HasOneRef() const override { return this->ref_count.HasOneRef(); }
 		bool HasAtLeastOneRef() const override { return this->ref_count.HasAtLeastOneRef(); }
-		private: CefRefCount ref_count;
+		private:
+			std::map<int, CefString> pending_app_frames;
+			CefRefCount ref_count;
 	};
 }
 

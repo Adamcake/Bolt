@@ -5,9 +5,8 @@
 Browser::WindowDelegate::WindowDelegate(
 	CefRefPtr<CefBrowserView> browser_view,
 	CefRefPtr<CefBrowserViewDelegate> browser_view_delegate,
-	CefRefPtr<CefBrowserView> overlay_view,
 	Details details
-): details(details), window(nullptr), browser_view(browser_view), overlay_view(overlay_view), browser_view_delegate(browser_view_delegate) { }
+): details(details), window(nullptr), browser_view(browser_view), browser_view_delegate(browser_view_delegate) { }
 
 void Browser::WindowDelegate::Close() {
 	if (this->window) {
@@ -19,9 +18,6 @@ void Browser::WindowDelegate::Close() {
 void Browser::WindowDelegate::OnWindowCreated(CefRefPtr<CefWindow> window) {
 	this->window = std::move(window);
 	this->window->AddChildView(this->browser_view);
-	if (this->overlay_view != nullptr) {
-		this->window->AddChildView(this->overlay_view);
-	}
 	this->window->Show();
 }
 
