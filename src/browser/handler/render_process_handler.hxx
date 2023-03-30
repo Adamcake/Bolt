@@ -3,19 +3,22 @@
 
 #include <map>
 
+#include "include/cef_browser.h"
+#include "include/cef_load_handler.h"
 #include "include/cef_render_process_handler.h"
 
 namespace Browser {
-	/// Implementation of CefRenderProcessHandler. Store on the stack, but access only via CefRefPtr.
+	/// Implementation of CefRenderProcessHandler and CefLoadHandler. Store on the stack, but access only via CefRefPtr.
 	/// https://github.com/chromiumembedded/cef/blob/5563/include/cef_render_process_handler.h
-	struct RenderProcessHandler: public CefRenderProcessHandler {
+	/// https://github.com/chromiumembedded/cef/blob/master/include/cef_load_handler.h
+	struct RenderProcessHandler: public CefRenderProcessHandler, CefLoadHandler {
 		RenderProcessHandler();
 
 		void OnBrowserCreated(CefRefPtr<CefBrowser>, CefRefPtr<CefDictionaryValue>) override;
 		void OnBrowserDestroyed(CefRefPtr<CefBrowser>) override;
-		void OnContextCreated(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, CefRefPtr<CefV8Context>) override;
-		void OnContextReleased(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, CefRefPtr<CefV8Context>) override;
 		void OnUncaughtException(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, CefRefPtr<CefV8Context>, CefRefPtr<CefV8Exception>, CefRefPtr<CefV8StackTrace>) override;
+		CefRefPtr<CefLoadHandler> GetLoadHandler() override;
+		void OnLoadEnd(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, int) override;
 
 		RenderProcessHandler(const RenderProcessHandler&) = delete;
 		RenderProcessHandler& operator=(const RenderProcessHandler&) = delete;
