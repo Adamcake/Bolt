@@ -7,7 +7,7 @@ namespace Browser {
 	/// Implementation of CefRequestHandler and CefResourceRequestHandler. Store on the stack, but access only via CefRefPtr.
 	/// https://github.com/chromiumembedded/cef/blob/5563/include/cef_request_handler.h
 	/// https://github.com/chromiumembedded/cef/blob/5563/include/cef_resource_request_handler.h
-	struct RequestHandler: public CefRequestHandler, public CefResourceRequestHandler {
+	struct RequestHandler: public CefRequestHandler {
 		RequestHandler();
 		CefString app_overlay_url;
 
@@ -20,8 +20,6 @@ namespace Browser {
 			const CefString&,
 			bool&
 		) override;
-
-		CefRefPtr<CefResourceHandler> GetResourceHandler(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, CefRefPtr<CefRequest>) override;
 
 		RequestHandler(const RequestHandler&) = delete;
 		RequestHandler& operator=(const RequestHandler&) = delete;
