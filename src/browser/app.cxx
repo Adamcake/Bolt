@@ -27,10 +27,30 @@ void Browser::App::OnUncaughtException(
 	CefRefPtr<CefBrowser>,
 	CefRefPtr<CefFrame>,
 	CefRefPtr<CefV8Context>,
-	CefRefPtr<CefV8Exception>,
-	CefRefPtr<CefV8StackTrace>
+	CefRefPtr<CefV8Exception> exception,
+	CefRefPtr<CefV8StackTrace> trace
 ) {
-
+	fmt::print("Unhandled exception in {}: {}\n", exception->GetScriptResourceName().ToString(), exception->GetMessage().ToString());
+	for (int i = 0; i < trace->GetFrameCount(); i += 1) {
+		CefRefPtr<CefV8StackFrame> frame = trace->GetFrame(i);
+		fmt::print("In {}:{}:{}\n", frame->GetScriptNameOrSourceURL().ToString(), frame->GetLineNumber(), frame->GetColumn());
+	}
+	CefString source_line_ = exception->GetSourceLine();
+	if (source_line_.size() <= 180) {
+		std::string source_line = exception->GetSourceLine().ToString();
+		fmt::print("{}\n", source_line);
+		int i = 0;
+		while (i < exception->GetStartColumn()) {
+			fmt::print("-");
+			i += 1;
+		}
+		while (i < exception->GetEndColumn()) {
+			fmt::print("^");
+			i += 1;
+		}
+	} else {
+		fmt::print("<origin code not shown as it is too long ({} chars)>\n", exception->GetSourceLine().size());
+	}
 }
 
 void Browser::App::OnLoadEnd(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, int) {
