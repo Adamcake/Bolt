@@ -13,6 +13,7 @@ namespace Browser {
 		CefRefPtr<CefRenderProcessHandler> GetRenderProcessHandler() override;
 		CefRefPtr<CefLoadHandler> GetLoadHandler() override;
 		void OnBrowserCreated(CefRefPtr<CefBrowser>, CefRefPtr<CefDictionaryValue>) override;
+		void OnContextCreated(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, CefRefPtr<CefV8Context>) override;
 		void OnBrowserDestroyed(CefRefPtr<CefBrowser>) override;
 		void OnUncaughtException(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, CefRefPtr<CefV8Context>, CefRefPtr<CefV8Exception>, CefRefPtr<CefV8StackTrace>) override;
 		void OnLoadEnd(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, int) override;
