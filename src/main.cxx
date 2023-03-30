@@ -30,9 +30,7 @@ int XIOErrorHandlerImpl(Display* display) {
 
 int main(int argc, char* argv[]) {
 	// Provide CEF with command-line arguments
-	cef_main_args_t main_args;
-	main_args.argc = argc;
-	main_args.argv = argv;
+	CefMainArgs main_args(argc, argv);
 
 	// Set up our app struct
 	Browser::App cef_app_;
