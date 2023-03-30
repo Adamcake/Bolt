@@ -19,6 +19,7 @@ namespace Browser {
 		void OnUncaughtException(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, CefRefPtr<CefV8Context>, CefRefPtr<CefV8Exception>, CefRefPtr<CefV8StackTrace>) override;
 		CefRefPtr<CefLoadHandler> GetLoadHandler() override;
 		void OnLoadEnd(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, int) override;
+		void OnLoadError(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, ErrorCode, const CefString&, const CefString&) override;
 
 		RenderProcessHandler(const RenderProcessHandler&) = delete;
 		RenderProcessHandler& operator=(const RenderProcessHandler&) = delete;

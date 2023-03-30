@@ -30,9 +30,20 @@ CefRefPtr<CefLoadHandler> Browser::RenderProcessHandler::GetLoadHandler() {
 }
 
 void Browser::RenderProcessHandler::OnLoadEnd(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, int) {
-	auto it = this->pending_app_frames.find(browser->GetIdentifier());
-	if (it != this->pending_app_frames.end() && frame->IsMain()) {
-		frame->VisitDOM(new DOMVisitorAppFrame(it->second));
-		this->pending_app_frames.erase(it);
+	if (frame->IsMain()) {
+		auto it = this->pending_app_frames.find(browser->GetIdentifier());
+		if (it != this->pending_app_frames.end()) {
+			frame->VisitDOM(new DOMVisitorAppFrame(it->second));
+			this->pending_app_frames.erase(it);
+		}
+	}
+}
+
+void Browser::RenderProcessHandler::OnLoadError(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, ErrorCode, const CefString&, const CefString&) {
+	if (frame->IsMain()) {
+		auto it = this->pending_app_frames.find(browser->GetIdentifier());
+		if (it != this->pending_app_frames.end()) {
+			this->pending_app_frames.erase(it);
+		}
 	}
 }
