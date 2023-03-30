@@ -2,16 +2,21 @@
 #define _BOLT_APP_HXX_
 
 #include "include/cef_app.h"
-#include "include/cef_render_process_handler.h"
 
 namespace Browser {
-	/// Implementation of CefApp. Store on the stack, but access only via CefRefPtr.
+	/// Implementation of CefApp, CefRenderProcessHandler, CefLoadHandler. Store on the stack, but access only via CefRefPtr.
 	/// https://github.com/chromiumembedded/cef/blob/5563/include/cef_app.h
-	struct App: public CefApp {
-		CefRefPtr<CefRenderProcessHandler> render_process_handler;
-
-		App(CefRefPtr<CefRenderProcessHandler>);
+	/// https://github.com/chromiumembedded/cef/blob/5563/include/cef_render_process_handler.h
+	/// https://github.com/chromiumembedded/cef/blob/master/include/cef_load_handler.h
+	struct App: public CefApp, CefRenderProcessHandler, CefLoadHandler {
+		App();
 		CefRefPtr<CefRenderProcessHandler> GetRenderProcessHandler() override;
+		CefRefPtr<CefLoadHandler> GetLoadHandler() override;
+		void OnBrowserCreated(CefRefPtr<CefBrowser>, CefRefPtr<CefDictionaryValue>) override;
+		void OnBrowserDestroyed(CefRefPtr<CefBrowser>) override;
+		void OnUncaughtException(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, CefRefPtr<CefV8Context>, CefRefPtr<CefV8Exception>, CefRefPtr<CefV8StackTrace>) override;
+		void OnLoadEnd(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, int) override;
+		void OnLoadError(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, ErrorCode, const CefString&, const CefString&) override;
 
 		App(const App&) = delete;
 		App& operator=(const App&) = delete;
@@ -19,7 +24,9 @@ namespace Browser {
 		bool Release() const override { return this->ref_count.Release(); }
 		bool HasOneRef() const override { return this->ref_count.HasOneRef(); }
 		bool HasAtLeastOneRef() const override { return this->ref_count.HasAtLeastOneRef(); }
-		private: CefRefCount ref_count;
+		private:
+			CefRefCount ref_count;
+			std::map<int, CefString> pending_app_frames;
 	};
 }
 

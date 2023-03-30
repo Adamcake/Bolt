@@ -3,9 +3,6 @@
 #include "browser.hxx"
 #include "browser/app.hxx"
 #include "browser/client.hxx"
-#include "browser/handler/render_process_handler.hxx"
-#include "browser/handler/request_handler.hxx"
-#include "include/cef_render_process_handler.h"
 
 #if defined(OS_WIN)
 #include <windows.h>
@@ -38,9 +35,7 @@ int main(int argc, char* argv[]) {
 	main_args.argv = argv;
 
 	// Set up our app struct
-	Browser::RenderProcessHandler rph_;
-	CefRefPtr<CefRenderProcessHandler> rph = & rph_;
-	Browser::App cef_app_(rph);
+	Browser::App cef_app_;
 	CefRefPtr<CefApp> cef_app = &cef_app_;
 
 	// CEF applications have multiple sub-processes (render, GPU, etc) that share the same executable.
@@ -79,11 +74,7 @@ int main(int argc, char* argv[]) {
 	}
 
 	// Our CEF client and the various things it needs pointers to
-	Browser::LifeSpanHandler life_span_handler_;
-	CefRefPtr<CefLifeSpanHandler> life_span_handler = &life_span_handler_;
-	Browser::RequestHandler request_handler_;
-	CefRefPtr<CefRequestHandler> request_handler = &request_handler_;
-	Browser::Client client_(life_span_handler, request_handler);
+	Browser::Client client_;
 	CefRefPtr<CefClient> client = &client_;
 
 	// Spawn a window using the "views" pipeline
@@ -100,6 +91,7 @@ int main(int argc, char* argv[]) {
 		.frame = false,
 		.controls_overlay = true,
 	};
+	
 	Browser::Window win(client, details);
 
 	// Run the CEF message loop
