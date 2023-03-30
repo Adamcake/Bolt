@@ -1,6 +1,8 @@
 #include "app.hxx"
 #include "dom_visitor.hxx"
 
+#include <fmt/core.h>
+
 Browser::App::App() {
 	
 }
@@ -17,6 +19,10 @@ void Browser::App::OnBrowserCreated(CefRefPtr<CefBrowser> browser, CefRefPtr<Cef
 	if (dict && dict->HasKey("BoltAppUrl")) {
 		this->pending_app_frames[browser->GetIdentifier()] = dict->GetString("BoltAppUrl");
 	}
+}
+
+void Browser::App::OnContextCreated(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame> frame, CefRefPtr<CefV8Context>) {
+	frame->GetV8Context()->GetGlobal()->SetValue("alt1", CefV8Value::CreateBool(false), V8_PROPERTY_ATTRIBUTE_READONLY);
 }
 
 void Browser::App::OnBrowserDestroyed(CefRefPtr<CefBrowser> browser) {
@@ -37,7 +43,7 @@ void Browser::App::OnUncaughtException(
 	}
 	CefString source_line_ = exception->GetSourceLine();
 	if (source_line_.size() <= 180) {
-		std::string source_line = exception->GetSourceLine().ToString();
+		std::string source_line = source_line_.ToString();
 		fmt::print("{}\n", source_line);
 		int i = 0;
 		while (i < exception->GetStartColumn()) {
@@ -49,7 +55,7 @@ void Browser::App::OnUncaughtException(
 			i += 1;
 		}
 	} else {
-		fmt::print("<origin code not shown as it is too long ({} chars)>\n", exception->GetSourceLine().size());
+		fmt::print("<origin code not shown as it is too long ({} chars)>\n", source_line_.size());
 	}
 }
 
