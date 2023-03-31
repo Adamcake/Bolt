@@ -74,8 +74,8 @@ void Browser::App::OnUncaughtException(
 	}
 }
 
-bool Browser::App::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame>, CefProcessId, CefRefPtr<CefProcessMessage> message) {
-	if (message->GetName() == "__bolt_closing") {
+bool Browser::App::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefProcessId, CefRefPtr<CefProcessMessage> message) {
+	if (message->GetName() == "__bolt_app_closing") {
 		fmt::print("[R] bolt_closing received for browser {}\n", browser->GetIdentifier());
 		auto it = std::remove_if(
 			this->apps.begin(),
@@ -83,6 +83,7 @@ bool Browser::App::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRe
 			[&browser](const CefRefPtr<Browser::AppFrameData>& data){ return browser->GetIdentifier() == data->id; }
 		);
 		while (it != this->apps.end()) {
+			it->get()->frame->SendProcessMessage(PID_BROWSER, CefProcessMessage::Create("__bolt_app_closed"));
 			it->get()->frame = nullptr;
 			it += 1;
 		}
