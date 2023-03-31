@@ -52,18 +52,6 @@ void Browser::App::OnContextCreated(CefRefPtr<CefBrowser> browser, CefRefPtr<Cef
 	}
 }
 
-void Browser::App::OnContextReleased(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefRefPtr<CefV8Context>) {
-	if (frame->IsMain()) {
-		this->OnBrowserDestroyed(browser);
-	}
-}
-
-void Browser::App::OnBrowserDestroyed(CefRefPtr<CefBrowser> browser) {
-	this->apps.erase(
-		std::remove_if(this->apps.begin(), this->apps.end(), [&browser](const CefRefPtr<Browser::AppFrameData>& data){ return browser->GetIdentifier() == data->id; })
-	);
-}
-
 void Browser::App::OnUncaughtException(
 	CefRefPtr<CefBrowser>,
 	CefRefPtr<CefFrame>,
