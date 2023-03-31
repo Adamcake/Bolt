@@ -71,26 +71,9 @@ int main(int argc, char* argv[]) {
 		return exit_code;
 	}
 
-	// Our CEF client and the various things it needs pointers to
+	// Our CEF client, the central object for the main thread
 	Browser::Client client_;
 	CefRefPtr<CefClient> client = &client_;
-
-	// Spawn a window using the "views" pipeline
-	Browser::Details details = {
-		.min_width = 250,
-		.min_height = 180,
-		.max_width = 1000,
-		.max_height = 1000,
-		.preferred_width = 250,
-		.preferred_height = 250,
-		.startx = 100,
-		.starty = 100,
-		.resizeable = true,
-		.frame = false,
-		.controls_overlay = true,
-	};
-	
-	Browser::Window win(client, details);
 
 	// Run the CEF message loop
 	// TODO: later this will be replaced with an OS-specific event loop capable of calling
@@ -98,7 +81,6 @@ int main(int argc, char* argv[]) {
 	CefRunMessageLoop();
 
 	// Release things we still own, then shut down CEF
-	win.Close();
 	CefShutdown();
 
 	return 0;
