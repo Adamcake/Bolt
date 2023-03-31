@@ -6,13 +6,19 @@ Browser::WindowDelegate::WindowDelegate(
 	CefRefPtr<CefBrowserView> browser_view,
 	CefRefPtr<CefBrowserViewDelegate> browser_view_delegate,
 	Details details
-): details(details), window(nullptr), browser_view(browser_view), browser_view_delegate(browser_view_delegate) { }
+): details(details), window(nullptr), browser_view(browser_view), browser_view_delegate(browser_view_delegate), closing(false) { }
 
 void Browser::WindowDelegate::Close() {
-	if (this->window) {
-		this->window->Close();
-		this->window = nullptr;
-	}
+	this->closing = true;
+	this->window->Close();
+}
+
+int Browser::WindowDelegate::GetBrowserIdentifier() {
+	return this->browser_view->GetBrowser()->GetIdentifier();
+}
+
+void Browser::WindowDelegate::SendProcessMessage(CefProcessId target_process, CefRefPtr<CefProcessMessage> message) {
+	this->browser_view->GetBrowser()->GetMainFrame()->SendProcessMessage(target_process, message);
 }
 
 void Browser::WindowDelegate::OnWindowCreated(CefRefPtr<CefWindow> window) {
@@ -57,7 +63,15 @@ bool Browser::WindowDelegate::CanMinimize(CefRefPtr<CefWindow>) {
 }
 
 bool Browser::WindowDelegate::CanClose(CefRefPtr<CefWindow>) {
-	return true;
+	if (this->closing) {
+		return true;
+	} else {
+		// CEF will call CefLifeSpanHandler::DoClose (implemented in Client), giving us a chance to
+		// do cleanup, then set this->closing to true, then call Close() again.
+		// This strategy is suggested by official examples eg cefsimple
+		// https://github.com/chromiumembedded/cef/blob/5563/tests/cefsimple/simple_app.cc#L38-L45
+		return this->browser_view->GetBrowser()->GetHost()->TryCloseBrowser();
+	}
 }
 
 CefSize Browser::WindowDelegate::GetPreferredSize(CefRefPtr<CefView>) {

@@ -27,11 +27,14 @@ namespace Browser {
 		CefSize GetMaximumSize(CefRefPtr<CefView>) override;
 
 		void Close();
+		int GetBrowserIdentifier();
+		void SendProcessMessage(CefProcessId, CefRefPtr<CefProcessMessage>);
 
 		private:
 			CefRefPtr<CefWindow> window;
 			CefRefPtr<CefBrowserView> browser_view;
 			CefRefPtr<CefBrowserViewDelegate> browser_view_delegate;
+			bool closing;
 
 			IMPLEMENT_REFCOUNTING(WindowDelegate);
 			DISALLOW_COPY_AND_ASSIGN(WindowDelegate);
