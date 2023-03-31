@@ -1,6 +1,8 @@
 #include "app.hxx"
 #include "dom_visitor.hxx"
 
+#include <algorithm>
+
 #include <fmt/core.h>
 
 Browser::App::App() {
@@ -17,16 +19,49 @@ CefRefPtr<CefLoadHandler> Browser::App::GetLoadHandler() {
 
 void Browser::App::OnBrowserCreated(CefRefPtr<CefBrowser> browser, CefRefPtr<CefDictionaryValue> dict) {
 	if (dict && dict->HasKey("BoltAppUrl")) {
-		this->pending_app_frames[browser->GetIdentifier()] = dict->GetString("BoltAppUrl");
+		this->apps.push_back(new Browser::AppFrameData(browser->GetIdentifier(), dict->GetString("BoltAppUrl")));
 	}
 }
 
-void Browser::App::OnContextCreated(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame> frame, CefRefPtr<CefV8Context>) {
-	frame->GetV8Context()->GetGlobal()->SetValue("alt1", CefV8Value::CreateBool(false), V8_PROPERTY_ATTRIBUTE_READONLY);
+void Browser::App::OnContextCreated(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefRefPtr<CefV8Context> context) {
+	for (int i = 0; i < this->apps.size(); i += 1) {
+		if (this->apps[i]->id == browser->GetIdentifier()) {
+			if (this->apps[i]->url == frame->GetURL()) {
+				CefRefPtr<CefV8Value> alt1 = CefV8Value::CreateObject(nullptr, nullptr);
+				alt1->SetValue("identifyAppUrl", CefV8Value::CreateFunction("identifyAppUrl", this->apps[i]), V8_PROPERTY_ATTRIBUTE_READONLY);
+				context->GetGlobal()->SetValue("alt1", alt1, V8_PROPERTY_ATTRIBUTE_READONLY);
+			} else if (frame->IsMain()) {
+				context->GetGlobal()->SetValue("__bolt_close", CefV8Value::CreateFunction("__bolt_close", this->apps[i]), V8_PROPERTY_ATTRIBUTE_READONLY);
+				context->GetGlobal()->SetValue("__bolt_minify", CefV8Value::CreateFunction("__bolt_minify", this->apps[i]), V8_PROPERTY_ATTRIBUTE_READONLY);
+				context->GetGlobal()->SetValue("__bolt_settings", CefV8Value::CreateFunction("__bolt_settings", this->apps[i]), V8_PROPERTY_ATTRIBUTE_READONLY);
+				context->GetGlobal()->SetValue("__bolt_begin_drag", CefV8Value::CreateFunction("__bolt_begin_drag", this->apps[i]), V8_PROPERTY_ATTRIBUTE_READONLY);
+			}
+		}
+
+	}
+	auto it = std::find_if(
+		this->apps.begin(),
+		this->apps.end(),
+		[&browser, &frame](const CefRefPtr<Browser::AppFrameData>& data){ return data->id == browser->GetIdentifier() && frame->GetURL() == data->url; }
+	);
+	if (it != this->apps.end()) {
+		CefRefPtr<CefV8Value> alt1 = CefV8Value::CreateObject(nullptr, nullptr);
+		alt1->SetValue("identifyAppUrl", CefV8Value::CreateFunction("identifyAppUrl", *it), V8_PROPERTY_ATTRIBUTE_READONLY);
+		// various others here...
+		context->GetGlobal()->SetValue("alt1", alt1, V8_PROPERTY_ATTRIBUTE_READONLY);
+	}
+}
+
+void Browser::App::OnContextReleased(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefRefPtr<CefV8Context>) {
+	if (frame->IsMain()) {
+		this->OnBrowserDestroyed(browser);
+	}
 }
 
 void Browser::App::OnBrowserDestroyed(CefRefPtr<CefBrowser> browser) {
-	this->pending_app_frames.erase(browser->GetIdentifier());
+	this->apps.erase(
+		std::remove_if(this->apps.begin(), this->apps.end(), [&browser](const CefRefPtr<Browser::AppFrameData>& data){ return browser->GetIdentifier() == data->id; })
+	);
 }
 
 void Browser::App::OnUncaughtException(
@@ -60,20 +95,21 @@ void Browser::App::OnUncaughtException(
 }
 
 void Browser::App::OnLoadEnd(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, int) {
-	if (frame->IsMain()) {
-		auto it = this->pending_app_frames.find(browser->GetIdentifier());
-		if (it != this->pending_app_frames.end()) {
-			frame->VisitDOM(new DOMVisitorAppFrame(it->second));
-			this->pending_app_frames.erase(it);
+	if (CefCurrentlyOn(TID_RENDERER)) {
+		if (frame->IsMain()) {
+			for(int i = 0; i < this->apps.size(); i += 1) {
+				if (this->apps[i]->id == browser->GetIdentifier()) {
+					frame->VisitDOM(new DOMVisitorAppFrame(this->apps[i]->url));
+				}
+			}
 		}
 	}
 }
 
 void Browser::App::OnLoadError(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, ErrorCode, const CefString&, const CefString&) {
-	if (frame->IsMain()) {
-		auto it = this->pending_app_frames.find(browser->GetIdentifier());
-		if (it != this->pending_app_frames.end()) {
-			this->pending_app_frames.erase(it);
-		}
+	if (CefCurrentlyOn(TID_RENDERER)) {
+		this->apps.erase(
+			std::remove_if(this->apps.begin(), this->apps.end(), [&browser](const CefRefPtr<Browser::AppFrameData>& data){ return browser->GetIdentifier() == data->id; })
+		);
 	}
 }
