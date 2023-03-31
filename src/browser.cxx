@@ -19,6 +19,10 @@ Browser::Window::Window(CefRefPtr<CefClient> client, Browser::Details details) {
 	CefWindow::CreateTopLevelWindow(this->window_delegate);
 }
 
+int Browser::Window::GetBrowserIdentifier() {
+	return this->window_delegate->browser_view->GetBrowser()->GetIdentifier();
+}
+
 void Browser::Window::Close() {
 	this->window_delegate->Close();
 	this->window_delegate = nullptr;

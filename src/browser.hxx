@@ -12,8 +12,9 @@ namespace Browser {
 	struct Window {
 		Window(CefRefPtr<CefClient> client, Details);
 		void Close();
-		
-		private: CefRefPtr<WindowDelegate> window_delegate;
+		int GetBrowserIdentifier();
+
+		CefRefPtr<WindowDelegate> window_delegate;
 	};
 }
 
