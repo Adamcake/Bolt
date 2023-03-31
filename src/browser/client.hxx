@@ -12,6 +12,7 @@ namespace Browser {
 		Client();
 		CefRefPtr<CefLifeSpanHandler> GetLifeSpanHandler() override;
 		CefRefPtr<CefRequestHandler> GetRequestHandler() override;
+		bool DoClose(CefRefPtr<CefBrowser>) override;
 		void OnBeforeClose(CefRefPtr<CefBrowser>) override;
 		CefRefPtr<CefResourceRequestHandler> GetResourceRequestHandler(
 			CefRefPtr<CefBrowser>,

@@ -79,8 +79,13 @@ CefRefPtr<CefRequestHandler> Browser::Client::GetRequestHandler() {
 	return this;
 }
 
+bool Browser::Client::DoClose(CefRefPtr<CefBrowser> browser) {
+	browser->GetMainFrame()->SendProcessMessage(PID_RENDERER, CefProcessMessage::Create("__bolt_closing"));
+	return false;
+}
+
 void Browser::Client::OnBeforeClose(CefRefPtr<CefBrowser> browser) {
-	// a window is about to close
+	// last callback while the browser exists - it's too late to send process messages at this point
 }
 
 CefRefPtr<CefResourceRequestHandler> Browser::Client::GetResourceRequestHandler(
