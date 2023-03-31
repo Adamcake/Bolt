@@ -77,9 +77,16 @@ void Browser::App::OnUncaughtException(
 bool Browser::App::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame>, CefProcessId, CefRefPtr<CefProcessMessage> message) {
 	if (message->GetName() == "__bolt_closing") {
 		fmt::print("[R] bolt_closing received for browser {}\n", browser->GetIdentifier());
-		this->apps.erase(
-			std::remove_if(this->apps.begin(), this->apps.end(), [&browser](const CefRefPtr<Browser::AppFrameData>& data){ return browser->GetIdentifier() == data->id; })
+		auto it = std::remove_if(
+			this->apps.begin(),
+			this->apps.end(),
+			[&browser](const CefRefPtr<Browser::AppFrameData>& data){ return browser->GetIdentifier() == data->id; }
 		);
+		while (it != this->apps.end()) {
+			it->get()->frame = nullptr;
+			it += 1;
+		}
+		this->apps.erase(it);
 		return true;
 	}
 
@@ -100,6 +107,7 @@ void Browser::App::OnLoadEnd(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> 
 }
 
 void Browser::App::OnLoadError(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, ErrorCode, const CefString&, const CefString&) {
+	fmt::print("[R] OnLoadError\n");
 	if (CefCurrentlyOn(TID_RENDERER)) {
 		this->apps.erase(
 			std::remove_if(this->apps.begin(), this->apps.end(), [&browser](const CefRefPtr<Browser::AppFrameData>& data){ return browser->GetIdentifier() == data->id; })
