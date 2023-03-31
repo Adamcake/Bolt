@@ -31,23 +31,12 @@ void Browser::App::OnContextCreated(CefRefPtr<CefBrowser> browser, CefRefPtr<Cef
 				alt1->SetValue("identifyAppUrl", CefV8Value::CreateFunction("identifyAppUrl", this->apps[i]), V8_PROPERTY_ATTRIBUTE_READONLY);
 				context->GetGlobal()->SetValue("alt1", alt1, V8_PROPERTY_ATTRIBUTE_READONLY);
 			} else if (frame->IsMain()) {
+				this->apps[i]->frame = frame;
 				context->GetGlobal()->SetValue("__bolt_app_minify", CefV8Value::CreateFunction("__bolt_app_minify", this->apps[i]), V8_PROPERTY_ATTRIBUTE_READONLY);
 				context->GetGlobal()->SetValue("__bolt_app_settings", CefV8Value::CreateFunction("__bolt_app_settings", this->apps[i]), V8_PROPERTY_ATTRIBUTE_READONLY);
 				context->GetGlobal()->SetValue("__bolt_app_begin_drag", CefV8Value::CreateFunction("__bolt_app_begin_drag", this->apps[i]), V8_PROPERTY_ATTRIBUTE_READONLY);
 			}
 		}
-
-	}
-	auto it = std::find_if(
-		this->apps.begin(),
-		this->apps.end(),
-		[&browser, &frame](const CefRefPtr<Browser::AppFrameData>& data){ return data->id == browser->GetIdentifier() && frame->GetURL() == data->url; }
-	);
-	if (it != this->apps.end()) {
-		CefRefPtr<CefV8Value> alt1 = CefV8Value::CreateObject(nullptr, nullptr);
-		alt1->SetValue("identifyAppUrl", CefV8Value::CreateFunction("identifyAppUrl", *it), V8_PROPERTY_ATTRIBUTE_READONLY);
-		// various others here...
-		context->GetGlobal()->SetValue("alt1", alt1, V8_PROPERTY_ATTRIBUTE_READONLY);
 	}
 }
 
