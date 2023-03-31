@@ -4,11 +4,12 @@
 
 namespace Browser {
 	struct AppFrameData: public CefV8Handler {
-		AppFrameData(int id, CefString url): id(id), url(std::move(url)) { }
+		AppFrameData(int id, CefString url): id(id), url(std::move(url)), frame(nullptr) { }
 		bool Execute(const CefString&, CefRefPtr<CefV8Value>, const CefV8ValueList&, CefRefPtr<CefV8Value>&, CefString&) override;
 
 		int id;
 		CefString url;
+		CefRefPtr<CefFrame> frame;
 
 		private:
 			DISALLOW_COPY_AND_ASSIGN(AppFrameData);

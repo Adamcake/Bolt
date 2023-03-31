@@ -1,4 +1,5 @@
 #include "app_frame_data.hxx"
+#include "include/internal/cef_types.h"
 
 #include <fmt/core.h>
 
@@ -9,6 +10,8 @@ bool Browser::AppFrameData::Execute(
 	CefRefPtr<CefV8Value>& retval,
 	CefString& exception
 ) {
-	fmt::print("Callback {}\n", name.ToString());
+	if (this->frame) {
+		this->frame->SendProcessMessage(PID_BROWSER, CefProcessMessage::Create(name));
+	}
 	return true;
 }
