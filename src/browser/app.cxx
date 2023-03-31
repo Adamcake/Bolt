@@ -94,6 +94,17 @@ void Browser::App::OnUncaughtException(
 	}
 }
 
+bool Browser::App::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame>, CefProcessId, CefRefPtr<CefProcessMessage> message) {
+	if (message->GetName() == "__bolt_closing") {
+		this->apps.erase(
+			std::remove_if(this->apps.begin(), this->apps.end(), [&browser](const CefRefPtr<Browser::AppFrameData>& data){ return browser->GetIdentifier() == data->id; })
+		);
+		return true;
+	}
+
+	return false;
+}
+
 void Browser::App::OnLoadEnd(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, int) {
 	if (CefCurrentlyOn(TID_RENDERER)) {
 		if (frame->IsMain()) {
