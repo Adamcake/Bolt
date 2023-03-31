@@ -14,6 +14,7 @@ namespace Browser {
 		CefRefPtr<CefRequestHandler> GetRequestHandler() override;
 		bool DoClose(CefRefPtr<CefBrowser>) override;
 		void OnBeforeClose(CefRefPtr<CefBrowser>) override;
+		bool OnProcessMessageReceived(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, CefProcessId, CefRefPtr<CefProcessMessage>) override;
 		CefRefPtr<CefResourceRequestHandler> GetResourceRequestHandler(
 			CefRefPtr<CefBrowser>,
 			CefRefPtr<CefFrame>,
