@@ -20,10 +20,14 @@ Browser::Window::Window(CefRefPtr<CefClient> client, Browser::Details details) {
 }
 
 int Browser::Window::GetBrowserIdentifier() {
-	return this->window_delegate->browser_view->GetBrowser()->GetIdentifier();
+	return this->window_delegate->GetBrowserIdentifier();
 }
 
-void Browser::Window::Close() {
+void Browser::Window::CloseRender() {
+	this->window_delegate->SendProcessMessage(PID_RENDERER, CefProcessMessage::Create("__bolt_app_closing"));
+}
+
+void Browser::Window::CloseBrowser() {
 	this->window_delegate->Close();
 	this->window_delegate = nullptr;
 }
