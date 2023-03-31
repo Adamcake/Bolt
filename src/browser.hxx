@@ -12,8 +12,7 @@ namespace Browser {
 	struct Window {
 		Window(CefRefPtr<CefClient> client, Details);
 		void Close();
-		Window(const Window&) = delete;
-		Window& operator=(const Window&) = delete;
+		
 		private: CefRefPtr<WindowDelegate> window_delegate;
 	};
 }
