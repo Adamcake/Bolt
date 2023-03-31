@@ -7,10 +7,11 @@
 namespace Browser {
 	/// Represents a visible browser window on the user's screen. This struct wraps a single pointer,
 	/// so it is safe to store anywhere and move around during operation.
-	/// The window will exist either until the user closes it or this object is destroyed.
+	/// The window will exist either until the user closes it or Window::Close() is called.
+	/// In both cases, CefLifeSpanHandler::OnBeforeClose callback will be called (implemented by Client).
 	struct Window {
 		Window(CefRefPtr<CefClient> client, Details);
-		~Window();
+		void Close();
 		Window(const Window&) = delete;
 		Window& operator=(const Window&) = delete;
 		private: CefRefPtr<WindowDelegate> window_delegate;
