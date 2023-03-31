@@ -20,12 +20,20 @@ namespace Browser {
 		void CloseRender();
 
 		/// Should be called only in response to a 'closed' message from the Render process.
+		/// Also indicates that this struct is about to be dropped and should no longer be used.
 		void CloseBrowser();
 
 		/// Calls GetIdentifier() on the internal CefBrowser
-		int GetBrowserIdentifier();
+		int GetBrowserIdentifier() const;
 
-		CefRefPtr<WindowDelegate> window_delegate;
+		/// Checks whether CloseBrowser() has been called and if so, whether the unique ID of its browser
+		/// matches the given param.
+		bool IsClosingWithHandle(int) const;
+
+		private:
+			CefRefPtr<WindowDelegate> window_delegate;
+			bool closing;
+			int closing_handle;
 	};
 }
 

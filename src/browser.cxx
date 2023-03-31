@@ -2,7 +2,7 @@
 #include "browser/browser_view_delegate.hxx"
 #include "include/views/cef_window.h"
 
-Browser::Window::Window(CefRefPtr<CefClient> client, Browser::Details details) {
+Browser::Window::Window(CefRefPtr<CefClient> client, Browser::Details details): closing(false) {
 	CefString url = "https://adamcake.com/";
 	CefBrowserSettings browser_settings;
 	browser_settings.background_color = CefColorSetARGB(0, 0, 0, 0);
@@ -19,7 +19,7 @@ Browser::Window::Window(CefRefPtr<CefClient> client, Browser::Details details) {
 	CefWindow::CreateTopLevelWindow(this->window_delegate);
 }
 
-int Browser::Window::GetBrowserIdentifier() {
+int Browser::Window::GetBrowserIdentifier() const {
 	return this->window_delegate->GetBrowserIdentifier();
 }
 
@@ -28,6 +28,11 @@ void Browser::Window::CloseRender() {
 }
 
 void Browser::Window::CloseBrowser() {
+	this->closing_handle = this->window_delegate->GetBrowserIdentifier();
 	this->window_delegate->Close();
-	this->window_delegate = nullptr;
+	this->closing = true;
+}
+
+bool Browser::Window::IsClosingWithHandle(int handle) const {
+	return this->closing && this->closing_handle == handle;
 }
