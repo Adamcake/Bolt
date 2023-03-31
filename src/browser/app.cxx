@@ -31,10 +31,9 @@ void Browser::App::OnContextCreated(CefRefPtr<CefBrowser> browser, CefRefPtr<Cef
 				alt1->SetValue("identifyAppUrl", CefV8Value::CreateFunction("identifyAppUrl", this->apps[i]), V8_PROPERTY_ATTRIBUTE_READONLY);
 				context->GetGlobal()->SetValue("alt1", alt1, V8_PROPERTY_ATTRIBUTE_READONLY);
 			} else if (frame->IsMain()) {
-				context->GetGlobal()->SetValue("__bolt_close", CefV8Value::CreateFunction("__bolt_close", this->apps[i]), V8_PROPERTY_ATTRIBUTE_READONLY);
-				context->GetGlobal()->SetValue("__bolt_minify", CefV8Value::CreateFunction("__bolt_minify", this->apps[i]), V8_PROPERTY_ATTRIBUTE_READONLY);
-				context->GetGlobal()->SetValue("__bolt_settings", CefV8Value::CreateFunction("__bolt_settings", this->apps[i]), V8_PROPERTY_ATTRIBUTE_READONLY);
-				context->GetGlobal()->SetValue("__bolt_begin_drag", CefV8Value::CreateFunction("__bolt_begin_drag", this->apps[i]), V8_PROPERTY_ATTRIBUTE_READONLY);
+				context->GetGlobal()->SetValue("__bolt_app_minify", CefV8Value::CreateFunction("__bolt_app_minify", this->apps[i]), V8_PROPERTY_ATTRIBUTE_READONLY);
+				context->GetGlobal()->SetValue("__bolt_app_settings", CefV8Value::CreateFunction("__bolt_app_settings", this->apps[i]), V8_PROPERTY_ATTRIBUTE_READONLY);
+				context->GetGlobal()->SetValue("__bolt_app_begin_drag", CefV8Value::CreateFunction("__bolt_app_begin_drag", this->apps[i]), V8_PROPERTY_ATTRIBUTE_READONLY);
 			}
 		}
 

@@ -15,14 +15,14 @@ void Browser::DOMVisitorAppFrame::Visit(CefRefPtr<CefDOMDocument> document) {
 	}
 	CefRefPtr<CefDOMNode> button_minify = document->GetElementById("button-minify");
 	if(button_minify) {
-		button_minify->SetElementAttribute("onclick", "window.__bolt_minify()");
+		button_minify->SetElementAttribute("onclick", "window.__bolt_app_minify()");
 	}
 	CefRefPtr<CefDOMNode> button_settings = document->GetElementById("button-settings");
 	if(button_settings) {
-		button_settings->SetElementAttribute("onclick", "window.__bolt_settings()");
+		button_settings->SetElementAttribute("onclick", "window.__bolt_app_settings()");
 	}
 	CefRefPtr<CefDOMNode> button_drag = document->GetElementById("button-drag");
 	if(button_drag) {
-		button_drag->SetElementAttribute("onmousedown", "window.__bolt_begin_drag()");
+		button_drag->SetElementAttribute("onmousedown", "window.__bolt_app_begin_drag()");
 	}
 }
