@@ -5,14 +5,13 @@ Browser::DOMVisitorAppFrame::DOMVisitorAppFrame(const CefString app_url): app_ur
 }
 
 void Browser::DOMVisitorAppFrame::Visit(CefRefPtr<CefDOMDocument> document) {
-	document->GetBody()->SetElementAttribute("onunload", "window.__bolt_close()");
 	CefRefPtr<CefDOMNode> app_frame = document->GetElementById("app-frame");
 	if(app_frame) {
 		app_frame->SetElementAttribute("src", this->app_url);
 	}
 	CefRefPtr<CefDOMNode> button_close = document->GetElementById("button-close");
 	if(button_close) {
-		button_close->SetElementAttribute("onclick", "window.__bolt_close()");
+		button_close->SetElementAttribute("onclick", "window.close()");
 	}
 	CefRefPtr<CefDOMNode> button_minify = document->GetElementById("button-minify");
 	if(button_minify) {
