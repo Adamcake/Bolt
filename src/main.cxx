@@ -98,6 +98,7 @@ int main(int argc, char* argv[]) {
 	CefRunMessageLoop();
 
 	// Release things we still own, then shut down CEF
+	win.Close();
 	CefShutdown();
 
 	return 0;
