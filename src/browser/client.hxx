@@ -1,7 +1,9 @@
 #ifndef _BOLT_CLIENT_HXX_
 #define _BOLT_CLIENT_HXX_
-
 #include "include/cef_client.h"
+#include "../browser.hxx"
+
+#include <vector>
 
 namespace Browser {
 	/// Implementation of CefClient, CefLifeSpanHandler, CefRequestHandler. Store on the stack, but access only via CefRefPtr.
@@ -34,6 +36,7 @@ namespace Browser {
 		private:
 			CefRefCount ref_count;
 			CefString app_overlay_url;
+			std::vector<Browser::Window> apps;
 	};
 }
 

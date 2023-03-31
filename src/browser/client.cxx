@@ -70,7 +70,21 @@ struct ResourceHandler: public CefResourceRequestHandler, CefResourceHandler {
 };
 
 Browser::Client::Client() {
+	Browser::Details details = {
+		.min_width = 250,
+		.min_height = 180,
+		.max_width = 1000,
+		.max_height = 1000,
+		.preferred_width = 250,
+		.preferred_height = 250,
+		.startx = 100,
+		.starty = 100,
+		.resizeable = true,
+		.frame = true,
+		.controls_overlay = true,
+	};
 	this->app_overlay_url = "http://bolt/app";
+	this->apps.push_back(Browser::Window(this, details));
 }
 
 CefRefPtr<CefLifeSpanHandler> Browser::Client::GetLifeSpanHandler() {
@@ -83,8 +97,12 @@ CefRefPtr<CefRequestHandler> Browser::Client::GetRequestHandler() {
 
 bool Browser::Client::DoClose(CefRefPtr<CefBrowser> browser) {
 	fmt::print("[B] DoClose for browser {}\n", browser->GetIdentifier());
-	browser->GetMainFrame()->SendProcessMessage(PID_RENDERER, CefProcessMessage::Create("__bolt_closing"));
-	return false;
+	for (size_t i = 0; i < this->apps.size(); i += 1) {
+		if (this->apps[i].GetBrowserIdentifier() == browser->GetIdentifier()) {
+			this->apps[i].CloseRender();
+		}
+	}
+	return true;
 }
 
 void Browser::Client::OnBeforeClose(CefRefPtr<CefBrowser> browser) {
@@ -92,11 +110,26 @@ void Browser::Client::OnBeforeClose(CefRefPtr<CefBrowser> browser) {
 	fmt::print("[B] OnBeforeClose for browser {}\n", browser->GetIdentifier());
 }
 
-bool Browser::Client::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame>, CefProcessId, CefRefPtr<CefProcessMessage> message) {
+bool Browser::Client::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefProcessId, CefRefPtr<CefProcessMessage> message) {
 	CefString name = message->GetName();
+
+	if (name == "__bolt_app_closed") {
+		fmt::print("[B] bolt_app_closed received for browser {}\n", browser->GetIdentifier());
+		for (size_t i = 0; i < this->apps.size(); i += 1) {
+			if (this->apps[i].GetBrowserIdentifier() == browser->GetIdentifier()) {
+				this->apps[i].CloseBrowser();
+			}
+		}
+		return true;
+	}
 
 	if (name == "__bolt_app_settings") {
 		fmt::print("[B] bolt_app_settings received for browser {}\n", browser->GetIdentifier());
+		for (size_t i = 0; i < this->apps.size(); i += 1) {
+			if (this->apps[i].GetBrowserIdentifier() == browser->GetIdentifier()) {
+				this->apps[i].CloseRender();
+			}
+		}
 		return true;
 	}
 
