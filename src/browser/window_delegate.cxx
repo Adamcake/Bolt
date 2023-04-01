@@ -17,6 +17,13 @@ int Browser::WindowDelegate::GetBrowserIdentifier() {
 	return this->browser_view->GetBrowser()->GetIdentifier();
 }
 
+void Browser::WindowDelegate::ShowDevTools(CefRefPtr<CefClient> client) {
+	CefWindowInfo window_info;
+	CefBrowserSettings browser_settings;
+	CefPoint point;
+	this->browser_view->GetBrowser()->GetHost()->ShowDevTools(window_info, client, browser_settings, point);
+}
+
 void Browser::WindowDelegate::SendProcessMessage(CefProcessId target_process, CefRefPtr<CefProcessMessage> message) {
 	this->browser_view->GetBrowser()->GetMainFrame()->SendProcessMessage(target_process, message);
 }

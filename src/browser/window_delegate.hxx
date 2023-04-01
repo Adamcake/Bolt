@@ -28,6 +28,7 @@ namespace Browser {
 
 		void Close();
 		int GetBrowserIdentifier();
+		void ShowDevTools(CefRefPtr<CefClient>);
 		void SendProcessMessage(CefProcessId, CefRefPtr<CefProcessMessage>);
 
 		private:
