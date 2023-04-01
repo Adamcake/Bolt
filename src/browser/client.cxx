@@ -72,7 +72,19 @@ struct ResourceHandler: public CefResourceRequestHandler, CefResourceHandler {
 
 Browser::Client::Client(CefRefPtr<Browser::App> app) {
 	app->SetBrowserProcessHandler(this);
-	/*
+}
+
+CefRefPtr<CefLifeSpanHandler> Browser::Client::GetLifeSpanHandler() {
+	return this;
+}
+
+CefRefPtr<CefRequestHandler> Browser::Client::GetRequestHandler() {
+	return this;
+}
+
+void Browser::Client::OnContextInitialized() {
+	// After main() enters its event loop, this function will be called on the main thread when CEF
+	// context is ready to go, so, as suggested by CEF examples, Bolt treats this as an entry point.
 	Browser::Details details = {
 		.min_width = 250,
 		.min_height = 180,
@@ -83,23 +95,21 @@ Browser::Client::Client(CefRefPtr<Browser::App> app) {
 		.startx = 100,
 		.starty = 100,
 		.resizeable = true,
-		.frame = true,
+		.frame = false,
 		.controls_overlay = true,
 	};
 	this->app_overlay_url = "http://bolt/app";
-	this->apps.push_back(Browser::Window(this, details));
-	this->apps.push_back(Browser::Window(this, details));
-	this->apps.push_back(Browser::Window(this, details));
-	this->apps.push_back(Browser::Window(this, details));
-	*/
+	this->apps.push_back(Browser::Window(this, details, "https://adamcake.com/"));
+	this->apps.push_back(Browser::Window(this, details, "https://adamcake.com/"));
+	this->apps.push_back(Browser::Window(this, details, "https://adamcake.com/"));
+	this->apps.push_back(Browser::Window(this, details, "https://adamcake.com/"));
 }
 
-CefRefPtr<CefLifeSpanHandler> Browser::Client::GetLifeSpanHandler() {
-	return this;
-}
-
-CefRefPtr<CefRequestHandler> Browser::Client::GetRequestHandler() {
-	return this;
+void Browser::Client::OnScheduleMessagePumpWork(int64 delay_ms) {
+	// This function will be called from many different threads, because we enabled `external_message_pump`
+	// in CefSettings in main(). The docs state that the given delay may be either positive or negative.
+	// A negative number indicates we should call CefDoMessageLoopWork() right now on the main thread.
+	// A positive number indicates we should do that after at least the given number of milliseconds.
 }
 
 bool Browser::Client::DoClose(CefRefPtr<CefBrowser> browser) {

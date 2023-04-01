@@ -17,6 +17,8 @@ namespace Browser {
 		Client(CefRefPtr<Browser::App>);
 		CefRefPtr<CefLifeSpanHandler> GetLifeSpanHandler() override;
 		CefRefPtr<CefRequestHandler> GetRequestHandler() override;
+		void OnContextInitialized() override;
+		void OnScheduleMessagePumpWork(int64) override;
 		bool DoClose(CefRefPtr<CefBrowser>) override;
 		void OnBeforeClose(CefRefPtr<CefBrowser>) override;
 		bool OnProcessMessageReceived(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, CefProcessId, CefRefPtr<CefProcessMessage>) override;
