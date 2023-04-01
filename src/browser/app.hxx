@@ -5,6 +5,7 @@
 #include "include/cef_app.h"
 #include "include/cef_base.h"
 #include "app_frame_data.hxx"
+#include "include/cef_browser_process_handler.h"
 
 namespace Browser {
 	/// Implementation of CefApp, CefRenderProcessHandler, CefLoadHandler. Store on the stack, but access only via CefRefPtr.
@@ -13,7 +14,9 @@ namespace Browser {
 	/// https://github.com/chromiumembedded/cef/blob/master/include/cef_load_handler.h
 	struct App: public CefApp, CefRenderProcessHandler, CefLoadHandler {
 		App();
+		void SetBrowserProcessHandler(CefRefPtr<CefBrowserProcessHandler> handler);
 		CefRefPtr<CefRenderProcessHandler> GetRenderProcessHandler() override;
+		CefRefPtr<CefBrowserProcessHandler> GetBrowserProcessHandler() override;
 		CefRefPtr<CefLoadHandler> GetLoadHandler() override;
 		void OnBrowserCreated(CefRefPtr<CefBrowser>, CefRefPtr<CefDictionaryValue>) override;
 		void OnContextCreated(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, CefRefPtr<CefV8Context>) override;
@@ -30,6 +33,7 @@ namespace Browser {
 		bool HasAtLeastOneRef() const override { return this->ref_count.HasAtLeastOneRef(); }
 		private:
 			CefRefCount ref_count;
+			CefRefPtr<CefBrowserProcessHandler> browser_process_handler;
 			std::vector<CefRefPtr<AppFrameData>> apps;
 	};
 }

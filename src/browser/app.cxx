@@ -5,12 +5,22 @@
 
 #include <fmt/core.h>
 
-Browser::App::App() {
+Browser::App::App(): browser_process_handler(nullptr) {
 	
+}
+
+void Browser::App::SetBrowserProcessHandler(CefRefPtr<CefBrowserProcessHandler> handler) {
+	this->browser_process_handler = handler;
 }
 
 CefRefPtr<CefRenderProcessHandler> Browser::App::GetRenderProcessHandler() {
 	return this;
+}
+
+CefRefPtr<CefBrowserProcessHandler> Browser::App::GetBrowserProcessHandler() {
+	// May be null, but in theory it should never be null on the main thread because it gets set via
+	// SetBrowserProcessHandler() before CefInitialize() is called. In other processes it will be null.
+	return this->browser_process_handler;
 }
 
 CefRefPtr<CefLoadHandler> Browser::App::GetLoadHandler() {
