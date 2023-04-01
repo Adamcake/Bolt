@@ -32,9 +32,9 @@ int main(int argc, char* argv[]) {
 	// Provide CEF with command-line arguments
 	CefMainArgs main_args(argc, argv);
 
-	// Set up our app struct
+	// CefApp struct - this implements handlers used by multiple processes
 	Browser::App cef_app_;
-	CefRefPtr<CefApp> cef_app = &cef_app_;
+	CefRefPtr<Browser::App> cef_app = &cef_app_;
 
 	// CEF applications have multiple sub-processes (render, GPU, etc) that share the same executable.
 	// This function checks the command-line and, if this is a sub-process, executes the appropriate logic.
@@ -42,6 +42,10 @@ int main(int argc, char* argv[]) {
 	if (exit_code >= 0) {
 		return exit_code;
 	}
+
+	// CefClient struct - central object for main thread, and implements lots of handlers for browser process
+	Browser::Client client_(cef_app);
+	CefRefPtr<CefClient> client = &client_;
 
 #if defined(CEF_X11)
 	// X11 error handlers
@@ -70,10 +74,6 @@ int main(int argc, char* argv[]) {
 		fmt::print("Exiting with error: cef_initialize exit_code {}\n", exit_code);
 		return exit_code;
 	}
-
-	// Our CEF client, the central object for the main thread
-	Browser::Client client_;
-	CefRefPtr<CefClient> client = &client_;
 
 	// Run the CEF message loop
 	// TODO: later this will be replaced with an OS-specific event loop capable of calling

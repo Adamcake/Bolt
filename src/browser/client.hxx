@@ -1,17 +1,20 @@
 #ifndef _BOLT_CLIENT_HXX_
 #define _BOLT_CLIENT_HXX_
 #include "include/cef_client.h"
+#include "app.hxx"
 #include "../browser.hxx"
 
 #include <vector>
 
 namespace Browser {
-	/// Implementation of CefClient, CefLifeSpanHandler, CefRequestHandler. Store on the stack, but access only via CefRefPtr.
+	/// Implementation of CefClient, CefBrowserProcessHandler, CefLifeSpanHandler, CefRequestHandler.
+	/// Store on the stack, but access only via CefRefPtr.
 	/// https://github.com/chromiumembedded/cef/blob/5563/include/cef_client.h
+	/// https://github.com/chromiumembedded/cef/blob/5563/include/cef_browser_process_handler.h
 	/// https://github.com/chromiumembedded/cef/blob/5563/include/cef_life_span_handler.h
 	/// https://github.com/chromiumembedded/cef/blob/5563/include/cef_request_handler.h
-	struct Client: public CefClient, CefLifeSpanHandler, CefRequestHandler {
-		Client();
+	struct Client: public CefClient, CefBrowserProcessHandler, CefLifeSpanHandler, CefRequestHandler {
+		Client(CefRefPtr<Browser::App>);
 		CefRefPtr<CefLifeSpanHandler> GetLifeSpanHandler() override;
 		CefRefPtr<CefRequestHandler> GetRequestHandler() override;
 		bool DoClose(CefRefPtr<CefBrowser>) override;
