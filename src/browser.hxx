@@ -10,7 +10,8 @@ namespace Browser {
 	/// The window will exist either until the user closes it or Window::CloseBrowser() is called.
 	/// In both cases, CefLifeSpanHandler::OnBeforeClose callback will be called (implemented by Client).
 	struct Window {
-		Window(CefRefPtr<CefClient> client, Details);
+		Window(CefRefPtr<CefClient> client, Details, CefString);
+		
 		/// A request to close a browser can originate either from the Render process or UI process.
 		/// In Bolt, if it originates in the Browser process (where this struct is), then it will be
 		/// sent to the Render process to begin there.

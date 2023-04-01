@@ -2,8 +2,7 @@
 #include "browser/browser_view_delegate.hxx"
 #include "include/views/cef_window.h"
 
-Browser::Window::Window(CefRefPtr<CefClient> client, Browser::Details details): closing(false) {
-	CefString url = "https://adamcake.com/";
+Browser::Window::Window(CefRefPtr<CefClient> client, Browser::Details details, CefString url): closing(false) {
 	CefBrowserSettings browser_settings;
 	browser_settings.background_color = CefColorSetARGB(0, 0, 0, 0);
 	CefRefPtr<CefBrowserViewDelegate> bvd = new Browser::BrowserViewDelegate(details);
