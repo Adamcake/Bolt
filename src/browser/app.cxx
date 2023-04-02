@@ -92,12 +92,12 @@ bool Browser::App::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRe
 			this->apps.end(),
 			[&browser](const CefRefPtr<Browser::AppFrameData>& data){ return browser->GetIdentifier() == data->id; }
 		);
-		while (it != this->apps.end()) {
+		for (auto i = it; i != this->apps.end(); i += 1) {
 			it->get()->frame->SendProcessMessage(PID_BROWSER, CefProcessMessage::Create("__bolt_app_closed"));
 			it->get()->frame = nullptr;
 			it += 1;
 		}
-		this->apps.erase(it);
+		this->apps.erase(it, this->apps.end());
 		return true;
 	}
 
@@ -121,7 +121,12 @@ void Browser::App::OnLoadError(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame
 	fmt::print("[R] OnLoadError\n");
 	if (CefCurrentlyOn(TID_RENDERER)) {
 		this->apps.erase(
-			std::remove_if(this->apps.begin(), this->apps.end(), [&browser](const CefRefPtr<Browser::AppFrameData>& data){ return browser->GetIdentifier() == data->id; })
+			std::remove_if(
+				this->apps.begin(),
+				this->apps.end(),
+				[&browser](const CefRefPtr<Browser::AppFrameData>& data){ return browser->GetIdentifier() == data->id; }
+			),
+			this->apps.end()
 		);
 	}
 }
