@@ -153,7 +153,7 @@ bool Browser::Client::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, Ce
 		fmt::print("[B] bolt_app_settings received for browser {}\n", browser->GetIdentifier());
 		for (size_t i = 0; i < this->apps.size(); i += 1) {
 			if (this->apps[i]->GetBrowserIdentifier() == browser->GetIdentifier()) {
-				this->apps[i]->CloseRender();
+				this->apps[i]->ShowDevTools(this);
 			}
 		}
 		return true;
