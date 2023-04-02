@@ -12,6 +12,8 @@ namespace Browser {
 	/// In both cases, CefLifeSpanHandler::OnBeforeClose callback will be called (implemented by Client).
 	/// This struct also acts as the CefWindowDelegate and CefBrowserViewDelegate for itself and any
 	/// children, such as devtools windows or browsers opened by Bolt apps.
+	/// https://github.com/chromiumembedded/cef/blob/5563/include/views/cef_window_delegate.h
+	/// https://github.com/chromiumembedded/cef/blob/5563/include/views/cef_browser_view_delegate.h
 	struct Window: CefWindowDelegate, CefBrowserViewDelegate {
 		Window(CefRefPtr<CefClient> client, Details, CefString);
 
