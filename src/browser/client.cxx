@@ -83,6 +83,7 @@ CefRefPtr<CefRequestHandler> Browser::Client::GetRequestHandler() {
 }
 
 void Browser::Client::OnContextInitialized() {
+	fmt::print("[B] OnContextInitialized\n");
 	// After main() enters its event loop, this function will be called on the main thread when CEF
 	// context is ready to go, so, as suggested by CEF examples, Bolt treats this as an entry point.
 	Browser::Details details = {
@@ -95,14 +96,14 @@ void Browser::Client::OnContextInitialized() {
 		.startx = 100,
 		.starty = 100,
 		.resizeable = true,
-		.frame = false,
+		.frame = true,
 		.controls_overlay = true,
 	};
 	this->app_overlay_url = "http://bolt/app";
-	this->apps.push_back(Browser::Window(this, details, "https://adamcake.com/"));
-	this->apps.push_back(Browser::Window(this, details, "https://adamcake.com/"));
-	this->apps.push_back(Browser::Window(this, details, "https://adamcake.com/"));
-	this->apps.push_back(Browser::Window(this, details, "https://adamcake.com/"));
+	this->apps.push_back(new Browser::Window(this, details, "https://adamcake.com/"));
+	this->apps.push_back(new Browser::Window(this, details, "https://adamcake.com/"));
+	this->apps.push_back(new Browser::Window(this, details, "https://adamcake.com/"));
+	this->apps.push_back(new Browser::Window(this, details, "https://adamcake.com/"));
 }
 
 void Browser::Client::OnScheduleMessagePumpWork(int64 delay_ms) {
@@ -115,8 +116,8 @@ void Browser::Client::OnScheduleMessagePumpWork(int64 delay_ms) {
 bool Browser::Client::DoClose(CefRefPtr<CefBrowser> browser) {
 	fmt::print("[B] DoClose for browser {}\n", browser->GetIdentifier());
 	for (size_t i = 0; i < this->apps.size(); i += 1) {
-		if (this->apps[i].GetBrowserIdentifier() == browser->GetIdentifier()) {
-			this->apps[i].CloseRender();
+		if (this->apps[i]->GetBrowserIdentifier() == browser->GetIdentifier()) {
+			this->apps[i]->CloseRender();
 		}
 	}
 	return true;
@@ -128,7 +129,7 @@ void Browser::Client::OnBeforeClose(CefRefPtr<CefBrowser> browser) {
 		std::remove_if(
 			this->apps.begin(),
 			this->apps.end(),
-			[&browser](const Browser::Window& window){ return window.IsClosingWithHandle(browser->GetIdentifier()); }
+			[&browser](const CefRefPtr<Browser::Window>& window){ return window->IsClosingWithHandle(browser->GetIdentifier()); }
 		)
 	);
 }
@@ -139,8 +140,8 @@ bool Browser::Client::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, Ce
 	if (name == "__bolt_app_closed") {
 		fmt::print("[B] bolt_app_closed received for browser {}\n", browser->GetIdentifier());
 		for (size_t i = 0; i < this->apps.size(); i += 1) {
-			if (this->apps[i].GetBrowserIdentifier() == browser->GetIdentifier()) {
-				this->apps[i].CloseBrowser();
+			if (this->apps[i]->GetBrowserIdentifier() == browser->GetIdentifier()) {
+				this->apps[i]->CloseBrowser();
 			}
 		}
 		return true;
@@ -149,8 +150,8 @@ bool Browser::Client::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, Ce
 	if (name == "__bolt_app_settings") {
 		fmt::print("[B] bolt_app_settings received for browser {}\n", browser->GetIdentifier());
 		for (size_t i = 0; i < this->apps.size(); i += 1) {
-			if (this->apps[i].GetBrowserIdentifier() == browser->GetIdentifier()) {
-				this->apps[i].CloseRender();
+			if (this->apps[i]->GetBrowserIdentifier() == browser->GetIdentifier()) {
+				this->apps[i]->CloseRender();
 			}
 		}
 		return true;

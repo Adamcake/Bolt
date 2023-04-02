@@ -1,6 +1,7 @@
 #ifndef _BOLT_CLIENT_HXX_
 #define _BOLT_CLIENT_HXX_
 #include "include/cef_client.h"
+#include "include/views/cef_window_delegate.h"
 #include "app.hxx"
 #include "../browser.hxx"
 
@@ -41,7 +42,7 @@ namespace Browser {
 		private:
 			CefRefCount ref_count;
 			CefString app_overlay_url;
-			std::vector<Browser::Window> apps;
+			std::vector<CefRefPtr<Browser::Window>> apps;
 	};
 }
 
