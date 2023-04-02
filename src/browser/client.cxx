@@ -131,7 +131,8 @@ void Browser::Client::OnBeforeClose(CefRefPtr<CefBrowser> browser) {
 			this->apps.begin(),
 			this->apps.end(),
 			[&browser](const CefRefPtr<Browser::Window>& window){ return window->IsClosingWithHandle(browser->GetIdentifier()); }
-		)
+		),
+		this->apps.end()
 	);
 }
 
