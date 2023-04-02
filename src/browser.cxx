@@ -21,9 +21,10 @@ int Browser::Window::GetBrowserIdentifier() const {
 }
 
 void Browser::Window::ShowDevTools(CefRefPtr<CefClient> client) {
-	CefWindowInfo window_info;
+	CefWindowInfo window_info; // ignored, because this is a BrowserView
 	CefBrowserSettings browser_settings;
-	CefPoint point;
+	CefRect rect = this->window->GetClientAreaBoundsInScreen();
+	CefPoint point(rect.width / 2, rect.height / 2);
 	this->browser_view->GetBrowser()->GetHost()->ShowDevTools(window_info, client, browser_settings, point);
 }
 
