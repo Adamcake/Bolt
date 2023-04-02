@@ -118,9 +118,10 @@ bool Browser::Client::DoClose(CefRefPtr<CefBrowser> browser) {
 	for (size_t i = 0; i < this->apps.size(); i += 1) {
 		if (this->apps[i]->GetBrowserIdentifier() == browser->GetIdentifier()) {
 			this->apps[i]->CloseRender();
+			return true;
 		}
 	}
-	return true;
+	return false;
 }
 
 void Browser::Client::OnBeforeClose(CefRefPtr<CefBrowser> browser) {
