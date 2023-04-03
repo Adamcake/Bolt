@@ -41,7 +41,6 @@ namespace Browser {
 		bool HasAtLeastOneRef() const override { return this->ref_count.HasAtLeastOneRef(); }
 		private:
 			CefRefCount ref_count;
-			CefString app_overlay_url;
 			std::vector<CefRefPtr<Browser::Window>> apps;
 	};
 }

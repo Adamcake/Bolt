@@ -99,7 +99,6 @@ void Browser::Client::OnContextInitialized() {
 		.frame = true,
 		.controls_overlay = true,
 	};
-	this->app_overlay_url = "http://bolt/app";
 	this->apps.push_back(new Browser::Window(this, details, "https://adamcake.com/"));
 	this->apps.push_back(new Browser::Window(this, details, "https://adamcake.com/"));
 	this->apps.push_back(new Browser::Window(this, details, "https://adamcake.com/"));
@@ -181,7 +180,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Client::GetResourceRequestHandler(
 	const CefString& request_initiator,
 	bool& disable_default_handling
 ) {
-	if (request->GetURL() == this->app_overlay_url) {
+	if (request->GetURL() == "http://bolt/app") {
 		disable_default_handling = true;
 		return new ResourceHandler(app_overlay_html);
 	}
