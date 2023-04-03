@@ -9,7 +9,8 @@ Browser::Window::Window(CefRefPtr<CefClient> client, Browser::Details details, C
 	if (details.controls_overlay) {
 		CefRefPtr<CefDictionaryValue> dict = CefDictionaryValue::Create();
 		dict->SetString("BoltAppUrl", url);
-		this->browser_view = CefBrowserView::CreateBrowserView(client, "http://bolt/app", browser_settings, std::move(dict), nullptr, this);
+		// URL is unused, but still needs to be interpreted as valid, for some reason
+		this->browser_view = CefBrowserView::CreateBrowserView(client, "0", browser_settings, std::move(dict), nullptr, this);
 	} else {
 		this->browser_view = CefBrowserView::CreateBrowserView(client, url, browser_settings, nullptr, nullptr, this);
 	}
