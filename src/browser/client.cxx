@@ -83,6 +83,7 @@ CefRefPtr<CefRequestHandler> Browser::Client::GetRequestHandler() {
 }
 
 void Browser::Client::OnContextInitialized() {
+	std::lock_guard<std::mutex> _(this->apps_lock);
 	fmt::print("[B] OnContextInitialized\n");
 	// After main() enters its event loop, this function will be called on the main thread when CEF
 	// context is ready to go, so, as suggested by CEF examples, Bolt treats this as an entry point.
@@ -113,6 +114,7 @@ void Browser::Client::OnScheduleMessagePumpWork(int64 delay_ms) {
 }
 
 bool Browser::Client::DoClose(CefRefPtr<CefBrowser> browser) {
+	std::lock_guard<std::mutex> _(this->apps_lock);
 	fmt::print("[B] DoClose for browser {}\n", browser->GetIdentifier());
 	for (size_t i = 0; i < this->apps.size(); i += 1) {
 		if (this->apps[i]->GetBrowserIdentifier() == browser->GetIdentifier()) {
@@ -124,6 +126,7 @@ bool Browser::Client::DoClose(CefRefPtr<CefBrowser> browser) {
 }
 
 void Browser::Client::OnBeforeClose(CefRefPtr<CefBrowser> browser) {
+	std::lock_guard<std::mutex> _(this->apps_lock);
 	fmt::print("[B] OnBeforeClose for browser {}\n", browser->GetIdentifier());
 	this->apps.erase(
 		std::remove_if(
@@ -136,6 +139,7 @@ void Browser::Client::OnBeforeClose(CefRefPtr<CefBrowser> browser) {
 }
 
 bool Browser::Client::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefProcessId, CefRefPtr<CefProcessMessage> message) {
+	std::lock_guard<std::mutex> _(this->apps_lock);
 	CefString name = message->GetName();
 
 	if (name == "__bolt_app_closed") {
@@ -180,9 +184,14 @@ CefRefPtr<CefResourceRequestHandler> Browser::Client::GetResourceRequestHandler(
 	const CefString& request_initiator,
 	bool& disable_default_handling
 ) {
-	if (request->GetURL() == "http://bolt/app") {
-		disable_default_handling = true;
-		return new ResourceHandler(app_overlay_html);
+	std::lock_guard<std::mutex> _(this->apps_lock);
+	
+	for (size_t i = 0; i < this->apps.size(); i += 1) {
+		if (this->apps[i]->GetBrowserIdentifier() == browser->GetIdentifier() && frame->IsMain()) { 
+			disable_default_handling = true;
+			return new ResourceHandler(app_overlay_html);
+		}
 	}
+
 	return nullptr;
 }

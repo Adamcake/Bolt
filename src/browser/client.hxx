@@ -6,6 +6,7 @@
 #include "../browser.hxx"
 
 #include <vector>
+#include <mutex>
 
 namespace Browser {
 	/// Implementation of CefClient, CefBrowserProcessHandler, CefLifeSpanHandler, CefRequestHandler.
@@ -41,7 +42,10 @@ namespace Browser {
 		bool HasAtLeastOneRef() const override { return this->ref_count.HasAtLeastOneRef(); }
 		private:
 			CefRefCount ref_count;
+
+			// Mutex-locked vector - may be accessed from either UI thread (most of the time) or IO thread (GetResourceRequestHandler)
 			std::vector<CefRefPtr<Browser::Window>> apps;
+			std::mutex apps_lock;
 	};
 }
 
