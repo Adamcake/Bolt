@@ -54,11 +54,12 @@ namespace Browser {
 		CefSize GetMaximumSize(CefRefPtr<CefView>) override;
 
 		/* CefBrowserViewDelegate functions */
+		void OnBrowserCreated(CefRefPtr<CefBrowserView>, CefRefPtr<CefBrowser>) override;
 		cef_chrome_toolbar_type_t GetChromeToolbarType() override;
 
 		private:
 			bool closing;
-			int closing_handle;
+			int browser_id;
 
 			Details details;
 			CefRefPtr<CefWindow> window;

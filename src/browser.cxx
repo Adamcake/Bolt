@@ -17,7 +17,7 @@ Browser::Window::Window(CefRefPtr<CefClient> client, Browser::Details details, C
 }
 
 int Browser::Window::GetBrowserIdentifier() const {
-	return this->browser_view->GetBrowser()->GetIdentifier();
+	return this->browser_id;
 }
 
 void Browser::Window::ShowDevTools(CefRefPtr<CefClient> client) {
@@ -33,13 +33,12 @@ void Browser::Window::CloseRender() {
 }
 
 void Browser::Window::CloseBrowser() {
-	this->closing_handle = this->GetBrowserIdentifier();
 	this->closing = true;
 	this->window->Close();
 }
 
 bool Browser::Window::IsClosingWithHandle(int handle) const {
-	return this->closing && this->closing_handle == handle;
+	return this->closing && this->browser_id == handle;
 }
 
 void Browser::Window::OnWindowCreated(CefRefPtr<CefWindow> window) {
@@ -104,6 +103,10 @@ CefSize Browser::Window::GetMinimumSize(CefRefPtr<CefView>) {
 
 CefSize Browser::Window::GetMaximumSize(CefRefPtr<CefView>) {
 	return CefSize(this->details.max_width, this->details.max_height);
+}
+
+void Browser::Window::OnBrowserCreated(CefRefPtr<CefBrowserView> browser_view, CefRefPtr<CefBrowser> browser) {
+	this->browser_id = browser->GetIdentifier();
 }
 
 cef_chrome_toolbar_type_t Browser::Window::GetChromeToolbarType() {
