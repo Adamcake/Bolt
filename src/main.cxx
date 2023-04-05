@@ -45,7 +45,8 @@ int main(int argc, char* argv[]) {
 
 	// CefClient struct - central object for main thread, and implements lots of handlers for browser process
 	Browser::Client client_(cef_app);
-	CefRefPtr<CefClient> client = &client_;
+	CefRefPtr<Browser::Client> client = &client_;
+	client->SetupNative();
 
 #if defined(CEF_X11)
 	// X11 error handlers
@@ -80,8 +81,8 @@ int main(int argc, char* argv[]) {
 	// cef_do_message_loop_work() in response to CEF's "message pump"
 	CefRunMessageLoop();
 
-	// Release things we still own, then shut down CEF
+	// Shutdown and return
 	CefShutdown();
-
+	client->CloseNative();
 	return 0;
 }
