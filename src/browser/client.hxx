@@ -4,6 +4,7 @@
 #include "include/views/cef_window_delegate.h"
 #include "app.hxx"
 #include "../browser.hxx"
+#include "../native/native.hxx"
 
 #include <vector>
 #include <mutex>
@@ -17,13 +18,21 @@ namespace Browser {
 	/// https://github.com/chromiumembedded/cef/blob/5563/include/cef_request_handler.h
 	struct Client: public CefClient, CefBrowserProcessHandler, CefLifeSpanHandler, CefRequestHandler {
 		Client(CefRefPtr<Browser::App>);
+
+		/* CefClient overrides */
 		CefRefPtr<CefLifeSpanHandler> GetLifeSpanHandler() override;
 		CefRefPtr<CefRequestHandler> GetRequestHandler() override;
+		bool OnProcessMessageReceived(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, CefProcessId, CefRefPtr<CefProcessMessage>) override;
+
+		/* CefBrowserProcessHandler overrides */
 		void OnContextInitialized() override;
 		void OnScheduleMessagePumpWork(int64) override;
+
+		/* CefLifeSpanHandler overrides */
 		bool DoClose(CefRefPtr<CefBrowser>) override;
 		void OnBeforeClose(CefRefPtr<CefBrowser>) override;
-		bool OnProcessMessageReceived(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, CefProcessId, CefRefPtr<CefProcessMessage>) override;
+
+		/* CefRequestHandler overrides */
 		CefRefPtr<CefResourceRequestHandler> GetResourceRequestHandler(
 			CefRefPtr<CefBrowser>,
 			CefRefPtr<CefFrame>,
@@ -42,6 +51,8 @@ namespace Browser {
 		bool HasAtLeastOneRef() const override { return this->ref_count.HasAtLeastOneRef(); }
 		private:
 			CefRefCount ref_count;
+
+			Native::Connection connection;
 
 			// Mutex-locked vector - may be accessed from either UI thread (most of the time) or IO thread (GetResourceRequestHandler)
 			std::vector<CefRefPtr<Browser::Window>> apps;
