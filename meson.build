@@ -1,4 +1,4 @@
-project('Bolt', 'cpp', subproject_dir: 'cef', default_options: ['buildtype=debugoptimized', 'cpp_std=c++17', 'prefix=/opt', 'bindir=bolt'])
+project('Bolt', 'cpp', subproject_dir: 'cef', default_options: ['buildtype=debugoptimized', 'cpp_std=c++17', 'cpp_eh=none', 'prefix=/opt', 'bindir=bolt'])
 cmake = import('cmake')
 libcef_dll_wrapper = cmake.subproject('dist').dependency('libcef_dll_wrapper')
 libcef = custom_target('libcef', output: 'libcef.so', command: ['./cef/install.sh', '@SOURCE_ROOT@', '@OUTDIR@'])
