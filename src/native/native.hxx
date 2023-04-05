@@ -4,6 +4,7 @@
 
 #ifdef __linux__
 #include <xcb/xcb.h>
+#include <thread>
 #endif
 
 namespace Native {
@@ -15,6 +16,7 @@ namespace Native {
 		#ifdef __linux__
 		xcb_connection_t* connection;
 		xcb_window_t root_window;
+		std::thread record_thread;
 		#endif
 
 		#ifdef _WIN32
