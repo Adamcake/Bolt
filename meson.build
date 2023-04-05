@@ -10,11 +10,11 @@ if build_machine.system() == 'linux'
 endif
 
 if host_machine.system() == 'linux'
-    client_native = 'src/native/native_x11.cxx'
+    client_native = 'src/native/client_x11.cxx'
 elif host_machine.system() == 'windows'
-    client_native = 'src/native/native_win32.cxx'
+    client_native = 'src/native/client_win32.cxx'
 elif host_machine.system() == 'darwin'
-    client_native = 'src/native/native_cocoa.mm'
+    client_native = 'src/native/client_cocoa.mm'
 endif
 
 executable(
