@@ -11,6 +11,9 @@ Place the entire binary distribution folder inside the `cef` directory with the 
 You'll also need the following dependencies:
 - [fmt](https://fmt.dev) (`fmt-devel` or `libfmt-dev` on most Linux package managers)
 - [tesseract](https://tesseract-ocr.github.io) (`tesseract-devel`, `tesseract-ocr-devel` or `libtesseract-dev` on most Linux package managers)
-- For Linux, X11 development libraries (`x11-devel` or `libx11-dev` on most Linux package managers) as well as the development libraries for X11's Shape, Record and Composite extensions, which may or may not be in separate packages from the general X11 one in your package manager.
+- Linux:
+  - X11 development libraries (`libX11-devel` or `libx11-dev` on most package managers)
+  - xcb development libraries (`libxcb-devel` or `libxcb-dev` on most package managers)
+  - development libraries for libxcb-composite and libxcb-record if your package manager has them separate from the base xcb package
 
 Once that's done, simply build with meson: `meson setup build` then `meson compile -C buiid`. If it compiled successfully you'll be able to run Bolt from inside the `build` directory. On a non-Windows platform, you may also install it by running `meson install -C build`.
