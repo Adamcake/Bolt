@@ -11,9 +11,10 @@ namespace Native {
 	typedef CefWindowHandle BrowserHandle;
 
 	/// Struct representing a connection to the OS (X11, Win32, etc)
-	struct Connection {
+	struct Native {
 		#ifdef __linux__
 		xcb_connection_t* connection;
+		xcb_window_t root_window;
 		#endif
 
 		#ifdef _WIN32

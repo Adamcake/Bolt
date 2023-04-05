@@ -52,7 +52,7 @@ namespace Browser {
 		private:
 			CefRefCount ref_count;
 
-			Native::Connection connection;
+			Native::Native native;
 
 			// Mutex-locked vector - may be accessed from either UI thread (most of the time) or IO thread (GetResourceRequestHandler)
 			std::vector<CefRefPtr<Browser::Window>> apps;
