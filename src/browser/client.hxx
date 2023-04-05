@@ -42,6 +42,21 @@ namespace Browser {
 			const CefString&,
 			bool&
 		) override;
+
+		/* Functions implemented in native */
+
+		/// Initialises the Native::Connection owned by this struct. Called on the main thread only.
+		/// Returns true on success, false on failure.
+		bool SetupNative();
+
+		/// Runs a platform-native event loop, blocking until it exits. Called on the main thread only.
+		/// This function assumes SetupNative has been called and that its return value indicated success.
+		void Run();
+
+		/// Closes the Native::Connection owned by this struct. Called on the main thread only.
+		/// This function will not be called until all owned browsers have been destroyed (i.e. OnBeforeClose
+		/// has been called for all Browsers), and this will be the last function call made to the Client.
+		void CloseNative();
 		
 		Client(const Client&) = delete;
 		Client& operator=(const Client&) = delete;
