@@ -6,7 +6,7 @@ meson.add_install_script('cef/install.sh')
 
 deps = [libcef_dll_wrapper, dependency('fmt'), dependency('tesseract')]
 if build_machine.system() == 'linux'
-    deps += [dependency('x11'), dependency('xcb')]
+    deps += [dependency('x11'), dependency('xcb'), dependency('xcb-record')]
 endif
 
 if host_machine.system() == 'linux'
