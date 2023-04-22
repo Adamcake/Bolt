@@ -1,5 +1,7 @@
 #include <fmt/core.h>
 
+#include <thread>
+
 #include "browser.hxx"
 #include "browser/app.hxx"
 #include "browser/client.hxx"
@@ -46,7 +48,7 @@ int main(int argc, char* argv[]) {
 	// CefClient struct - central object for main thread, and implements lots of handlers for browser process
 	Browser::Client client_(cef_app);
 	CefRefPtr<Browser::Client> client = &client_;
-	client->SetupNative();
+	std::thread native_thread(&Browser::Client::Run, client);
 
 #if defined(CEF_X11)
 	// X11 error handlers
@@ -65,7 +67,6 @@ int main(int argc, char* argv[]) {
 	// CEF settings - only set the ones we're interested in
 	CefSettings settings = CefSettings();
 	settings.log_severity = LOGSEVERITY_WARNING; // Print warnings and errors only
-	//settings.external_message_pump = true;     // Allows us to integrate CEF's event loop into our own
 	settings.command_line_args_disabled = true;  // We don't want our command-line to configure CEF's windows
 	settings.uncaught_exception_stack_size = 8;  // Number of call stack frames given in unhandled exception events
 
@@ -73,16 +74,18 @@ int main(int argc, char* argv[]) {
 	exit_code = CefInitialize(main_args, settings, cef_app, nullptr);
 	if (exit_code == 0) {
 		fmt::print("Exiting with error: cef_initialize exit_code {}\n", exit_code);
+		client->CloseNative();
+		native_thread.join();
 		return exit_code;
 	}
 
-	// Run the CEF message loop
-	// TODO: later this will be replaced with an OS-specific event loop capable of calling
-	// cef_do_message_loop_work() in response to CEF's "message pump"
+	// Block on the CEF message loop until CefQuitMessageLoop() is called
 	CefRunMessageLoop();
 
 	// Shutdown and return
+	// TODO: CloseNative could technically be called before the native thread has finished the relevant setup...
 	CefShutdown();
 	client->CloseNative();
+	native_thread.join();
 	return 0;
 }
