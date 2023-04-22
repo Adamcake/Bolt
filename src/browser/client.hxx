@@ -45,15 +45,12 @@ namespace Browser {
 
 		/* Functions implemented in native */
 
-		/// Initialises the Native::Connection owned by this struct. Called on the main thread only.
-		/// Returns true on success, false on failure.
-		bool SetupNative();
-
-		/// Runs a platform-native event loop, blocking until it exits. Called on the main thread only.
+		/// Runs a platform-native event loop, blocking until it exits. Called in its own dedicated thread.
 		/// This function assumes SetupNative has been called and that its return value indicated success.
 		void Run();
 
-		/// Closes the Native::Connection owned by this struct. Called on the main thread only.
+		/// Closes the Native::Connection owned by this struct. Called on the main thread only, so should fire an
+		/// event to the event loop indicating to stop. This function must be non-blocking.
 		/// This function will not be called until all owned browsers have been destroyed (i.e. OnBeforeClose
 		/// has been called for all Browsers), and this will be the last function call made to the Client.
 		void CloseNative();

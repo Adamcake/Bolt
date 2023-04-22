@@ -8,37 +8,74 @@
 // Uses the xcb-record extension to report mouse button events to main event loop
 void Record(xcb_connection_t*);
 
-bool Browser::Client::SetupNative() {
+void Browser::Client::Run() {
 	this->native.connection = xcb_connect(nullptr, nullptr);
 	if (!this->native.connection) {
 		fmt::print("[native] connection is null\n");
-		return false;
+		return;
 	}
 	if (xcb_connection_has_error(this->native.connection)) {
 		fmt::print("[native] connection has error\n");
-		return false;
+		return;
 	}
 	xcb_screen_iterator_t screens = xcb_setup_roots_iterator(xcb_get_setup(this->native.connection));
 	if (screens.rem != 1) {
 		fmt::print("[native] {} root screens found; expected exactly 1\n", screens.rem);
 		xcb_disconnect(this->native.connection);
-		return false;
+		return;
 	}
 	this->native.root_window = screens.data->root;
 
+	this->native.event_window = xcb_generate_id(this->native.connection);
+	if (this->native.event_window == 0xFFFFFFFF) {
+		fmt::print("[native] failed to create event window - xcb_generate_id failed\n");
+		xcb_disconnect(this->native.connection);
+		return;
+	}
+	auto event_mask = XCB_EVENT_MASK_STRUCTURE_NOTIFY;
+	auto create_error = xcb_request_check(this->native.connection, xcb_create_window(
+		this->native.connection,
+		XCB_COPY_FROM_PARENT,
+		this->native.event_window,
+		this->native.root_window,
+		0,
+		0,
+		1,
+		1,
+		0,
+		XCB_WINDOW_CLASS_INPUT_OUTPUT,
+		XCB_COPY_FROM_PARENT,
+		XCB_CW_EVENT_MASK,
+		&event_mask
+	));
+	if (create_error) {
+		fmt::print("[native] failed to create event window - error {}\n", create_error->error_code);
+		free(create_error);
+		xcb_disconnect(this->native.connection);
+		return;
+	}
+
 	this->native.record_thread = std::thread(Record, this->native.connection);
 
-	return true;
-}
+	xcb_flush(this->native.connection);
 
-void Browser::Client::Run() {
+	bool run = true;
 	xcb_generic_event_t* event;
-	while (true) {
+	while (run) {
 		event = xcb_wait_for_event(this->native.connection);
 		if (event) {
 			// Top bit indicates whether the event came from SendEvent
 			uint8_t type = event->response_type & 0b01111111;
 			switch(type) {
+				case XCB_CLIENT_MESSAGE: {
+					auto message = reinterpret_cast<xcb_client_message_event_t*>(event);
+					if (message->window == this->native.event_window) {
+						fmt::print("[native] closing\n");
+						run = false;
+					}
+					break;
+				}
+
 				// type=0 is Error, although this isn't documented anywhere nor defined with any name
 				case 0: {
 					xcb_generic_error_t* error = reinterpret_cast<xcb_generic_error_t*>(event);
@@ -62,11 +99,26 @@ void Browser::Client::Run() {
 			break;
 		}
 	}
+
+	xcb_disconnect(this->native.connection);
+	this->native.record_thread.join();
+	fmt::print("[native] stopped\n");
 }
 
 void Browser::Client::CloseNative() {
-	xcb_disconnect(this->native.connection);
-	this->native.record_thread.join();
+	xcb_client_message_event_t* event = new xcb_client_message_event_t;
+	event->response_type = XCB_CLIENT_MESSAGE;
+	event->window = this->native.event_window;
+	event->format = 8;
+	auto cookie = xcb_send_event_checked(
+		this->native.connection,
+		false,
+		this->native.event_window,
+		XCB_EVENT_MASK_STRUCTURE_NOTIFY,
+		reinterpret_cast<const char*>(event)
+	);
+	xcb_discard_reply(this->native.connection, cookie.sequence);
+	xcb_flush(this->native.connection);
 }
 
 void Record(xcb_connection_t* connection) {
@@ -127,7 +179,17 @@ void Record(xcb_connection_t* connection) {
 
 		switch (reply->category) {
 			case 0: { // XRecordFromServer
-				fmt::print("[native] record\n");
+				uint8_t* data = xcb_record_enable_context_data(reply);
+				int data_len = xcb_record_enable_context_data_length(reply);
+				if (data_len == sizeof(xcb_button_press_event_t)) {
+					xcb_generic_event_t* ev = reinterpret_cast<xcb_generic_event_t*>(data);
+					switch (ev->response_type) {
+						case XCB_BUTTON_PRESS: {
+							xcb_button_press_event_t* event = reinterpret_cast<xcb_button_press_event_t*>(ev);
+							fmt::print("[native] record {}\n", event->detail);
+						}
+					}
+				}
 				break;
 			}
 			case 4: { // XRecordStartOfData
@@ -144,7 +206,5 @@ void Record(xcb_connection_t* connection) {
 		free(reply);
 	}
 
-	xcb_record_disable_context (connection, id);
-	xcb_record_free_context (connection, id);
-	xcb_disconnect (record_connection);
+	xcb_disconnect(record_connection);
 }

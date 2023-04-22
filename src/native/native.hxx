@@ -2,6 +2,8 @@
 #define _BOLT_NATIVE_HXX_
 #include "include/views/cef_window.h"
 
+#include <mutex>
+
 #ifdef __linux__
 #include <xcb/xcb.h>
 #include <thread>
@@ -16,6 +18,7 @@ namespace Native {
 		#ifdef __linux__
 		xcb_connection_t* connection;
 		xcb_window_t root_window;
+		xcb_window_t event_window;
 		std::thread record_thread;
 		#endif
 
