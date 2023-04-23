@@ -19,6 +19,7 @@ namespace Native {
 		xcb_connection_t* connection;
 		xcb_window_t root_window;
 		xcb_window_t event_window;
+		xcb_window_t tray_window;
 		std::thread record_thread;
 		#endif
 

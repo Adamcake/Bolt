@@ -4,6 +4,7 @@
 #include <thread>
 #include <xcb/record.h>
 #include <fmt/core.h>
+#include <xcb/xproto.h>
 
 // Uses the xcb-record extension to report mouse button events to main event loop
 void Record(xcb_connection_t*);
@@ -26,6 +27,17 @@ void Browser::Client::Run() {
 	}
 	this->native.root_window = screens.data->root;
 
+	auto tray_opcode_atom_cookie = xcb_intern_atom(this->native.connection, false, 23, "_NET_SYSTEM_TRAY_OPCODE");
+	auto tray_atom_cookie = xcb_intern_atom(this->native.connection, false, 19, "_NET_SYSTEM_TRAY_S0");
+	auto net_wm_name_cookie = xcb_intern_atom(this->native.connection, false, 12, "_NET_WM_NAME");
+	auto net_wm_icon_cookie = xcb_intern_atom(this->native.connection, false, 12, "_NET_WM_ICON");
+	auto net_wm_pid_cookie = xcb_intern_atom(this->native.connection, false, 11, "_NET_WM_PID");
+	auto wm_client_machine_cookie = xcb_intern_atom(this->native.connection, false, 17, "WM_CLIENT_MACHINE");
+	auto utf8_string_cookie = xcb_intern_atom(this->native.connection, false, 11, "UTF8_STRING");
+	auto wm_delete_window_cookie = xcb_intern_atom(this->native.connection, false, 16, "WM_DELETE_WINDOW");
+	auto net_wm_ping_cookie = xcb_intern_atom(this->native.connection, false, 12, "_NET_WM_PING");
+	auto wm_protocols_cookie = xcb_intern_atom(this->native.connection, false, 12, "WM_PROTOCOLS");
+	
 	this->native.event_window = xcb_generate_id(this->native.connection);
 	if (this->native.event_window == 0xFFFFFFFF) {
 		fmt::print("[native] failed to create event window - xcb_generate_id failed\n");
@@ -55,6 +67,147 @@ void Browser::Client::Run() {
 		return;
 	}
 
+	this->native.tray_window = xcb_generate_id(this->native.connection);
+	if (this->native.tray_window == 0xFFFFFFFF) {
+		fmt::print("[native] failed to create tray icon - xcb_generate_id failed\n");
+		xcb_disconnect(this->native.connection);
+		return;
+	}
+	create_error = xcb_request_check(this->native.connection, xcb_create_window(
+		this->native.connection,
+		XCB_COPY_FROM_PARENT,
+		this->native.tray_window,
+		this->native.root_window,
+		0,
+		0,
+		16,
+		16,
+		0,
+		XCB_WINDOW_CLASS_INPUT_OUTPUT,
+		XCB_COPY_FROM_PARENT,
+		0,
+		nullptr
+	));
+	if (create_error) {
+		fmt::print("[native] failed to create tray icon - error {}\n", create_error->error_code);
+		free(create_error);
+		xcb_disconnect(this->native.connection);
+		return;
+	}
+
+	char hostname[HOST_NAME_MAX];
+	memset(hostname, 0, HOST_NAME_MAX);
+	gethostname(hostname, HOST_NAME_MAX);
+	auto pid = getpid();
+	uint32_t icon[(16 * 16 + 2)] = {};
+	memset(icon, 0xFF, (16 * 16 + 2) * sizeof(uint32_t));
+	icon[0] = 16;
+	icon[1] = 16;
+	xcb_intern_atom_reply_t* tray_opcode_atom = xcb_intern_atom_reply(this->native.connection, tray_opcode_atom_cookie, nullptr);
+	xcb_intern_atom_reply_t* tray_atom = xcb_intern_atom_reply(this->native.connection, tray_atom_cookie, nullptr);
+	xcb_intern_atom_reply_t* net_wm_name = xcb_intern_atom_reply(this->native.connection, net_wm_name_cookie, nullptr);
+	xcb_intern_atom_reply_t* net_wm_icon = xcb_intern_atom_reply(this->native.connection, net_wm_icon_cookie, nullptr);
+	xcb_intern_atom_reply_t* net_wm_pid = xcb_intern_atom_reply(this->native.connection, net_wm_pid_cookie, nullptr);
+	xcb_intern_atom_reply_t* wm_client_machine = xcb_intern_atom_reply(this->native.connection, wm_client_machine_cookie, nullptr);
+	xcb_intern_atom_reply_t* utf8_string = xcb_intern_atom_reply(this->native.connection, utf8_string_cookie, nullptr);
+	xcb_intern_atom_reply_t* wm_delete_window = xcb_intern_atom_reply(this->native.connection, wm_delete_window_cookie, nullptr);
+	xcb_intern_atom_reply_t* net_wm_ping = xcb_intern_atom_reply(this->native.connection, net_wm_ping_cookie, nullptr);
+	xcb_intern_atom_reply_t* wm_protocols = xcb_intern_atom_reply(this->native.connection, wm_protocols_cookie, nullptr);
+	xcb_atom_t window_atoms[] = { wm_delete_window->atom, net_wm_ping->atom };
+
+	xcb_discard_reply(this->native.connection, xcb_change_property(
+		this->native.connection,
+		XCB_PROP_MODE_REPLACE,
+		this->native.tray_window,
+		net_wm_pid->atom,
+		XCB_ATOM_CARDINAL,
+		32,
+		1,
+		&pid
+	).sequence);
+	xcb_discard_reply(this->native.connection, xcb_change_property(
+		this->native.connection,
+		XCB_PROP_MODE_REPLACE,
+		this->native.tray_window,
+		wm_client_machine->atom,
+		XCB_ATOM_STRING,
+		8,
+		strlen(hostname),
+		hostname
+	).sequence);
+	xcb_discard_reply(this->native.connection, xcb_change_property(
+		this->native.connection,
+		XCB_PROP_MODE_REPLACE,
+		this->native.tray_window,
+		net_wm_name->atom,
+		utf8_string->atom,
+		8,
+		4,
+		"Bolt"
+	).sequence);
+	xcb_discard_reply(this->native.connection, xcb_change_property(
+		this->native.connection,
+		XCB_PROP_MODE_REPLACE,
+		this->native.tray_window,
+		XCB_ATOM_WM_NAME,
+		XCB_ATOM_STRING,
+		8,
+		4,
+		"Bolt"
+	).sequence);
+	xcb_discard_reply(this->native.connection, xcb_change_property(
+		this->native.connection,
+		XCB_PROP_MODE_REPLACE,
+		this->native.tray_window,
+		XCB_ATOM_WM_CLASS,
+		XCB_ATOM_STRING,
+		8,
+		10,
+		"bolt\0bolt\0"
+	).sequence);
+	xcb_discard_reply(this->native.connection, xcb_change_property(
+		this->native.connection,
+		XCB_PROP_MODE_REPLACE,
+		this->native.tray_window,
+		net_wm_icon->atom,
+		XCB_ATOM_CARDINAL,
+		32,
+		(16 * 16) + 2,
+		icon
+	).sequence);
+	xcb_discard_reply(this->native.connection, xcb_change_property(
+		this->native.connection,
+		XCB_PROP_MODE_REPLACE,
+		this->native.tray_window,
+		wm_protocols->atom,
+		XCB_ATOM_ATOM,
+		32,
+		2,
+		window_atoms
+	).sequence);
+
+	auto tray_owner_cookie = xcb_get_selection_owner(this->native.connection, tray_atom->atom);
+	auto tray = xcb_get_selection_owner_reply(this->native.connection, tray_owner_cookie, nullptr)->owner;
+	auto attr_cookie = xcb_change_window_attributes(this->native.connection, tray, XCB_CW_EVENT_MASK, &event_mask);
+	xcb_discard_reply(this->native.connection, attr_cookie.sequence);
+	xcb_client_message_event_t e;
+	memset(&e, 0, sizeof e);
+	e.response_type = XCB_CLIENT_MESSAGE;
+	e.window = tray;
+	e.type = tray_opcode_atom->atom;
+	e.format = 32;
+	e.data.data32[0] = XCB_CURRENT_TIME;
+	e.data.data32[1] = 0; // SYSTEM_TRAY_REQUEST_DOCK
+	e.data.data32[2] = this->native.tray_window;
+	auto send_event_cookie = xcb_send_event_checked(
+		this->native.connection,
+		false,
+		tray,
+		XCB_EVENT_MASK_NO_EVENT,
+		reinterpret_cast<const char*>(&e)
+	);
+	xcb_discard_reply(this->native.connection, send_event_cookie.sequence);
+
 	this->native.record_thread = std::thread(Record, this->native.connection);
 
 	xcb_flush(this->native.connection);
@@ -69,9 +222,26 @@ void Browser::Client::Run() {
 			switch(type) {
 				case XCB_CLIENT_MESSAGE: {
 					auto message = reinterpret_cast<xcb_client_message_event_t*>(event);
+
 					if (message->window == this->native.event_window) {
-						fmt::print("[native] closing\n");
+						fmt::print("[native] stopping due to client message\n");
 						run = false;
+					} else if (message->window == this->native.tray_window && message->type == wm_protocols->atom && message->format == 32) {
+						if (message->data.data32[0] == wm_delete_window->atom) {
+							auto destroy = xcb_destroy_window(this->native.connection, this->native.tray_window);
+							xcb_discard_reply(this->native.connection, destroy.sequence);
+						} else if (message->data.data32[0] == net_wm_ping->atom) {
+							message->window = this->native.root_window;
+							auto cookie = xcb_send_event_checked(
+								this->native.connection,
+								false,
+								this->native.root_window,
+								XCB_EVENT_MASK_STRUCTURE_NOTIFY,
+								reinterpret_cast<const char*>(&message)
+							);
+							xcb_discard_reply(this->native.connection, cookie.sequence);
+							xcb_flush(this->native.connection);
+						}
 					}
 					break;
 				}
@@ -95,27 +265,41 @@ void Browser::Client::Run() {
 
 			free(event);
 		} else {
-			fmt::print("[native] xcb_wait_for_event returned nullptr\n");
+			fmt::print("[native] X11 socket closed unexpectedly\n");
 			break;
 		}
 	}
 
+	auto destroy = xcb_destroy_window(this->native.connection, this->native.tray_window);
+	xcb_discard_reply(this->native.connection, destroy.sequence);
+	xcb_flush(this->native.connection);
 	xcb_disconnect(this->native.connection);
 	this->native.record_thread.join();
+	free(tray_opcode_atom);
+	free(tray_atom);
+	free(net_wm_name);
+	free(net_wm_icon);
+	free(net_wm_pid);
+	free(wm_client_machine);
+	free(utf8_string);
+	free(wm_delete_window);
+	free(net_wm_ping);
+	free(wm_protocols);
 	fmt::print("[native] stopped\n");
 }
 
 void Browser::Client::CloseNative() {
-	xcb_client_message_event_t* event = new xcb_client_message_event_t;
-	event->response_type = XCB_CLIENT_MESSAGE;
-	event->window = this->native.event_window;
-	event->format = 8;
+	xcb_client_message_event_t event;
+	memset(&event, 0, sizeof event);
+	event.response_type = XCB_CLIENT_MESSAGE;
+	event.window = this->native.event_window;
+	event.format = 8;
 	auto cookie = xcb_send_event_checked(
 		this->native.connection,
 		false,
 		this->native.event_window,
 		XCB_EVENT_MASK_STRUCTURE_NOTIFY,
-		reinterpret_cast<const char*>(event)
+		reinterpret_cast<const char*>(&event)
 	);
 	xcb_discard_reply(this->native.connection, cookie.sequence);
 	xcb_flush(this->native.connection);
