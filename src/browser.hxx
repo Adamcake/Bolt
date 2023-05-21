@@ -3,7 +3,7 @@
 #include "browser/common.hxx"
 #include "include/cef_client.h"
 #include "include/views/cef_window.h"
-#include "include/views/cef_browser_view_delegate.h"
+#include "include/views/cef_browser_view.h"
 
 namespace Browser {
 	/// Represents a visible browser window on the user's screen. This struct wraps a single pointer,
