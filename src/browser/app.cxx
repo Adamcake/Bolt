@@ -93,11 +93,11 @@ bool Browser::App::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRe
 			[&browser](const CefRefPtr<Browser::AppFrameData>& data){ return browser->GetIdentifier() == data->id; }
 		);
 		for (auto i = it; i != this->apps.end(); i += 1) {
-			it->get()->frame->SendProcessMessage(PID_BROWSER, CefProcessMessage::Create("__bolt_app_closed"));
 			it->get()->frame = nullptr;
 			it += 1;
 		}
 		this->apps.erase(it, this->apps.end());
+		frame->SendProcessMessage(PID_BROWSER, CefProcessMessage::Create("__bolt_app_closed"));
 		return true;
 	}
 
