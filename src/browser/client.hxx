@@ -6,8 +6,16 @@
 #include "../browser.hxx"
 #include "../native/native.hxx"
 
-#include <vector>
+#include <map>
 #include <mutex>
+#include <string>
+#include <vector>
+
+struct _InternalFile {
+	bool success;
+	std::vector<unsigned char> data;
+	CefString mime_type;
+};
 
 namespace Browser {
 	/// Implementation of CefClient, CefBrowserProcessHandler, CefLifeSpanHandler, CefRequestHandler.
@@ -65,6 +73,9 @@ namespace Browser {
 			CefRefCount ref_count;
 
 			Native::Native native;
+
+			std::string internal_url = "https://jaslaunch-internal/";
+			std::map<std::string, _InternalFile> internal_pages;
 
 			// Mutex-locked vector - may be accessed from either UI thread (most of the time) or IO thread (GetResourceRequestHandler)
 			std::vector<CefRefPtr<Browser::Window>> apps;
