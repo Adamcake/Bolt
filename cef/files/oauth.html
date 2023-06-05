@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>JasLaunch</title>
+		<script>
+			const parentWindow = window.opener || window.parent;
+			if (parentWindow) {
+				const searchParams = new URLSearchParams(window.location.search);
+
+				parentWindow.postMessage({
+					"type": "authCode",
+					"code": searchParams.get('code'),
+					"state": searchParams.get('state'),
+				}, "*");
+			}
+		</script>
+	</head>
+	<body>
+		<p>Authorising...</p>
+	</body>
+</html>

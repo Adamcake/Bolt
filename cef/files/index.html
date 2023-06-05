@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>JasLaunch</title>
+		<script>
+			async function make_initial_url(e) {
+				const verifier_data = new TextEncoder().encode(e.pkceCodeVerifier);
+				const digested = await crypto.subtle.digest("SHA-256", verifier_data);
+				var raw = "";
+				var bytes = new Uint8Array(digested);
+				for (var i = 0; i < bytes.byteLength; i++) {
+					raw += String.fromCharCode(bytes[i]);
+				}
+				const code_challenge = btoa(raw).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+				return e.origin.concat("/oauth2/auth?").concat(new URLSearchParams({
+					auth_method: e.authMethod,
+					login_type: e.loginType,
+					flow: e.flow,
+					response_type: "code",
+					client_id: e.clientid,
+					redirect_uri: e.redirect,
+					code_challenge: code_challenge,
+					code_challenge_method: "S256",
+					prompt: "login",
+					scope: "openid offline gamesso.token.create user.profile.read",
+					state: e.pkceState
+				}));
+			}
+
+			function make_random_verifier() {
+				var t = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
+				var n = new Uint32Array(43);
+				crypto.getRandomValues(n);
+				return Array.from(n, function(e) {
+					return t[e % t.length]
+				}).join("")
+			}
+
+			function make_random_state() {
+				var t = 0;
+				var r = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+				var n = r.length - 1;
+	
+				var o = crypto.getRandomValues(new Uint8Array(12));
+				return Array.from(o).map(function(e) {
+					return Math.round(e * (n - t) / 255 + t)
+				}).map(function(e) {
+					return r[e]
+				}).join("")
+			}
+
+			function start(s) {
+				const state = make_random_state();
+				const verifier = make_random_verifier();
+				var w = window.open("about:blank", "", "width=480,height=720");
+				window.addEventListener("message", (event) => {
+					if (event.origin != "https://jaslaunch-internal" && btoa(event.origin).replaceAll('\x3d', '') != s.origin) {
+						console.log(`discarding message from origin ${event.origin}`);
+						return;
+					}
+					switch (event.data.type) {
+						case "authCode":
+							if (event.data.state == state) {
+								const exchange_url = atob(s.origin).concat("/oauth2/token");
+								const post_data = new URLSearchParams({
+									grant_type: "authorization_code",
+									client_id: atob(s.clientid),
+									code: event.data.code,
+									code_verifier: verifier,
+									redirect_uri: atob(s.redirect)
+								});
+								var xml = new XMLHttpRequest();
+
+								xml.onreadystatechange = () => {
+									if (xml.readyState == 4 && xml.status == 200) {
+										w.close();
+										const oauth_creds = JSON.parse(xml.response);
+										const sections = oauth_creds.id_token.split('.');
+										if (sections.length !== 3) {
+											document.getElementById("bodytext").innerText = "Malformed id_token: ".concat(sections.length).concat(" sections");
+											return;
+										}
+										const header = JSON.parse(atob(sections[0]));
+										if (header.typ !== "JWT") {
+											document.getElementById("bodytext").innerText = "Bad id_token header: typ should be JWT, but is ".concat(header.typ);
+										}
+										const payload = JSON.parse(atob(sections[1]));
+										switch (payload.login_provider) {
+											case "runescape":
+												handleGameLogin(s, oauth_creds, payload.sub);
+												break;
+											default:
+												handleStandardLogin(s, oauth_creds, payload.sub);
+												break;
+										}
+									} else if (xml.status >= 400) {
+										w.close();
+										document.getElementById("bodytext").innerText = "Error: from ".concat(exchange_url).concat(": ").concat(xml.status).concat(" ").concat(xml.response);
+									}
+								};
+								xml.open('POST', exchange_url, true);
+								xml.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+								xml.setRequestHeader("Accept", "application/json");
+								xml.send(post_data);
+							}
+							break;
+						case "initAuth":
+							console.log(`message: init auth: ${event.data.auth_method}`);
+							break;
+						case "externalUrl":
+							console.log(`message: external url: ${event.data.url}`);
+							break;
+						case "gameSessionServerAuth":
+							// not sure what conditions cause this one just yet...
+							console.log(`message: game session server auth: id_token ${event.data.id_token}, state ${event.data.state}`);
+							break;
+						default:
+							console.log("unknown message type: ".concat(event.data.type));
+							break;
+					}
+				});
+				make_initial_url({
+					origin: atob(s.origin),
+					redirect: atob(s.redirect),
+					authMethod: "",
+					loginType: "",
+					clientid: atob(s.clientid),
+					flow: "launcher",
+					pkceState: state,
+					pkceCodeVerifier: verifier,
+				}).then((e) => { w.location.replace(e); });
+			}
+
+			function handleStandardLogin(s, credentials, id) {
+
+			}
+
+			function handleGameLogin(s, credentials, id) {
+				const auth_url = "https://thingproxy.freeboard.io/fetch/".concat(atob(s.profile_api).concat("/profile"));
+				var xml = new XMLHttpRequest();
+				xml.onreadystatechange = () => {
+					if (xml.readyState == 4 && xml.status == 200) {
+						document.getElementById("bodytext").innerText = xml.response;
+					}
+				};
+				xml.open('GET', auth_url, true);
+				xml.setRequestHeader("Authorization", "Bearer ".concat(credentials.id_token));
+				xml.setRequestHeader("Accept", "application/json");
+				xml.send();
+			}
+		</script>
+	</head>
+	<body style="overflow:hidden" onload="start(window.s())">
+		<p id="bodytext">Loading...</p>
+	</body>
+</html>
