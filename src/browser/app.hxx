@@ -8,11 +8,12 @@
 #include "include/cef_browser_process_handler.h"
 
 namespace Browser {
-	/// Implementation of CefApp, CefRenderProcessHandler, CefLoadHandler. Store on the stack, but access only via CefRefPtr.
+	/// Implementation of CefApp, CefRenderProcessHandler, CefLoadHandler, CefV8Handler. Store on the stack, but access only via CefRefPtr.
 	/// https://github.com/chromiumembedded/cef/blob/5563/include/cef_app.h
 	/// https://github.com/chromiumembedded/cef/blob/5563/include/cef_render_process_handler.h
-	/// https://github.com/chromiumembedded/cef/blob/master/include/cef_load_handler.h
-	struct App: public CefApp, CefRenderProcessHandler, CefLoadHandler {
+	/// https://github.com/chromiumembedded/cef/blob/5563/include/cef_load_handler.h
+	/// https://github.com/chromiumembedded/cef/blob/5563/include/cef_v8.h#L230
+	struct App: public CefApp, CefRenderProcessHandler, CefLoadHandler, CefV8Handler {
 		App();
 		void SetBrowserProcessHandler(CefRefPtr<CefBrowserProcessHandler> handler);
 		CefRefPtr<CefRenderProcessHandler> GetRenderProcessHandler() override;
@@ -24,6 +25,7 @@ namespace Browser {
 		bool OnProcessMessageReceived(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, CefProcessId, CefRefPtr<CefProcessMessage>) override;
 		void OnLoadEnd(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, int) override;
 		void OnLoadError(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, ErrorCode, const CefString&, const CefString&) override;
+		bool Execute(const CefString&, CefRefPtr<CefV8Value>, const CefV8ValueList&, CefRefPtr<CefV8Value>&, CefString&) override;
 
 		App(const App&) = delete;
 		App& operator=(const App&) = delete;

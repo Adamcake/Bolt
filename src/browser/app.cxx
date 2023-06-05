@@ -35,13 +35,11 @@ void Browser::App::OnBrowserCreated(CefRefPtr<CefBrowser> browser, CefRefPtr<Cef
 }
 
 void Browser::App::OnContextCreated(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefRefPtr<CefV8Context> context) {
+	context->GetGlobal()->SetValue("s", CefV8Value::CreateFunction("s", this), V8_PROPERTY_ATTRIBUTE_READONLY);
 	for (int i = 0; i < this->apps.size(); i += 1) {
 		if (this->apps[i]->id == browser->GetIdentifier()) {
 			if (this->apps[i]->url == frame->GetURL()) {
 				fmt::print("[R] OnContextCreated for app view for browser {}\n", browser->GetIdentifier());
-				CefRefPtr<CefV8Value> alt1 = CefV8Value::CreateObject(nullptr, nullptr);
-				alt1->SetValue("identifyAppUrl", CefV8Value::CreateFunction("identifyAppUrl", this->apps[i]), V8_PROPERTY_ATTRIBUTE_READONLY);
-				context->GetGlobal()->SetValue("alt1", alt1, V8_PROPERTY_ATTRIBUTE_READONLY);
 			} else if (frame->IsMain()) {
 				fmt::print("[R] OnContextCreated for app overlay for browser {}\n", browser->GetIdentifier());
 				this->apps[i]->frame = frame;
@@ -129,4 +127,15 @@ void Browser::App::OnLoadError(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame
 			this->apps.end()
 		);
 	}
+}
+
+bool Browser::App::Execute(const CefString&, CefRefPtr<CefV8Value>, const CefV8ValueList&, CefRefPtr<CefV8Value>& retval, CefString&) {
+	retval = CefV8Value::CreateObject(nullptr, nullptr);
+	retval->SetValue("origin", CefV8Value::CreateString("aHR0cHM6Ly9hY2NvdW50LmphZ2V4LmNvbQ"), V8_PROPERTY_ATTRIBUTE_READONLY);
+	retval->SetValue("redirect", CefV8Value::CreateString("aHR0cHM6Ly9zZWN1cmUucnVuZXNjYXBlLmNvbS9tPXdlYmxvZ2luL2xhdW5jaGVyLXJlZGlyZWN0"), V8_PROPERTY_ATTRIBUTE_READONLY);
+	retval->SetValue("clientid", CefV8Value::CreateString("Y29tX2phZ2V4X2F1dGhfZGVza3RvcF9sYXVuY2hlcg"), V8_PROPERTY_ATTRIBUTE_READONLY);
+	retval->SetValue("api", CefV8Value::CreateString("aHR0cHM6Ly9hcGkuamFnZXguY29tL3Yx"), V8_PROPERTY_ATTRIBUTE_READONLY);
+	retval->SetValue("auth_api", CefV8Value::CreateString("aHR0cHM6Ly9hdXRoLmphZ2V4LmNvbS9nYW1lLXNlc3Npb24vdjE"), V8_PROPERTY_ATTRIBUTE_READONLY);
+	retval->SetValue("profile_api", CefV8Value::CreateString("aHR0cHM6Ly9zZWN1cmUuamFnZXguY29tL3JzLXByb2ZpbGUvdjE"), V8_PROPERTY_ATTRIBUTE_READONLY);
+	return true;
 }
