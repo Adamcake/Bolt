@@ -301,11 +301,5 @@ CefRefPtr<CefResourceRequestHandler> Browser::Client::GetResourceRequestHandler(
 	}
 
 	// route the request normally, to a website or whatever
-	// apply a hack to disable cors complaints...
-	const char url[] = {104, 116, 116, 112, 115, 58, 47, 47, 115, 101, 99, 117, 114, 101, 46, 106, 97, 103, 101, 120, 46, 99, 111, 109};
-	if (!memcmp(request_url.c_str(), url, sizeof url)) {
-		fmt::print("hey\n");
-		request->SetHeaderByName("Origin", url, true);
-	}
 	return nullptr;
 }
