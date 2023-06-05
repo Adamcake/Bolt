@@ -39,6 +39,9 @@ namespace Browser {
 		/// matches the given param.
 		bool IsClosingWithHandle(int) const;
 
+		/// Whether this window has an overlay frame
+		bool HasFrame() const;
+
 		/* CefWindowDelegate functions */
 		void OnWindowCreated(CefRefPtr<CefWindow>) override;
 		void OnWindowDestroyed(CefRefPtr<CefWindow>) override;
@@ -59,6 +62,7 @@ namespace Browser {
 
 		private:
 			bool closing;
+			bool has_frame;
 			int browser_id;
 
 			Details details;

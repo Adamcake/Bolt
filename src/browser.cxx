@@ -1,8 +1,10 @@
 #include "browser.hxx"
 #include "include/views/cef_window.h"
 
+#include <fmt/core.h>
+
 Browser::Window::Window(CefRefPtr<CefClient> client, Browser::Details details, CefString url):
-	closing(false), details(details), window(nullptr), browser_view(nullptr)
+	closing(false), has_frame(details.controls_overlay), details(details), window(nullptr), browser_view(nullptr)
 {
 	CefBrowserSettings browser_settings;
 	browser_settings.background_color = CefColorSetARGB(0, 0, 0, 0);
@@ -42,7 +44,12 @@ bool Browser::Window::IsClosingWithHandle(int handle) const {
 	return this->closing && this->browser_id == handle;
 }
 
+bool Browser::Window::HasFrame() const {
+	return this->has_frame;
+}
+
 void Browser::Window::OnWindowCreated(CefRefPtr<CefWindow> window) {
+	fmt::print("OnWindowCreated {}\n", window->GetID());
 	this->window = std::move(window);
 	this->window->AddChildView(this->browser_view);
 	this->window->Show();
@@ -107,6 +114,7 @@ CefSize Browser::Window::GetMaximumSize(CefRefPtr<CefView>) {
 }
 
 void Browser::Window::OnBrowserCreated(CefRefPtr<CefBrowserView> browser_view, CefRefPtr<CefBrowser> browser) {
+	fmt::print("OnBrowserCreated {}\n", browser->GetIdentifier());
 	this->browser_id = browser->GetIdentifier();
 }
 
