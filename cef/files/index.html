@@ -103,6 +103,7 @@
 								xml.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
 								xml.setRequestHeader("Accept", "application/json");
 								xml.send(post_data);
+
 							}
 							break;
 						case "initAuth":
@@ -137,7 +138,7 @@
 			}
 
 			function handleGameLogin(s, credentials, id) {
-				const auth_url = "https://thingproxy.freeboard.io/fetch/".concat(atob(s.profile_api).concat("/profile"));
+				const auth_url = atob(s.profile_api).concat("/profile");
 				var xml = new XMLHttpRequest();
 				xml.onreadystatechange = () => {
 					if (xml.readyState == 4 && xml.status == 200) {
