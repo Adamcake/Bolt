@@ -1,3 +1,4 @@
+<!--Main page displayed by the launcher. Basically just a javascript file with a couple of HTML tags around it.-->
 <!doctype html>
 <html lang="en">
 	<head>
@@ -78,12 +79,19 @@
 										const oauth_creds = JSON.parse(xml.response);
 										const sections = oauth_creds.id_token.split('.');
 										if (sections.length !== 3) {
-											document.getElementById("bodytext").innerText = "Malformed id_token: ".concat(sections.length).concat(" sections");
+											document.getElementById("root").innerHTML =
+												"<p>Malformed id_token: "
+												.concat(sections.length)
+												.concat(" sections")
+												.concat("</p>");
 											return;
 										}
 										const header = JSON.parse(atob(sections[0]));
 										if (header.typ !== "JWT") {
-											document.getElementById("bodytext").innerText = "Bad id_token header: typ should be JWT, but is ".concat(header.typ);
+											document.getElementById("root").innerHTML =
+												"<p>Bad id_token header: typ should be JWT, but is "
+												.concat(header.typ)
+												.concat("</p>");
 										}
 										const payload = JSON.parse(atob(sections[1]));
 										switch (payload.login_provider) {
@@ -96,7 +104,13 @@
 										}
 									} else if (xml.status >= 400) {
 										w.close();
-										document.getElementById("bodytext").innerText = "Error: from ".concat(exchange_url).concat(": ").concat(xml.status).concat(" ").concat(xml.response);
+										document.getElementById("root").innerHTML =
+											"Error: from "
+											.concat(exchange_url)
+											.concat(": ")
+											.concat(xml.status)
+											.concat(" ")
+											.concat(xml.response);
 									}
 								};
 								xml.open('POST', exchange_url, true);
@@ -142,17 +156,51 @@
 				var xml = new XMLHttpRequest();
 				xml.onreadystatechange = () => {
 					if (xml.readyState == 4 && xml.status == 200) {
-						document.getElementById("bodytext").innerText = xml.response;
+						const name_info = JSON.parse(xml.response);
+						const display_name = name_info.displayNameSet ? name_info.displayName : "";
+						const display_name_html = name_info.displayNameSet ? "<b>".concat(name_info.displayName).concat("</b>") : "<i>(no name set)</i>";
+						document.getElementById("root").innerHTML =
+							"<p>username: "
+							.concat(display_name_html)
+							.concat("</p><br>")
+							.concat("<p>account id: ")
+							.concat(id)
+							.concat("</p><br>")
+							.concat("<button onclick=\"launchRs('")
+							.concat(atob(s.shield_url))
+							.concat("', '")
+							.concat(escape(credentials.access_token))
+							.concat("', '")
+							.concat(escape(credentials.refresh_token))
+							.concat("', '")
+							.concat(escape(display_name))
+							.concat("')\">Launch</button>");
 					}
 				};
 				xml.open('GET', auth_url, true);
 				xml.setRequestHeader("Authorization", "Bearer ".concat(credentials.id_token));
-				xml.setRequestHeader("Accept", "application/json");
 				xml.send();
+			}
+
+			function launchRs(url, access_token, refresh_token, display_name) {
+				var xml = new XMLHttpRequest();
+				xml.open('POST', url, true);
+				xml.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+				xml.setRequestHeader("Authorization", "Basic Y29tX2phZ2V4X2F1dGhfZGVza3RvcF9yczpwdWJsaWM=");
+				xml.onreadystatechange = () => {
+					if (xml.readyState == 4 && xml.status == 200) {
+						console.log(xml.response);
+					}
+				};
+				xml.send(new URLSearchParams({
+					token: unescape(access_token),
+					grant_type: "token_exchange",
+					scope: "gamesso.token.create"
+				}));
 			}
 		</script>
 	</head>
 	<body style="overflow:hidden" onload="start(window.s())">
-		<p id="bodytext">Loading...</p>
+		<div id="root" />
 	</body>
 </html>
