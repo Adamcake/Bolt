@@ -1,12 +1,10 @@
 # Bolt
-An alternative, CEF-based client for running your favourite helper applications for your favourite MMO.
+A third-party launcher and helper for your favourite MMO
 
 ## Building
 If you just want to get Bolt installed then you don't need to build it from source! Check the "Releases" section on the right.
 
-But if you do want to build from source, the first thing you should know is that Bolt is based on [Chromium Embedded Framework](https://bitbucket.org/chromiumembedded/cef) (CEF), so to build it, you'll first need to build or otherwise obtain a binary distribution of Chromium. Official builds of Bolt are currently based on Chromium **113.0.5672.93**. When building, all of the patches in the `cef/patch` directory should be applied to the chromium/src directory before running the ninja build command; four of them are fixes required to compile with llvm15 and the final one adds a transparency feature which is used by Bolt.
-
-Place the entire binary distribution folder inside the `cef` directory with the name "dist", or create a symbolic link with the same effect.
+But if you do want to build from source, the first thing you should know is that Bolt is based on [Chromium Embedded Framework](https://bitbucket.org/chromiumembedded/cef) (CEF), so to build it, you'll first need to build or otherwise obtain a binary distribution of Chromium. Official builds of Bolt are currently based on Chromium **113.0.5672.93**. Place the entire binary distribution folder inside the `cef` directory with the name "dist", or create a symbolic link with the same effect.
 
 You'll also need the following dependencies:
 - [fmt](https://fmt.dev) (`fmt-devel` or `libfmt-dev` on most Linux package managers)
@@ -17,3 +15,8 @@ You'll also need the following dependencies:
   - development libraries for libxcb-composite and libxcb-record if your package manager has them separate from the base xcb package
 
 Once that's done, simply build with meson: `meson setup build` then `meson compile -C buiid`. If it compiled successfully you'll be able to run Bolt from inside the `build` directory. On a non-Windows platform, you may also install it by running `meson install -C build`.
+
+## Disclaimer
+Bolt is an unofficial third-party project and is not in any way affiliated with any of the games or companies it interacts with. Said games and companies are not responsible for any problems with Bolt nor any damage caused by using Bolt.
+
+Bolt is NOT a game client. It simply downloads and runs unmodified game clients. Bolt has absolutely no ability to automate gameplay.
