@@ -14,7 +14,7 @@ You'll also need the following dependencies:
   - xcb development libraries (`libxcb-devel` or `libxcb-dev` on most package managers)
   - development libraries for libxcb-composite and libxcb-record if your package manager has them separate from the base xcb package
 
-Once that's done, simply build with meson: `meson setup build` then `meson compile -C buiid`. If it compiled successfully you'll be able to run Bolt from inside the `build` directory. On a non-Windows platform, you may also install it by running `meson install -C build`.
+Once that's done, simply build with meson: `meson setup build` then `meson compile -C build`. If it compiled successfully you'll be able to run Bolt from inside the `build` directory. On a non-Windows platform, you may also install it by running `meson install -C build`.
 
 ## Disclaimer
 Bolt is an unofficial third-party project and is not in any way affiliated with any of the games or companies it interacts with. Said games and companies are not responsible for any problems with Bolt nor any damage caused by using Bolt.
