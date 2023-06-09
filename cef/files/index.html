@@ -7,6 +7,8 @@
 		<script>
 			var credentials = null;
 
+			// checks if `credentials` are about to expire or have already expired,
+			// and renews them using the oauth endpoint if so
 			function checkRenewCreds(url, client_id) {
 				return new Promise((resolve, reject) => {
 					// only renew if less than 30 seconds left
@@ -35,6 +37,7 @@
 				});
 			}
 
+			// parses a response from the oauth endpoint into the `credentials` var
 			function parseCredentials(str) {
 				const oauth_creds = JSON.parse(str);
 				const sections = oauth_creds.id_token.split('.');
@@ -66,7 +69,9 @@
 				console.log(credentials);
 			}
 
-			async function make_initial_url(e) {
+			// builds the url to be opened in the login window
+			// async because crypto.subtle.digest is async for some reason, so remember to `await`
+			async function makeLoginUrl(e) {
 				const verifier_data = new TextEncoder().encode(e.pkceCodeVerifier);
 				const digested = await crypto.subtle.digest("SHA-256", verifier_data);
 				var raw = "";
@@ -90,6 +95,7 @@
 				}));
 			}
 
+			// builds a random PKCE verifier string using crypto.getRandomValues
 			function make_random_verifier() {
 				var t = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
 				var n = new Uint32Array(43);
@@ -99,6 +105,7 @@
 				}).join("")
 			}
 
+			// builds a random PKCE state string using crypto.getRandomValues
 			function make_random_state() {
 				var t = 0;
 				var r = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
@@ -112,6 +119,7 @@
 				}).join("")
 			}
 
+			// body's onload function
 			function start(s) {
 				const state = make_random_state();
 				const verifier = make_random_verifier();
@@ -180,7 +188,7 @@
 							break;
 					}
 				});
-				make_initial_url({
+				makeLoginUrl({
 					origin: atob(s.origin),
 					redirect: atob(s.redirect),
 					authMethod: "",
@@ -192,10 +200,12 @@
 				}).then((e) => { w.location.replace(e); });
 			}
 
+			// called when login was successful, but with absent or unrecognised login_provider
 			function handleStandardLogin(s, refresh_url, client_id) {
 
 			}
 
+			// called after successful login using a game account as the login_provider
 			function handleGameLogin(s, refresh_url, client_id) {
 				const auth_url = atob(s.profile_api).concat("/profile");
 				var xml = new XMLHttpRequest();
@@ -227,6 +237,7 @@
 				xml.send();
 			}
 
+			// launch game
 			function launchRs(url, display_name, refresh_url, client_id) {
 				checkRenewCreds(unescape(refresh_url), unescape(client_id)).then(() => {
 					var xml = new XMLHttpRequest();
