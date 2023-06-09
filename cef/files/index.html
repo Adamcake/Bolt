@@ -181,12 +181,27 @@
 								xml.onreadystatechange = () => {
 									if (xml.readyState == 4 && xml.status == 200) {
 										const accounts_url = atob(s.auth_api).concat("/accounts");
+										const session_id = JSON.parse(xml.response).sessionId;
 										var xml2 = new XMLHttpRequest();
 										xml2.onreadystatechange = () => {
 											if (xml2.readyState == 4 && xml2.status == 200) {
 												pendingGameAuth.account_info_promise.then((account_info) => {
+													var select_str = "";
+													JSON.parse(xml2.response).forEach((acc) => {
+														if (acc.displayName) {
+															select_str += `<option value="${acc.accountId}" name="${escape(acc.displayName)}">${escape(acc.displayName)}</option>`;
+														} else {
+															select_str += `<option value="${acc.accountId}">(no name set)</option>`;
+														}
+													});
+													document.getElementById("root").innerHTML = `
+														<p>Currently logged in as <b>${account_info.displayName}</b>#${account_info.suffix}</p>
+														<p><label for="accounts">Account:</label> <select name="accounts" id="accounts">${select_str}</select></p>
+														<button onclick='const e = document.getElementById("accounts"); const acc_id = e.value;
+														const acc_name = e.options[e.selectedIndex].getAttribute("name");
+														launchRS3Flatpak(null, null, unescape("${escape(session_id)}"), acc_id, acc_name)'>Launch RS3 Flatpak</button>
+													`;
 													pendingGameAuth = null;
-													document.getElementById("root").innerHTML = xml2.response;
 												});
 											} else if (xml2.status >= 400) {
 												err(`Error: from ${accounts_url}: ${xml2.status}: ${xml2.response}`);
@@ -194,9 +209,8 @@
 										};
 										xml2.open('GET', accounts_url, true);
 										xml2.setRequestHeader("Accept", "application/json");
-										xml2.setRequestHeader("Authorization", "Bearer ".concat(JSON.parse(xml.response).sessionId));
+										xml2.setRequestHeader("Authorization", "Bearer ".concat(session_id));
 										xml2.send();
-										
 									} else if (xml.status >= 400) {
 										err(`Error: from ${sessions_url}: ${xml.status}: ${xml.response}`);
 									}
@@ -269,18 +283,14 @@
 						const name_info = JSON.parse(xml.response);
 						const display_name = name_info.displayNameSet ? name_info.displayName : "";
 						const display_name_html = name_info.displayNameSet ? "<b>".concat(name_info.displayName).concat("</b>") : "<i>(no name set)</i>";
-						document.getElementById("root").innerHTML =
-							"<p>Currently logged in with a game account</p><p>display name: "
-							.concat(display_name_html)
-							.concat("</p><button onclick=\"launchRs('")
-							.concat(atob(s.shield_url))
-							.concat("', '")
-							.concat(escape(display_name))
-							.concat("', '")
-							.concat(escape(refresh_url))
-							.concat("', '")
-							.concat(escape(client_id))
-							.concat("')\">Launch</button>");
+						document.getElementById("root").innerHTML = `
+							<p>Currently logged in with a game account</p>
+							<p>display name: ${display_name_html}</p>
+							<button onclick='getShieldTokens(atob("${s.shield_url}"), unescape("${escape(display_name)}"), unescape("${escape(refresh_url)}"),
+							unescape("${escape(client_id)}")).then((e) => { launchRS3Flatpak(e.access_token, e.refresh_token, null, null,
+							"${name_info.displayNameSet ? name_info.displayName : null}");
+							})'>Launch Flatpak RS3</button>
+						`;
 					}
 				};
 				xml.open('GET', auth_url, true);
@@ -288,24 +298,33 @@
 				xml.send();
 			}
 
-			// launch game
-			function launchRs(url, display_name, refresh_url, client_id) {
-				checkRenewCreds(unescape(refresh_url), unescape(client_id)).then(() => {
-					var xml = new XMLHttpRequest();
-					xml.open('POST', url, true);
-					xml.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
-					xml.setRequestHeader("Authorization", "Basic Y29tX2phZ2V4X2F1dGhfZGVza3RvcF9yczpwdWJsaWM=");
-					xml.onreadystatechange = () => {
-						if (xml.readyState == 4 && xml.status == 200) {
-							console.log(xml.response);
-						}
-					};
-					xml.send(new URLSearchParams({
-						token: unescape(credentials.access_token),
-						grant_type: "token_exchange",
-						scope: "gamesso.token.create"
-					}));
+			// use oauth creds to get a response from the "shield" endpoint
+			function getShieldTokens(url, display_name, refresh_url, client_id) {
+				return new Promise((resolve, reject) => {
+					checkRenewCreds(refresh_url, client_id).then(() => {
+						var xml = new XMLHttpRequest();
+						xml.open('POST', url, true);
+						xml.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+						xml.setRequestHeader("Authorization", "Basic Y29tX2phZ2V4X2F1dGhfZGVza3RvcF9yczpwdWJsaWM=");
+						xml.onreadystatechange = () => {
+							if (xml.readyState == 4 && xml.status == 200) {
+								resolve(JSON.parse(xml.response));
+							} else if (xml.status >= 400) {
+								reject(xml.status);
+							}
+						};
+						xml.send(new URLSearchParams({
+							token: credentials.access_token,
+							grant_type: "token_exchange",
+							scope: "gamesso.token.create"
+						}));
+					});
 				});
+			}
+
+			// launch RS3 via flatpak using the given env variables
+			function launchRS3Flatpak(jx_access_token, jx_refresh_token, jx_session_id, jx_character_id, jx_display_name) {
+				console.log(`launchRS3Flatpak(${jx_access_token}, ${jx_refresh_token}, ${jx_session_id}, ${jx_character_id}, ${jx_display_name})`);
 			}
 
 			// sets body text to an error message, then throws that error message
