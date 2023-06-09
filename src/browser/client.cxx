@@ -271,6 +271,12 @@ CefRefPtr<CefResourceRequestHandler> Browser::Client::GetResourceRequestHandler(
 	if (url_len >= internal_url_size) {
 		if (memcmp(url_cstr, this->internal_url.c_str(), internal_url_size) == 0) {
 			disable_default_handling = true;
+
+			if (url_len == internal_url_size) {
+				const char* data = "Moved\n";
+				return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 302, "text/plain", "/index.html");
+			}
+
 			auto it = std::find_if(
 				this->internal_pages.begin(),
 				this->internal_pages.end(),
