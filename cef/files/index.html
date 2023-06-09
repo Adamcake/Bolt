@@ -6,6 +6,7 @@
 		<title>Bolt Launcher</title>
 		<script>
 			var credentials = null;
+			var pendingGameAuth = null;
 
 			// checks if `credentials` are about to expire or have already expired,
 			// and renews them using the oauth endpoint if so
@@ -42,20 +43,11 @@
 				const oauth_creds = JSON.parse(str);
 				const sections = oauth_creds.id_token.split('.');
 				if (sections.length !== 3) {
-					throw new Exception(
-						"<p>Malformed id_token: "
-						.concat(sections.length)
-						.concat(" sections")
-						.concat("</p>")
-					);
+					err(`Malformed id_token: ${sections.length} sections, expected 3`);
 				}
 				const header = JSON.parse(atob(sections[0]));
 				if (header.typ !== "JWT") {
-					throw new Exception(
-						"<p>Bad id_token header: typ should be JWT, but is "
-						.concat(header.typ)
-						.concat("</p>")
-					);
+					err(`Bad id_token header: typ ${header.typ}, expected JWT`);
 				}
 				const payload = JSON.parse(atob(sections[1]));
 				credentials = {
@@ -66,7 +58,6 @@
 					login_provider: payload.login_provider || null,
 					expiry: Date.now() + (oauth_creds.expires_in * 1000)
 				};
-				console.log(credentials);
 			}
 
 			// builds the url to be opened in the login window
@@ -112,11 +103,9 @@
 				var n = r.length - 1;
 	
 				var o = crypto.getRandomValues(new Uint8Array(12));
-				return Array.from(o).map(function(e) {
+				return Array.from(o).map((e) => {
 					return Math.round(e * (n - t) / 255 + t)
-				}).map(function(e) {
-					return r[e]
-				}).join("")
+				}).map((e) => { return r[e]; }).join("")
 			}
 
 			// body's onload function
@@ -145,25 +134,18 @@
 
 								xml.onreadystatechange = () => {
 									if (xml.readyState == 4 && xml.status == 200) {
-										w.close();
 										parseCredentials(xml.response);
 										switch (credentials.login_provider) {
 											case "runescape":
 												handleGameLogin(s, exchange_url, client_id);
 												break;
 											default:
-												handleStandardLogin(s, exchange_url, client_id);
+												handleStandardLogin(s, w, exchange_url, client_id, state);
 												break;
 										}
 									} else if (xml.status >= 400) {
 										w.close();
-										document.getElementById("root").innerHTML =
-											"Error: from "
-											.concat(exchange_url)
-											.concat(": ")
-											.concat(xml.status)
-											.concat(" ")
-											.concat(xml.response);
+										err(`Error: from ${exchange_url}: ${xml.status}: ${xml.response}`);
 									}
 								};
 								xml.open('POST', exchange_url, true);
@@ -180,8 +162,50 @@
 							console.log(`message: external url: ${event.data.url}`);
 							break;
 						case "gameSessionServerAuth":
-							// not sure what conditions cause this one just yet...
-							console.log(`message: game session server auth: id_token ${event.data.id_token}, state ${event.data.state}`);
+							if (pendingGameAuth && pendingGameAuth.state == event.data.state) {
+								w.close();
+								const sections = event.data.id_token.split('.');
+								if (sections.length !== 3) {
+									err(`Malformed id_token: ${sections.length} sections, expected 3`);
+								}
+								const header = JSON.parse(atob(sections[0]));
+								if (header.typ !== "JWT") {
+									err(`Bad id_token header: typ ${header.typ}, expected JWT`);
+								}
+								const payload = JSON.parse(atob(sections[1]));
+								if (atob(payload.nonce) !== pendingGameAuth.nonce) {
+									err("Incorrect nonce in id_token");
+								}
+								const sessions_url = atob(s.auth_api).concat("/sessions");
+								var xml = new XMLHttpRequest();
+								xml.onreadystatechange = () => {
+									if (xml.readyState == 4 && xml.status == 200) {
+										const accounts_url = atob(s.auth_api).concat("/accounts");
+										var xml2 = new XMLHttpRequest();
+										xml2.onreadystatechange = () => {
+											if (xml2.readyState == 4 && xml2.status == 200) {
+												pendingGameAuth.account_info_promise.then((account_info) => {
+													pendingGameAuth = null;
+													document.getElementById("root").innerHTML = xml2.response;
+												});
+											} else if (xml2.status >= 400) {
+												err(`Error: from ${accounts_url}: ${xml2.status}: ${xml2.response}`);
+											}
+										};
+										xml2.open('GET', accounts_url, true);
+										xml2.setRequestHeader("Accept", "application/json");
+										xml2.setRequestHeader("Authorization", "Bearer ".concat(JSON.parse(xml.response).sessionId));
+										xml2.send();
+										
+									} else if (xml.status >= 400) {
+										err(`Error: from ${sessions_url}: ${xml.status}: ${xml.response}`);
+									}
+								};
+								xml.open('POST', sessions_url, true);
+								xml.setRequestHeader("Content-Type", "application/json");
+								xml.setRequestHeader("Accept", "application/json");
+								xml.send(`{"idToken": "${event.data.id_token}"}`);
+							}
 							break;
 						default:
 							console.log("unknown message type: ".concat(event.data.type));
@@ -201,8 +225,39 @@
 			}
 
 			// called when login was successful, but with absent or unrecognised login_provider
-			function handleStandardLogin(s, refresh_url, client_id) {
-
+			function handleStandardLogin(s, w, refresh_url, client_id, state) {
+				if (pendingGameAuth !== null) {
+					throw new Error("game auth flow started while another was already pending");
+				}
+				const nonce = crypto.randomUUID();
+				pendingGameAuth = {
+					state: state,
+					nonce: nonce,
+					account_info_promise: new Promise((resolve, reject) => {
+						const url = atob(s.api).concat("/users/").concat(credentials.sub).concat("/displayName");
+						var xml = new XMLHttpRequest();
+						xml.onreadystatechange = () => {
+							if (xml.readyState == 4 && xml.status == 200) {
+								resolve(JSON.parse(xml.response));
+							} else if(xml.status >= 400) {
+								reject(xml.status);
+							}
+						};
+						xml.open('GET', url, true);
+						xml.setRequestHeader("Authorization", "Bearer ".concat(credentials.access_token));
+						xml.send();
+					})
+				};
+				w.location.href = atob(s.origin).concat("/oauth2/auth?").concat(new URLSearchParams({
+					id_token_hint: credentials.id_token,
+					nonce: btoa(nonce),
+					prompt: "consent",
+					redirect_uri: "http://localhost",
+					response_type: "id_token code",
+					state: state,
+					client_id: "1fddee4e-b100-4f4e-b2b0-097f9088f9d2",
+					scope: "openid offline"
+				}));
 			}
 
 			// called after successful login using a game account as the login_provider
@@ -215,13 +270,9 @@
 						const display_name = name_info.displayNameSet ? name_info.displayName : "";
 						const display_name_html = name_info.displayNameSet ? "<b>".concat(name_info.displayName).concat("</b>") : "<i>(no name set)</i>";
 						document.getElementById("root").innerHTML =
-							"<p>Currently logged in with an RS account</p><p>username: "
+							"<p>Currently logged in with a game account</p><p>display name: "
 							.concat(display_name_html)
-							.concat("</p>")
-							.concat("<p>account id: ")
-							.concat(credentials.sub)
-							.concat("</p>")
-							.concat("<button onclick=\"launchRs('")
+							.concat("</p><button onclick=\"launchRs('")
 							.concat(atob(s.shield_url))
 							.concat("', '")
 							.concat(escape(display_name))
@@ -255,6 +306,12 @@
 						scope: "gamesso.token.create"
 					}));
 				});
+			}
+
+			// sets body text to an error message, then throws that error message
+			function err(str) {
+				document.getElementById("root").innerHTML = `<p>${str}</p>`;
+				throw new Error(str);
 			}
 		</script>
 	</head>
