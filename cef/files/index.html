@@ -56,7 +56,7 @@
 				const verifier = make_random_verifier();
 				var w = window.open("about:blank", "", "width=480,height=720");
 				window.addEventListener("message", (event) => {
-					if (event.origin != "https://jaslaunch-internal" && btoa(event.origin).replaceAll('\x3d', '') != s.origin) {
+					if (event.origin != "https://bolt-internal" && btoa(event.origin).replaceAll('\x3d', '') != s.origin) {
 						console.log(`discarding message from origin ${event.origin}`);
 						return;
 					}
@@ -160,12 +160,12 @@
 						const display_name = name_info.displayNameSet ? name_info.displayName : "";
 						const display_name_html = name_info.displayNameSet ? "<b>".concat(name_info.displayName).concat("</b>") : "<i>(no name set)</i>";
 						document.getElementById("root").innerHTML =
-							"<p>username: "
+							"<p>Currently logged in with an RS account</p><p>username: "
 							.concat(display_name_html)
-							.concat("</p><br>")
+							.concat("</p>")
 							.concat("<p>account id: ")
 							.concat(id)
-							.concat("</p><br>")
+							.concat("</p>")
 							.concat("<button onclick=\"launchRs('")
 							.concat(atob(s.shield_url))
 							.concat("', '")

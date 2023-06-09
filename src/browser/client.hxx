@@ -74,7 +74,7 @@ namespace Browser {
 
 			Native::Native native;
 
-			std::string internal_url = "https://jaslaunch-internal/";
+			std::string internal_url = "https://bolt-internal/";
 			std::map<std::string, _InternalFile> internal_pages;
 
 			// Mutex-locked vector - may be accessed from either UI thread (most of the time) or IO thread (GetResourceRequestHandler)

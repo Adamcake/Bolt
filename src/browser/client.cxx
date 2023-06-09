@@ -139,7 +139,7 @@ void Browser::Client::OnContextInitialized() {
 		.frame = true,
 		.controls_overlay = false,
 	};
-	Browser::Window* w = new Browser::Window(this, details, "https://jaslaunch-internal/index.html");
+	Browser::Window* w = new Browser::Window(this, details, this->internal_url);
 	w->ShowDevTools(this);
 	this->apps.push_back(w);
 }
