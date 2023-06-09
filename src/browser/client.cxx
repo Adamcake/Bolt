@@ -111,6 +111,7 @@ Browser::Client::Client(CefRefPtr<Browser::App> app) {
 	app->SetBrowserProcessHandler(this);
 	this->internal_pages["index.html"] = allocate_file("cef/files/index.html", mime_type_html);
 	this->internal_pages["oauth.html"] = allocate_file("cef/files/oauth.html", mime_type_html);
+	this->internal_pages["game_auth.html"] = allocate_file("cef/files/game_auth.html", mime_type_html);
 }
 
 CefRefPtr<CefLifeSpanHandler> Browser::Client::GetLifeSpanHandler() {
@@ -259,6 +260,18 @@ CefRefPtr<CefResourceRequestHandler> Browser::Client::GetResourceRequestHandler(
 			disable_default_handling = true;
 			const char* data = "Moved\n";
 			CefString location = CefString(this->internal_url + "oauth.html?code=" + match[1].str() + "&state=" + match[2].str());
+			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 302, "text/plain", location);
+		}
+	}
+
+	// another custom schema type of thing, but this one uses localhost, for whatever reason
+	const std::regex regex2("^http:\\/\\/localhost\\/#(code=.+)$");
+	std::smatch match2;
+	if (std::regex_match(request_url, match2, regex2)) {
+		if (match2.size() == 2) {
+			disable_default_handling = true;
+			const char* data = "Moved\n";
+			CefString location = CefString(this->internal_url + "game_auth.html?" + match2[1].str());
 			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 302, "text/plain", location);
 		}
 	}
