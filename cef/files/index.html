@@ -5,6 +5,67 @@
 		<meta charset="utf-8" />
 		<title>Bolt Launcher</title>
 		<script>
+			var credentials = null;
+
+			function checkRenewCreds(url, client_id) {
+				return new Promise((resolve, reject) => {
+					// only renew if less than 30 seconds left
+					if (credentials.expiry - Date.now() < 30000) {
+						const post_data = new URLSearchParams({
+							grant_type: "refresh_token",
+							client_id: client_id,
+							refresh_token: credentials.refresh_token
+						});
+						var xml = new XMLHttpRequest();
+						xml.onreadystatechange = () => {
+							if (xml.readyState == 4 && xml.status == 200) {
+								parseCredentials(xml.response);
+								resolve(null);
+							} else if (xml.status >= 400) {
+								reject(xml.status);
+							}
+						};
+						xml.open('POST', url, true);
+						xml.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+						xml.setRequestHeader("Accept", "application/json");
+						xml.send(post_data);
+					} else {
+						resolve(null);
+					}
+				});
+			}
+
+			function parseCredentials(str) {
+				const oauth_creds = JSON.parse(str);
+				const sections = oauth_creds.id_token.split('.');
+				if (sections.length !== 3) {
+					throw new Exception(
+						"<p>Malformed id_token: "
+						.concat(sections.length)
+						.concat(" sections")
+						.concat("</p>")
+					);
+				}
+				const header = JSON.parse(atob(sections[0]));
+				if (header.typ !== "JWT") {
+					throw new Exception(
+						"<p>Bad id_token header: typ should be JWT, but is "
+						.concat(header.typ)
+						.concat("</p>")
+					);
+				}
+				const payload = JSON.parse(atob(sections[1]));
+				credentials = {
+					access_token: oauth_creds.access_token,
+					id_token: oauth_creds.id_token,
+					refresh_token: oauth_creds.refresh_token,
+					sub: payload.sub,
+					login_provider: payload.login_provider || null,
+					expiry: Date.now() + (oauth_creds.expires_in * 1000)
+				};
+				console.log(credentials);
+			}
+
 			async function make_initial_url(e) {
 				const verifier_data = new TextEncoder().encode(e.pkceCodeVerifier);
 				const digested = await crypto.subtle.digest("SHA-256", verifier_data);
@@ -54,6 +115,7 @@
 			function start(s) {
 				const state = make_random_state();
 				const verifier = make_random_verifier();
+				const client_id = atob(s.clientid);
 				var w = window.open("about:blank", "", "width=480,height=720");
 				window.addEventListener("message", (event) => {
 					if (event.origin != "https://bolt-internal" && btoa(event.origin).replaceAll('\x3d', '') != s.origin) {
@@ -76,30 +138,13 @@
 								xml.onreadystatechange = () => {
 									if (xml.readyState == 4 && xml.status == 200) {
 										w.close();
-										const oauth_creds = JSON.parse(xml.response);
-										const sections = oauth_creds.id_token.split('.');
-										if (sections.length !== 3) {
-											document.getElementById("root").innerHTML =
-												"<p>Malformed id_token: "
-												.concat(sections.length)
-												.concat(" sections")
-												.concat("</p>");
-											return;
-										}
-										const header = JSON.parse(atob(sections[0]));
-										if (header.typ !== "JWT") {
-											document.getElementById("root").innerHTML =
-												"<p>Bad id_token header: typ should be JWT, but is "
-												.concat(header.typ)
-												.concat("</p>");
-										}
-										const payload = JSON.parse(atob(sections[1]));
-										switch (payload.login_provider) {
+										parseCredentials(xml.response);
+										switch (credentials.login_provider) {
 											case "runescape":
-												handleGameLogin(s, oauth_creds, payload.sub);
+												handleGameLogin(s, exchange_url, client_id);
 												break;
 											default:
-												handleStandardLogin(s, oauth_creds, payload.sub);
+												handleStandardLogin(s, exchange_url, client_id);
 												break;
 										}
 									} else if (xml.status >= 400) {
@@ -140,18 +185,18 @@
 					redirect: atob(s.redirect),
 					authMethod: "",
 					loginType: "",
-					clientid: atob(s.clientid),
+					clientid: client_id,
 					flow: "launcher",
 					pkceState: state,
 					pkceCodeVerifier: verifier,
 				}).then((e) => { w.location.replace(e); });
 			}
 
-			function handleStandardLogin(s, credentials, id) {
+			function handleStandardLogin(s, refresh_url, client_id) {
 
 			}
 
-			function handleGameLogin(s, credentials, id) {
+			function handleGameLogin(s, refresh_url, client_id) {
 				const auth_url = atob(s.profile_api).concat("/profile");
 				var xml = new XMLHttpRequest();
 				xml.onreadystatechange = () => {
@@ -164,16 +209,16 @@
 							.concat(display_name_html)
 							.concat("</p>")
 							.concat("<p>account id: ")
-							.concat(id)
+							.concat(credentials.sub)
 							.concat("</p>")
 							.concat("<button onclick=\"launchRs('")
 							.concat(atob(s.shield_url))
 							.concat("', '")
-							.concat(escape(credentials.access_token))
-							.concat("', '")
-							.concat(escape(credentials.refresh_token))
-							.concat("', '")
 							.concat(escape(display_name))
+							.concat("', '")
+							.concat(escape(refresh_url))
+							.concat("', '")
+							.concat(escape(client_id))
 							.concat("')\">Launch</button>");
 					}
 				};
@@ -182,21 +227,23 @@
 				xml.send();
 			}
 
-			function launchRs(url, access_token, refresh_token, display_name) {
-				var xml = new XMLHttpRequest();
-				xml.open('POST', url, true);
-				xml.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
-				xml.setRequestHeader("Authorization", "Basic Y29tX2phZ2V4X2F1dGhfZGVza3RvcF9yczpwdWJsaWM=");
-				xml.onreadystatechange = () => {
-					if (xml.readyState == 4 && xml.status == 200) {
-						console.log(xml.response);
-					}
-				};
-				xml.send(new URLSearchParams({
-					token: unescape(access_token),
-					grant_type: "token_exchange",
-					scope: "gamesso.token.create"
-				}));
+			function launchRs(url, display_name, refresh_url, client_id) {
+				checkRenewCreds(unescape(refresh_url), unescape(client_id)).then(() => {
+					var xml = new XMLHttpRequest();
+					xml.open('POST', url, true);
+					xml.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+					xml.setRequestHeader("Authorization", "Basic Y29tX2phZ2V4X2F1dGhfZGVza3RvcF9yczpwdWJsaWM=");
+					xml.onreadystatechange = () => {
+						if (xml.readyState == 4 && xml.status == 200) {
+							console.log(xml.response);
+						}
+					};
+					xml.send(new URLSearchParams({
+						token: unescape(credentials.access_token),
+						grant_type: "token_exchange",
+						scope: "gamesso.token.create"
+					}));
+				});
 			}
 		</script>
 	</head>
