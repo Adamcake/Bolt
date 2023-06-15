@@ -49,7 +49,7 @@ bool Browser::Window::HasFrame() const {
 }
 
 void Browser::Window::OnWindowCreated(CefRefPtr<CefWindow> window) {
-	fmt::print("OnWindowCreated {}\n", window->GetID());
+	fmt::print("[B] OnWindowCreated {}\n", window->GetID());
 	this->window = std::move(window);
 	this->window->AddChildView(this->browser_view);
 	this->window->Show();
@@ -114,7 +114,7 @@ CefSize Browser::Window::GetMaximumSize(CefRefPtr<CefView>) {
 }
 
 void Browser::Window::OnBrowserCreated(CefRefPtr<CefBrowserView> browser_view, CefRefPtr<CefBrowser> browser) {
-	fmt::print("OnBrowserCreated {}\n", browser->GetIdentifier());
+	fmt::print("[B] OnBrowserCreated {}\n", browser->GetIdentifier());
 	this->browser_id = browser->GetIdentifier();
 }
 
