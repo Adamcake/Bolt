@@ -12,8 +12,8 @@ You'll also need the following dependencies:
   - X11 development libraries (`libX11-devel` or `libx11-dev` on most package managers)
 
 Once that's done, simply build with cmake as you usually would. It's recommended to build with the same compiler you compiled CEF with; specify CC and CXX env vars to point to your C and C++ compiler respectively.
-`cmake -S . -B build -G Ninja -D CMAKE_BUILD_TYPE=Release` (or Debug)
-`cmake --build build`
+- `cmake -S . -B build -G Ninja -D CMAKE_BUILD_TYPE=Release` (or Debug)
+- `cmake --build build`
 
 ## Disclaimer
 Bolt is an unofficial third-party project and is not in any way affiliated with any of the games or companies it interacts with. Said games and companies are not responsible for any problems with Bolt nor any damage caused by using Bolt.
