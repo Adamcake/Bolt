@@ -5,6 +5,15 @@
 
 #include <fmt/core.h>
 
+/*
+Any attempt to leverage the render process has resulted in a display of the truly staggering incompetence with
+which Chromium was developed. It is just about unusable. Despite CefRenderProcessHandler being the official way
+to do interop, Most CEF-based applications do interop by web requests that they can intercept in the browser
+process, and having tried to do it this way, I now understand why that is. Consider this your only warning:
+DO NOT try to use CefRenderProcessHandler for anything; every single one of its methods is BROKEN BEYOND BELIEF.
+Your time is valuable, don't waste it here.
+*/
+
 Browser::App::App(): browser_process_handler(nullptr) {
 	
 }
@@ -117,16 +126,6 @@ void Browser::App::OnLoadEnd(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> 
 
 void Browser::App::OnLoadError(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, ErrorCode, const CefString&, const CefString&) {
 	fmt::print("[R] OnLoadError\n");
-	if (CefCurrentlyOn(TID_RENDERER)) {
-		this->apps.erase(
-			std::remove_if(
-				this->apps.begin(),
-				this->apps.end(),
-				[&browser](const CefRefPtr<Browser::AppFrameData>& data){ return browser->GetIdentifier() == data->id; }
-			),
-			this->apps.end()
-		);
-	}
 }
 
 bool Browser::App::Execute(const CefString&, CefRefPtr<CefV8Value>, const CefV8ValueList&, CefRefPtr<CefV8Value>& retval, CefString&) {
