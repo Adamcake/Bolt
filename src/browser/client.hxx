@@ -4,7 +4,6 @@
 #include "include/views/cef_window_delegate.h"
 #include "app.hxx"
 #include "../browser.hxx"
-#include "../native/native.hxx"
 
 #include <map>
 #include <mutex>
@@ -71,8 +70,6 @@ namespace Browser {
 		bool HasAtLeastOneRef() const override { return this->ref_count.HasAtLeastOneRef(); }
 		private:
 			CefRefCount ref_count;
-
-			Native::Native native;
 
 			std::string internal_url = "https://bolt-internal/";
 			std::map<std::string, _InternalFile> internal_pages;

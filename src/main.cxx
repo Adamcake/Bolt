@@ -1,7 +1,5 @@
 #include <fmt/core.h>
 
-#include <thread>
-
 #include "browser.hxx"
 #include "browser/app.hxx"
 #include "browser/client.hxx"
@@ -48,7 +46,6 @@ int main(int argc, char* argv[]) {
 	// CefClient struct - central object for main thread, and implements lots of handlers for browser process
 	Browser::Client client_(cef_app);
 	CefRefPtr<Browser::Client> client = &client_;
-	std::thread native_thread(&Browser::Client::Run, client);
 
 #if defined(CEF_X11)
 	// X11 error handlers
@@ -73,9 +70,7 @@ int main(int argc, char* argv[]) {
 	// Initialize CEF
 	exit_code = CefInitialize(main_args, settings, cef_app, nullptr);
 	if (exit_code == 0) {
-		fmt::print("Exiting with error: cef_initialize exit_code {}\n", exit_code);
-		client->CloseNative();
-		native_thread.join();
+		fmt::print("Exiting with error: CefInitialize exit_code {}\n", exit_code);
 		return exit_code;
 	}
 
@@ -83,9 +78,6 @@ int main(int argc, char* argv[]) {
 	CefRunMessageLoop();
 
 	// Shutdown and return
-	// TODO: CloseNative could technically be called before the native thread has finished the relevant setup...
 	CefShutdown();
-	client->CloseNative();
-	native_thread.join();
 	return 0;
 }
