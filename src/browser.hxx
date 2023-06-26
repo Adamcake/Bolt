@@ -17,28 +17,6 @@ namespace Browser {
 	struct Window: CefWindowDelegate, CefBrowserViewDelegate {
 		Window(CefRefPtr<CefClient> client, Details, CefString);
 
-		/// A request to close a browser can originate either from the Render process or UI process.
-		/// In Bolt, if it originates in the Browser process (where this struct is), then it will be
-		/// sent to the Render process to begin there.
-		/// When the render process has finished deleting, (which may or may not have happened due to
-		/// a call to CloseRender(), it will send a message back to the Browser process indicating it's
-		/// now okay to call CloseBrowser(). CloseBrowser should not be called before that.
-		void CloseRender();
-
-		/// Should be called only in response to a 'closed' message from the Render process.
-		/// Also indicates that this struct is about to be dropped and should no longer be used.
-		void CloseBrowser();
-
-		/// Calls GetIdentifier() on the internal CefBrowser
-		int GetBrowserIdentifier() const;
-
-		/// Opens dev tools for this window by calling CefBrowser::ShowDevTools with some standard settings
-		void ShowDevTools(CefRefPtr<CefClient>);
-
-		/// Checks whether CloseBrowser() has been called and if so, whether the unique ID of its browser
-		/// matches the given param.
-		bool IsClosingWithHandle(int) const;
-
 		/// Whether this window has an overlay frame
 		bool HasFrame() const;
 
@@ -61,9 +39,7 @@ namespace Browser {
 		cef_chrome_toolbar_type_t GetChromeToolbarType() override;
 
 		private:
-			bool closing;
 			bool has_frame;
-			int browser_id;
 
 			Details details;
 			CefRefPtr<CefWindow> window;
