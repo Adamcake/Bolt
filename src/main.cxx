@@ -4,10 +4,6 @@
 #include "browser/app.hxx"
 #include "browser/client.hxx"
 
-#if defined(OS_WIN)
-#include <windows.h>
-#endif
-
 #if defined(CEF_X11)
 #include <X11/Xlib.h>
 
@@ -30,7 +26,17 @@ int XIOErrorHandlerImpl(Display* display) {
 
 int main(int argc, char* argv[]) {
 	// Provide CEF with command-line arguments
-	CefMainArgs main_args(argc, argv);
+	// Add a flag to disable web security, because a certain company's API endpoints don't have correct
+	// access control settings; remove this setting if they ever get their stuff together
+	const char* arg = "--disable-web-security";
+	const size_t arg_len = strlen(arg);
+	char* arg_ = new char[arg_len + 1];
+	memcpy(arg_, arg, arg_len);
+	arg_[arg_len] = '\0';
+	char** argv_ = new char*[argc + 1];
+	memcpy(argv_, argv, argc * sizeof(char*));
+	argv_[argc] = arg_;
+	CefMainArgs main_args(argc + 1, argv_);
 
 	// CefApp struct - this implements handlers used by multiple processes
 	Browser::App cef_app_;
@@ -53,18 +59,10 @@ int main(int argc, char* argv[]) {
 	XSetIOErrorHandler(XIOErrorHandlerImpl);
 #endif
 
-	// Parse command-line arguments
-	CefRefPtr<CefCommandLine> command_line = CefCommandLine::CreateCommandLine();
-#if defined(OS_WIN)
-	command_line->InitFromString(::GetCommandLineW());
-#else
-	command_line->InitFromArgv(argc, argv);
-#endif
-
 	// CEF settings - only set the ones we're interested in
 	CefSettings settings = CefSettings();
 	settings.log_severity = LOGSEVERITY_WARNING; // Print warnings and errors only
-	settings.command_line_args_disabled = true;  // We don't want our command-line to configure CEF's windows
+	settings.command_line_args_disabled = false; // Needed because we append args
 	settings.uncaught_exception_stack_size = 8;  // Number of call stack frames given in unhandled exception events
 
 	// Initialize CEF
@@ -79,5 +77,7 @@ int main(int argc, char* argv[]) {
 
 	// Shutdown and return
 	CefShutdown();
+	delete[] argv_;
+	delete[] arg_;
 	return 0;
 }
