@@ -13,15 +13,32 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CEF_ROOT}/cmake")
 find_package(CEF REQUIRED)
 add_subdirectory(${CEF_LIBCEF_DLL_WRAPPER_PATH} libcef_dll_wrapper)
 
-# Files to copy from cef to build
-configure_file("${CEF_ROOT}/Release/libcef.so" "libcef.so" COPYONLY)
+# Copy and link libcef
+if(UNIX AND NOT APPLE)
+    set(CEF_LIB_NAME "libcef.so")
+elseif(WIN32)
+    set(CEF_LIB_NAME "libcef.dll")
+elseif(APPLE)
+    # TODO: mac support
+endif()
 
 # This line needs to be updated manually with any new/deleted object files; cmake discourages GLOBbing source files
 add_executable(bolt src/main.cxx src/browser.cxx src/browser/app_frame_data.cxx src/browser/app.cxx src/browser/client.cxx src/browser/dom_visitor.cxx)
 target_include_directories(bolt PUBLIC ${CEF_ROOT})
 target_link_directories(bolt PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
-set_target_properties(bolt PROPERTIES CXX_STANDARD 20 CXX_EXTENSIONS OFF BUILD_RPATH_USE_ORIGIN TRUE)
+set_target_properties(bolt PROPERTIES CXX_STANDARD 20 CXX_EXTENSIONS OFF)
+if(UNIX AND NOT APPLE)
+    set_target_properties(bolt PROPERTIES INSTALL_RPATH "$ORIGIN")
+endif()
 target_link_libraries(bolt PUBLIC libcef_dll_wrapper)
-target_link_libraries(bolt PUBLIC "cef")
+target_link_libraries(bolt PUBLIC "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/${CEF_LIB_NAME}")
 target_link_libraries(bolt PUBLIC "X11")
 target_link_libraries(bolt PUBLIC "fmt")
+
+# Install commands for target dir layout - as per https://bitbucket.org/chromiumembedded/cef/wiki/Tutorial.md
+if(APPLE)
+    # TODO: mac support
+else()
+    install(TARGETS bolt DESTINATION Bolt)
+    install(DIRECTORY "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/" "${CEF_ROOT}/Resources/" "${CMAKE_CURRENT_SOURCE_DIR}/html" DESTINATION Bolt)
+endif()
