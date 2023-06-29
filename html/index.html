@@ -137,6 +137,7 @@
 										parseCredentials(xml.response);
 										switch (credentials.login_provider) {
 											case "runescape":
+												w.close();
 												handleGameLogin(s, exchange_url, client_id);
 												break;
 											default:
