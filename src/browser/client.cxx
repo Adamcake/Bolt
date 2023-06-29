@@ -107,10 +107,10 @@ Browser::Client::Client(CefRefPtr<Browser::App> app) {
 	CefString mime_type_html = "text/html";
 	CefString mime_type_js = "application/javascript";
 	app->SetBrowserProcessHandler(this);
-	this->internal_pages["index.html"] = allocate_file("cef/files/index.html", mime_type_html);
-	this->internal_pages["oauth.html"] = allocate_file("cef/files/oauth.html", mime_type_html);
-	this->internal_pages["game_auth.html"] = allocate_file("cef/files/game_auth.html", mime_type_html);
-	this->internal_pages["frame.html"] = allocate_file("cef/files/frame.html", mime_type_html);
+	this->internal_pages["index.html"] = allocate_file("html/index.html", mime_type_html);
+	this->internal_pages["oauth.html"] = allocate_file("html/oauth.html", mime_type_html);
+	this->internal_pages["game_auth.html"] = allocate_file("html/game_auth.html", mime_type_html);
+	this->internal_pages["frame.html"] = allocate_file("html/frame.html", mime_type_html);
 }
 
 CefRefPtr<CefLifeSpanHandler> Browser::Client::GetLifeSpanHandler() {
