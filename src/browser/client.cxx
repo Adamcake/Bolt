@@ -152,33 +152,17 @@ void Browser::Client::OnScheduleMessagePumpWork(int64 delay_ms) {
 
 bool Browser::Client::DoClose(CefRefPtr<CefBrowser> browser) {
 	fmt::print("[B] DoClose for browser {}\n", browser->GetIdentifier());
-	browser->GetMainFrame()->SendProcessMessage(PID_RENDERER, CefProcessMessage::Create("__bolt_app_closing"));
 	return false;
 }
 
 void Browser::Client::OnBeforeClose(CefRefPtr<CefBrowser> browser) {
 	std::lock_guard<std::mutex> _(this->apps_lock);
 	fmt::print("[B] OnBeforeClose for browser {}\n", browser->GetIdentifier());
-	// TODO: figure out a way to remove apps
-	//this->apps.erase(
-	//	std::remove_if(
-	//		this->apps.begin(),
-	//		this->apps.end(),
-	//		[&browser](const CefRefPtr<Browser::Window>& window){ return window->IsClosingWithHandle(browser->GetIdentifier()); }
-	//	),
-	//	this->apps.end()
-	//);
 }
 
 bool Browser::Client::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefProcessId, CefRefPtr<CefProcessMessage> message) {
 	std::lock_guard<std::mutex> _(this->apps_lock);
 	CefString name = message->GetName();
-
-	if (name == "__bolt_app_closed") {
-		fmt::print("[B] bolt_app_closed received for browser {}\n", browser->GetIdentifier());
-		browser->GetHost()->TryCloseBrowser();
-		return true;
-	}
 
 	if (name == "__bolt_app_settings") {
 		fmt::print("[B] bolt_app_settings received for browser {}\n", browser->GetIdentifier());
