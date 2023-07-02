@@ -38,26 +38,10 @@ CefRefPtr<CefLoadHandler> Browser::App::GetLoadHandler() {
 
 void Browser::App::OnBrowserCreated(CefRefPtr<CefBrowser> browser, CefRefPtr<CefDictionaryValue> dict) {
 	fmt::print("[R] OnBrowserCreated for browser {}\n", browser->GetIdentifier());
-	if (dict && dict->HasKey("BoltAppUrl")) {
-		this->apps.push_back(new Browser::AppFrameData(browser->GetIdentifier(), dict->GetString("BoltAppUrl")));
-	}
 }
 
 void Browser::App::OnContextCreated(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefRefPtr<CefV8Context> context) {
 	context->GetGlobal()->SetValue("s", CefV8Value::CreateFunction("s", this), V8_PROPERTY_ATTRIBUTE_READONLY);
-	for (int i = 0; i < this->apps.size(); i += 1) {
-		if (this->apps[i]->id == browser->GetIdentifier()) {
-			if (this->apps[i]->url == frame->GetURL()) {
-				fmt::print("[R] OnContextCreated for app view for browser {}\n", browser->GetIdentifier());
-			} else if (frame->IsMain()) {
-				fmt::print("[R] OnContextCreated for app overlay for browser {}\n", browser->GetIdentifier());
-				this->apps[i]->frame = frame;
-				context->GetGlobal()->SetValue("__bolt_app_minify", CefV8Value::CreateFunction("__bolt_app_minify", this->apps[i]), V8_PROPERTY_ATTRIBUTE_READONLY);
-				context->GetGlobal()->SetValue("__bolt_app_settings", CefV8Value::CreateFunction("__bolt_app_settings", this->apps[i]), V8_PROPERTY_ATTRIBUTE_READONLY);
-				context->GetGlobal()->SetValue("__bolt_app_begin_drag", CefV8Value::CreateFunction("__bolt_app_begin_drag", this->apps[i]), V8_PROPERTY_ATTRIBUTE_READONLY);
-			}
-		}
-	}
 }
 
 void Browser::App::OnUncaughtException(
@@ -92,22 +76,6 @@ void Browser::App::OnUncaughtException(
 }
 
 bool Browser::App::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefProcessId, CefRefPtr<CefProcessMessage> message) {
-	if (message->GetName() == "__bolt_app_closing") {
-		fmt::print("[R] bolt_closing received for browser {}\n", browser->GetIdentifier());
-		auto it = std::remove_if(
-			this->apps.begin(),
-			this->apps.end(),
-			[&browser](const CefRefPtr<Browser::AppFrameData>& data){ return browser->GetIdentifier() == data->id; }
-		);
-		for (auto i = it; i != this->apps.end(); i += 1) {
-			it->get()->frame = nullptr;
-			it += 1;
-		}
-		this->apps.erase(it, this->apps.end());
-		frame->SendProcessMessage(PID_BROWSER, CefProcessMessage::Create("__bolt_app_closed"));
-		return true;
-	}
-
 	return false;
 }
 
@@ -115,11 +83,6 @@ void Browser::App::OnLoadEnd(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> 
 	if (CefCurrentlyOn(TID_RENDERER)) {
 		if (frame->IsMain()) {
 			fmt::print("[R] OnLoadEnd for browser {}\n", browser->GetIdentifier());
-			for(int i = 0; i < this->apps.size(); i += 1) {
-				if (this->apps[i]->id == browser->GetIdentifier()) {
-					frame->VisitDOM(new DOMVisitorAppFrame(this->apps[i]->url));
-				}
-			}
 		}
 	}
 }

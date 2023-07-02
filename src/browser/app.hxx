@@ -4,7 +4,6 @@
 #include "include/base/cef_macros.h"
 #include "include/cef_app.h"
 #include "include/cef_base.h"
-#include "app_frame_data.hxx"
 #include "include/cef_browser_process_handler.h"
 
 namespace Browser {
@@ -36,7 +35,6 @@ namespace Browser {
 		private:
 			CefRefCount ref_count;
 			CefRefPtr<CefBrowserProcessHandler> browser_process_handler;
-			std::vector<CefRefPtr<AppFrameData>> apps;
 	};
 }
 
