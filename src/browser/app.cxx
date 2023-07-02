@@ -1,5 +1,4 @@
 #include "app.hxx"
-#include "dom_visitor.hxx"
 
 #include <algorithm>
 
