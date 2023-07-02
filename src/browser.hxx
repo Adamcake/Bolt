@@ -16,6 +16,7 @@ namespace Browser {
 	/// https://github.com/chromiumembedded/cef/blob/5563/include/views/cef_browser_view_delegate.h
 	struct Window: CefWindowDelegate, CefBrowserViewDelegate {
 		Window(CefRefPtr<CefClient> client, Details, CefString);
+		Window(Details);
 
 		/* CefWindowDelegate functions */
 		void OnWindowCreated(CefRefPtr<CefWindow>) override;
@@ -32,6 +33,8 @@ namespace Browser {
 		CefSize GetMaximumSize(CefRefPtr<CefView>) override;
 
 		/* CefBrowserViewDelegate functions */
+		CefRefPtr<CefBrowserViewDelegate> GetDelegateForPopupBrowserView(CefRefPtr<CefBrowserView>, const CefBrowserSettings&, CefRefPtr<CefClient>, bool) override;
+		bool OnPopupBrowserViewCreated(CefRefPtr<CefBrowserView>, CefRefPtr<CefBrowserView>, bool) override;
 		void OnBrowserCreated(CefRefPtr<CefBrowserView>, CefRefPtr<CefBrowser>) override;
 		cef_chrome_toolbar_type_t GetChromeToolbarType() override;
 
@@ -39,6 +42,8 @@ namespace Browser {
 			Details details;
 			CefRefPtr<CefWindow> window;
 			CefRefPtr<CefBrowserView> browser_view;
+			CefRefPtr<Window> pending_child;
+			std::vector<CefRefPtr<Window>> children;
 
 			IMPLEMENT_REFCOUNTING(Window);
 			DISALLOW_COPY_AND_ASSIGN(Window);

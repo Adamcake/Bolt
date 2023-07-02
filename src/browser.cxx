@@ -4,8 +4,9 @@
 #include <fmt/core.h>
 
 Browser::Window::Window(CefRefPtr<CefClient> client, Browser::Details details, CefString url):
-	details(details), window(nullptr), browser_view(nullptr)
+	details(details), window(nullptr), browser_view(nullptr), pending_child(nullptr)
 {
+	fmt::print("[B] Browser::Window constructor, this={}\n", reinterpret_cast<uintptr_t>(this));
 	CefBrowserSettings browser_settings;
 	browser_settings.background_color = CefColorSetARGB(0, 0, 0, 0);
 	if (details.controls_overlay) {
@@ -16,12 +17,18 @@ Browser::Window::Window(CefRefPtr<CefClient> client, Browser::Details details, C
 		this->browser_view = CefBrowserView::CreateBrowserView(client, url, browser_settings, nullptr, nullptr, this);
 	}
 	CefWindow::CreateTopLevelWindow(this);
+
+}
+
+Browser::Window::Window(Browser::Details details): details(details), window(nullptr), browser_view(nullptr), pending_child(nullptr) {
+	fmt::print("[B] Browser::Window popup constructor 2, this={}\n", reinterpret_cast<uintptr_t>(this));
 }
 
 void Browser::Window::OnWindowCreated(CefRefPtr<CefWindow> window) {
 	fmt::print("[B] OnWindowCreated {}\n", window->GetID());
 	this->window = std::move(window);
 	this->window->AddChildView(this->browser_view);
+	this->window->CenterWindow(CefSize(this->details.preferred_width, this->details.preferred_height));
 	this->window->Show();
 }
 
@@ -60,6 +67,7 @@ bool Browser::Window::CanMinimize(CefRefPtr<CefWindow>) {
 }
 
 bool Browser::Window::CanClose(CefRefPtr<CefWindow> win) {
+	fmt::print("[B] CanClose for window {}, this={}\n", window->GetID(), reinterpret_cast<uintptr_t>(this));
 	// CEF will call CefLifeSpanHandler::DoClose (implemented in Client), giving us a chance to
 	// do cleanup and then call TryCloseBrowser() a second time.
 	// This strategy is suggested by official examples, e.g. cefsimple:
@@ -84,8 +92,36 @@ CefSize Browser::Window::GetMaximumSize(CefRefPtr<CefView>) {
 	return CefSize(this->details.max_width, this->details.max_height);
 }
 
-void Browser::Window::OnBrowserCreated(CefRefPtr<CefBrowserView>, CefRefPtr<CefBrowser>) {
+CefRefPtr<CefBrowserViewDelegate> Browser::Window::GetDelegateForPopupBrowserView(CefRefPtr<CefBrowserView>, const CefBrowserSettings&, CefRefPtr<CefClient>, bool) {
+	fmt::print("[B] GetDelegateForPopupBrowserView this={}\n", reinterpret_cast<uintptr_t>(this));
+	Browser::Details details = {
+		.min_width = 250,
+		.min_height = 180,
+		.max_width = 1000,
+		.max_height = 1000,
+		.preferred_width = 150,
+		.preferred_height = 600,
+		.startx = 100,
+		.starty = 100,
+		.resizeable = true,
+		.frame = true,
+		.controls_overlay = false,
+	};
+	this->pending_child = new Browser::Window(details);
+	return this->pending_child;
+}
 
+bool Browser::Window::OnPopupBrowserViewCreated(CefRefPtr<CefBrowserView> browser_view, CefRefPtr<CefBrowserView> popup_browser_view, bool is_devtools) {
+	fmt::print("[B] OnPopupBrowserViewCreated this={}\n", reinterpret_cast<uintptr_t>(this));
+	this->pending_child->browser_view = popup_browser_view;
+	CefWindow::CreateTopLevelWindow(this->pending_child);
+	this->children.push_back(this->pending_child);
+	this->pending_child = nullptr;
+	return true;
+}
+
+void Browser::Window::OnBrowserCreated(CefRefPtr<CefBrowserView>, CefRefPtr<CefBrowser> browser) {
+	fmt::print("[B] OnBrowserCreated this={} {}\n", reinterpret_cast<uintptr_t>(this), browser->GetIdentifier());
 }
 
 cef_chrome_toolbar_type_t Browser::Window::GetChromeToolbarType() {
