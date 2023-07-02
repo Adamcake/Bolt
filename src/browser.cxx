@@ -84,21 +84,9 @@ CefSize Browser::Window::GetPreferredSize(CefRefPtr<CefView>) {
 	return CefSize(this->details.preferred_width, this->details.preferred_height);
 }
 
-CefSize Browser::Window::GetMinimumSize(CefRefPtr<CefView>) {
-	return CefSize(this->details.min_width, this->details.min_height);
-}
-
-CefSize Browser::Window::GetMaximumSize(CefRefPtr<CefView>) {
-	return CefSize(this->details.max_width, this->details.max_height);
-}
-
 CefRefPtr<CefBrowserViewDelegate> Browser::Window::GetDelegateForPopupBrowserView(CefRefPtr<CefBrowserView>, const CefBrowserSettings&, CefRefPtr<CefClient>, bool) {
 	fmt::print("[B] GetDelegateForPopupBrowserView this={}\n", reinterpret_cast<uintptr_t>(this));
 	Browser::Details details = {
-		.min_width = 250,
-		.min_height = 180,
-		.max_width = 1000,
-		.max_height = 1000,
 		.preferred_width = 150,
 		.preferred_height = 600,
 		.startx = 100,

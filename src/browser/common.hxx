@@ -4,10 +4,6 @@
 namespace Browser {
 	/// Details used to create a browser window
 	struct Details {
-		int min_width;
-		int min_height;
-		int max_width;
-		int max_height;
 		int preferred_width;
 		int preferred_height;
 		int startx;

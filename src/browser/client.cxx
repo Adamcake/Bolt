@@ -127,10 +127,6 @@ void Browser::Client::OnContextInitialized() {
 	// After main() enters its event loop, this function will be called on the main thread when CEF
 	// context is ready to go, so, as suggested by CEF examples, Bolt treats this as an entry point.
 	Browser::Details details = {
-		.min_width = 250,
-		.min_height = 180,
-		.max_width = 1000,
-		.max_height = 1000,
 		.preferred_width = 800,
 		.preferred_height = 608,
 		.startx = 100,

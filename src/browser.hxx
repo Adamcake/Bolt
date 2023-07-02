@@ -29,8 +29,6 @@ namespace Browser {
 		bool CanMinimize(CefRefPtr<CefWindow>) override;
 		bool CanClose(CefRefPtr<CefWindow>) override;
 		CefSize GetPreferredSize(CefRefPtr<CefView>) override;
-		CefSize GetMinimumSize(CefRefPtr<CefView>) override;
-		CefSize GetMaximumSize(CefRefPtr<CefView>) override;
 
 		/* CefBrowserViewDelegate functions */
 		CefRefPtr<CefBrowserViewDelegate> GetDelegateForPopupBrowserView(CefRefPtr<CefBrowserView>, const CefBrowserSettings&, CefRefPtr<CefClient>, bool) override;
