@@ -23,7 +23,7 @@ elseif(APPLE)
 endif()
 
 # This line needs to be updated manually with any new/deleted object files; cmake discourages GLOBbing source files
-add_executable(bolt src/main.cxx src/browser.cxx src/browser/app_frame_data.cxx src/browser/app.cxx src/browser/client.cxx src/browser/dom_visitor.cxx)
+add_executable(bolt src/main.cxx src/browser.cxx src/browser/app.cxx src/browser/client.cxx)
 target_include_directories(bolt PUBLIC ${CEF_ROOT})
 target_link_directories(bolt PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
 set_target_properties(bolt PROPERTIES CXX_STANDARD 20 CXX_EXTENSIONS OFF)
