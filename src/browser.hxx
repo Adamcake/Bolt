@@ -17,9 +17,6 @@ namespace Browser {
 	struct Window: CefWindowDelegate, CefBrowserViewDelegate {
 		Window(CefRefPtr<CefClient> client, Details, CefString);
 
-		/// Whether this window has an overlay frame
-		bool HasFrame() const;
-
 		/* CefWindowDelegate functions */
 		void OnWindowCreated(CefRefPtr<CefWindow>) override;
 		void OnWindowDestroyed(CefRefPtr<CefWindow>) override;
@@ -39,8 +36,6 @@ namespace Browser {
 		cef_chrome_toolbar_type_t GetChromeToolbarType() override;
 
 		private:
-			bool has_frame;
-
 			Details details;
 			CefRefPtr<CefWindow> window;
 			CefRefPtr<CefBrowserView> browser_view;

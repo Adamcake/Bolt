@@ -4,7 +4,7 @@
 #include <fmt/core.h>
 
 Browser::Window::Window(CefRefPtr<CefClient> client, Browser::Details details, CefString url):
-	has_frame(details.controls_overlay), details(details), window(nullptr), browser_view(nullptr)
+	details(details), window(nullptr), browser_view(nullptr)
 {
 	CefBrowserSettings browser_settings;
 	browser_settings.background_color = CefColorSetARGB(0, 0, 0, 0);
@@ -16,10 +16,6 @@ Browser::Window::Window(CefRefPtr<CefClient> client, Browser::Details details, C
 		this->browser_view = CefBrowserView::CreateBrowserView(client, url, browser_settings, nullptr, nullptr, this);
 	}
 	CefWindow::CreateTopLevelWindow(this);
-}
-
-bool Browser::Window::HasFrame() const {
-	return this->has_frame;
 }
 
 void Browser::Window::OnWindowCreated(CefRefPtr<CefWindow> window) {
