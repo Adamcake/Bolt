@@ -99,10 +99,10 @@ CefSize Browser::Window::GetPreferredSize(CefRefPtr<CefView>) {
 CefRefPtr<CefBrowserViewDelegate> Browser::Window::GetDelegateForPopupBrowserView(CefRefPtr<CefBrowserView>, const CefBrowserSettings&, CefRefPtr<CefClient>, bool) {
 	fmt::print("[B] GetDelegateForPopupBrowserView this={}\n", reinterpret_cast<uintptr_t>(this));
 	Browser::Details details = {
-		.preferred_width = 150,
-		.preferred_height = 600,
-		.startx = 100,
-		.starty = 100,
+		.preferred_width = this->popup_features.widthSet ? this->popup_features.width : 0,
+		.preferred_height = this->popup_features.heightSet ? this->popup_features.height : 0,
+		.startx = 200,
+		.starty = 200,
 		.resizeable = true,
 		.frame = true,
 		.controls_overlay = false,
@@ -141,4 +141,13 @@ bool Browser::Window::CloseBrowser(CefRefPtr<CefBrowser> browser) {
 	);
 	return this->browser_view->GetBrowser()->IsSame(browser);
 	fmt::print("[B] CloseBrowser END this={}\n", reinterpret_cast<uintptr_t>(this));
+}
+
+void Browser::Window::SetPopupFeaturesForBrowser(CefRefPtr<CefBrowser> browser, const CefPopupFeatures& popup_features) {
+	for (CefRefPtr<Window>& window: this->children) {
+		window->SetPopupFeaturesForBrowser(browser, popup_features);
+	}
+	if (this->browser_view->GetBrowser()->IsSame(browser)) {
+		this->popup_features = popup_features;
+	}
 }

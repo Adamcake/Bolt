@@ -1,4 +1,5 @@
 #include "client.hxx"
+#include "include/cef_life_span_handler.h"
 
 #include <algorithm>
 #include <fmt/core.h>
@@ -137,6 +138,26 @@ void Browser::Client::OnContextInitialized() {
 	};
 	Browser::Window* w = new Browser::Window(this, details, this->internal_url);
 	this->windows.push_back(w);
+}
+
+bool Browser::Client::OnBeforePopup(
+	CefRefPtr<CefBrowser> browser,
+	CefRefPtr<CefFrame> frame,
+	const CefString& target_url,
+	const CefString& target_frame_name,
+	CefLifeSpanHandler::WindowOpenDisposition target_disposition,
+	bool user_gesture,
+	const CefPopupFeatures& popup_features,
+	CefWindowInfo& window_info,
+	CefRefPtr<CefClient>& client,
+	CefBrowserSettings& settings,
+	CefRefPtr<CefDictionaryValue>& extra_info,
+	bool* no_javascript_access
+) {
+	for (CefRefPtr<Browser::Window>& window: this->windows) {
+		window->SetPopupFeaturesForBrowser(browser, popup_features);
+	}
+	return false;
 }
 
 bool Browser::Client::DoClose(CefRefPtr<CefBrowser> browser) {

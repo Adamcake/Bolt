@@ -23,6 +23,10 @@ namespace Browser {
 		/// Cannot be called from CefLifeSpanHandler::OnBeforeClose, see CefBrowserViewDelegate::OnBrowserDestroyed for info
 		bool CloseBrowser(CefRefPtr<CefBrowser>);
 
+		/// Assigns given popup features to to matching windows
+		/// Given popup features will be used for the next child window to open
+		void SetPopupFeaturesForBrowser(CefRefPtr<CefBrowser>, const CefPopupFeatures&);
+
 		/* CefWindowDelegate functions */
 		void OnWindowCreated(CefRefPtr<CefWindow>) override;
 		void OnWindowClosing(CefRefPtr<CefWindow>) override;
@@ -47,6 +51,7 @@ namespace Browser {
 			CefRefPtr<CefBrowserView> browser_view;
 			CefRefPtr<Window> pending_child;
 			std::vector<CefRefPtr<Window>> children;
+			CefPopupFeatures popup_features;
 
 			IMPLEMENT_REFCOUNTING(Window);
 			DISALLOW_COPY_AND_ASSIGN(Window);

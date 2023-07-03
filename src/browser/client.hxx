@@ -1,6 +1,7 @@
 #ifndef _BOLT_CLIENT_HXX_
 #define _BOLT_CLIENT_HXX_
 #include "include/cef_client.h"
+#include "include/cef_life_span_handler.h"
 #include "include/views/cef_window_delegate.h"
 #include "app.hxx"
 #include "../browser.hxx"
@@ -35,6 +36,20 @@ namespace Browser {
 		void OnContextInitialized() override;
 
 		/* CefLifeSpanHandler overrides */
+		bool OnBeforePopup(
+			CefRefPtr<CefBrowser>,
+			CefRefPtr<CefFrame>,
+			const CefString&,
+			const CefString&,
+			CefLifeSpanHandler::WindowOpenDisposition,
+			bool,
+			const CefPopupFeatures&,
+			CefWindowInfo&,
+			CefRefPtr<CefClient>&,
+			CefBrowserSettings&,
+			CefRefPtr<CefDictionaryValue>&,
+			bool*
+		) override;
 		bool DoClose(CefRefPtr<CefBrowser>) override;
 		void OnBeforeClose(CefRefPtr<CefBrowser>) override;
 
