@@ -12,6 +12,7 @@ namespace Browser {
 		bool resizeable;
 		bool frame;
 		bool controls_overlay;
+		bool is_devtools = false;
 	};
 }
 

@@ -98,17 +98,18 @@ CefSize Browser::Window::GetPreferredSize(CefRefPtr<CefView>) {
 	return CefSize(this->details.preferred_width, this->details.preferred_height);
 }
 
-CefRefPtr<CefBrowserViewDelegate> Browser::Window::GetDelegateForPopupBrowserView(CefRefPtr<CefBrowserView>, const CefBrowserSettings&, CefRefPtr<CefClient>, bool) {
+CefRefPtr<CefBrowserViewDelegate> Browser::Window::GetDelegateForPopupBrowserView(CefRefPtr<CefBrowserView>, const CefBrowserSettings&, CefRefPtr<CefClient>, bool is_devtools) {
 	fmt::print("[B] GetDelegateForPopupBrowserView this={}\n", reinterpret_cast<uintptr_t>(this));
 	Browser::Details details = {
-		.preferred_width = this->popup_features.widthSet ? this->popup_features.width : 0,
-		.preferred_height = this->popup_features.heightSet ? this->popup_features.height : 0,
+		.preferred_width = this->popup_features.widthSet ? this->popup_features.width : 800,
+		.preferred_height = this->popup_features.heightSet ? this->popup_features.height : 608,
 		.startx = this->popup_features.x,
 		.starty = this->popup_features.y,
 		.center_on_open = !this->popup_features.xSet || !this->popup_features.ySet,
 		.resizeable = true,
 		.frame = true,
 		.controls_overlay = false,
+		.is_devtools = is_devtools,
 	};
 	this->pending_child = new Browser::Window(details);
 	return this->pending_child;
@@ -125,7 +126,6 @@ bool Browser::Window::OnPopupBrowserViewCreated(CefRefPtr<CefBrowserView> browse
 
 void Browser::Window::OnBrowserCreated(CefRefPtr<CefBrowserView>, CefRefPtr<CefBrowser> browser) {
 	fmt::print("[B] OnBrowserCreated this={} {}\n", reinterpret_cast<uintptr_t>(this), browser->GetIdentifier());
-	
 }
 
 cef_chrome_toolbar_type_t Browser::Window::GetChromeToolbarType() {
