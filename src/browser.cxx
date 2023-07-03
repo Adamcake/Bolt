@@ -30,7 +30,9 @@ void Browser::Window::OnWindowCreated(CefRefPtr<CefWindow> window) {
 	fmt::print("[B] OnWindowCreated {} this={}\n", window->GetID(), reinterpret_cast<uintptr_t>(this));
 	this->window = std::move(window);
 	this->window->AddChildView(this->browser_view);
-	this->window->CenterWindow(CefSize(this->details.preferred_width, this->details.preferred_height));
+	if (this->details.center_on_open) {
+		this->window->CenterWindow(CefSize(this->details.preferred_width, this->details.preferred_height));
+	}
 	this->window->Show();
 }
 
@@ -101,8 +103,9 @@ CefRefPtr<CefBrowserViewDelegate> Browser::Window::GetDelegateForPopupBrowserVie
 	Browser::Details details = {
 		.preferred_width = this->popup_features.widthSet ? this->popup_features.width : 0,
 		.preferred_height = this->popup_features.heightSet ? this->popup_features.height : 0,
-		.startx = 200,
-		.starty = 200,
+		.startx = this->popup_features.x,
+		.starty = this->popup_features.y,
+		.center_on_open = !this->popup_features.xSet || !this->popup_features.ySet,
 		.resizeable = true,
 		.frame = true,
 		.controls_overlay = false,

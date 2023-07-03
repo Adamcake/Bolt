@@ -130,8 +130,7 @@ void Browser::Client::OnContextInitialized() {
 	Browser::Details details = {
 		.preferred_width = 800,
 		.preferred_height = 608,
-		.startx = 100,
-		.starty = 100,
+		.center_on_open = true,
 		.resizeable = true,
 		.frame = true,
 		.controls_overlay = false,
