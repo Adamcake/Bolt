@@ -11,7 +11,7 @@ You'll also need the following dependencies:
 - Linux:
   - X11 development libraries (`libX11-devel` or `libx11-dev` on most package managers)
 
-Once that's done, simply build with cmake as you usually would. It's recommended to build with the same compiler you compiled CEF with; specify CC and CXX env vars to point to your C and C++ compiler respectively, and optionally supply `-G Ninja` to the first arg if you have Ninja installed and would prefer to use it over Make.
+Once that's done, simply build with cmake as you usually would. It's recommended to build with the same compiler you compiled CEF with; specify CC and CXX env vars to point to your C and C++ compiler respectively, and optionally supply `-G Ninja` to the first command if you have Ninja installed and would prefer to use it over Make.
 - `cmake -S . -B build -D CMAKE_BUILD_TYPE=Release`
 - `cmake --build build`
 - `cmake --install build --prefix build`
