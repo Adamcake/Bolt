@@ -1,5 +1,15 @@
 cmake_minimum_required(VERSION 3.21) # Minimum CEF requirement, but building with the latest cmake is strongly recommended
 project(Bolt VERSION 0.1 LANGUAGES C CXX)
+if(NOT WIN32)
+    # necessary for installing files in both /opt and /usr
+    set(CMAKE_INSTALL_PREFIX /)
+
+    # Short shell script to be installed in /usr/local/bin, gets renamed to "bolt" later
+    file(GENERATE OUTPUT bolt-run.sh CONTENT "#!/bin/sh\ncd /opt/Bolt\n./bolt \"$@\"\n")
+
+    # auto-generated helper for running from build dir; this file does not get installed
+    file(GENERATE OUTPUT bolt.sh CONTENT "#!/bin/sh\ncd ${CMAKE_CURRENT_BINARY_DIR}/opt/Bolt\n./bolt \"$@\"\n" FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+endif()
 
 # Generate compile_commands.json, for use by language servers for highlighting/autocomplete/etc
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -39,6 +49,11 @@ target_link_libraries(bolt PUBLIC "fmt")
 if(APPLE)
     # TODO: mac support
 else()
-    install(TARGETS bolt DESTINATION Bolt)
-    install(DIRECTORY "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/" "${CEF_ROOT}/Resources/" "${CMAKE_CURRENT_SOURCE_DIR}/html" DESTINATION Bolt)
+    install(TARGETS bolt DESTINATION opt/Bolt)
+    install(DIRECTORY "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/" "${CEF_ROOT}/Resources/" "${CMAKE_CURRENT_SOURCE_DIR}/html" DESTINATION opt/Bolt)
+endif()
+
+# Finally, install shell script in bin dir
+if(NOT WIN32)
+    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/bolt-run.sh" RENAME bolt DESTINATION usr/local/bin PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 endif()
