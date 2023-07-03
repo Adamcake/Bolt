@@ -136,7 +136,7 @@ void Browser::Client::OnContextInitialized() {
 		.controls_overlay = false,
 	};
 	Browser::Window* w = new Browser::Window(this, details, this->internal_url);
-	this->apps.push_back(w);
+	this->windows.push_back(w);
 }
 
 void Browser::Client::OnScheduleMessagePumpWork(int64 delay_ms) {
@@ -149,13 +149,13 @@ void Browser::Client::OnScheduleMessagePumpWork(int64 delay_ms) {
 bool Browser::Client::DoClose(CefRefPtr<CefBrowser> browser) {
 	fmt::print("[B] DoClose for browser {}\n", browser->GetIdentifier());
 	std::lock_guard<std::mutex> _(this->apps_lock);
-	this->apps.erase(
+	this->windows.erase(
 		std::remove_if(
-			this->apps.begin(),
-			this->apps.end(),
+			this->windows.begin(),
+			this->windows.end(),
 			[&browser](const CefRefPtr<Browser::Window>& window){ return window->CloseBrowser(browser); }
 		),
-		this->apps.end()
+		this->windows.end()
 	);
 	return false;
 }

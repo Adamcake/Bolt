@@ -63,7 +63,7 @@ namespace Browser {
 			std::map<std::string, _InternalFile> internal_pages;
 
 			// Mutex-locked vector - may be accessed from either UI thread (most of the time) or IO thread (GetResourceRequestHandler)
-			std::vector<CefRefPtr<Browser::Window>> apps;
+			std::vector<CefRefPtr<Browser::Window>> windows;
 			std::mutex apps_lock;
 	};
 }
