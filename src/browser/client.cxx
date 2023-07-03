@@ -139,13 +139,6 @@ void Browser::Client::OnContextInitialized() {
 	this->windows.push_back(w);
 }
 
-void Browser::Client::OnScheduleMessagePumpWork(int64 delay_ms) {
-	// This function will be called from many different threads, because we enabled `external_message_pump`
-	// in CefSettings in main(). The docs state that the given delay may be either positive or negative.
-	// A negative number indicates we should call CefDoMessageLoopWork() right now on the main thread.
-	// A positive number indicates we should do that after at least the given number of milliseconds.
-}
-
 bool Browser::Client::DoClose(CefRefPtr<CefBrowser> browser) {
 	fmt::print("[B] DoClose for browser {}\n", browser->GetIdentifier());
 	std::lock_guard<std::mutex> _(this->apps_lock);

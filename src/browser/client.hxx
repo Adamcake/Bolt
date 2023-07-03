@@ -33,7 +33,6 @@ namespace Browser {
 
 		/* CefBrowserProcessHandler overrides */
 		void OnContextInitialized() override;
-		void OnScheduleMessagePumpWork(int64) override;
 
 		/* CefLifeSpanHandler overrides */
 		bool DoClose(CefRefPtr<CefBrowser>) override;
