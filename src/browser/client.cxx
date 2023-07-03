@@ -5,8 +5,8 @@
 #include <fstream>
 #include <regex>
 
-/// https://github.com/chromiumembedded/cef/blob/5563/include/cef_resource_request_handler.h
-/// https://github.com/chromiumembedded/cef/blob/5563/include/cef_resource_handler.h
+/// https://github.com/chromiumembedded/cef/blob/5735/include/cef_resource_request_handler.h
+/// https://github.com/chromiumembedded/cef/blob/5735/include/cef_resource_handler.h
 struct ResourceHandler: public CefResourceRequestHandler, CefResourceHandler {
 	ResourceHandler(const unsigned char* data, size_t len, int status, CefString mime):
 		data(data), data_len(len), status(status), mime(mime), has_location(false), cursor(0) { }

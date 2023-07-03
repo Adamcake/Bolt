@@ -19,10 +19,10 @@ struct _InternalFile {
 namespace Browser {
 	/// Implementation of CefClient, CefBrowserProcessHandler, CefLifeSpanHandler, CefRequestHandler.
 	/// Store on the stack, but access only via CefRefPtr.
-	/// https://github.com/chromiumembedded/cef/blob/5563/include/cef_client.h
-	/// https://github.com/chromiumembedded/cef/blob/5563/include/cef_browser_process_handler.h
-	/// https://github.com/chromiumembedded/cef/blob/5563/include/cef_life_span_handler.h
-	/// https://github.com/chromiumembedded/cef/blob/5563/include/cef_request_handler.h
+	/// https://github.com/chromiumembedded/cef/blob/5735/include/cef_client.h
+	/// https://github.com/chromiumembedded/cef/blob/5735/include/cef_browser_process_handler.h
+	/// https://github.com/chromiumembedded/cef/blob/5735/include/cef_life_span_handler.h
+	/// https://github.com/chromiumembedded/cef/blob/5735/include/cef_request_handler.h
 	struct Client: public CefClient, CefBrowserProcessHandler, CefLifeSpanHandler, CefRequestHandler {
 		Client(CefRefPtr<Browser::App>);
 
