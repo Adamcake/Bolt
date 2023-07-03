@@ -50,6 +50,7 @@ namespace Browser {
 			CefRefPtr<CefDictionaryValue>&,
 			bool*
 		) override;
+		void OnAfterCreated(CefRefPtr<CefBrowser>) override;
 		bool DoClose(CefRefPtr<CefBrowser>) override;
 		void OnBeforeClose(CefRefPtr<CefBrowser>) override;
 
@@ -73,12 +74,14 @@ namespace Browser {
 		private:
 			CefRefCount ref_count;
 
+			bool show_devtools;
+
 			std::string internal_url = "https://bolt-internal/";
 			std::map<std::string, _InternalFile> internal_pages;
 
 			// Mutex-locked vector - may be accessed from either UI thread (most of the time) or IO thread (GetResourceRequestHandler)
 			std::vector<CefRefPtr<Browser::Window>> windows;
-			std::mutex apps_lock;
+			std::mutex windows_lock;
 	};
 }
 

@@ -5,8 +5,8 @@
 
 #include <fmt/core.h>
 
-Browser::Window::Window(CefRefPtr<CefClient> client, Browser::Details details, CefString url):
-	details(details), window(nullptr), browser_view(nullptr), pending_child(nullptr)
+Browser::Window::Window(CefRefPtr<CefClient> client, Browser::Details details, CefString url, bool show_devtools_for_children):
+	show_devtools_for_children(show_devtools_for_children), details(details), window(nullptr), browser_view(nullptr), pending_child(nullptr)
 {
 	fmt::print("[B] Browser::Window constructor, this={}\n", reinterpret_cast<uintptr_t>(this));
 	CefBrowserSettings browser_settings;
@@ -22,7 +22,9 @@ Browser::Window::Window(CefRefPtr<CefClient> client, Browser::Details details, C
 
 }
 
-Browser::Window::Window(Browser::Details details): details(details), window(nullptr), browser_view(nullptr), pending_child(nullptr) {
+Browser::Window::Window(Browser::Details details, bool show_devtools_for_children):
+	show_devtools_for_children(show_devtools_for_children), details(details), window(nullptr), browser_view(nullptr), pending_child(nullptr)
+{
 	fmt::print("[B] Browser::Window popup constructor, this={}\n", reinterpret_cast<uintptr_t>(this));
 }
 
@@ -111,7 +113,7 @@ CefRefPtr<CefBrowserViewDelegate> Browser::Window::GetDelegateForPopupBrowserVie
 		.controls_overlay = false,
 		.is_devtools = is_devtools,
 	};
-	this->pending_child = new Browser::Window(details);
+	this->pending_child = new Browser::Window(details, this->show_devtools_for_children);
 	return this->pending_child;
 }
 
@@ -120,7 +122,11 @@ bool Browser::Window::OnPopupBrowserViewCreated(CefRefPtr<CefBrowserView> browse
 	this->pending_child->browser_view = popup_browser_view;
 	CefWindow::CreateTopLevelWindow(this->pending_child);
 	this->children.push_back(this->pending_child);
-	this->pending_child = nullptr;
+	CefRefPtr<Browser::Window> child = nullptr;
+	std::swap(this->pending_child, child);
+	if (this->show_devtools_for_children && !is_devtools) {
+		child->ShowDevTools();
+	}
 	return true;
 }
 
@@ -153,4 +159,11 @@ void Browser::Window::SetPopupFeaturesForBrowser(CefRefPtr<CefBrowser> browser, 
 	if (this->browser_view->GetBrowser()->IsSame(browser)) {
 		this->popup_features = popup_features;
 	}
+}
+
+void Browser::Window::ShowDevTools() {
+	CefRefPtr<CefBrowserHost> browser_host = browser_view->GetBrowser()->GetHost();
+	CefWindowInfo window_info; // ignored, because this is a BrowserView
+	CefBrowserSettings browser_settings;
+	browser_host->ShowDevTools(window_info, browser_host->GetClient(), browser_settings, CefPoint());
 }

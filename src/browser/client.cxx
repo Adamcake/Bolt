@@ -104,7 +104,7 @@ _InternalFile allocate_file(const char* filename, CefString mime_type) {
 	}
 }
 
-Browser::Client::Client(CefRefPtr<Browser::App> app) {
+Browser::Client::Client(CefRefPtr<Browser::App> app): show_devtools(true) {
 	CefString mime_type_html = "text/html";
 	CefString mime_type_js = "application/javascript";
 	app->SetBrowserProcessHandler(this);
@@ -123,7 +123,6 @@ CefRefPtr<CefRequestHandler> Browser::Client::GetRequestHandler() {
 }
 
 void Browser::Client::OnContextInitialized() {
-	std::lock_guard<std::mutex> _(this->apps_lock);
 	fmt::print("[B] OnContextInitialized\n");
 	// After main() enters its event loop, this function will be called on the main thread when CEF
 	// context is ready to go, so, as suggested by CEF examples, Bolt treats this as an entry point.
@@ -135,7 +134,11 @@ void Browser::Client::OnContextInitialized() {
 		.frame = true,
 		.controls_overlay = false,
 	};
-	Browser::Window* w = new Browser::Window(this, details, this->internal_url);
+	Browser::Window* w = new Browser::Window(this, details, this->internal_url, this->show_devtools);
+	if (this->show_devtools) {
+		w->ShowDevTools();
+	}
+	std::lock_guard<std::mutex> _(this->windows_lock);
 	this->windows.push_back(w);
 }
 
@@ -153,15 +156,20 @@ bool Browser::Client::OnBeforePopup(
 	CefRefPtr<CefDictionaryValue>& extra_info,
 	bool* no_javascript_access
 ) {
+	std::lock_guard<std::mutex> _(this->windows_lock);
 	for (CefRefPtr<Browser::Window>& window: this->windows) {
 		window->SetPopupFeaturesForBrowser(browser, popup_features);
 	}
 	return false;
 }
 
+void Browser::Client::OnAfterCreated(CefRefPtr<CefBrowser> browser) {
+	fmt::print("[B] OnAfterCreated for browser {}\n", browser->GetIdentifier());
+}
+
 bool Browser::Client::DoClose(CefRefPtr<CefBrowser> browser) {
 	fmt::print("[B] DoClose for browser {}\n", browser->GetIdentifier());
-	std::lock_guard<std::mutex> _(this->apps_lock);
+	std::lock_guard<std::mutex> _(this->windows_lock);
 	this->windows.erase(
 		std::remove_if(
 			this->windows.begin(),
@@ -178,7 +186,7 @@ void Browser::Client::OnBeforeClose(CefRefPtr<CefBrowser> browser) {
 }
 
 bool Browser::Client::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefProcessId, CefRefPtr<CefProcessMessage> message) {
-	std::lock_guard<std::mutex> _(this->apps_lock);
+	//std::lock_guard<std::mutex> _(this->apps_lock);
 	CefString name = message->GetName();
 
 	if (name == "__bolt_app_settings") {

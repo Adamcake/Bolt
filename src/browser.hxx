@@ -2,6 +2,7 @@
 #define _BOLT_BROWSER_HXX_
 #include "browser/common.hxx"
 #include "include/cef_client.h"
+#include "include/internal/cef_ptr.h"
 #include "include/views/cef_window.h"
 #include "include/views/cef_browser_view.h"
 
@@ -15,8 +16,8 @@ namespace Browser {
 	/// https://github.com/chromiumembedded/cef/blob/5735/include/views/cef_window_delegate.h
 	/// https://github.com/chromiumembedded/cef/blob/5735/include/views/cef_browser_view_delegate.h
 	struct Window: CefWindowDelegate, CefBrowserViewDelegate {
-		Window(CefRefPtr<CefClient> client, Details, CefString);
-		Window(Details);
+		Window(CefRefPtr<CefClient> client, Details, CefString, bool);
+		Window(Details, bool);
 
 		/// Purges matching windows from this window's list of children
 		/// Returns true if this window itself matches the given browser, false otherwise
@@ -26,6 +27,9 @@ namespace Browser {
 		/// Assigns given popup features to to matching windows
 		/// Given popup features will be used for the next child window to open
 		void SetPopupFeaturesForBrowser(CefRefPtr<CefBrowser>, const CefPopupFeatures&);
+
+		/// Opens devtools for this browser
+		void ShowDevTools();
 
 		/* CefWindowDelegate functions */
 		void OnWindowCreated(CefRefPtr<CefWindow>) override;
@@ -46,6 +50,7 @@ namespace Browser {
 		cef_chrome_toolbar_type_t GetChromeToolbarType() override;
 
 		private:
+			bool show_devtools_for_children;
 			Details details;
 			CefRefPtr<CefWindow> window;
 			CefRefPtr<CefBrowserView> browser_view;
