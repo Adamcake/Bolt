@@ -1,6 +1,8 @@
 #include "browser.hxx"
 #include "include/views/cef_window.h"
 
+#include <algorithm>
+
 #include <fmt/core.h>
 
 Browser::Window::Window(CefRefPtr<CefClient> client, Browser::Details details, CefString url):
@@ -21,7 +23,7 @@ Browser::Window::Window(CefRefPtr<CefClient> client, Browser::Details details, C
 }
 
 Browser::Window::Window(Browser::Details details): details(details), window(nullptr), browser_view(nullptr), pending_child(nullptr) {
-	fmt::print("[B] Browser::Window popup constructor 2, this={}\n", reinterpret_cast<uintptr_t>(this));
+	fmt::print("[B] Browser::Window popup constructor, this={}\n", reinterpret_cast<uintptr_t>(this));
 }
 
 void Browser::Window::OnWindowCreated(CefRefPtr<CefWindow> window) {
@@ -70,18 +72,20 @@ bool Browser::Window::CanMinimize(CefRefPtr<CefWindow>) {
 
 bool Browser::Window::CanClose(CefRefPtr<CefWindow> win) {
 	fmt::print("[B] CanClose for window {}, this={}\n", window->GetID(), reinterpret_cast<uintptr_t>(this));
+
+	// Empty this->children by swapping it with a local empty vector, then iterate the local vector
+	std::vector<CefRefPtr<Browser::Window>> children;
+	std::swap(this->children, children);
+	for (CefRefPtr<Window>& window: children) {
+		window->browser_view->GetBrowser()->GetHost()->CloseBrowser(true);
+	}
+
 	// CEF will call CefLifeSpanHandler::DoClose (implemented in Client), giving us a chance to
 	// do cleanup and then call TryCloseBrowser() a second time.
 	// This strategy is suggested by official examples, e.g. cefsimple:
 	// https://github.com/chromiumembedded/cef/blob/5563/tests/cefsimple/simple_app.cc#L38-L45
 	CefRefPtr<CefBrowser> browser = this->browser_view->GetBrowser();
 	if (browser) {
-		// Empty this->children by swapping it with a local empty vector, then iterate the local vector
-		std::vector<CefRefPtr<Browser::Window>> children;
-		std::swap(this->children, children);
-		for (CefRefPtr<Window>& window: children) {
-			window->browser_view->GetBrowser()->GetHost()->CloseBrowser(true);
-		}
 		return browser->GetHost()->TryCloseBrowser();
 	} else {
 		return true;
@@ -118,8 +122,23 @@ bool Browser::Window::OnPopupBrowserViewCreated(CefRefPtr<CefBrowserView> browse
 
 void Browser::Window::OnBrowserCreated(CefRefPtr<CefBrowserView>, CefRefPtr<CefBrowser> browser) {
 	fmt::print("[B] OnBrowserCreated this={} {}\n", reinterpret_cast<uintptr_t>(this), browser->GetIdentifier());
+	
 }
 
 cef_chrome_toolbar_type_t Browser::Window::GetChromeToolbarType() {
 	return CEF_CTT_NONE;
+}
+
+bool Browser::Window::CloseBrowser(CefRefPtr<CefBrowser> browser) {
+	fmt::print("[B] CloseBrowser this={}\n", reinterpret_cast<uintptr_t>(this));
+	this->children.erase(
+		std::remove_if(
+			this->children.begin(),
+			this->children.end(),
+			[&browser](const CefRefPtr<Browser::Window>& window){ return window->CloseBrowser(browser); }
+		),
+		this->children.end()
+	);
+	return this->browser_view->GetBrowser()->IsSame(browser);
+	fmt::print("[B] CloseBrowser END this={}\n", reinterpret_cast<uintptr_t>(this));
 }

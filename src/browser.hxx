@@ -18,6 +18,11 @@ namespace Browser {
 		Window(CefRefPtr<CefClient> client, Details, CefString);
 		Window(Details);
 
+		/// Purges matching windows from this window's list of children
+		/// Returns true if this window itself matches the given browser, false otherwise
+		/// Cannot be called from CefLifeSpanHandler::OnBeforeClose, see CefBrowserViewDelegate::OnBrowserDestroyed for info
+		bool CloseBrowser(CefRefPtr<CefBrowser>);
+
 		/* CefWindowDelegate functions */
 		void OnWindowCreated(CefRefPtr<CefWindow>) override;
 		void OnWindowClosing(CefRefPtr<CefWindow>) override;

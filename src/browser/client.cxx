@@ -148,11 +148,19 @@ void Browser::Client::OnScheduleMessagePumpWork(int64 delay_ms) {
 
 bool Browser::Client::DoClose(CefRefPtr<CefBrowser> browser) {
 	fmt::print("[B] DoClose for browser {}\n", browser->GetIdentifier());
+	std::lock_guard<std::mutex> _(this->apps_lock);
+	this->apps.erase(
+		std::remove_if(
+			this->apps.begin(),
+			this->apps.end(),
+			[&browser](const CefRefPtr<Browser::Window>& window){ return window->CloseBrowser(browser); }
+		),
+		this->apps.end()
+	);
 	return false;
 }
 
 void Browser::Client::OnBeforeClose(CefRefPtr<CefBrowser> browser) {
-	std::lock_guard<std::mutex> _(this->apps_lock);
 	fmt::print("[B] OnBeforeClose for browser {}\n", browser->GetIdentifier());
 }
 
