@@ -25,16 +25,18 @@ Browser::Window::Window(Browser::Details details): details(details), window(null
 }
 
 void Browser::Window::OnWindowCreated(CefRefPtr<CefWindow> window) {
-	fmt::print("[B] OnWindowCreated {}\n", window->GetID());
+	fmt::print("[B] OnWindowCreated {} this={}\n", window->GetID(), reinterpret_cast<uintptr_t>(this));
 	this->window = std::move(window);
 	this->window->AddChildView(this->browser_view);
 	this->window->CenterWindow(CefSize(this->details.preferred_width, this->details.preferred_height));
 	this->window->Show();
 }
 
-void Browser::Window::OnWindowDestroyed(CefRefPtr<CefWindow> window) {
+void Browser::Window::OnWindowClosing(CefRefPtr<CefWindow> window) {
+	fmt::print("[B] OnWindowClosing {} this={}\n", window->GetID(), reinterpret_cast<uintptr_t>(this));
 	this->window = nullptr;
 	this->browser_view = nullptr;
+	this->pending_child = nullptr;
 }
 
 CefRect Browser::Window::GetInitialBounds(CefRefPtr<CefWindow> window) {
@@ -74,6 +76,12 @@ bool Browser::Window::CanClose(CefRefPtr<CefWindow> win) {
 	// https://github.com/chromiumembedded/cef/blob/5563/tests/cefsimple/simple_app.cc#L38-L45
 	CefRefPtr<CefBrowser> browser = this->browser_view->GetBrowser();
 	if (browser) {
+		// Empty this->children by swapping it with a local empty vector, then iterate the local vector
+		std::vector<CefRefPtr<Browser::Window>> children;
+		std::swap(this->children, children);
+		for (CefRefPtr<Window>& window: children) {
+			window->browser_view->GetBrowser()->GetHost()->CloseBrowser(true);
+		}
 		return browser->GetHost()->TryCloseBrowser();
 	} else {
 		return true;

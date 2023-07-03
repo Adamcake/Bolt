@@ -20,7 +20,7 @@ namespace Browser {
 
 		/* CefWindowDelegate functions */
 		void OnWindowCreated(CefRefPtr<CefWindow>) override;
-		void OnWindowDestroyed(CefRefPtr<CefWindow>) override;
+		void OnWindowClosing(CefRefPtr<CefWindow>) override;
 		CefRect GetInitialBounds(CefRefPtr<CefWindow>) override;
 		cef_show_state_t GetInitialShowState(CefRefPtr<CefWindow>) override;
 		bool IsFrameless(CefRefPtr<CefWindow>) override;
