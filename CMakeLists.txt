@@ -5,10 +5,10 @@ if(NOT WIN32)
     set(CMAKE_INSTALL_PREFIX /)
 
     # Short shell script to be installed in /usr/local/bin, gets renamed to "bolt" later
-    file(GENERATE OUTPUT bolt-run.sh CONTENT "#!/bin/sh\ncd /opt/Bolt\n./bolt \"$@\"\n")
+    file(GENERATE OUTPUT bolt-run.sh CONTENT "#!/bin/sh -eu\ncd /opt/Bolt\n./bolt \"$@\"\n")
 
     # auto-generated helper for running from build dir; this file does not get installed
-    file(GENERATE OUTPUT bolt.sh CONTENT "#!/bin/sh\ncd ${CMAKE_CURRENT_BINARY_DIR}/opt/Bolt\n./bolt \"$@\"\n" FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+    file(GENERATE OUTPUT bolt.sh CONTENT "#!/bin/sh -eu\ncd ${CMAKE_CURRENT_BINARY_DIR}/opt/Bolt\n./bolt \"$@\"\n" FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 endif()
 
 # Generate compile_commands.json, for use by language servers for highlighting/autocomplete/etc
