@@ -28,7 +28,6 @@ add_executable(bolt src/main.cxx src/browser.cxx src/browser/app.cxx src/browser
 
 # Various build properties
 target_include_directories(bolt PUBLIC ${CEF_ROOT})
-target_link_directories(bolt PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
 set_target_properties(bolt PROPERTIES CXX_STANDARD 20 CXX_EXTENSIONS OFF)
 target_link_libraries(bolt PUBLIC libcef_dll_wrapper)
 target_link_libraries(bolt PUBLIC "fmt")
