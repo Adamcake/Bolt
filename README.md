@@ -4,12 +4,17 @@ A third-party launcher and helper for your favourite MMO
 ## Building
 If you just want to get Bolt installed then you don't need to build it from source! Check the "Releases" section on the right.
 
-But if you do want to build from source, the first thing you should know is that Bolt is based on [Chromium Embedded Framework](https://bitbucket.org/chromiumembedded/cef) (CEF), so to build it, you'll first need to [build](https://bitbucket.org/chromiumembedded/cef/wiki/MasterBuildQuickStart.md) or [otherwise obtain](https://adamcake.com/cef) a binary distribution of CEF. Place the entire binary distribution folder inside the `cef` directory with the name "dist", or create a symbolic link with the same effect.
+But if you do want to build from source, the first thing you should know is that Bolt is based on [Chromium Embedded Framework](https://bitbucket.org/chromiumembedded/cef) (CEF), so to build it, you'll first need either to [build](https://bitbucket.org/chromiumembedded/cef/wiki/MasterBuildQuickStart.md) or [download](https://adamcake.com/cef) a binary distribution of CEF.
 
-You'll also need the following dependencies:
-- [fmt](https://fmt.dev) (`fmt-devel` or `libfmt-dev` on most Linux package managers)
-- Linux:
-  - X11 development libraries (`libX11-devel` or `libx11-dev` on most package managers)
+Clone this repository with submodules:
+- `git clone --recurse-submodules https://github.com/Adamcake/Bolt.git`
+
+If you accidentally cloned without submodules (no `modules` directory), you can checkout submodules like so:
+- `git submodule update --init --recursive`
+
+Place your entire CEF binary distribution folder inside the `cef` directory with the name "dist", or create a symbolic link with the same effect.
+
+If building on Linux, install X11 development libraries (`libX11-devel` or `libx11-dev` on most package managers)
 
 Once that's done, you can start building. Open a command window or terminal in the root directory of this repository, then follow the build instructions for your platform.
 
@@ -17,6 +22,7 @@ Once that's done, you can start building. Open a command window or terminal in t
 - `cmake -S . -B build -D CMAKE_BUILD_TYPE=Release`
   - note: build types "Debug" and "Release" are supported
   - note: if you have Ninja installed, specify `-G Ninja` for much faster builds
+  - note: specify CC and CXX env variables at this stage to direct cmake to the C and C++ compilers you want it to use
 - `cmake --build build`
 - `cmake --install build --prefix build`
   - note: if a `--prefix` is not specified, Bolt will be installed to /usr/local, requiring root privileges
