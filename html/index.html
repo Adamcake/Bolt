@@ -9,6 +9,7 @@
 			var messages = document.createElement("ul");
 			var credentials = null;
 			var pendingGameAuth = null;
+			var rs3_linux_installed_hash = null;
 
 			// checks if `credentials` are about to expire or have already expired,
 			// and renews them using the oauth endpoint if so
@@ -118,6 +119,11 @@
 				const verifier = make_random_verifier();
 				const client_id = atob(s.clientid);
 				const exchange_url = atob(s.origin).concat("/oauth2/token");
+
+				const query = new URLSearchParams(window.location.search);
+				rs3_linux_installed_hash = query.get("rs3_linux_installed_hash");
+				credentials = query.get("credentials");
+
 				var w = window.open("about:blank", "", "width=480,height=720");
 				window.addEventListener("message", (event) => {
 					if (event.origin != "https://bolt-internal" && btoa(event.origin).replaceAll('\x3d', '') != s.origin) {
@@ -139,15 +145,7 @@
 								xml.onreadystatechange = () => {
 									if (xml.readyState == 4 && xml.status == 200) {
 										parseCredentials(xml.response);
-										switch (credentials.login_provider) {
-											case "runescape":
-												w.close();
-												handleGameLogin(s, exchange_url, client_id);
-												break;
-											default:
-												handleStandardLogin(s, w, exchange_url, client_id, state);
-												break;
-										}
+										handleLogin(s, w, exchange_url, client_id, state);
 									} else if (xml.status >= 400) {
 										w.close();
 										err(`Error: from ${exchange_url}: ${xml.status}: ${xml.response}`);
@@ -248,16 +246,34 @@
 							break;
 					}
 				});
-				makeLoginUrl({
-					origin: atob(s.origin),
-					redirect: atob(s.redirect),
-					authMethod: "",
-					loginType: "",
-					clientid: client_id,
-					flow: "launcher",
-					pkceState: state,
-					pkceCodeVerifier: verifier,
-				}).then((e) => { w.location.replace(e); });
+
+				if (credentials) {
+					handleLogin(s, w, exchange_url, client_id, state);
+				} else {
+					makeLoginUrl({
+						origin: atob(s.origin),
+						redirect: atob(s.redirect),
+						authMethod: "",
+						loginType: "",
+						clientid: client_id,
+						flow: "launcher",
+						pkceState: state,
+						pkceCodeVerifier: verifier,
+					}).then((e) => { w.location.replace(e); });
+				}
+			}
+
+			// called on new successful login with credentials, delegates to a specific handler based on login_provider value
+			function handleLogin(s, w, exchange_url, client_id, state) {
+				switch (credentials.login_provider) {
+					case atob(s.provider):
+						w.close();
+						handleGameLogin(s, exchange_url, client_id);
+						break;
+					default:
+						handleStandardLogin(s, w, exchange_url, client_id, state);
+						break;
+				}
 			}
 
 			// called when login was successful, but with absent or unrecognised login_provider
