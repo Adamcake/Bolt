@@ -5,6 +5,8 @@
 		<meta charset="utf-8" />
 		<title>Bolt Launcher</title>
 		<script>
+			var root = null;
+			var messages = document.createElement("ul");
 			var credentials = null;
 			var pendingGameAuth = null;
 
@@ -110,9 +112,12 @@
 
 			// body's onload function
 			function start(s) {
+				root = document.body;
+				root.appendChild(footer(false));
 				const state = make_random_state();
 				const verifier = make_random_verifier();
 				const client_id = atob(s.clientid);
+				const exchange_url = atob(s.origin).concat("/oauth2/token");
 				var w = window.open("about:blank", "", "width=480,height=720");
 				window.addEventListener("message", (event) => {
 					if (event.origin != "https://bolt-internal" && btoa(event.origin).replaceAll('\x3d', '') != s.origin) {
@@ -122,10 +127,9 @@
 					switch (event.data.type) {
 						case "authCode":
 							if (event.data.state == state) {
-								const exchange_url = atob(s.origin).concat("/oauth2/token");
 								const post_data = new URLSearchParams({
 									grant_type: "authorization_code",
-									client_id: atob(s.clientid),
+									client_id: client_id,
 									code: event.data.code,
 									code_verifier: verifier,
 									redirect_uri: atob(s.redirect)
@@ -187,22 +191,39 @@
 										xml2.onreadystatechange = () => {
 											if (xml2.readyState == 4 && xml2.status == 200) {
 												pendingGameAuth.account_info_promise.then((account_info) => {
-													var select_str = "";
-													JSON.parse(xml2.response).forEach((acc) => {
-														if (acc.displayName) {
-															select_str += `<option value="${acc.accountId}" name="${escape(acc.displayName)}">${escape(acc.displayName)}</option>`;
-														} else {
-															select_str += `<option value="${acc.accountId}">(no name set)</option>`;
-														}
-													});
-													document.getElementById("root").innerHTML = `
-														<p>Currently logged in as <b>${account_info.displayName}</b>#${account_info.suffix}</p>
-														<p><label for="accounts">Account:</label> <select name="accounts" id="accounts">${select_str}</select></p>
-														<button onclick='const e = document.getElementById("accounts"); const acc_id = e.value;
-														const acc_name = e.options[e.selectedIndex].getAttribute("name");
-														launchRS3Flatpak(null, null, unescape("${escape(session_id)}"), acc_id, acc_name)'>Launch RS3 Flatpak</button>
-													`;
 													pendingGameAuth = null;
+													clearRoot();
+													var select = document.createElement("select");
+													JSON.parse(xml2.response).forEach((acc) => {
+														var opt = document.createElement("option");
+														opt.value = acc.accountId;
+														if (acc.displayName) {
+															opt.name = acc.displayName;
+															opt.innerText = acc.displayName;
+														} else {
+															opt.innerText = `#${acc.accountId}`;
+														}
+														select.appendChild(opt);
+													});
+													var logged_in = document.createElement("p");
+													logged_in.innerHTML = `Currently logged in as <b>${account_info.displayName}</b>#${account_info.suffix}`;
+													root.appendChild(logged_in);
+													var accounts = document.createElement("p");
+													var accounts_label = document.createElement("label");
+													accounts_label.for = select;
+													accounts_label.innerText = "Account: ";
+													accounts.appendChild(accounts_label);
+													accounts.appendChild(select);
+													root.appendChild(accounts);
+													var rs3_linux = document.createElement("button");
+													rs3_linux.onclick = () => {
+														const acc_id = select.value;
+														const acc_name = select.options[select.selectedIndex].getAttribute("name");
+														launchRS3Linux(null, null, session_id, acc_id, acc_name);
+													};
+													rs3_linux.innerText = "Launch RS3";
+													root.appendChild(rs3_linux);
+													root.appendChild(footer(true));
 												});
 											} else if (xml2.status >= 400) {
 												err(`Error: from ${accounts_url}: ${xml2.status}: ${xml2.response}`);
@@ -282,16 +303,23 @@
 				xml.onreadystatechange = () => {
 					if (xml.readyState == 4 && xml.status == 200) {
 						const name_info = JSON.parse(xml.response);
-						const display_name = name_info.displayNameSet ? name_info.displayName : "";
-						const display_name_html = name_info.displayNameSet ? "<b>".concat(name_info.displayName).concat("</b>") : "<i>(no name set)</i>";
-						document.getElementById("root").innerHTML = `
-							<p>Currently logged in with a game account</p>
-							<p>display name: ${display_name_html}</p>
-							<button onclick='getShieldTokens(atob("${s.shield_url}"), unescape("${escape(display_name)}"), unescape("${escape(refresh_url)}"),
-							unescape("${escape(client_id)}")).then((e) => { launchRS3Flatpak(e.access_token, e.refresh_token, null, null,
-							"${name_info.displayNameSet ? name_info.displayName : null}");
-							})'>Launch Flatpak RS3</button>
-						`;
+						clearRoot();
+						var logged_in = document.createElement("p");
+						if (name_info.displayNameSet) {
+							logged_in.innerHTML = `Currently logged in as <b>${name_info.displayName}</b>`;
+						} else {
+							logged_in.innerText = "Currently logged in (no display name set)";
+						}
+						root.appendChild(logged_in);
+						var rs3_linux = document.createElement("button");
+						rs3_linux.onclick = () => {
+							getShieldTokens(atob(s.shield_url), name_info.displayNameSet ? name_info.displayName : "", refresh_url, client_id)
+								.then((e) => { launchRS3Linux(e.access_token, e.refresh_token, null, null, name_info.displayNameSet ? name_info.displayName : null);
+							});
+						};
+						rs3_linux.innerText = "Launch RS3";
+						root.appendChild(rs3_linux);
+						root.appendChild(footer(true));
 					}
 				};
 				xml.open('GET', auth_url, true);
@@ -324,18 +352,44 @@
 			}
 
 			// launch RS3 via flatpak using the given env variables
-			function launchRS3Flatpak(jx_access_token, jx_refresh_token, jx_session_id, jx_character_id, jx_display_name) {
-				console.log(`launchRS3Flatpak(${jx_access_token}, ${jx_refresh_token}, ${jx_session_id}, ${jx_character_id}, ${jx_display_name})`);
+			function launchRS3Linux(jx_access_token, jx_refresh_token, jx_session_id, jx_character_id, jx_display_name) {
+				console.log(`launchRS3Linux(${jx_access_token}, ${jx_refresh_token}, ${jx_session_id}, ${jx_character_id}, ${jx_display_name})`);
 			}
 
-			// sets body text to an error message, then throws that error message
+			// clears all content from root
+			function clearRoot() {
+				while (root.lastElementChild) {
+					root.removeChild(root.lastElementChild);
+				}
+			}
+
+			// generates footer element for pages
+			function footer(separator) {
+				if (separator) {
+					root.appendChild(document.createElement("br"));
+					var hr = document.createElement("hr");
+					hr.style = "width: 85%;";
+					root.appendChild(hr);
+				}
+				var d = document.createElement("div");
+				var p = document.createElement("p");
+				p.innerText = "Output:";
+				d.appendChild(p);
+				d.appendChild(messages);
+				return d;
+			}
+
+			// adds an error message to the message list, then throws that error message
 			function err(str) {
-				document.getElementById("root").innerHTML = `<p>${str}</p>`;
+				var p = document.createElement("p");
+				p.innerText = str;
+				p.style = "background-color: #FF30303A;";
+				var li = document.createElement("li");
+				li.appendChild(p);
+				messages.insertBefore(li, messages.firstChild);
 				throw new Error(str);
 			}
 		</script>
 	</head>
-	<body style="overflow:hidden" onload="start(window.s())">
-		<div id="root" />
-	</body>
+	<body style="overflow:hidden" onload="start(s())" />
 </html>
