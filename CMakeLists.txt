@@ -23,17 +23,13 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CEF_ROOT}/cmake")
 find_package(CEF REQUIRED)
 add_subdirectory(${CEF_LIBCEF_DLL_WRAPPER_PATH} libcef_dll_wrapper)
 
-# fmt submodule
-add_subdirectory(modules/fmt)
-
 # This line needs to be updated manually with any new/deleted object files; cmake discourages GLOBbing source files
-add_executable(bolt src/main.cxx src/browser.cxx src/browser/app.cxx src/browser/client.cxx)
+add_executable(bolt modules/fmt/src/format.cc src/main.cxx src/browser.cxx src/browser/app.cxx src/browser/client.cxx)
 
 # Various build properties
-target_include_directories(bolt PUBLIC ${CEF_ROOT})
+target_include_directories(bolt PUBLIC ${CEF_ROOT} modules/fmt/include)
 set_target_properties(bolt PROPERTIES CXX_STANDARD 20 CXX_EXTENSIONS OFF)
 target_link_libraries(bolt PUBLIC libcef_dll_wrapper)
-target_link_libraries(bolt PUBLIC fmt)
 if(UNIX AND NOT APPLE)
     set_target_properties(bolt PROPERTIES INSTALL_RPATH "$ORIGIN")
     target_link_libraries(bolt PUBLIC "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/libcef.so")
