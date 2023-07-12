@@ -14,6 +14,7 @@
 
 			// checks if `credentials` are about to expire or have already expired,
 			// and renews them using the oauth endpoint if so
+			// returns null on success or an http status code on failure
 			function checkRenewCreds(url, client_id) {
 				return new Promise((resolve, reject) => {
 					// only renew if less than 30 seconds left
@@ -25,12 +26,17 @@
 						});
 						var xml = new XMLHttpRequest();
 						xml.onreadystatechange = () => {
-							if (xml.readyState == 4 && xml.status == 200) {
-								parseCredentials(xml.response);
-								resolve(null);
-							} else if (xml.status >= 400) {
-								reject(xml.status);
+							if (xml.readyState == 4) {
+								if (xml.status == 200) {
+									parseCredentials(xml.response);
+									resolve(null);
+								} else {
+									resolve(xml.status);
+								}
 							}
+						};
+						xml.onerror = () => {
+							resolve(0);
 						};
 						xml.open('POST', url, true);
 						xml.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
@@ -47,11 +53,11 @@
 				const oauth_creds = JSON.parse(str);
 				const sections = oauth_creds.id_token.split('.');
 				if (sections.length !== 3) {
-					err(`Malformed id_token: ${sections.length} sections, expected 3`);
+					err(`Malformed id_token: ${sections.length} sections, expected 3`, true);
 				}
 				const header = JSON.parse(atob(sections[0]));
 				if (header.typ !== "JWT") {
-					err(`Bad id_token header: typ ${header.typ}, expected JWT`);
+					err(`Bad id_token header: typ ${header.typ}, expected JWT`, true);
 				}
 				const payload = JSON.parse(atob(sections[1]));
 				credentials = {
@@ -132,7 +138,7 @@
 				var w = window.open("about:blank", "", "width=480,height=720");
 				window.addEventListener("message", (event) => {
 					if (event.origin != "https://bolt-internal" && btoa(event.origin).replaceAll('\x3d', '') != s.origin) {
-						console.log(`discarding message from origin ${event.origin}`);
+						msg(`discarding window message from origin ${event.origin}`);
 						return;
 					}
 					switch (event.data.type) {
@@ -146,15 +152,20 @@
 									redirect_uri: atob(s.redirect)
 								});
 								var xml = new XMLHttpRequest();
-
 								xml.onreadystatechange = () => {
-									if (xml.readyState == 4 && xml.status == 200) {
-										parseCredentials(xml.response);
-										handleLogin(s, w, exchange_url, client_id, state);
-									} else if (xml.status >= 400) {
-										w.close();
-										err(`Error: from ${exchange_url}: ${xml.status}: ${xml.response}`);
+									if (xml.readyState == 4) {
+										if (xml.status == 200) {
+											parseCredentials(xml.response);
+											handleLogin(s, w, exchange_url, client_id, state);
+										} else {
+											w.close();
+											err(`Error: from ${exchange_url}: ${xml.status}: ${xml.response}`, false);
+										}
 									}
+								};
+								xml.onerror = () => {
+									w.close();
+									err(`Error: from ${exchange_url}: non-http error`, false);
 								};
 								xml.open('POST', exchange_url, true);
 								xml.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
@@ -164,78 +175,95 @@
 							}
 							break;
 						case "initAuth":
-							console.log(`message: init auth: ${event.data.auth_method}`);
+							msg(`message: init auth: ${event.data.auth_method}`);
 							break;
 						case "externalUrl":
-							console.log(`message: external url: ${event.data.url}`);
+							msg(`message: external url: ${event.data.url}`);
 							break;
 						case "gameSessionServerAuth":
 							if (pendingGameAuth && pendingGameAuth.state == event.data.state) {
 								w.close();
 								const sections = event.data.id_token.split('.');
 								if (sections.length !== 3) {
-									err(`Malformed id_token: ${sections.length} sections, expected 3`);
+									err(`Malformed id_token: ${sections.length} sections, expected 3`, false);
+									break;
 								}
 								const header = JSON.parse(atob(sections[0]));
 								if (header.typ !== "JWT") {
-									err(`Bad id_token header: typ ${header.typ}, expected JWT`);
+									err(`Bad id_token header: typ ${header.typ}, expected JWT`, false);
+									break;
 								}
 								const payload = JSON.parse(atob(sections[1]));
 								if (atob(payload.nonce) !== pendingGameAuth.nonce) {
-									err("Incorrect nonce in id_token");
+									err("Incorrect nonce in id_token", false);
+									break;
 								}
 								const sessions_url = atob(s.auth_api).concat("/sessions");
 								var xml = new XMLHttpRequest();
 								xml.onreadystatechange = () => {
-									if (xml.readyState == 4 && xml.status == 200) {
-										const accounts_url = atob(s.auth_api).concat("/accounts");
-										const session_id = JSON.parse(xml.response).sessionId;
-										var xml2 = new XMLHttpRequest();
-										xml2.onreadystatechange = () => {
-											if (xml2.readyState == 4 && xml2.status == 200) {
-												pendingGameAuth.account_info_promise.then((account_info) => {
-													pendingGameAuth = null;
-													clearRoot();
-													var select = document.createElement("select");
-													JSON.parse(xml2.response).forEach((acc) => {
-														var opt = document.createElement("option");
-														opt.value = acc.accountId;
-														if (acc.displayName) {
-															opt.name = acc.displayName;
-															opt.innerText = acc.displayName;
-														} else {
-															opt.innerText = `#${acc.accountId}`;
-														}
-														select.appendChild(opt);
-													});
-													var logged_in = document.createElement("p");
-													logged_in.innerHTML = `Currently logged in as <b>${account_info.displayName}</b>#${account_info.suffix}`;
-													root.appendChild(logged_in);
-													var accounts = document.createElement("p");
-													var accounts_label = document.createElement("label");
-													accounts_label.for = select;
-													accounts_label.innerText = "Account: ";
-													accounts.appendChild(accounts_label);
-													accounts.appendChild(select);
-													root.appendChild(accounts);
-													root.appendChild(generateLaunchButtons((f) => {
-														const acc_id = select.value;
-														const acc_name = select.options[select.selectedIndex].getAttribute("name");
-														f(s, null, null, session_id, acc_id, acc_name);
-													}));
-													root.appendChild(footer(true));
-												});
-											} else if (xml2.status >= 400) {
-												err(`Error: from ${accounts_url}: ${xml2.status}: ${xml2.response}`);
-											}
-										};
-										xml2.open('GET', accounts_url, true);
-										xml2.setRequestHeader("Accept", "application/json");
-										xml2.setRequestHeader("Authorization", "Bearer ".concat(session_id));
-										xml2.send();
-									} else if (xml.status >= 400) {
-										err(`Error: from ${sessions_url}: ${xml.status}: ${xml.response}`);
+									if (xml.readyState == 4) {
+										if (xml.status == 200) {
+											const accounts_url = atob(s.auth_api).concat("/accounts");
+											const session_id = JSON.parse(xml.response).sessionId;
+											var xml2 = new XMLHttpRequest();
+											xml2.onreadystatechange = () => {
+												if (xml2.readyState == 4) {
+													if (xml2.status == 200) {
+														pendingGameAuth.account_info_promise.then((account_info) => {
+															pendingGameAuth = null;
+															if (typeof account_info !== "number") {
+																clearRoot();
+																var select = document.createElement("select");
+																JSON.parse(xml2.response).forEach((acc) => {
+																	var opt = document.createElement("option");
+																	opt.value = acc.accountId;
+																	if (acc.displayName) {
+																		opt.name = acc.displayName;
+																		opt.innerText = acc.displayName;
+																	} else {
+																		opt.innerText = `#${acc.accountId}`;
+																	}
+																	select.appendChild(opt);
+																});
+																var logged_in = document.createElement("p");
+																logged_in.innerHTML = `Currently logged in as <b>${account_info.displayName}</b>#${account_info.suffix}`;
+																root.appendChild(logged_in);
+																var accounts = document.createElement("p");
+																var accounts_label = document.createElement("label");
+																accounts_label.for = select;
+																accounts_label.innerText = "Account: ";
+																accounts.appendChild(accounts_label);
+																accounts.appendChild(select);
+																root.appendChild(accounts);
+																root.appendChild(generateLaunchButtons((f) => {
+																	const acc_id = select.value;
+																	const acc_name = select.options[select.selectedIndex].getAttribute("name");
+																	f(s, null, null, session_id, acc_id, acc_name);
+																}));
+																root.appendChild(footer(true));
+															} else {
+																err(`Error getting account info: ${account_info}`, false);
+															}
+														});
+													} else {
+														err(`Error: from ${accounts_url}: ${xml2.status}: ${xml2.response}`, false);
+													}
+												}
+											};
+											xml2.onerror = () => {
+												err(`Error: from ${accounts_url}: non-http error`, false);
+											};
+											xml2.open('GET', accounts_url, true);
+											xml2.setRequestHeader("Accept", "application/json");
+											xml2.setRequestHeader("Authorization", "Bearer ".concat(session_id));
+											xml2.send();
+										} else {
+											err(`Error: from ${sessions_url}: ${xml.status}: ${xml.response}`, false);
+										}
 									}
+								};
+								xml.onerror = () => {
+									err(`Error: from ${sessions_url}: ${xml.status}: ${xml.response}`, false);
 								};
 								xml.open('POST', sessions_url, true);
 								xml.setRequestHeader("Content-Type", "application/json");
@@ -244,7 +272,7 @@
 							}
 							break;
 						default:
-							console.log("unknown message type: ".concat(event.data.type));
+							msg("Unknown message type: ".concat(event.data.type));
 							break;
 					}
 				});
@@ -291,11 +319,16 @@
 						const url = atob(s.api).concat("/users/").concat(credentials.sub).concat("/displayName");
 						var xml = new XMLHttpRequest();
 						xml.onreadystatechange = () => {
-							if (xml.readyState == 4 && xml.status == 200) {
-								resolve(JSON.parse(xml.response));
-							} else if(xml.status >= 400) {
-								reject(xml.status);
+							if (xml.readyState == 4) {
+								if (xml.status == 200) {
+									resolve(JSON.parse(xml.response));
+								} else {
+									resolve(xml.status);
+								}
 							}
+						};
+						xml.onerror = () => {
+							resolve(0);
 						};
 						xml.open('GET', url, true);
 						xml.setRequestHeader("Authorization", "Bearer ".concat(credentials.access_token));
@@ -319,23 +352,34 @@
 				const auth_url = atob(s.profile_api).concat("/profile");
 				var xml = new XMLHttpRequest();
 				xml.onreadystatechange = () => {
-					if (xml.readyState == 4 && xml.status == 200) {
-						const name_info = JSON.parse(xml.response);
-						clearRoot();
-						var logged_in = document.createElement("p");
-						if (name_info.displayNameSet) {
-							logged_in.innerHTML = `Currently logged in as <b>${name_info.displayName}</b>`;
+					if (xml.readyState == 4) {
+						if (xml.status == 200) {
+							const name_info = JSON.parse(xml.response);
+							clearRoot();
+							var logged_in = document.createElement("p");
+							if (name_info.displayNameSet) {
+								logged_in.innerHTML = `Currently logged in as <b>${name_info.displayName}</b>`;
+							} else {
+								logged_in.innerText = "Currently logged in (no display name set)";
+							}
+							root.appendChild(logged_in);
+							root.appendChild(generateLaunchButtons((f) => {
+								getShieldTokens(atob(s.shield_url), name_info.displayNameSet ? name_info.displayName : "", refresh_url, client_id).then((e) => {
+									if (typeof e !== "number") {
+										f(s, e.access_token, e.refresh_token, null, null, name_info.displayNameSet ? name_info.displayName : null);
+									} else {
+										err(`Error getting shield tokens: ${atob(s.shield_url)}: ${e}`, false);
+									}
+								});
+							}));
+							root.appendChild(footer(true));
 						} else {
-							logged_in.innerText = "Currently logged in (no display name set)";
+							err(`Error: from ${auth_url}: ${xml.status}: ${xml.response}`, false);
 						}
-						root.appendChild(logged_in);
-						root.appendChild(generateLaunchButtons((f) => {
-							getShieldTokens(atob(s.shield_url), name_info.displayNameSet ? name_info.displayName : "", refresh_url, client_id)
-								.then((e) => { f(s, e.access_token, e.refresh_token, null, null, name_info.displayNameSet ? name_info.displayName : null);
-							});
-						}));
-						root.appendChild(footer(true));
 					}
+				};
+				xml.onerror = () => {
+					err(`Error: ${auth_url}: non-http error`, false);
 				};
 				xml.open('GET', auth_url, true);
 				xml.setRequestHeader("Authorization", "Bearer ".concat(credentials.id_token));
@@ -343,25 +387,36 @@
 			}
 
 			// use oauth creds to get a response from the "shield" endpoint
+			// returns a JSON object on success or a HTTP status code on failure
 			function getShieldTokens(url, display_name, refresh_url, client_id) {
 				return new Promise((resolve, reject) => {
-					checkRenewCreds(refresh_url, client_id).then(() => {
-						var xml = new XMLHttpRequest();
-						xml.open('POST', url, true);
-						xml.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
-						xml.setRequestHeader("Authorization", "Basic Y29tX2phZ2V4X2F1dGhfZGVza3RvcF9yczpwdWJsaWM=");
-						xml.onreadystatechange = () => {
-							if (xml.readyState == 4 && xml.status == 200) {
-								resolve(JSON.parse(xml.response));
-							} else if (xml.status >= 400) {
-								reject(xml.status);
-							}
-						};
-						xml.send(new URLSearchParams({
-							token: credentials.access_token,
-							grant_type: "token_exchange",
-							scope: "gamesso.token.create"
-						}));
+					checkRenewCreds(refresh_url, client_id).then((status) => {
+						if (status === null) {
+							var xml = new XMLHttpRequest();
+							xml.open('POST', url, true);
+							xml.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+							xml.setRequestHeader("Authorization", "Basic Y29tX2phZ2V4X2F1dGhfZGVza3RvcF9yczpwdWJsaWM=");
+							xml.onreadystatechange = () => {
+								if (xml.readyState == 4) {
+									if (xml.status == 200) {
+										resolve(JSON.parse(xml.response));
+									} else {
+										resolve(xml.status);
+									}
+								}
+							};
+							xml.onerror = () => {
+								resolve(xml.status);
+							};
+							xml.send(new URLSearchParams({
+								token: credentials.access_token,
+								grant_type: "token_exchange",
+								scope: "gamesso.token.create"
+							}));
+						} else {
+							err(`Error renewing credentials: ${refresh_url}: ${status}`, false);
+							resolve(status);
+						}
 					});
 				});
 			}
@@ -387,34 +442,45 @@
 				const url = content_url.concat("dists/trusty/non-free/binary-amd64/Packages");
 				xml.open('GET', url, true);
 				xml.onreadystatechange = () => {
-					if (xml.readyState == 4 && xml.status == 200) {
-						const lines = Object.fromEntries(xml.response.split('\n').map((x) => { return x.split(": "); }));
-						if (!lines.Filename || !lines.Size) {
-							err(`could not parse package data from URL: ${url}`);
-						}
-						if (lines.SHA256 !== rs3LinuxInstalledHash) {
-							var m = msg("Downloading game client... 0%");
-							var exe_xml = new XMLHttpRequest();
-							exe_xml.open('GET', content_url.concat(lines.Filename), true);
-							exe_xml.onprogress = (e) => {
-								if (e.loaded) {
-									m.innerText = `Downloading game client... ${(Math.round(1000.0 * e.loaded / lines.Size) / 10.0).toFixed(1)}%`;
-								}
-							};
-							exe_xml.onreadystatechange = () => {
-								if (exe_xml.readyState == 4 && exe_xml.status == 200) {
-									// what now?
-								} else if (exe_xml.status >= 400) {
-									err(`Error downloading game client from ${url}: ${exe_xml.status}: ${exe_xml.response}`);
-								}
-							};
-							exe_xml.send();
+					if (xml.readyState == 4) {
+						if (xml.status == 200) {
+							const lines = Object.fromEntries(xml.response.split('\n').map((x) => { return x.split(": "); }));
+							if (!lines.Filename || !lines.Size) {
+								err(`Could not parse package data from URL: ${url}`, false);
+								return;
+							}
+							if (lines.SHA256 !== rs3LinuxInstalledHash) {
+								var m = msg("Downloading game client... 0%");
+								var exe_xml = new XMLHttpRequest();
+								exe_xml.open('GET', content_url.concat(lines.Filename), true);
+								exe_xml.onprogress = (e) => {
+									if (e.loaded) {
+										m.innerText = `Downloading game client... ${(Math.round(1000.0 * e.loaded / lines.Size) / 10.0).toFixed(1)}%`;
+									}
+								};
+								exe_xml.onreadystatechange = () => {
+									if (exe_xml.readyState == 4) {
+										if (exe_xml.status == 200) {
+											// what now?
+										} else {
+											err(`Error downloading game client: from ${url}: ${exe_xml.status}: ${exe_xml.response}`, false);
+										}
+									}
+								};
+								exe_xml.onerror = () => {
+									err(`Error downloading game client: from ${url}: non-http error`, false);
+								};
+								exe_xml.send();
+							} else {
+								msg("Latest client is already installed");
+							}
 						} else {
-							msg("Latest client is already installed");
+							err(`Error: from ${url}: ${xml.status}: ${xml.response}`, false);
 						}
-					} else if (xml.status >= 400) {
-						err(`Error accessing ${url}: ${xml.status}: ${xml.response}`);
 					}
+				};
+				xml.onerror = () => {
+					err(`Error: from ${url}: non-http error`, false);
 				};
 				xml.send();
 			}
@@ -444,6 +510,7 @@
 
 			// adds a message to the message list, returning the inner <p> element
 			function msg(str) {
+				console.log(str);
 				var p = document.createElement("p");
 				p.innerText = str;
 				var li = document.createElement("li");
@@ -452,15 +519,21 @@
 				return p;
 			}
 
-			// adds an error message to the message list, then throws that error message
-			function err(str) {
+			// adds an error message to the message list
+			// if do_throw is true, throws the error message
+			function err(str, do_throw) {
+				if (!do_throw) {
+					console.error(str);
+				}
 				var p = document.createElement("p");
 				p.innerText = str;
 				p.style = "background-color: #FF30303A;";
 				var li = document.createElement("li");
 				li.appendChild(p);
 				messages.insertBefore(li, messages.firstChild);
-				throw new Error(str);
+				if (do_throw) {
+					throw new Error(str);
+				}
 			}
 		</script>
 	</head>
