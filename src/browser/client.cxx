@@ -135,12 +135,13 @@ void Browser::Client::OnContextInitialized() {
 		.controls_overlay = false,
 	};
 	std::string url = this->internal_url + this->launcher_uri;
-	Browser::Window* w = new Browser::Window(this, details, url, this->show_devtools);
+	CefRefPtr<Browser::Window> w = new Browser::Window(this, details, url, this->show_devtools);
+	this->windows_lock.lock();
+	this->windows.push_back(w);
+	this->windows_lock.unlock();
 	if (this->show_devtools) {
 		w->ShowDevTools();
 	}
-	std::lock_guard<std::mutex> _(this->windows_lock);
-	this->windows.push_back(w);
 }
 
 bool Browser::Client::OnBeforePopup(
@@ -187,7 +188,7 @@ void Browser::Client::OnBeforeClose(CefRefPtr<CefBrowser> browser) {
 }
 
 bool Browser::Client::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefProcessId, CefRefPtr<CefProcessMessage> message) {
-	//std::lock_guard<std::mutex> _(this->apps_lock);
+	std::lock_guard<std::mutex> _(this->windows_lock);
 	CefString name = message->GetName();
 
 	if (name == "__bolt_app_settings") {
@@ -220,6 +221,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Client::GetResourceRequestHandler(
 	const CefString& request_initiator,
 	bool& disable_default_handling
 ) {
+	std::lock_guard<std::mutex> _(this->windows_lock);
 	const std::string request_url = request->GetURL().ToString();
 
 	// custom schema thing
