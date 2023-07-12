@@ -235,10 +235,10 @@
 																accounts.appendChild(accounts_label);
 																accounts.appendChild(select);
 																root.appendChild(accounts);
-																root.appendChild(generateLaunchButtons((f) => {
+																root.appendChild(generateLaunchButtons((f, element) => {
 																	const acc_id = select.value;
 																	const acc_name = select.options[select.selectedIndex].getAttribute("name");
-																	f(s, null, null, session_id, acc_id, acc_name);
+																	f(s, element, null, null, session_id, acc_id, acc_name);
 																}));
 																root.appendChild(footer(true));
 															} else {
@@ -363,12 +363,13 @@
 								logged_in.innerText = "Currently logged in (no display name set)";
 							}
 							root.appendChild(logged_in);
-							root.appendChild(generateLaunchButtons((f) => {
+							root.appendChild(generateLaunchButtons((f, element) => {
 								getShieldTokens(atob(s.shield_url), name_info.displayNameSet ? name_info.displayName : "", refresh_url, client_id).then((e) => {
 									if (typeof e !== "number") {
-										f(s, e.access_token, e.refresh_token, null, null, name_info.displayNameSet ? name_info.displayName : null);
+										f(s, element, e.access_token, e.refresh_token, null, null, name_info.displayNameSet ? name_info.displayName : null);
 									} else {
 										err(`Error getting shield tokens: ${atob(s.shield_url)}: ${e}`, false);
+										element.disabled = false;
 									}
 								});
 							}));
@@ -422,12 +423,16 @@
 			}
 
 			// generates an HTML element containing launch-game buttons
+			// the parameter is a function callback, which must take exactly two arguments:
+			// 1. a function which your function should invoke with JX env variables, e.g. launchRS3Linux
+			// 2. a HTML Button element, which should be passed to parameter 1 when invoking it, or, if not
+			//    invoking the callback for some reason, then set disabled=false on parameter 2 before returning
 			function generateLaunchButtons(f) {
 				var div = document.createElement("div");
 
 				if (platform === "linux") {
 					var rs3_linux = document.createElement("button");
-					rs3_linux.onclick = () => { f(launchRS3Linux); };
+					rs3_linux.onclick = () => { rs3_linux.disabled = true; f(launchRS3Linux, rs3_linux); };
 					rs3_linux.innerText = "Launch RS3";
 					div.appendChild(rs3_linux);
 				}
@@ -436,7 +441,7 @@
 			}
 
 			// asynchronously download and launch RS3's official .deb client using the given env variables
-			function launchRS3Linux(s, jx_access_token, jx_refresh_token, jx_session_id, jx_character_id, jx_display_name) {
+			function launchRS3Linux(s, element, jx_access_token, jx_refresh_token, jx_session_id, jx_character_id, jx_display_name) {
 				var xml = new XMLHttpRequest();
 				const content_url = atob(s.content_url);
 				const url = content_url.concat("dists/trusty/non-free/binary-amd64/Packages");
@@ -447,6 +452,7 @@
 							const lines = Object.fromEntries(xml.response.split('\n').map((x) => { return x.split(": "); }));
 							if (!lines.Filename || !lines.Size) {
 								err(`Could not parse package data from URL: ${url}`, false);
+								element.disabled = false;
 								return;
 							}
 							if (lines.SHA256 !== rs3LinuxInstalledHash) {
@@ -462,25 +468,31 @@
 									if (exe_xml.readyState == 4) {
 										if (exe_xml.status == 200) {
 											// what now?
+											element.disabled = false;
 										} else {
 											err(`Error downloading game client: from ${url}: ${exe_xml.status}: ${exe_xml.response}`, false);
+											element.disabled = false;
 										}
 									}
 								};
 								exe_xml.onerror = () => {
 									err(`Error downloading game client: from ${url}: non-http error`, false);
+									element.disabled = false;
 								};
 								exe_xml.send();
 							} else {
 								msg("Latest client is already installed");
+								//element.disabled = false;
 							}
 						} else {
 							err(`Error: from ${url}: ${xml.status}: ${xml.response}`, false);
+							element.disabled = false;
 						}
 					}
 				};
 				xml.onerror = () => {
 					err(`Error: from ${url}: non-http error`, false);
+					element.disabled = false;
 				};
 				xml.send();
 			}
