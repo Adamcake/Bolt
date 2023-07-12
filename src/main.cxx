@@ -46,6 +46,12 @@ int BoltRunAnyProcess(CefMainArgs main_args) {
 }
 
 int BoltRunBrowserProcess(CefMainArgs main_args, CefRefPtr<Browser::App> cef_app) {
+#if defined(CEF_X11)
+	// X11 error handlers
+	XSetErrorHandler(XErrorHandlerImpl);
+	XSetIOErrorHandler(XIOErrorHandlerImpl);
+#endif
+
 	// CefClient struct - central object for main thread, and implements lots of handlers for browser process
 	Browser::Client client_(cef_app);
 	CefRefPtr<Browser::Client> client = &client_;
@@ -71,12 +77,6 @@ int BoltRunBrowserProcess(CefMainArgs main_args, CefRefPtr<Browser::App> cef_app
 
 #if defined(__linux__)
 int main(int argc, char* argv[]) {
-#if defined(CEF_X11)
-	// X11 error handlers
-	XSetErrorHandler(XErrorHandlerImpl);
-	XSetIOErrorHandler(XIOErrorHandlerImpl);
-#endif
-
 	// Provide CEF with command-line arguments
 	// Add a flag to disable web security, because a certain company's API endpoints don't have correct
 	// access control settings; remove this setting if they ever get their stuff together
