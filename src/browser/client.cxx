@@ -134,7 +134,8 @@ void Browser::Client::OnContextInitialized() {
 		.frame = true,
 		.controls_overlay = false,
 	};
-	Browser::Window* w = new Browser::Window(this, details, this->internal_url, this->show_devtools);
+	std::string url = this->internal_url + this->launcher_uri;
+	Browser::Window* w = new Browser::Window(this, details, url, this->show_devtools);
 	if (this->show_devtools) {
 		w->ShowDevTools();
 	}
