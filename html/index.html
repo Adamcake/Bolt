@@ -5,6 +5,7 @@
 		<meta charset="utf-8" />
 		<title>Bolt Launcher</title>
 		<script>
+			var platform = null;
 			var root = null;
 			var messages = document.createElement("ul");
 			var credentials = null;
@@ -121,6 +122,7 @@
 				const exchange_url = atob(s.origin).concat("/oauth2/token");
 
 				const query = new URLSearchParams(window.location.search);
+				platform = query.get("platform");
 				rs3LinuxInstalledHash = query.get("rs3_linux_installed_hash");
 				const c = query.get("credentials");
 				if (c) {
@@ -216,14 +218,11 @@
 													accounts.appendChild(accounts_label);
 													accounts.appendChild(select);
 													root.appendChild(accounts);
-													var rs3_linux = document.createElement("button");
-													rs3_linux.onclick = () => {
+													root.appendChild(generateLaunchButtons((f) => {
 														const acc_id = select.value;
 														const acc_name = select.options[select.selectedIndex].getAttribute("name");
-														launchRS3Linux(s, null, null, session_id, acc_id, acc_name);
-													};
-													rs3_linux.innerText = "Launch RS3";
-													root.appendChild(rs3_linux);
+														f(s, null, null, session_id, acc_id, acc_name);
+													}));
 													root.appendChild(footer(true));
 												});
 											} else if (xml2.status >= 400) {
@@ -330,14 +329,11 @@
 							logged_in.innerText = "Currently logged in (no display name set)";
 						}
 						root.appendChild(logged_in);
-						var rs3_linux = document.createElement("button");
-						rs3_linux.onclick = () => {
+						root.appendChild(generateLaunchButtons((f) => {
 							getShieldTokens(atob(s.shield_url), name_info.displayNameSet ? name_info.displayName : "", refresh_url, client_id)
-								.then((e) => { launchRS3Linux(s, e.access_token, e.refresh_token, null, null, name_info.displayNameSet ? name_info.displayName : null);
+								.then((e) => { f(s, e.access_token, e.refresh_token, null, null, name_info.displayNameSet ? name_info.displayName : null);
 							});
-						};
-						rs3_linux.innerText = "Launch RS3";
-						root.appendChild(rs3_linux);
+						}));
 						root.appendChild(footer(true));
 					}
 				};
@@ -368,6 +364,20 @@
 						}));
 					});
 				});
+			}
+
+			// generates an HTML element containing launch-game buttons
+			function generateLaunchButtons(f) {
+				var div = document.createElement("div");
+
+				if (platform === "linux") {
+					var rs3_linux = document.createElement("button");
+					rs3_linux.onclick = () => { f(launchRS3Linux); };
+					rs3_linux.innerText = "Launch RS3";
+					div.appendChild(rs3_linux);
+				}
+
+				return div;
 			}
 
 			// asynchronously download and launch RS3's official .deb client using the given env variables
