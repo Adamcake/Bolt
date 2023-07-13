@@ -108,10 +108,10 @@ Browser::Client::Client(CefRefPtr<Browser::App> app, std::filesystem::path confi
 	CefString mime_type_html = "text/html";
 	CefString mime_type_js = "application/javascript";
 	app->SetBrowserProcessHandler(this);
-	this->internal_pages["index.html"] = allocate_file("html/index.html", mime_type_html);
-	this->internal_pages["oauth.html"] = allocate_file("html/oauth.html", mime_type_html);
-	this->internal_pages["game_auth.html"] = allocate_file("html/game_auth.html", mime_type_html);
-	this->internal_pages["frame.html"] = allocate_file("html/frame.html", mime_type_html);
+	this->internal_pages["/index.html"] = allocate_file("html/index.html", mime_type_html);
+	this->internal_pages["/oauth.html"] = allocate_file("html/oauth.html", mime_type_html);
+	this->internal_pages["/game_auth.html"] = allocate_file("html/game_auth.html", mime_type_html);
+	this->internal_pages["/frame.html"] = allocate_file("html/frame.html", mime_type_html);
 }
 
 CefRefPtr<CefLifeSpanHandler> Browser::Client::GetLifeSpanHandler() {
@@ -135,13 +135,10 @@ void Browser::Client::OnContextInitialized() {
 		.controls_overlay = false,
 	};
 	std::string url = this->internal_url + this->launcher_uri;
-	CefRefPtr<Browser::Window> w = new Browser::Window(this, details, url, this->show_devtools);
 	this->windows_lock.lock();
+	CefRefPtr<Browser::Window> w = new Browser::Window(Browser::Kind::Launcher, this, details, url, this->show_devtools);
 	this->windows.push_back(w);
 	this->windows_lock.unlock();
-	if (this->show_devtools) {
-		w->ShowDevTools();
-	}
 }
 
 bool Browser::Client::OnBeforePopup(
@@ -221,54 +218,108 @@ CefRefPtr<CefResourceRequestHandler> Browser::Client::GetResourceRequestHandler(
 	const CefString& request_initiator,
 	bool& disable_default_handling
 ) {
-	std::lock_guard<std::mutex> _(this->windows_lock);
-	const std::string request_url = request->GetURL().ToString();
+	// One of the dreaded phrases that I don't want to show up in a grep/search
+	constexpr char provider[] = {106, 97, 103, 101, 120, 0};
 
-	// custom schema thing
-	const std::regex regex("^.....:code=([^,]+),state=([^,]+),intent=social_auth$");
-	std::smatch match;
-	if (std::regex_match(request_url, match, regex)) {
-		if (match.size() == 3) {
-			disable_default_handling = true;
-			const char* data = "Moved\n";
-			CefString location = CefString(this->internal_url + "oauth.html?code=" + match[1].str() + "&state=" + match[2].str());
-			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 302, "text/plain", location);
-		}
+	// Find the Window responsible for this request, if any
+	this->windows_lock.lock();
+	auto it = std::find_if(
+		this->windows.begin(),
+		this->windows.end(),
+		[&browser](const CefRefPtr<Browser::Window>& window){ return window->HasBrowser(browser); }
+	);
+	if (it == this->windows.end()) {
+		// Request came from no window?
+		return nullptr;
+	}
+	const CefRefPtr<Browser::Window> window = *it;
+	this->windows_lock.unlock();
+
+	if (window->IsApp()) {
+		// TODO: make Browser::Window a valid request handler for sandboxing purposes
+		return nullptr;
 	}
 
-	// another custom schema type of thing, but this one uses localhost, for whatever reason
-	const std::regex regex2("^http:\\/\\/localhost\\/#(code=.+)$");
-	std::smatch match2;
-	if (std::regex_match(request_url, match2, regex2)) {
-		if (match2.size() == 2) {
-			disable_default_handling = true;
-			const char* data = "Moved\n";
-			CefString location = CefString(this->internal_url + "game_auth.html?" + match2[1].str());
-			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 302, "text/plain", location);
+	if (window->IsLauncher()) {
+		// Parse URL
+		const std::string request_url = request->GetURL().ToString();
+		const std::string::size_type colon = request_url.find_first_of(':');
+		if (colon == std::string::npos) {
+			return nullptr;
 		}
-	}
-
-	// internal pages
-	const char* url_cstr = request_url.c_str();
-	size_t url_len = request_url.find_first_of("?#");
-	if (url_len == std::string::npos) url_len = request_url.size();
-	size_t internal_url_size = this->internal_url.size();
-	if (url_len >= internal_url_size) {
-		if (memcmp(url_cstr, this->internal_url.c_str(), internal_url_size) == 0) {
-			disable_default_handling = true;
-
-			if (url_len == internal_url_size) {
-				const char* data = "Moved\n";
-				return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 302, "text/plain", "/index.html");
+		const std::string_view schema(request_url.begin(), request_url.begin() + colon);
+		if (schema == provider) {
+			// parser for custom schema thing
+			bool has_code = false;
+			std::string_view code;
+			bool has_state = false;
+			std::string_view state;
+			std::string::size_type cursor = colon + 1;
+			while (true) {
+				std::string::size_type next_eq = request_url.find_first_of('=', cursor);
+				std::string::size_type next_comma = request_url.find_first_of(',', cursor);
+				if (next_eq == std::string::npos || next_comma < next_eq) return nullptr;
+				const bool last_pair = next_comma == std::string::npos;
+				std::string_view key(request_url.begin() + cursor, request_url.begin() + next_eq);
+				std::string_view value(request_url.begin() + next_eq + 1, last_pair ? request_url.end() : request_url.begin() + next_comma);
+				if (key == "code") {
+					code = value;
+					has_code = true;
+				}
+				if (key == "state") {
+					state = value;
+					has_state = true;
+				}
+				if (last_pair) {
+					break;
+				} else {
+					cursor = next_comma + 1;
+				}
 			}
+			if (has_code && has_state) {
+				disable_default_handling = true;
+				const char* data = "Moved\n";
+				CefString location = CefString(this->internal_url + "oauth.html?code=" + std::string(code) + "&state=" + std::string(state));
+				return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 302, "text/plain", location);
+			} else {
+				return nullptr;
+			}
+		}
 
+		if ((schema != "http" && schema != "https") || request_url.size() < colon + 4
+			|| request_url.at(colon + 1) != '/' || request_url.at(colon + 2) != '/')
+		{
+			return nullptr;
+		}
+
+		// parse all the important parts of the URL as string_views
+		const std::string::size_type next_hash = request_url.find_first_of('#', colon + 3);
+		const auto url_end = next_hash == std::string::npos ? request_url.end() : request_url.begin() + next_hash;
+		const std::string::size_type next_sep = request_url.find_first_of('/', colon + 3);
+		const std::string::size_type next_question = request_url.find_first_of('?', colon + 3);
+		const auto domain_end = next_sep == std::string::npos && next_question == std::string::npos ? url_end : request_url.begin() + std::min(next_sep, next_question);
+		const std::string_view domain(request_url.begin() + colon + 3, domain_end);
+		const std::string_view path(domain_end, next_question == std::string::npos ? url_end : request_url.begin() + next_question);
+		const std::string_view query(request_url.begin() + next_question + 1, next_question == std::string::npos ? request_url.begin() + next_question + 1 : url_end);
+		const std::string_view comment(next_hash == std::string::npos ? request_url.end() : request_url.begin() + next_hash + 1, request_url.end());
+
+		// handler for another custom request thing, but this one uses localhost, for whatever reason
+		if (domain == "localhost" && path == "/" && comment.starts_with("code=")) {
+			disable_default_handling = true;
+			const char* data = "Moved\n";
+			CefString location = CefString(this->internal_url + "game_auth.html?" + std::string(comment));
+			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 302, "text/plain", location);
+		}
+
+		// internal pages
+		if (domain == "bolt-internal") {
+			disable_default_handling = true;
+
+			// respond using internal hashmap of filenames
 			auto it = std::find_if(
 				this->internal_pages.begin(),
 				this->internal_pages.end(),
-				[url_cstr, url_len, internal_url_size](const auto& e) {
-					if (e.first.size() != url_len - internal_url_size) return false;
-					return !memcmp(e.first.c_str(), url_cstr + internal_url_size, url_len - internal_url_size);
-				}
+				[&path](const auto& e) { return e.first == path; }
 			);
 			if (it != this->internal_pages.end()) {
 				if (it->second.success) {
@@ -290,7 +341,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Client::GetResourceRequestHandler(
 			}
 		}
 	}
-
+	
 	// route the request normally, to a website or whatever
 	return nullptr;
 }
