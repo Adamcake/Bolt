@@ -7,6 +7,13 @@
 #include "include/views/cef_browser_view.h"
 
 namespace Browser {
+	/// The purpose of a browser. Affects what kind of requests the browser is allowed to make and
+	/// how they're handled. Children and devtools will have the same Kind as the parent.
+	enum Kind {
+		Launcher,
+		Applet,
+	};
+
 	/// Represents a visible browser window on the user's screen. This struct wraps a single pointer,
 	/// so it is safe to store anywhere and move around during operation.
 	/// The window will exist either until the user closes it or Window::CloseBrowser() is called.
@@ -16,8 +23,17 @@ namespace Browser {
 	/// https://github.com/chromiumembedded/cef/blob/5735/include/views/cef_window_delegate.h
 	/// https://github.com/chromiumembedded/cef/blob/5735/include/views/cef_browser_view_delegate.h
 	struct Window: CefWindowDelegate, CefBrowserViewDelegate {
-		Window(CefRefPtr<CefClient> client, Details, CefString, bool);
-		Window(Details, bool);
+		Window(Kind, CefRefPtr<CefClient> client, Details, CefString, bool);
+		Window(Kind, Details, bool);
+
+		/// Returns true if this window is Kind::Launcher
+		bool IsLauncher() const;
+
+		/// Returns true if this window is Kind::App
+		bool IsApp() const;
+
+		/// Returns true if the given browser is this window or one of its children, otherwise false
+		bool HasBrowser(CefRefPtr<CefBrowser>) const;
 
 		/// Purges matching windows from this window's list of children
 		/// Returns true if this window itself matches the given browser, false otherwise
@@ -47,13 +63,16 @@ namespace Browser {
 		CefRefPtr<CefBrowserViewDelegate> GetDelegateForPopupBrowserView(CefRefPtr<CefBrowserView>, const CefBrowserSettings&, CefRefPtr<CefClient>, bool) override;
 		bool OnPopupBrowserViewCreated(CefRefPtr<CefBrowserView>, CefRefPtr<CefBrowserView>, bool) override;
 		void OnBrowserCreated(CefRefPtr<CefBrowserView>, CefRefPtr<CefBrowser>) override;
+		void OnBrowserDestroyed(CefRefPtr<CefBrowserView>, CefRefPtr<CefBrowser>) override;
 		cef_chrome_toolbar_type_t GetChromeToolbarType() override;
 
 		private:
-			bool show_devtools_for_children;
+			Kind kind;
+			bool show_devtools;
 			Details details;
 			CefRefPtr<CefWindow> window;
 			CefRefPtr<CefBrowserView> browser_view;
+			CefRefPtr<CefBrowser> browser;
 			CefRefPtr<Window> pending_child;
 			std::vector<CefRefPtr<Window>> children;
 			CefPopupFeatures popup_features;
