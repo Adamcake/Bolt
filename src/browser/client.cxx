@@ -104,7 +104,7 @@ _InternalFile allocate_file(const char* filename, CefString mime_type) {
 	}
 }
 
-Browser::Client::Client(CefRefPtr<Browser::App> app): show_devtools(true) {
+Browser::Client::Client(CefRefPtr<Browser::App> app, std::filesystem::path config_dir): show_devtools(true), config_dir(config_dir) {
 	CefString mime_type_html = "text/html";
 	CefString mime_type_js = "application/javascript";
 	app->SetBrowserProcessHandler(this);

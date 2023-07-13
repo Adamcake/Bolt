@@ -8,6 +8,12 @@
 #include <windows.h>
 #endif
 
+#if defined(__linux__)
+#include <sys/file.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#endif
+
 #if defined(CEF_X11)
 #include <X11/Xlib.h>
 
@@ -29,6 +35,7 @@ int XIOErrorHandlerImpl(Display* display) {
 #endif
 
 int BoltRunBrowserProcess(CefMainArgs, CefRefPtr<Browser::App>);
+bool LockConfigDirectory(std::filesystem::path&);
 
 int BoltRunAnyProcess(CefMainArgs main_args) {
 	// CefApp struct - this implements handlers used by multiple processes
@@ -52,8 +59,14 @@ int BoltRunBrowserProcess(CefMainArgs main_args, CefRefPtr<Browser::App> cef_app
 	XSetIOErrorHandler(XIOErrorHandlerImpl);
 #endif
 
+	// find home directory
+	std::filesystem::path config_dir;
+	if (!LockConfigDirectory(config_dir)) {
+		return 1;
+	}
+
 	// CefClient struct - central object for main thread, and implements lots of handlers for browser process
-	Browser::Client client_(cef_app);
+	Browser::Client client_(cef_app, config_dir);
 	CefRefPtr<Browser::Client> client = &client_;
 
 	// CEF settings - only set the ones we're interested in
@@ -96,6 +109,37 @@ int main(int argc, char* argv[]) {
 	delete[] argv_;
 	delete[] arg_;
 	return ret;
+}
+
+bool LockConfigDirectory(std::filesystem::path& path) {
+	const char* xdg_config_home = getenv("XDG_CONFIG_HOME");
+	const char* home = getenv("HOME");
+	if (xdg_config_home) {
+		path.assign(xdg_config_home);
+	} else if (home) {
+		path.assign(home);
+		path.append(".config");
+	} else {
+		fmt::print("No $XDG_CONFIG_HOME or $HOME\n");
+		return false;
+	}
+	path.append("bolt-launcher");
+	std::error_code err;
+	std::filesystem::create_directories(path, err);
+	if (err.value() != 0) {
+		fmt::print("Could not create directories (error {}) {}\n", err.value(), path.c_str());
+		return false;
+	}
+
+	std::filesystem::path fpath = path;
+	fpath.append("lock");
+	int lockfile = open(fpath.c_str(), O_WRONLY | O_CREAT, 0666);
+	if (flock(lockfile, LOCK_EX | LOCK_NB)) {
+		fmt::print("Failed to obtain lockfile; is the program already running?\n");
+		return false;
+	} else {
+		return true;
+	}
 }
 #endif
 

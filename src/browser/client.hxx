@@ -6,6 +6,7 @@
 #include "app.hxx"
 #include "../browser.hxx"
 
+#include <filesystem>
 #include <map>
 #include <mutex>
 #include <string>
@@ -25,7 +26,7 @@ namespace Browser {
 	/// https://github.com/chromiumembedded/cef/blob/5735/include/cef_life_span_handler.h
 	/// https://github.com/chromiumembedded/cef/blob/5735/include/cef_request_handler.h
 	struct Client: public CefClient, CefBrowserProcessHandler, CefLifeSpanHandler, CefRequestHandler {
-		Client(CefRefPtr<Browser::App>);
+		Client(CefRefPtr<Browser::App>, std::filesystem::path);
 
 		/* CefClient overrides */
 		CefRefPtr<CefLifeSpanHandler> GetLifeSpanHandler() override;
@@ -75,6 +76,7 @@ namespace Browser {
 			CefRefCount ref_count;
 
 			bool show_devtools;
+			std::filesystem::path config_dir;
 
 			std::string internal_url = "https://bolt-internal/";
 			std::map<std::string, _InternalFile> internal_pages;
