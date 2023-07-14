@@ -5,6 +5,7 @@
 		<meta charset="utf-8" />
 		<title>Bolt Launcher</title>
 		<script>
+			const internal_url = "https://bolt-internal";
 			var platform = null;
 			var root = null;
 			var messages = document.createElement("ul");
@@ -137,7 +138,7 @@
 
 				var w = window.open("about:blank", "", "width=480,height=720");
 				window.addEventListener("message", (event) => {
-					if (event.origin != "https://bolt-internal" && btoa(event.origin).replaceAll('\x3d', '') != s.origin) {
+					if (event.origin != internal_url && btoa(event.origin).replaceAll('\x3d', '') != s.origin) {
 						msg(`discarding window message from origin ${event.origin}`);
 						return;
 					}
@@ -442,57 +443,69 @@
 
 			// asynchronously download and launch RS3's official .deb client using the given env variables
 			function launchRS3Linux(s, element, jx_access_token, jx_refresh_token, jx_session_id, jx_character_id, jx_display_name) {
+				const launch = (hash, deb) => {
+					var xml = new XMLHttpRequest();
+					var params = {};
+					if (hash) params.hash = hash;
+					if (jx_access_token) params.jx_access_token = jx_access_token;
+					if (jx_refresh_token) params.jx_refresh_token = jx_refresh_token;
+					if (jx_session_id) params.jx_session_id = jx_session_id;
+					if (jx_character_id) params.jx_character_id = jx_character_id;
+					if (jx_display_name) params.jx_display_name = jx_display_name;
+					xml.open('POST', "/launch-deb?".concat(new URLSearchParams(params)), true);
+					xml.onreadystatechange = () => {
+						if (xml.readyState == 4) {
+							msg(`Game launch status: '${xml.responseText.trim()}'`);
+							element.disabled = false;
+						}
+					};
+					xml.onerror = () => {
+						element.disabled = false;
+					};
+					xml.send(deb);
+				};
+
 				var xml = new XMLHttpRequest();
 				const content_url = atob(s.content_url);
 				const url = content_url.concat("dists/trusty/non-free/binary-amd64/Packages");
 				xml.open('GET', url, true);
 				xml.onreadystatechange = () => {
-					if (xml.readyState == 4) {
-						if (xml.status == 200) {
-							const lines = Object.fromEntries(xml.response.split('\n').map((x) => { return x.split(": "); }));
-							if (!lines.Filename || !lines.Size) {
-								err(`Could not parse package data from URL: ${url}`, false);
-								element.disabled = false;
-								return;
-							}
-							if (lines.SHA256 !== rs3LinuxInstalledHash) {
-								var m = msg("Downloading game client... 0%");
-								var exe_xml = new XMLHttpRequest();
-								exe_xml.open('GET', content_url.concat(lines.Filename), true);
-								exe_xml.onprogress = (e) => {
-									if (e.loaded) {
-										m.innerText = `Downloading game client... ${(Math.round(1000.0 * e.loaded / lines.Size) / 10.0).toFixed(1)}%`;
-									}
-								};
-								exe_xml.onreadystatechange = () => {
-									if (exe_xml.readyState == 4) {
-										if (exe_xml.status == 200) {
-											// what now?
-											element.disabled = false;
-										} else {
-											err(`Error downloading game client: from ${url}: ${exe_xml.status}: ${exe_xml.response}`, false);
-											element.disabled = false;
-										}
-									}
-								};
-								exe_xml.onerror = () => {
-									err(`Error downloading game client: from ${url}: non-http error`, false);
-									element.disabled = false;
-								};
-								exe_xml.send();
-							} else {
-								msg("Latest client is already installed");
-								//element.disabled = false;
-							}
+					if (xml.readyState == 4 && xml.status == 200) {
+						const lines = Object.fromEntries(xml.response.split('\n').map((x) => { return x.split(": "); }));
+						if (!lines.Filename || !lines.Size) {
+							err(`Could not parse package data from URL: ${url}`, false);
+							launch();
+							return;
+						}
+						if (lines.SHA256 !== rs3LinuxInstalledHash) {
+							var m = msg("Downloading game client... 0%");
+							var exe_xml = new XMLHttpRequest();
+							exe_xml.open('GET', content_url.concat(lines.Filename), true);
+							exe_xml.responseType = "arraybuffer";
+							exe_xml.onprogress = (e) => {
+								if (e.loaded) {
+									m.innerText = `Downloading game client... ${(Math.round(1000.0 * e.loaded / lines.Size) / 10.0).toFixed(1)}%`;
+								}
+							};
+							exe_xml.onreadystatechange = () => {
+								if (exe_xml.readyState == 4 && exe_xml.status == 200) {
+									launch(lines.SHA256, exe_xml.response);
+								}
+							};
+							exe_xml.onerror = () => {
+								err(`Error downloading game client: from ${url}: non-http error`, false);
+								launch();
+							};
+							exe_xml.send();
 						} else {
-							err(`Error: from ${url}: ${xml.status}: ${xml.response}`, false);
-							element.disabled = false;
+							msg("Latest client is already installed");
+							launch();
 						}
 					}
 				};
 				xml.onerror = () => {
 					err(`Error: from ${url}: non-http error`, false);
-					element.disabled = false;
+					launch();
 				};
 				xml.send();
 			}
