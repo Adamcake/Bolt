@@ -14,7 +14,9 @@ If you accidentally cloned without submodules (no `modules` directory), you can 
 
 Place your entire CEF binary distribution folder inside the `cef` directory with the name "dist", or create a symbolic link with the same effect.
 
-If building on Linux, install X11 development libraries (`libX11-devel` or `libx11-dev` on most package managers)
+If building on Linux, install the following dependencies:
+- X11 development libraries (`libX11-devel` or `libx11-dev` on most package managers)
+- libarchive development libraries (`libarchive-devel` or `libarchive-dev` on most package managers)
 
 Once that's done, you can start building. Open a command window or terminal in the root directory of this repository, then follow the build instructions for your platform.
 
