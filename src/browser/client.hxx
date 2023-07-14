@@ -76,7 +76,7 @@ namespace Browser {
 			CefRefCount ref_count;
 
 			bool show_devtools;
-			std::filesystem::path config_dir;
+			std::filesystem::path data_dir;
 			size_t env_count;
 
 			std::string env_key_home = "HOME=";

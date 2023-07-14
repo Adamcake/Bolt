@@ -116,7 +116,7 @@ _InternalFile allocate_file(const char* filename, CefString mime_type) {
 	}
 }
 
-Browser::Client::Client(CefRefPtr<Browser::App> app, std::filesystem::path config_dir): show_devtools(true), config_dir(config_dir) {
+Browser::Client::Client(CefRefPtr<Browser::App> app, std::filesystem::path data_dir): show_devtools(true), data_dir(data_dir) {
 	CefString mime_type_html = "text/html";
 	CefString mime_type_js = "application/javascript";
 	app->SetBrowserProcessHandler(this);
@@ -155,7 +155,7 @@ void Browser::Client::OnContextInitialized() {
 	std::string url = this->internal_url + this->launcher_uri;
 
 #if defined(__linux__)
-	std::filesystem::path hash_path = this->config_dir;
+	std::filesystem::path hash_path = this->data_dir;
 	hash_path.append("rs3linux.sha256");
 	int file = open(hash_path.c_str(), O_RDONLY);
 	if (file != -1) {
@@ -360,7 +360,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Client::GetResourceRequestHandler(
 			// instruction to launch RS3 .deb
 			if (path == "/launch-deb") {
 				CefRefPtr<CefPostData> post_data = request->GetPostData();
-				std::filesystem::path path = this->config_dir;
+				std::filesystem::path path = this->data_dir;
 				path.append("rs3linux");
 
 				auto cursor = 0;
@@ -533,7 +533,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Client::GetResourceRequestHandler(
 				argv[0] = path_str.data();
 				argv[1] = nullptr;
 				bool should_set_home = true;
-				std::string env_home = this->env_key_home + this->config_dir.c_str();
+				std::string env_home = this->env_key_home + this->data_dir.c_str();
 				char** env = new char*[this->env_count + 7];
 				size_t i;
 				for (i = 0; i < this->env_count; i += 1) {
@@ -596,7 +596,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Client::GetResourceRequestHandler(
 
 					if (has_hash) {
 						size_t written = 0;
-						std::filesystem::path hash_path(this->config_dir);
+						std::filesystem::path hash_path(this->data_dir);
 						hash_path.append("rs3linux.sha256");
 						int file = open(hash_path.c_str(), O_WRONLY | O_CREAT, 0644);
 						while (written < hash.size()) {
