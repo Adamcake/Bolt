@@ -16,6 +16,8 @@
 #include <regex>
 #include <spawn.h>
 
+extern char **environ;
+
 /// https://github.com/chromiumembedded/cef/blob/5735/include/cef_resource_request_handler.h
 /// https://github.com/chromiumembedded/cef/blob/5735/include/cef_resource_handler.h
 struct ResourceHandler: public CefResourceRequestHandler, CefResourceHandler {
@@ -122,6 +124,12 @@ Browser::Client::Client(CefRefPtr<Browser::App> app, std::filesystem::path confi
 	this->internal_pages["/oauth.html"] = allocate_file("html/oauth.html", mime_type_html);
 	this->internal_pages["/game_auth.html"] = allocate_file("html/game_auth.html", mime_type_html);
 	this->internal_pages["/frame.html"] = allocate_file("html/frame.html", mime_type_html);
+	this->env_count = 0;
+	char** env = environ;
+	while (*env != nullptr) {
+		this->env_count += 1;
+		env += 1;
+	}
 }
 
 CefRefPtr<CefLifeSpanHandler> Browser::Client::GetLifeSpanHandler() {
@@ -326,6 +334,8 @@ CefRefPtr<CefResourceRequestHandler> Browser::Client::GetResourceRequestHandler(
 			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 302, "text/plain", location);
 		}
 
+		// TODO: everything below this is massively unmaintainable and needs splitting up probably into CefResourceRequestHandler impls
+
 		// internal pages
 		if (domain == "bolt-internal") {
 			disable_default_handling = true;
@@ -339,17 +349,17 @@ CefRefPtr<CefResourceRequestHandler> Browser::Client::GetResourceRequestHandler(
 
 				auto cursor = 0;
 				bool has_hash = false;
-				bool has_access_token = false;
-				bool has_refresh_token = false;
-				bool has_session_id = false;
-				bool has_character_id = false;
-				bool has_display_name = false;
-				CefString hash;
-				CefString access_token;
-				CefString refresh_token;
-				CefString session_id;
-				CefString character_id;
-				CefString display_name;
+				bool should_set_access_token = false;
+				bool should_set_refresh_token = false;
+				bool should_set_session_id = false;
+				bool should_set_character_id = false;
+				bool should_set_display_name = false;
+				std::string hash;
+				std::string env_access_token;
+				std::string env_refresh_token;
+				std::string env_session_id;
+				std::string env_character_id;
+				std::string env_display_name;
 					
 				while (true) {
 					const std::string::size_type next_eq = query.find_first_of('=', cursor);
@@ -363,38 +373,38 @@ CefRefPtr<CefResourceRequestHandler> Browser::Client::GetResourceRequestHandler(
 					if (key == "hash") {
 						auto value_end = next_amp == std::string::npos ? query.end() : query.begin() + next_amp;
 						CefString value = std::string(std::string_view(query.begin() + next_eq + 1,  value_end));
-						access_token = CefURIDecode(value, true, UU_SPACES);
+						hash = CefURIDecode(value, true, UU_SPACES).ToString();
 						has_hash = true;
 					}
 					if (key == "jx_access_token") {
 						auto value_end = next_amp == std::string::npos ? query.end() : query.begin() + next_amp;
 						CefString value = std::string(std::string_view(query.begin() + next_eq + 1,  value_end));
-						access_token = CefURIDecode(value, true, UU_SPACES);
-						has_access_token = true;
+						env_access_token = std::string("JX_ACCESS_TOKEN=") + CefURIDecode(value, true, UU_SPACES).ToString();
+						should_set_access_token = true;
 					}
 					if (key == "jx_refresh_token") {
 						auto value_end = next_amp == std::string::npos ? query.end() : query.begin() + next_amp;
 						CefString value = std::string(std::string_view(query.begin() + next_eq + 1,  value_end));
-						access_token = CefURIDecode(value, true, UU_SPACES);
-						has_refresh_token = true;
+						env_refresh_token = std::string("JX_REFRESH_TOKEN=") + CefURIDecode(value, true, UU_SPACES).ToString();
+						should_set_refresh_token = true;
 					}
 					if (key == "jx_session_id") {
 						auto value_end = next_amp == std::string::npos ? query.end() : query.begin() + next_amp;
 						CefString value = std::string(std::string_view(query.begin() + next_eq + 1,  value_end));
-						access_token = CefURIDecode(value, true, UU_SPACES);
-						has_session_id = true;
+						env_session_id = std::string("JX_SESSION_ID=") + CefURIDecode(value, true, UU_SPACES).ToString();
+						should_set_session_id = true;
 					}
 					if (key == "jx_character_id") {
 						auto value_end = next_amp == std::string::npos ? query.end() : query.begin() + next_amp;
 						CefString value = std::string(std::string_view(query.begin() + next_eq + 1,  value_end));
-						access_token = CefURIDecode(value, true, UU_SPACES);
-						has_character_id = true;
+						env_character_id = std::string("JX_CHARACTER_ID=") + CefURIDecode(value, true, UU_SPACES).ToString();
+						should_set_character_id = true;
 					}
 					if (key == "jx_display_name") {
 						auto value_end = next_amp == std::string::npos ? query.end() : query.begin() + next_amp;
 						CefString value = std::string(std::string_view(query.begin() + next_eq + 1,  value_end));
-						access_token = CefURIDecode(value, true, UU_SPACES);
-						has_display_name = true;
+						env_display_name = std::string("JX_DISPLAY_NAME=") + CefURIDecode(value, true, UU_SPACES).ToString();
+						should_set_display_name = true;
 					}
 
 					if (next_amp == std::string::npos) break;
@@ -506,12 +516,79 @@ CefRefPtr<CefResourceRequestHandler> Browser::Client::GetResourceRequestHandler(
 				char* argv[2];
 				argv[0] = path_str.data();
 				argv[1] = nullptr;
-				char* env[8];
-				memset(env, 0, sizeof env);
+				bool should_set_home = true;
+				std::string env_home = this->env_key_home + this->config_dir.c_str();
+				char** env = new char*[this->env_count + 7];
+				size_t i;
+				for (i = 0; i < this->env_count; i += 1) {
+					if (should_set_access_token && strncmp(environ[i], this->env_key_access_token.c_str(), this->env_key_access_token.size()) == 0) {
+						should_set_access_token = false;
+						env[i] = env_access_token.data();
+					} else if (should_set_refresh_token && strncmp(environ[i], this->env_key_refresh_token.c_str(), this->env_key_refresh_token.size()) == 0) {
+						should_set_refresh_token = false;
+						env[i] = env_refresh_token.data();
+					} else if (should_set_session_id && strncmp(environ[i], this->env_key_session_id.c_str(), this->env_key_session_id.size()) == 0) {
+						should_set_session_id = false;
+						env[i] = env_session_id.data();
+					} else if (should_set_character_id && strncmp(environ[i], this->env_key_character_id.c_str(), this->env_key_character_id.size()) == 0) {
+						should_set_character_id = false;
+						env[i] = env_character_id.data();
+					} else if (should_set_display_name && strncmp(environ[i], this->env_key_display_name.c_str(), this->env_key_display_name.size()) == 0) {
+						should_set_display_name = false;
+						env[i] = env_display_name.data();
+					} else if (strncmp(environ[i], this->env_key_home.c_str(), this->env_key_home.size()) == 0) {
+						should_set_home = false;
+						env[i] = env_home.data();
+					} else {
+						env[i] = environ[i];
+					}
+				}
+				if (should_set_access_token) {
+					env[i] = env_access_token.data();
+					i += 1;
+				}
+				if (should_set_refresh_token) {
+					env[i] = env_refresh_token.data();
+					i += 1;
+				}
+				if (should_set_session_id) {
+					env[i] = env_session_id.data();
+					i += 1;
+				}
+				if (should_set_character_id) {
+					env[i] = env_character_id.data();
+					i += 1;
+				}
+				if (should_set_access_token) {
+					env[i] = env_access_token.data();
+					i += 1;
+				}
+				if (should_set_home) {
+					env[i] = env_home.data();
+					i += 1;
+				}
+				env[i] = nullptr;
+
 				int r = posix_spawn(&pid, path_str.c_str(), &file_actions, &attributes, argv, env);
+				
+				posix_spawnattr_destroy(&attributes);
+				posix_spawn_file_actions_destroy(&file_actions);
+				delete[] env;
 
 				if (r == 0) {
-					fmt::print("Successfully spawned game process with pid {}\n", pid);
+					fmt::print("[B] Successfully spawned game process with pid {}\n", pid);
+
+					if (has_hash) {
+						size_t written = 0;
+						std::filesystem::path hash_path(this->config_dir);
+						hash_path.append("rs3linux.sha256");
+						int file = open(hash_path.c_str(), O_WRONLY | O_CREAT, 0644);
+						while (written < hash.size()) {
+							written += write(file, hash.c_str() + written, hash.size() - written);
+						}
+						close(file);
+					}
+
 					const char* data = "OK\n";
 					return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
 				} else {
