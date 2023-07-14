@@ -456,6 +456,9 @@
 					xml.onreadystatechange = () => {
 						if (xml.readyState == 4) {
 							msg(`Game launch status: '${xml.responseText.trim()}'`);
+							if (xml.status == 200 && hash) {
+								rs3LinuxInstalledHash = hash;
+							}
 							element.disabled = false;
 						}
 					};
