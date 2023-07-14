@@ -8,7 +8,7 @@ if(NOT WIN32)
     file(GENERATE OUTPUT bolt-run.sh CONTENT "#!/bin/sh -eu\ncd /opt/bolt-launcher\n./bolt \"$@\"\n")
 
     # auto-generated helper for running from build dir; this file does not get installed
-    file(GENERATE OUTPUT bolt.sh CONTENT "#!/bin/sh -eu\nexport XDG_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/config\ncd ${CMAKE_CURRENT_BINARY_DIR}/opt/bolt-launcher\n./bolt \"$@\"\n" FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+    file(GENERATE OUTPUT bolt.sh CONTENT "#!/bin/sh -eu\nexport XDG_DATA_HOME=${CMAKE_CURRENT_BINARY_DIR}/data\ncd ${CMAKE_CURRENT_BINARY_DIR}/opt/bolt-launcher\n./bolt \"$@\"\n" FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 endif()
 
 # Generate compile_commands.json, for use by language servers for highlighting/autocomplete/etc
