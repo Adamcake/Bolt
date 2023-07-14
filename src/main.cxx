@@ -35,7 +35,7 @@ int XIOErrorHandlerImpl(Display* display) {
 #endif
 
 int BoltRunBrowserProcess(CefMainArgs, CefRefPtr<Browser::App>);
-bool LockConfigDirectory(std::filesystem::path&);
+bool LockDataDirectory(std::filesystem::path&);
 
 int BoltRunAnyProcess(CefMainArgs main_args) {
 	// CefApp struct - this implements handlers used by multiple processes
@@ -60,13 +60,13 @@ int BoltRunBrowserProcess(CefMainArgs main_args, CefRefPtr<Browser::App> cef_app
 #endif
 
 	// find home directory
-	std::filesystem::path config_dir;
-	if (!LockConfigDirectory(config_dir)) {
+	std::filesystem::path data_dir;
+	if (!LockDataDirectory(data_dir)) {
 		return 1;
 	}
 
 	// CefClient struct - central object for main thread, and implements lots of handlers for browser process
-	Browser::Client client_(cef_app, config_dir);
+	Browser::Client client_(cef_app, data_dir);
 	CefRefPtr<Browser::Client> client = &client_;
 
 	// CEF settings - only set the ones we're interested in
@@ -111,16 +111,17 @@ int main(int argc, char* argv[]) {
 	return ret;
 }
 
-bool LockConfigDirectory(std::filesystem::path& path) {
-	const char* xdg_config_home = getenv("XDG_CONFIG_HOME");
+bool LockDataDirectory(std::filesystem::path& path) {
+	const char* xdg_data_home = getenv("XDG_DATA_HOME");
 	const char* home = getenv("HOME");
-	if (xdg_config_home) {
-		path.assign(xdg_config_home);
+	if (xdg_data_home) {
+		path.assign(xdg_data_home);
 	} else if (home) {
 		path.assign(home);
-		path.append(".config");
+		path.append(".local");
+		path.append("share");
 	} else {
-		fmt::print("No $XDG_CONFIG_HOME or $HOME\n");
+		fmt::print("No $XDG_DATA_HOME or $HOME\n");
 		return false;
 	}
 	path.append("bolt-launcher");
