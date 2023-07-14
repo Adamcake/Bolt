@@ -153,6 +153,22 @@ void Browser::Client::OnContextInitialized() {
 		.controls_overlay = false,
 	};
 	std::string url = this->internal_url + this->launcher_uri;
+
+#if defined(__linux__)
+	std::filesystem::path hash_path = this->config_dir;
+	hash_path.append("rs3linux.sha256");
+	int file = open(hash_path.c_str(), O_RDONLY);
+	if (file != -1) {
+		char buf[64];
+		ssize_t r = read(file, buf, 64);
+		if (r == 64) {
+			url += "&rs3_linux_installed_hash=";
+			url.append(buf, 64);
+		}
+	}
+	close(file);
+#endif
+
 	this->windows_lock.lock();
 	CefRefPtr<Browser::Window> w = new Browser::Window(Browser::Kind::Launcher, this, details, url, this->show_devtools);
 	this->windows.push_back(w);
