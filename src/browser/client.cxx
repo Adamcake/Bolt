@@ -575,8 +575,8 @@ CefRefPtr<CefResourceRequestHandler> Browser::Client::GetResourceRequestHandler(
 					env[i] = env_character_id.data();
 					i += 1;
 				}
-				if (should_set_access_token) {
-					env[i] = env_access_token.data();
+				if (should_set_display_name) {
+					env[i] = env_display_name.data();
 					i += 1;
 				}
 				if (should_set_home) {
