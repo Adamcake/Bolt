@@ -1,3 +1,4 @@
+#include <filesystem>
 #include <fmt/core.h>
 
 #include "browser.hxx"
@@ -74,6 +75,12 @@ int BoltRunBrowserProcess(CefMainArgs main_args, CefRefPtr<Browser::App> cef_app
 	settings.log_severity = LOGSEVERITY_WARNING; // Print warnings and errors only
 	settings.command_line_args_disabled = false; // Needed because we append args
 	settings.uncaught_exception_stack_size = 8;  // Number of call stack frames given in unhandled exception events
+
+	// Give CEF a place to put its cache stuff - default location is next to the exe which is not OK
+	std::filesystem::path cef_cache_path = data_dir;
+	cef_cache_path.append("CefCache");
+	std::filesystem::create_directories(cef_cache_path);
+	cef_string_from_utf8(cef_cache_path.c_str(), strlen(cef_cache_path.c_str()), &settings.cache_path);
 
 	// Initialize CEF
 	int exit_code = CefInitialize(main_args, settings, cef_app, nullptr);
