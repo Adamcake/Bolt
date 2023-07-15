@@ -528,6 +528,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Client::GetResourceRequestHandler(
 				pid_t pid;
 				posix_spawn_file_actions_init(&file_actions);
 				posix_spawnattr_init(&attributes);
+				posix_spawnattr_setflags(&attributes, POSIX_SPAWN_SETSID);
 				std::string path_str(path.c_str());
 				char* argv[2];
 				argv[0] = path_str.data();
