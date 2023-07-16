@@ -516,6 +516,11 @@ CefRefPtr<CefResourceRequestHandler> Browser::Client::GetResourceRequestHandler(
 
 					written = 0;
 					int file = open(path.c_str(), O_WRONLY | O_CREAT, 0755);
+					if (file == -1) {
+						delete[] game;
+						const char* data = "Failed to save executable; if the game is already running, close it and try again\n";
+						return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 500, "text/plain");
+					}
 					while (written < game_size) {
 						written += write(file, game + written, game_size - written);
 					}
@@ -600,6 +605,10 @@ CefRefPtr<CefResourceRequestHandler> Browser::Client::GetResourceRequestHandler(
 						std::filesystem::path hash_path(this->data_dir);
 						hash_path.append("rs3linux.sha256");
 						int file = open(hash_path.c_str(), O_WRONLY | O_CREAT, 0644);
+						if (file == -1) {
+							const char* data = "OK, but unable to save hash file\n";
+							return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
+						}
 						while (written < hash.size()) {
 							written += write(file, hash.c_str() + written, hash.size() - written);
 						}
