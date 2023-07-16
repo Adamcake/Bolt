@@ -93,37 +93,14 @@ struct ResourceHandler: public CefResourceRequestHandler, CefResourceHandler {
 		DISALLOW_COPY_AND_ASSIGN(ResourceHandler);
 };
 
-_InternalFile allocate_file(const char* filename, CefString mime_type) {
-	// little helper function for Client constructor
-	std::ifstream file(filename, std::ios::binary);
-	file.seekg(0, std::ios::end);
-	std::streamsize size = file.tellg();
-
-	if (size < 0) {
-		return _InternalFile { .success = false };
-	}
-
-	file.seekg(0, std::ios::beg);
-	std::vector<unsigned char> buf(size);
-	if (file.read(reinterpret_cast<char*>(buf.data()), size)) {
-		return _InternalFile {
-			.success = true,
-			.data = buf,
-			.mime_type = mime_type,
-		};
-	} else {
-		return _InternalFile { .success = false };
-	}
-}
-
 Browser::Client::Client(CefRefPtr<Browser::App> app, std::filesystem::path data_dir): show_devtools(true), data_dir(data_dir) {
 	CefString mime_type_html = "text/html";
 	CefString mime_type_js = "application/javascript";
 	app->SetBrowserProcessHandler(this);
-	this->internal_pages["/index.html"] = allocate_file("html/index.html", mime_type_html);
-	this->internal_pages["/oauth.html"] = allocate_file("html/oauth.html", mime_type_html);
-	this->internal_pages["/game_auth.html"] = allocate_file("html/game_auth.html", mime_type_html);
-	this->internal_pages["/frame.html"] = allocate_file("html/frame.html", mime_type_html);
+	this->internal_pages["/index.html"] = InternalFile("html/index.html", mime_type_html);
+	this->internal_pages["/oauth.html"] = InternalFile("html/oauth.html", mime_type_html);
+	this->internal_pages["/game_auth.html"] = InternalFile("html/game_auth.html", mime_type_html);
+	this->internal_pages["/frame.html"] = InternalFile("html/frame.html", mime_type_html);
 	this->env_count = 0;
 	char** env = environ;
 	while (*env != nullptr) {

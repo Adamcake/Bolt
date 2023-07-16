@@ -12,12 +12,6 @@
 #include <string>
 #include <vector>
 
-struct _InternalFile {
-	bool success;
-	std::vector<unsigned char> data;
-	CefString mime_type;
-};
-
 namespace Browser {
 	/// Implementation of CefClient, CefBrowserProcessHandler, CefLifeSpanHandler, CefRequestHandler.
 	/// Store on the stack, but access only via CefRefPtr.
@@ -86,7 +80,7 @@ namespace Browser {
 			std::string env_key_character_id = "JX_CHARACTER_ID=";
 			std::string env_key_display_name = "JX_DISPLAY_NAME=";
 			std::string internal_url = "https://bolt-internal/";
-			std::map<std::string, _InternalFile> internal_pages;
+			std::map<std::string, InternalFile> internal_pages;
 #if defined(__linux__)
 			std::string launcher_uri = "index.html?platform=linux";
 #elif defined(_WIN32)
