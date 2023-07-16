@@ -140,7 +140,15 @@ void Browser::Window::OnBrowserDestroyed(CefRefPtr<CefBrowserView>, CefRefPtr<Ce
 	this->browser = nullptr;
 }
 
-CefRefPtr<CefResourceHandler> Browser::Window::GetResourceHandler(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, CefRefPtr<CefRequest>) {
+CefRefPtr<CefResourceRequestHandler> Browser::Window::GetResourceRequestHandler(
+	CefRefPtr<CefBrowser>,
+	CefRefPtr<CefFrame>,
+	CefRefPtr<CefRequest>,
+	bool,
+	bool,
+	const CefString&,
+	bool&
+) {
 	// Custom resource handling is implemented by overriding this function in child classes
 	return nullptr;
 }

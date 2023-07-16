@@ -23,7 +23,7 @@ namespace Browser {
 	/// https://github.com/chromiumembedded/cef/blob/5735/include/views/cef_window_delegate.h
 	/// https://github.com/chromiumembedded/cef/blob/5735/include/views/cef_browser_view_delegate.h
 	/// https://github.com/chromiumembedded/cef/blob/5735/include/cef_resource_request_handler.h
-	struct Window: CefWindowDelegate, CefBrowserViewDelegate, CefResourceRequestHandler {
+	struct Window: CefWindowDelegate, CefBrowserViewDelegate, CefRequestHandler {
 		Window(Kind, CefRefPtr<CefClient> client, Details, CefString, bool);
 		Window(Kind, Details, bool);
 
@@ -67,8 +67,16 @@ namespace Browser {
 		void OnBrowserDestroyed(CefRefPtr<CefBrowserView>, CefRefPtr<CefBrowser>) override;
 		cef_chrome_toolbar_type_t GetChromeToolbarType() override;
 
-		/* CefResourceRequestHandler functions */
-		CefRefPtr<CefResourceHandler> GetResourceHandler(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, CefRefPtr<CefRequest>) override;
+		/* CefRequestHandler functions */
+		CefRefPtr<CefResourceRequestHandler> GetResourceRequestHandler(
+			CefRefPtr<CefBrowser>,
+			CefRefPtr<CefFrame>,
+			CefRefPtr<CefRequest>,
+			bool,
+			bool,
+			const CefString&,
+			bool&
+		) override;
 
 		private:
 			Kind kind;
