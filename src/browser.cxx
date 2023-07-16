@@ -140,6 +140,11 @@ void Browser::Window::OnBrowserDestroyed(CefRefPtr<CefBrowserView>, CefRefPtr<Ce
 	this->browser = nullptr;
 }
 
+CefRefPtr<CefResourceHandler> Browser::Window::GetResourceHandler(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, CefRefPtr<CefRequest>) {
+	// Custom resource handling is implemented by overriding this function in child classes
+	return nullptr;
+}
+
 cef_chrome_toolbar_type_t Browser::Window::GetChromeToolbarType() {
 	return CEF_CTT_NONE;
 }

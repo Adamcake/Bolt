@@ -18,11 +18,12 @@ namespace Browser {
 	/// so it is safe to store anywhere and move around during operation.
 	/// The window will exist either until the user closes it or Window::CloseBrowser() is called.
 	/// In both cases, CefLifeSpanHandler::OnBeforeClose callback will be called (implemented by Client).
-	/// This struct also acts as the CefWindowDelegate and CefBrowserViewDelegate for itself and any
-	/// children, such as devtools windows or browsers opened by Bolt apps.
+	/// This struct also acts as the CefWindowDelegate and CefBrowserViewDelegate for the window it represents,
+	/// and the CefResourceRequestHandler for requests originating from this window or any of its children.
 	/// https://github.com/chromiumembedded/cef/blob/5735/include/views/cef_window_delegate.h
 	/// https://github.com/chromiumembedded/cef/blob/5735/include/views/cef_browser_view_delegate.h
-	struct Window: CefWindowDelegate, CefBrowserViewDelegate {
+	/// https://github.com/chromiumembedded/cef/blob/5735/include/cef_resource_request_handler.h
+	struct Window: CefWindowDelegate, CefBrowserViewDelegate, CefResourceRequestHandler {
 		Window(Kind, CefRefPtr<CefClient> client, Details, CefString, bool);
 		Window(Kind, Details, bool);
 
@@ -65,6 +66,9 @@ namespace Browser {
 		void OnBrowserCreated(CefRefPtr<CefBrowserView>, CefRefPtr<CefBrowser>) override;
 		void OnBrowserDestroyed(CefRefPtr<CefBrowserView>, CefRefPtr<CefBrowser>) override;
 		cef_chrome_toolbar_type_t GetChromeToolbarType() override;
+
+		/* CefResourceRequestHandler functions */
+		CefRefPtr<CefResourceHandler> GetResourceHandler(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, CefRefPtr<CefRequest>) override;
 
 		private:
 			Kind kind;
