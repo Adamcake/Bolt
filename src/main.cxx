@@ -141,7 +141,7 @@ bool LockDataDirectory(std::filesystem::path& path) {
 
 	std::filesystem::path fpath = path;
 	fpath.append("lock");
-	int lockfile = open(fpath.c_str(), O_WRONLY | O_CREAT, 0666);
+	int lockfile = open(fpath.c_str(), O_WRONLY | O_CREAT | O_CLOEXEC, 0666);
 	if (flock(lockfile, LOCK_EX | LOCK_NB)) {
 		fmt::print("Failed to obtain lockfile; is the program already running?\n");
 		return false;
