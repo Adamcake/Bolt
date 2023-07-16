@@ -26,6 +26,7 @@ namespace Browser {
 		std::vector<unsigned char> data;
 		CefString mime_type;
 
+		InternalFile(): success(false) { }
 		InternalFile(const char* filename, CefString mime_type): mime_type(mime_type) {
 			std::ifstream file(filename, std::ios::binary);
 			file.seekg(0, std::ios::end);
