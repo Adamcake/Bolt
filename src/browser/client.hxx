@@ -71,15 +71,7 @@ namespace Browser {
 
 			bool show_devtools;
 			std::filesystem::path data_dir;
-			size_t env_count;
 
-			std::string env_key_home = "HOME=";
-			std::string env_key_access_token = "JX_ACCESS_TOKEN=";
-			std::string env_key_refresh_token = "JX_REFRESH_TOKEN=";
-			std::string env_key_session_id = "JX_SESSION_ID=";
-			std::string env_key_character_id = "JX_CHARACTER_ID=";
-			std::string env_key_display_name = "JX_DISPLAY_NAME=";
-			std::string internal_url = "https://bolt-internal/";
 			std::map<std::string, InternalFile> internal_pages;
 #if defined(__linux__)
 			std::string launcher_uri = "index.html?platform=linux";

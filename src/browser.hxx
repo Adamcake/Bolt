@@ -7,13 +7,6 @@
 #include "include/views/cef_browser_view.h"
 
 namespace Browser {
-	/// The purpose of a browser. Affects what kind of requests the browser is allowed to make and
-	/// how they're handled. Children and devtools will have the same Kind as the parent.
-	enum Kind {
-		Launcher,
-		Applet,
-	};
-
 	/// Represents a visible browser window on the user's screen. This struct wraps a single pointer,
 	/// so it is safe to store anywhere and move around during operation.
 	/// The window will exist either until the user closes it or Window::CloseBrowser() is called.
@@ -24,14 +17,14 @@ namespace Browser {
 	/// https://github.com/chromiumembedded/cef/blob/5735/include/views/cef_browser_view_delegate.h
 	/// https://github.com/chromiumembedded/cef/blob/5735/include/cef_resource_request_handler.h
 	struct Window: CefWindowDelegate, CefBrowserViewDelegate, CefRequestHandler {
-		Window(Kind, CefRefPtr<CefClient> client, Details, CefString, bool);
-		Window(Kind, Details, bool);
+		/// Calls this->Init internally
+		Window(CefRefPtr<CefClient> client, Details, CefString, bool);
 
-		/// Returns true if this window is Kind::Launcher
-		bool IsLauncher() const;
+		/// Does not call this->Init internally
+		Window(Details, bool);
 
-		/// Returns true if this window is Kind::App
-		bool IsApp() const;
+		/// Initialise with a browser_view. Should be called from a constructor, if at all.
+		void Init(CefRefPtr<CefClient> client, Details, CefString, bool);
 
 		/// Returns true if the given browser is this window or one of its children, otherwise false
 		bool HasBrowser(CefRefPtr<CefBrowser>) const;
@@ -79,7 +72,6 @@ namespace Browser {
 		) override;
 
 		private:
-			Kind kind;
 			bool show_devtools;
 			Details details;
 			CefRefPtr<CefWindow> window;

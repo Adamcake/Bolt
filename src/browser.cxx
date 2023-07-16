@@ -5,10 +5,20 @@
 
 #include <fmt/core.h>
 
-Browser::Window::Window(Kind kind, CefRefPtr<CefClient> client, Browser::Details details, CefString url, bool show_devtools):
-	kind(kind), show_devtools(show_devtools), details(details), window(nullptr), browser_view(nullptr), browser(nullptr), pending_child(nullptr)
+Browser::Window::Window(CefRefPtr<CefClient> client, Browser::Details details, CefString url, bool show_devtools):
+	show_devtools(show_devtools), details(details), window(nullptr), browser_view(nullptr), browser(nullptr), pending_child(nullptr)
 {
 	fmt::print("[B] Browser::Window constructor, this={}\n", reinterpret_cast<uintptr_t>(this));
+	this->Init(client, details, url, show_devtools);
+}
+
+Browser::Window::Window(Browser::Details details, bool show_devtools):
+	show_devtools(show_devtools), details(details), window(nullptr), browser_view(nullptr), browser(nullptr), pending_child(nullptr)
+{
+	fmt::print("[B] Browser::Window popup constructor, this={}\n", reinterpret_cast<uintptr_t>(this));
+}
+
+void Browser::Window::Init(CefRefPtr<CefClient> client, Browser::Details details, CefString url, bool show_devtools) {
 	CefBrowserSettings browser_settings;
 	browser_settings.background_color = CefColorSetARGB(0, 0, 0, 0);
 	if (details.controls_overlay) {
@@ -19,13 +29,6 @@ Browser::Window::Window(Kind kind, CefRefPtr<CefClient> client, Browser::Details
 		this->browser_view = CefBrowserView::CreateBrowserView(client, url, browser_settings, nullptr, nullptr, this);
 	}
 	CefWindow::CreateTopLevelWindow(this);
-
-}
-
-Browser::Window::Window(Kind kind, Browser::Details details, bool show_devtools):
-	kind(kind), show_devtools(show_devtools), details(details), window(nullptr), browser_view(nullptr), browser(nullptr), pending_child(nullptr)
-{
-	fmt::print("[B] Browser::Window popup constructor, this={}\n", reinterpret_cast<uintptr_t>(this));
 }
 
 void Browser::Window::OnWindowCreated(CefRefPtr<CefWindow> window) {
@@ -113,7 +116,7 @@ CefRefPtr<CefBrowserViewDelegate> Browser::Window::GetDelegateForPopupBrowserVie
 		.controls_overlay = false,
 		.is_devtools = is_devtools,
 	};
-	this->pending_child = new Browser::Window(this->kind, details, this->show_devtools);
+	this->pending_child = new Browser::Window(details, this->show_devtools);
 	return this->pending_child;
 }
 
@@ -155,14 +158,6 @@ CefRefPtr<CefResourceRequestHandler> Browser::Window::GetResourceRequestHandler(
 
 cef_chrome_toolbar_type_t Browser::Window::GetChromeToolbarType() {
 	return CEF_CTT_NONE;
-}
-
-bool Browser::Window::IsLauncher() const {
-	return this->kind == Kind::Launcher;
-}
-
-bool Browser::Window::IsApp() const {
-	return this->kind == Kind::Applet;
 }
 
 bool Browser::Window::HasBrowser(CefRefPtr<CefBrowser> browser) const {

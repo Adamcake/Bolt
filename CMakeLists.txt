@@ -23,8 +23,13 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CEF_ROOT}/cmake")
 find_package(CEF REQUIRED)
 add_subdirectory(${CEF_LIBCEF_DLL_WRAPPER_PATH} libcef_dll_wrapper)
 
+set(WINDOW_LAUNCHER_OS_SPECIFIC src/browser/window_launcher_linux.cxx)
+
 # This line needs to be updated manually with any new/deleted object files; cmake discourages GLOBbing source files
-add_executable(bolt modules/fmt/src/format.cc src/main.cxx src/browser.cxx src/browser/app.cxx src/browser/client.cxx)
+add_executable(bolt
+    modules/fmt/src/format.cc src/main.cxx src/browser.cxx src/browser/app.cxx src/browser/client.cxx
+    src/browser/resource_handler.cxx src/browser/window_launcher.cxx ${WINDOW_LAUNCHER_OS_SPECIFIC}
+)
 
 # Various build properties
 target_include_directories(bolt PUBLIC ${CEF_ROOT} modules/fmt/include)
