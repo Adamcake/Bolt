@@ -4,22 +4,53 @@
 	<head>
 		<meta charset="utf-8" />
 		<title>Bolt Launcher</title>
+		<style>
+			select {
+				margin-left: 10px;
+				margin-right: 10px;
+				margin-top: 10px;
+				min-width: 110px;
+			}
+
+			hr {
+				width: 85%;
+			}
+
+			button {
+				margin-left: 4px;
+				margin-right: 4px;
+				margin-top: 8px;
+			}
+
+			.button-red {
+				background-color:#f49088;
+			}
+		</style>
 		<script>
 			const internal_url = "https://bolt-internal";
 			var platform = null;
-			var root = null;
-			var messages = document.createElement("ul");
-			var credentials = null;
-			var pendingGameAuth = null;
+			var credentials = [];
+			var pendingOauth = null;
+			var pendingGameAuth = [];
 			var rs3LinuxInstalledHash = null;
+
+			var messages = document.createElement("ul");
+			var accountSelect = document.createElement("select");
+			var loginButton = document.createElement("button");
+			var logoutButton = document.createElement("button");
+			var loggedInInfo = document.createElement("div");
+			var loginButtons = document.createElement("div");
+			var gameAccountSelection = document.createElement("div");
+			var launchGameButtons = document.createElement("div");
+			var footer = document.createElement("div");
 
 			// checks if `credentials` are about to expire or have already expired,
 			// and renews them using the oauth endpoint if so
 			// returns null on success or an http status code on failure
-			function checkRenewCreds(url, client_id) {
+			function checkRenewCreds(creds, url, client_id) {
 				return new Promise((resolve, reject) => {
 					// only renew if less than 30 seconds left
-					if (credentials.expiry - Date.now() < 30000) {
+					if (creds.expiry - Date.now() < 30000) {
 						const post_data = new URLSearchParams({
 							grant_type: "refresh_token",
 							client_id: client_id,
@@ -29,8 +60,13 @@
 						xml.onreadystatechange = () => {
 							if (xml.readyState == 4) {
 								if (xml.status == 200) {
-									parseCredentials(xml.response);
-									resolve(null);
+									const c = parseCredentials(xml.response);
+									if (c) {
+										Object.assign(creds, c);
+										resolve(null);
+									} else {
+										resolve(0);
+									}
 								} else {
 									resolve(xml.status);
 								}
@@ -49,19 +85,22 @@
 				});
 			}
 
-			// parses a response from the oauth endpoint into the `credentials` var
+			// parses a response from the oauth endpoint, returning an object to be stored in the `credentials` var
+			// or returns null on failure
 			function parseCredentials(str) {
 				const oauth_creds = JSON.parse(str);
 				const sections = oauth_creds.id_token.split('.');
 				if (sections.length !== 3) {
-					err(`Malformed id_token: ${sections.length} sections, expected 3`, true);
+					err(`Malformed id_token: ${sections.length} sections, expected 3`, false);
+					return null;
 				}
 				const header = JSON.parse(atob(sections[0]));
 				if (header.typ !== "JWT") {
-					err(`Bad id_token header: typ ${header.typ}, expected JWT`, true);
+					err(`Bad id_token header: typ ${header.typ}, expected JWT`, false);
+					return null;
 				}
 				const payload = JSON.parse(atob(sections[1]));
-				credentials = {
+				return {
 					access_token: oauth_creds.access_token,
 					id_token: oauth_creds.id_token,
 					refresh_token: oauth_creds.refresh_token,
@@ -98,7 +137,7 @@
 			}
 
 			// builds a random PKCE verifier string using crypto.getRandomValues
-			function make_random_verifier() {
+			function makeRandomVerifier() {
 				var t = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
 				var n = new Uint32Array(43);
 				crypto.getRandomValues(n);
@@ -108,7 +147,7 @@
 			}
 
 			// builds a random PKCE state string using crypto.getRandomValues
-			function make_random_state() {
+			function makeRandomState() {
 				var t = 0;
 				var r = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 				var n = r.length - 1;
@@ -119,12 +158,17 @@
 				}).map((e) => { return r[e]; }).join("")
 			}
 
+			// remove an entry by its reference from the pendingGameAuth list
+			// this function assumes this entry is in the list
+			function removePendingGameAuth(pending, close_window) {
+				if (close_window) {
+					pending.win.close();
+				}
+				pendingGameAuth.splice(pendingGameAuth.indexOf(pending));
+			}
+
 			// body's onload function
 			function start(s) {
-				root = document.body;
-				root.appendChild(footer(false));
-				const state = make_random_state();
-				const verifier = make_random_verifier();
 				const client_id = atob(s.clientid);
 				const exchange_url = atob(s.origin).concat("/oauth2/token");
 
@@ -133,10 +177,9 @@
 				rs3LinuxInstalledHash = query.get("rs3_linux_installed_hash");
 				const c = query.get("credentials");
 				if (c) {
-					credentials = JSON.parse(c);
+					credentials = JSON.parse(atob(c));
 				}
 
-				var w = window.open("about:blank", "", "width=480,height=720");
 				window.addEventListener("message", (event) => {
 					if (event.origin != internal_url && btoa(event.origin).replaceAll('\x3d', '') != s.origin) {
 						msg(`discarding window message from origin ${event.origin}`);
@@ -144,35 +187,38 @@
 					}
 					switch (event.data.type) {
 						case "authCode":
-							if (event.data.state == state) {
+							var pending = pendingOauth;
+							if (pending) {
+								pendingOauth = null;
 								const post_data = new URLSearchParams({
 									grant_type: "authorization_code",
 									client_id: client_id,
 									code: event.data.code,
-									code_verifier: verifier,
-									redirect_uri: atob(s.redirect)
+									code_verifier: pending.verifier,
+									redirect_uri: atob(s.redirect),
 								});
 								var xml = new XMLHttpRequest();
 								xml.onreadystatechange = () => {
 									if (xml.readyState == 4) {
 										if (xml.status == 200) {
-											parseCredentials(xml.response);
-											handleLogin(s, w, exchange_url, client_id, state);
+											const creds = parseCredentials(xml.response);
+											if (creds) {
+												credentials.push(creds);
+												handleLogin(s, pending.win, creds, exchange_url, client_id);
+											} else {
+												err(`Error: invalid credentials received`, false);
+												pending.win.close();
+											}
 										} else {
-											w.close();
 											err(`Error: from ${exchange_url}: ${xml.status}: ${xml.response}`, false);
+											pending.win.close();
 										}
 									}
-								};
-								xml.onerror = () => {
-									w.close();
-									err(`Error: from ${exchange_url}: non-http error`, false);
 								};
 								xml.open('POST', exchange_url, true);
 								xml.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
 								xml.setRequestHeader("Accept", "application/json");
 								xml.send(post_data);
-
 							}
 							break;
 						case "initAuth":
@@ -182,8 +228,9 @@
 							msg(`message: external url: ${event.data.url}`);
 							break;
 						case "gameSessionServerAuth":
-							if (pendingGameAuth && pendingGameAuth.state == event.data.state) {
-								w.close();
+							var pending = pendingGameAuth.find((x) => { return event.data.state == x.state });
+							if (pending) {
+								removePendingGameAuth(pending, true);
 								const sections = event.data.id_token.split('.');
 								if (sections.length !== 3) {
 									err(`Malformed id_token: ${sections.length} sections, expected 3`, false);
@@ -195,7 +242,7 @@
 									break;
 								}
 								const payload = JSON.parse(atob(sections[1]));
-								if (atob(payload.nonce) !== pendingGameAuth.nonce) {
+								if (atob(payload.nonce) !== pending.nonce) {
 									err("Incorrect nonce in id_token", false);
 									break;
 								}
@@ -210,10 +257,10 @@
 											xml2.onreadystatechange = () => {
 												if (xml2.readyState == 4) {
 													if (xml2.status == 200) {
-														pendingGameAuth.account_info_promise.then((account_info) => {
-															pendingGameAuth = null;
+														pending.account_info_promise.then((account_info) => {
 															if (typeof account_info !== "number") {
-																clearRoot();
+																const name_text = `${account_info.displayName}#${account_info.suffix}`;
+																msg(`Successfully added login for ${name_text}`);
 																var select = document.createElement("select");
 																JSON.parse(xml2.response).forEach((acc) => {
 																	var opt = document.createElement("option");
@@ -226,22 +273,12 @@
 																	}
 																	select.appendChild(opt);
 																});
-																var logged_in = document.createElement("p");
-																logged_in.innerHTML = `Currently logged in as <b>${account_info.displayName}</b>#${account_info.suffix}`;
-																root.appendChild(logged_in);
-																var accounts = document.createElement("p");
-																var accounts_label = document.createElement("label");
-																accounts_label.for = select;
-																accounts_label.innerText = "Account: ";
-																accounts.appendChild(accounts_label);
-																accounts.appendChild(select);
-																root.appendChild(accounts);
-																root.appendChild(generateLaunchButtons((f, element) => {
-																	const acc_id = select.value;
-																	const acc_name = select.options[select.selectedIndex].getAttribute("name");
+																const gen_login_vars = (f, element, opt) => {
+																	const acc_id = opt.value;
+																	const acc_name = opt.name;
 																	f(s, element, null, null, session_id, acc_id, acc_name);
-																}));
-																root.appendChild(footer(true));
+																};
+																addNewAccount(name_text, gen_login_vars, select);
 															} else {
 																err(`Error getting account info: ${account_info}`, false);
 															}
@@ -251,9 +288,6 @@
 													}
 												}
 											};
-											xml2.onerror = () => {
-												err(`Error: from ${accounts_url}: non-http error`, false);
-											};
 											xml2.open('GET', accounts_url, true);
 											xml2.setRequestHeader("Accept", "application/json");
 											xml2.setRequestHeader("Authorization", "Bearer ".concat(session_id));
@@ -262,9 +296,6 @@
 											err(`Error: from ${sessions_url}: ${xml.status}: ${xml.response}`, false);
 										}
 									}
-								};
-								xml.onerror = () => {
-									err(`Error: from ${sessions_url}: ${xml.status}: ${xml.response}`, false);
 								};
 								xml.open('POST', sessions_url, true);
 								xml.setRequestHeader("Content-Type", "application/json");
@@ -278,46 +309,112 @@
 					}
 				});
 
-				if (credentials) {
-					handleLogin(s, w, exchange_url, client_id, state);
-				} else {
-					makeLoginUrl({
-						origin: atob(s.origin),
-						redirect: atob(s.redirect),
-						authMethod: "",
-						loginType: "",
-						clientid: client_id,
-						flow: "launcher",
-						pkceState: state,
-						pkceCodeVerifier: verifier,
-					}).then((e) => { w.location.replace(e); });
-				}
+				var accounts_label = document.createElement("label");
+				accounts_label.innerText = "Logged in as:";
+				accounts_label.for = accountSelect;
+				loggedInInfo.appendChild(accounts_label);
+				loggedInInfo.appendChild(accountSelect);
+
+				accountSelect.onchange = () => {
+					clearElement(launchGameButtons);
+					clearElement(gameAccountSelection);
+					if (accountSelect.selectedIndex >= 0) {
+						const opt = accountSelect.options[accountSelect.selectedIndex];
+						generateAccountSelection(opt.genLoginVars, opt.gameAccountSelect);
+					}
+				};
+
+				loginButton.innerText = "Log in";
+				loginButton.onclick = () => {
+					if (pendingOauth === null || pendingOauth.win.closed) {
+						var state = makeRandomState();
+						const verifier = makeRandomVerifier();
+						makeLoginUrl({
+							origin: atob(s.origin),
+							redirect: atob(s.redirect),
+							authMethod: "",
+							loginType: "",
+							clientid: client_id,
+							flow: "launcher",
+							pkceState: state,
+							pkceCodeVerifier: verifier,
+						}).then((e) => {
+							var win = window.open(e, "", "width=480,height=720");
+							pendingOauth = { state: state, verifier: verifier, win: win };
+						});
+					} else {
+						pendingOauth.win.focus();
+					}
+				};
+				
+				logoutButton.innerText = "Log out of all accounts";
+				logoutButton.setAttribute("class", "button-red");
+				logoutButton.onclick = () => {
+					msg("Note: the logout button doesn't do anything yet");
+				};
+
+				var p = document.createElement("p");
+				p.innerText = "Messages:";
+				loginButtons.appendChild(loginButton);
+				loginButtons.appendChild(logoutButton);
+				document.body.appendChild(loginButtons);
+				document.body.appendChild(loggedInInfo);
+				document.body.appendChild(document.createElement("br"));
+				document.body.appendChild(document.createElement("hr"));
+				document.body.appendChild(gameAccountSelection);
+				document.body.appendChild(launchGameButtons);
+				document.body.appendChild(document.createElement("br"));
+				document.body.appendChild(document.createElement("hr"));
+				document.body.appendChild(p);
+				document.body.appendChild(messages);
+
+				credentials.forEach((x) => {
+					handleLogin(s, null, x, exchange_url, client_id);
+				});
 			}
 
 			// called on new successful login with credentials, delegates to a specific handler based on login_provider value
-			function handleLogin(s, w, exchange_url, client_id, state) {
-				switch (credentials.login_provider) {
+			function handleLogin(s, win, creds, exchange_url, client_id) {
+				switch (creds.login_provider) {
 					case atob(s.provider):
-						w.close();
-						handleGameLogin(s, exchange_url, client_id);
+						if (win) {
+							win.close();
+						}
+						handleGameLogin(s, creds, exchange_url, client_id);
 						break;
 					default:
-						handleStandardLogin(s, w, exchange_url, client_id, state);
+						handleStandardLogin(s, win, creds, exchange_url, client_id);
 						break;
 				}
 			}
 
 			// called when login was successful, but with absent or unrecognised login_provider
-			function handleStandardLogin(s, w, refresh_url, client_id, state) {
-				if (pendingGameAuth !== null) {
-					throw new Error("game auth flow started while another was already pending");
-				}
+			function handleStandardLogin(s, w, creds, refresh_url, client_id) {
+				const state = makeRandomState();
 				const nonce = crypto.randomUUID();
-				pendingGameAuth = {
+				const location = atob(s.origin).concat("/oauth2/auth?").concat(new URLSearchParams({
+					id_token_hint: creds.id_token,
+					nonce: btoa(nonce),
+					prompt: "consent",
+					redirect_uri: "http://localhost",
+					response_type: "id_token code",
+					state: state,
+					client_id: "1fddee4e-b100-4f4e-b2b0-097f9088f9d2",
+					scope: "openid offline"
+				}));
+
+				var win = w;
+				if (win) {
+					win.location.href = location;
+				} else {
+					win = window.open(location, "", "width=480,height=720");
+				}
+				pendingGameAuth.push({
 					state: state,
 					nonce: nonce,
+					win: win,
 					account_info_promise: new Promise((resolve, reject) => {
-						const url = atob(s.api).concat("/users/").concat(credentials.sub).concat("/displayName");
+						const url = atob(s.api).concat("/users/").concat(creds.sub).concat("/displayName");
 						var xml = new XMLHttpRequest();
 						xml.onreadystatechange = () => {
 							if (xml.readyState == 4) {
@@ -328,44 +425,31 @@
 								}
 							}
 						};
-						xml.onerror = () => {
-							resolve(0);
-						};
 						xml.open('GET', url, true);
-						xml.setRequestHeader("Authorization", "Bearer ".concat(credentials.access_token));
+						xml.setRequestHeader("Authorization", "Bearer ".concat(creds.access_token));
 						xml.send();
 					})
-				};
-				w.location.href = atob(s.origin).concat("/oauth2/auth?").concat(new URLSearchParams({
-					id_token_hint: credentials.id_token,
-					nonce: btoa(nonce),
-					prompt: "consent",
-					redirect_uri: "http://localhost",
-					response_type: "id_token code",
-					state: state,
-					client_id: "1fddee4e-b100-4f4e-b2b0-097f9088f9d2",
-					scope: "openid offline"
-				}));
+				});
 			}
 
 			// called after successful login using a game account as the login_provider
-			function handleGameLogin(s, refresh_url, client_id) {
+			function handleGameLogin(s, creds, refresh_url, client_id) {
 				const auth_url = atob(s.profile_api).concat("/profile");
 				var xml = new XMLHttpRequest();
 				xml.onreadystatechange = () => {
 					if (xml.readyState == 4) {
 						if (xml.status == 200) {
+							// note: select element is just for show here and unused in the callback,
+							// since there can only be one game account in this situation
 							const name_info = JSON.parse(xml.response);
-							clearRoot();
-							var logged_in = document.createElement("p");
-							if (name_info.displayNameSet) {
-								logged_in.innerHTML = `Currently logged in as <b>${name_info.displayName}</b>`;
-							} else {
-								logged_in.innerText = "Currently logged in (no display name set)";
-							}
-							root.appendChild(logged_in);
-							root.appendChild(generateLaunchButtons((f, element) => {
-								getShieldTokens(atob(s.shield_url), name_info.displayNameSet ? name_info.displayName : "", refresh_url, client_id).then((e) => {
+							const name_text = name_info.displayNameSet ? name_info.displayName : "[no name set]";
+							var select = document.createElement("select");
+							var opt = document.createElement("option");
+							opt.innerText = name_text;
+							select.add(opt);
+							msg(`Successfully added login for ${name_text}`);
+							addNewAccount(name_text, (f, element, opt) => {
+								getShieldTokens(creds, atob(s.shield_url), name_info.displayNameSet ? name_info.displayName : "", refresh_url, client_id).then((e) => {
 									if (typeof e !== "number") {
 										f(s, element, e.access_token, e.refresh_token, null, null, name_info.displayNameSet ? name_info.displayName : null);
 									} else {
@@ -373,8 +457,7 @@
 										element.disabled = false;
 									}
 								});
-							}));
-							root.appendChild(footer(true));
+							}, select);
 						} else {
 							err(`Error: from ${auth_url}: ${xml.status}: ${xml.response}`, false);
 						}
@@ -384,15 +467,15 @@
 					err(`Error: ${auth_url}: non-http error`, false);
 				};
 				xml.open('GET', auth_url, true);
-				xml.setRequestHeader("Authorization", "Bearer ".concat(credentials.id_token));
+				xml.setRequestHeader("Authorization", "Bearer ".concat(creds.id_token));
 				xml.send();
 			}
 
 			// use oauth creds to get a response from the "shield" endpoint
 			// returns a JSON object on success or a HTTP status code on failure
-			function getShieldTokens(url, display_name, refresh_url, client_id) {
+			function getShieldTokens(creds, url, display_name, refresh_url, client_id) {
 				return new Promise((resolve, reject) => {
-					checkRenewCreds(refresh_url, client_id).then((status) => {
+					checkRenewCreds(creds, refresh_url, client_id).then((status) => {
 						if (status === null) {
 							var xml = new XMLHttpRequest();
 							xml.open('POST', url, true);
@@ -407,11 +490,8 @@
 									}
 								}
 							};
-							xml.onerror = () => {
-								resolve(xml.status);
-							};
 							xml.send(new URLSearchParams({
-								token: credentials.access_token,
+								token: creds.access_token,
 								grant_type: "token_exchange",
 								scope: "gamesso.token.create"
 							}));
@@ -423,22 +503,51 @@
 				});
 			}
 
-			// generates an HTML element containing launch-game buttons
+			// adds an option to the accounts drop-down menu at the top of the page
+			// genLoginVars is the function that will be passed to generateLaunchButtons
+			function addNewAccount(name, genLoginVars, select) {
+				const index = accountSelect.childElementCount;
+				var opt = document.createElement("option");
+				opt.genLoginVars = genLoginVars;
+				opt.name = name;
+				opt.innerText = name;
+				opt.gameAccountSelect = select;
+				accountSelect.add(opt);
+				accountSelect.selectedIndex = index;
+				accountSelect.onchange();
+			}
+
+			// populates the gameAccountSelection element and by extension the launchGameButtons element
+			// "f" is the function passed to generateLaunchButtons, "select" is a HTML Select element
+			function generateAccountSelection(f, select) {
+				clearElement(gameAccountSelection);
+				var label = document.createElement("label");
+				label.for = select;
+				label.innerText = "Choose a game account:";
+				select.onchange = () => {
+					clearElement(launchGameButtons);
+					if (select.selectedIndex >= 0) {
+						generateLaunchButtons(f, select.options[select.selectedIndex]);
+					}
+				};
+				select.onchange();
+				gameAccountSelection.appendChild(label);
+				gameAccountSelection.appendChild(select);
+			}
+
+			// populates the launchGameButtons element with buttons
 			// the parameter is a function callback, which must take exactly two arguments:
 			// 1. a function which your function should invoke with JX env variables, e.g. launchRS3Linux
 			// 2. a HTML Button element, which should be passed to parameter 1 when invoking it, or, if not
+			// 3. a HTML Option element, representing the currently selected game account
 			//    invoking the callback for some reason, then set disabled=false on parameter 2 before returning
-			function generateLaunchButtons(f) {
-				var div = document.createElement("div");
-
+			function generateLaunchButtons(f, opt) {
 				if (platform === "linux") {
 					var rs3_linux = document.createElement("button");
-					rs3_linux.onclick = () => { rs3_linux.disabled = true; f(launchRS3Linux, rs3_linux); };
+					rs3_linux.onclick = () => { rs3_linux.disabled = true; f(launchRS3Linux, rs3_linux, opt); };
 					rs3_linux.innerText = "Launch RS3";
-					div.appendChild(rs3_linux);
+					launchGameButtons.appendChild(rs3_linux);
 				}
-
-				return div;
 			}
 
 			// asynchronously download and launch RS3's official .deb client using the given env variables
@@ -513,27 +622,11 @@
 				xml.send();
 			}
 
-			// clears all content from root
-			function clearRoot() {
-				while (root.lastElementChild) {
-					root.removeChild(root.lastElementChild);
+			// clears all child content from an element
+			function clearElement(e) {
+				while (e.lastElementChild) {
+					e.removeChild(e.lastElementChild);
 				}
-			}
-
-			// generates footer element for pages
-			function footer(separator) {
-				if (separator) {
-					root.appendChild(document.createElement("br"));
-					var hr = document.createElement("hr");
-					hr.style = "width: 85%;";
-					root.appendChild(hr);
-				}
-				var d = document.createElement("div");
-				var p = document.createElement("p");
-				p.innerText = "Output:";
-				d.appendChild(p);
-				d.appendChild(messages);
-				return d;
 			}
 
 			// adds a message to the message list, returning the inner <p> element
@@ -544,6 +637,9 @@
 				var li = document.createElement("li");
 				li.appendChild(p);
 				messages.insertBefore(li, messages.firstChild);
+				while (messages.childElementCount > 20) {
+					messages.removeChild(messages.lastChild);
+				}
 				return p;
 			}
 
@@ -553,12 +649,9 @@
 				if (!do_throw) {
 					console.error(str);
 				}
-				var p = document.createElement("p");
-				p.innerText = str;
-				p.style = "background-color: #FF30303A;";
-				var li = document.createElement("li");
-				li.appendChild(p);
-				messages.insertBefore(li, messages.firstChild);
+				while (messages.childElementCount > 20) {
+					messages.removeChild(messages.lastChild);
+				}
 				if (do_throw) {
 					throw new Error(str);
 				}
