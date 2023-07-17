@@ -5,6 +5,11 @@
 		<meta charset="utf-8" />
 		<title>Bolt Launcher</title>
 		<style>
+			body {
+				overflow: hidden;
+				z-index: 0;
+			}
+
 			select {
 				margin-left: 10px;
 				margin-right: 10px;
@@ -24,6 +29,35 @@
 
 			.button-red {
 				background-color:#f49088;
+			}
+
+			.p-disclaimer {
+				user-select: none;
+				font-size: 28px;
+			}
+
+			.button-disclaimer {
+				width: 300px;
+				height: 70px;
+				text-align: center;
+				font-size: 48px;
+				background-color: #6868E0;
+			}
+
+			.div-bg {
+				padding-left: 6%;
+				padding-right: 6%;
+				padding-top: auto;
+				padding-bottom: auto;
+				left: 0;
+				top: 0;
+				width: 88%;
+				height: 100%;
+				position: absolute;
+				z-index: 10;
+				text-align: center;
+				vertical-align: middle;
+				background-color: #CCCCCC;
 			}
 		</style>
 		<script>
@@ -368,6 +402,28 @@
 				document.body.appendChild(p);
 				document.body.appendChild(messages);
 
+				if (!c) {
+					var disclaimer = document.createElement("div");
+					var close_disclaimer = document.createElement("button");
+					disclaimer.setAttribute("class", "div-bg");
+					close_disclaimer.setAttribute("class", "button-disclaimer");
+					close_disclaimer.innerText = "I understand";
+					close_disclaimer.onclick = () => {
+						disclaimer.remove();
+					};
+					var p1 = document.createElement("p");
+					p1.setAttribute("class", "p-disclaimer");
+					p1.innerHTML = atob("Qm9sdCBpcyBhbiA8Yj51bm9mZmljaWFsIHRoaXJkLXBhcnR5IGxhdW5jaGVyPC9iPi4gSXQncyBmcmVlIGFuZCBvcGVuLXNvdXJjZSBzb2Z0d2FyZSBsaWNlbnNlZCB1bmRlciBBR1BMIDMuMC4=");
+					var p2 = document.createElement("p");
+					p2.setAttribute("class", "p-disclaimer");
+					p2.innerHTML = atob("SmFnZXggaXMgPGI+bm90IHJlc3BvbnNpYmxlPC9iPiBmb3IgYW55IHByb2JsZW1zIG9yIGRhbWFnZSBjYXVzZWQgYnkgdXNpbmcgdGhpcyBwcm9kdWN0Lg");
+					disclaimer.appendChild(document.createElement("br"));
+					disclaimer.appendChild(p1);
+					disclaimer.appendChild(p2);
+					disclaimer.appendChild(close_disclaimer);
+					document.body.appendChild(disclaimer);
+				}
+
 				credentials.forEach((x) => {
 					handleLogin(s, null, x, exchange_url, client_id);
 				});
@@ -658,5 +714,5 @@
 			}
 		</script>
 	</head>
-	<body style="overflow:hidden" onload="start(s())" />
+	<body onload="start(s())" />
 </html>
