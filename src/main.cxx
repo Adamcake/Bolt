@@ -121,7 +121,7 @@ int main(int argc, char* argv[]) {
 bool LockDataDirectory(std::filesystem::path& path) {
 	const char* xdg_data_home = getenv("XDG_DATA_HOME");
 	const char* home = getenv("HOME");
-	if (xdg_data_home) {
+	if (xdg_data_home && *xdg_data_home) {
 		path.assign(xdg_data_home);
 	} else if (home) {
 		path.assign(home);
