@@ -2,10 +2,19 @@ cmake_minimum_required(VERSION 3.21) # Minimum CEF requirement, but building wit
 project(Bolt VERSION 0.1 LANGUAGES C CXX)
 if(NOT WIN32)
     # necessary for installing files in both /opt and /usr
-    set(CMAKE_INSTALL_PREFIX /)
+    # can be overridden using --install-prefix in the initial cmake setup command
+    if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+        set(CMAKE_INSTALL_PREFIX /)
+    endif()
+
+    # defines DESTINATION of shell script (relative to CMAKE_INSTALL_PREFIX, unless set to an absolute path)
+    # things like flatpak need to override this
+    if(NOT BOLT_BINDIR)
+        set(BOLT_BINDIR usr/local/bin)
+    endif()
 
     # Short shell script to be installed in /usr/local/bin, gets renamed to "bolt" later
-    file(GENERATE OUTPUT bolt-run.sh CONTENT "#!/bin/sh -eu\ncd /opt/bolt-launcher\n./bolt \"$@\"\n")
+    file(GENERATE OUTPUT bolt-run.sh CONTENT "#!/bin/sh -eu\ncd ${CMAKE_INSTALL_PREFIX}/opt/bolt-launcher\n./bolt \"$@\"\n")
 
     # auto-generated helper for running from build dir; this file does not get installed
     file(GENERATE OUTPUT bolt.sh CONTENT "#!/bin/sh -eu\nexport XDG_DATA_HOME=${CMAKE_CURRENT_BINARY_DIR}/data\ncd ${CMAKE_CURRENT_BINARY_DIR}/opt/bolt-launcher\n./bolt \"$@\"\n" FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
@@ -18,7 +27,9 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 file(GENERATE OUTPUT .gitignore CONTENT "*")
 
 # libcef C++ wrapper
-set(CEF_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/cef/dist")
+if(NOT CEF_ROOT)
+    set(CEF_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/cef/dist")
+endif()
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CEF_ROOT}/cmake")
 find_package(CEF REQUIRED)
 add_subdirectory(${CEF_LIBCEF_DLL_WRAPPER_PATH} libcef_dll_wrapper)
@@ -64,5 +75,5 @@ endif()
 
 # Finally, install shell script in bin dir
 if(NOT WIN32)
-    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/bolt-run.sh" RENAME bolt DESTINATION usr/local/bin PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/bolt-run.sh" RENAME bolt DESTINATION ${BOLT_BINDIR} PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 endif()
