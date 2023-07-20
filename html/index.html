@@ -499,7 +499,7 @@
 							// note: select element is just for show here and unused in the callback,
 							// since there can only be one game account in this situation
 							const name_info = JSON.parse(xml.response);
-							const name_text = name_info.displayNameSet ? name_info.displayName : "[no name set]";
+							const name_text = name_info.displayNameSet ? name_info.displayName : `#${creds.sub}`;
 							var select = document.createElement("select");
 							var opt = document.createElement("option");
 							opt.innerText = name_text;
