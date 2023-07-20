@@ -71,7 +71,7 @@ namespace Browser {
 			bool&
 		) override;
 
-		private:
+		protected:
 			bool show_devtools;
 			Details details;
 			CefRefPtr<CefWindow> window;
