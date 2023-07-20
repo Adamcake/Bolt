@@ -211,7 +211,7 @@
 				rs3LinuxInstalledHash = query.get("rs3_linux_installed_hash");
 				const c = query.get("credentials");
 				if (c) {
-					credentials = JSON.parse(atob(c));
+					credentials = JSON.parse(c);
 				}
 
 				window.addEventListener("message", (event) => {
@@ -238,6 +238,7 @@
 											const creds = parseCredentials(xml.response);
 											if (creds) {
 												credentials.push(creds);
+												saveAllCreds();
 												handleLogin(s, pending.win, creds, exchange_url, client_id);
 											} else {
 												err(`Error: invalid credentials received`, false);
@@ -533,6 +534,8 @@
 				return new Promise((resolve, reject) => {
 					checkRenewCreds(creds, refresh_url, client_id).then((status) => {
 						if (status === null) {
+							saveAllCreds();
+
 							var xml = new XMLHttpRequest();
 							xml.open('POST', url, true);
 							xml.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
@@ -557,6 +560,20 @@
 						}
 					});
 				});
+			}
+
+			// sends a request to save all credentials to their config file,
+			// overwriting the previous file, if any
+			async function saveAllCreds() {
+				var xml = new XMLHttpRequest();
+				xml.open('POST', "/save-credentials", true);
+				xml.setRequestHeader("Content-Type", "application/json");
+				xml.onreadystatechange = () => {
+					if (xml.readyState == 4) {
+						msg(`Save-credentials status: ${xml.responseText.trim()}`);
+					}
+				};
+				xml.send(credentials);
 			}
 
 			// adds an option to the accounts drop-down menu at the top of the page
