@@ -29,6 +29,7 @@ namespace Browser {
 			std::string internal_url = "https://bolt-internal/";
 			const std::map<std::string, InternalFile>* internal_pages;
 			std::filesystem::path data_dir;
+			std::filesystem::path creds_path;
 			std::filesystem::path rs3_path;
 			std::filesystem::path rs3_hash_path;
 			size_t env_count;

@@ -21,11 +21,15 @@ Browser::Launcher::Launcher(
 ): Window(details, show_devtools), data_dir(data_dir), internal_pages(internal_pages) {
 	std::string url = this->internal_url + std::string("index.html?platform=linux");
 
+	this->creds_path = data_dir;
+	this->creds_path.append("creds");
+
 	this->rs3_path = data_dir;
 	this->rs3_path.append("rs3linux");
 
 	this->rs3_hash_path = data_dir;
 	this->rs3_hash_path.append("rs3linux.sha256");
+
 	int file = open(this->rs3_hash_path.c_str(), O_RDONLY);
 	if (file != -1) {
 		char buf[64];
@@ -36,6 +40,23 @@ Browser::Launcher::Launcher(
 		}
 	}
 	close(file);
+
+	struct stat file_status;
+	if (stat(this->creds_path.c_str(), &file_status) >= 0) {
+		file = open(this->creds_path.c_str(), O_RDONLY);
+		if (file != -1) {
+			char* buf = new char[file_status.st_size];
+			size_t written = 0;
+			while (written < file_status.st_size) {
+				written += read(file, buf + written, file_status.st_size - written);
+			}
+			CefString str = CefURIEncode(CefString(buf), true);
+			url += "&credentials=";
+			url += str.ToString();
+			delete[] buf;
+			close(file);
+		}
+	}
 
 	this->env_count = 0;
 	char** env = environ;
@@ -398,6 +419,35 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 				const char* data = "Error spawning process\n";
 				return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 500, "text/plain");
 			}
+		}
+
+		// instruction to save user credentials to disk
+		if (path == "/save-credentials") {
+			CefRefPtr<CefPostData> post_data = request->GetPostData();
+			if (post_data->GetElementCount() != 1) {
+				const char* data = "Bad request\n";
+				return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+			}
+
+			CefPostData::ElementVector elements;
+			post_data->GetElements(elements);
+			size_t byte_count = elements[0]->GetBytesCount();
+			size_t written = 0;
+			int file = open(this->creds_path.c_str(), O_WRONLY | O_CREAT, 0644);
+			if (file == -1) {
+				const char* data = "Failed to open file\n";
+				return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
+			}
+			unsigned char* buf = new unsigned char[byte_count];
+			elements[0]->GetBytes(byte_count, buf);
+			while (written < byte_count) {
+				written += write(file, buf + written, byte_count - written);
+			}
+			close(file);
+			delete[] buf;
+
+			const char* data = "OK\n";
+			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
 		}
 
 		// respond using internal hashmap of filenames
