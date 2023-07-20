@@ -314,7 +314,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 				delete[] tar_xz;
 
 				written = 0;
-				int file = open(this->rs3_path.c_str(), O_WRONLY | O_CREAT, 0755);
+				int file = open(this->rs3_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0755);
 				if (file == -1) {
 					delete[] game;
 					const char* data = "Failed to save executable; if the game is already running, close it and try again\n";
@@ -401,7 +401,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 
 				if (has_hash) {
 					size_t written = 0;
-					int file = open(this->rs3_hash_path.c_str(), O_WRONLY | O_CREAT, 0644);
+					int file = open(this->rs3_hash_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
 					if (file == -1) {
 						const char* data = "OK, but unable to save hash file\n";
 						return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
@@ -433,7 +433,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 			post_data->GetElements(elements);
 			size_t byte_count = elements[0]->GetBytesCount();
 			size_t written = 0;
-			int file = open(this->creds_path.c_str(), O_WRONLY | O_CREAT, 0644);
+			int file = open(this->creds_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
 			if (file == -1) {
 				const char* data = "Failed to open file\n";
 				return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
