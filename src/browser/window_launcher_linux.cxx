@@ -50,7 +50,7 @@ Browser::Launcher::Launcher(
 			while (written < file_status.st_size) {
 				written += read(file, buf + written, file_status.st_size - written);
 			}
-			CefString str = CefURIEncode(CefString(buf), true);
+			CefString str = CefURIEncode(CefString(buf, file_status.st_size), true);
 			url += "&credentials=";
 			url += str.ToString();
 			delete[] buf;
