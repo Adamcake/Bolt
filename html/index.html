@@ -403,6 +403,10 @@
 				document.body.appendChild(p);
 				document.body.appendChild(messages);
 
+				var loading = document.createElement("div");
+				loading.setAttribute("class", "div-bg");
+				document.body.appendChild(loading);
+
 				if (!c) {
 					var disclaimer = document.createElement("div");
 					var close_disclaimer = document.createElement("button");
@@ -425,9 +429,17 @@
 					document.body.appendChild(disclaimer);
 				}
 
-				credentials.forEach((x) => {
-					handleLogin(s, null, x, exchange_url, client_id);
-				});
+				(async () => {
+					const promises = credentials.map((x) => { checkRenewCreds(x, exchange_url, client_id); });
+					credentials = (await Promise.all(promises)).filter((x) => {
+						if (x === null) {
+							handleLogin(s, null, x, exchange_url, client_id);
+						}
+						return x === null || x === 0;
+					});
+					saveAllCreds();
+					loading.remove();
+				})();
 			}
 
 			// called on new successful login with credentials, delegates to a specific handler based on login_provider value
