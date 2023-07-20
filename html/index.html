@@ -573,7 +573,7 @@
 						msg(`Save-credentials status: ${xml.responseText.trim()}`);
 					}
 				};
-				xml.send(credentials);
+				xml.send(JSON.stringify(credentials));
 			}
 
 			// adds an option to the accounts drop-down menu at the top of the page
