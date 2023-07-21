@@ -20,19 +20,12 @@ namespace Browser {
 		) override;
 
 		private:
-			std::string env_key_home = "HOME=";
-			std::string env_key_access_token = "JX_ACCESS_TOKEN=";
-			std::string env_key_refresh_token = "JX_REFRESH_TOKEN=";
-			std::string env_key_session_id = "JX_SESSION_ID=";
-			std::string env_key_character_id = "JX_CHARACTER_ID=";
-			std::string env_key_display_name = "JX_DISPLAY_NAME=";
 			std::string internal_url = "https://bolt-internal/";
 			const std::map<std::string, InternalFile>* internal_pages;
 			std::filesystem::path data_dir;
 			std::filesystem::path creds_path;
 			std::filesystem::path rs3_path;
 			std::filesystem::path rs3_hash_path;
-			size_t env_count;
 	};
 }
 

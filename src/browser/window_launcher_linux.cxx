@@ -12,6 +12,13 @@
 
 extern char **environ;
 
+constexpr std::string_view env_key_home = "HOME=";
+constexpr std::string_view env_key_access_token = "JX_ACCESS_TOKEN=";
+constexpr std::string_view env_key_refresh_token = "JX_REFRESH_TOKEN=";
+constexpr std::string_view env_key_session_id = "JX_SESSION_ID=";
+constexpr std::string_view env_key_character_id = "JX_CHARACTER_ID=";
+constexpr std::string_view env_key_display_name = "JX_DISPLAY_NAME=";
+
 Browser::Launcher::Launcher(
 	CefRefPtr<CefClient> client,
 	Details details,
@@ -56,13 +63,6 @@ Browser::Launcher::Launcher(
 			delete[] buf;
 			close(file);
 		}
-	}
-
-	this->env_count = 0;
-	char** env = environ;
-	while (*env != nullptr) {
-		this->env_count += 1;
-		env += 1;
 	}
 
 	this->Init(client, details, url, show_devtools);
@@ -194,31 +194,31 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 				if (key == "jx_access_token") {
 					auto value_end = next_amp == std::string::npos ? query.end() : query.begin() + next_amp;
 					CefString value = std::string(std::string_view(query.begin() + next_eq + 1,  value_end));
-					env_access_token = std::string("JX_ACCESS_TOKEN=") + CefURIDecode(value, true, UU_SPACES).ToString();
+					env_access_token = std::string(env_key_access_token) + CefURIDecode(value, true, UU_SPACES).ToString();
 					should_set_access_token = true;
 				}
 				if (key == "jx_refresh_token") {
 					auto value_end = next_amp == std::string::npos ? query.end() : query.begin() + next_amp;
 					CefString value = std::string(std::string_view(query.begin() + next_eq + 1,  value_end));
-					env_refresh_token = std::string("JX_REFRESH_TOKEN=") + CefURIDecode(value, true, UU_SPACES).ToString();
+					env_refresh_token = std::string(env_key_refresh_token) + CefURIDecode(value, true, UU_SPACES).ToString();
 					should_set_refresh_token = true;
 				}
 				if (key == "jx_session_id") {
 					auto value_end = next_amp == std::string::npos ? query.end() : query.begin() + next_amp;
 					CefString value = std::string(std::string_view(query.begin() + next_eq + 1,  value_end));
-					env_session_id = std::string("JX_SESSION_ID=") + CefURIDecode(value, true, UU_SPACES).ToString();
+					env_session_id = std::string(env_key_session_id) + CefURIDecode(value, true, UU_SPACES).ToString();
 					should_set_session_id = true;
 				}
 				if (key == "jx_character_id") {
 					auto value_end = next_amp == std::string::npos ? query.end() : query.begin() + next_amp;
 					CefString value = std::string(std::string_view(query.begin() + next_eq + 1,  value_end));
-					env_character_id = std::string("JX_CHARACTER_ID=") + CefURIDecode(value, true, UU_SPACES).ToString();
+					env_character_id = std::string(env_key_character_id) + CefURIDecode(value, true, UU_SPACES).ToString();
 					should_set_character_id = true;
 				}
 				if (key == "jx_display_name") {
 					auto value_end = next_amp == std::string::npos ? query.end() : query.begin() + next_amp;
 					CefString value = std::string(std::string_view(query.begin() + next_eq + 1,  value_end));
-					env_display_name = std::string("JX_DISPLAY_NAME=") + CefURIDecode(value, true, UU_SPACES).ToString();
+					env_display_name = std::string(env_key_display_name) + CefURIDecode(value, true, UU_SPACES).ToString();
 					should_set_display_name = true;
 				}
 
@@ -327,6 +327,10 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 				delete[] game;
 			}
 
+			char** e;
+			for (e = environ; *e; e += 1);
+			size_t env_count = e - environ;
+
 			posix_spawn_file_actions_t file_actions;
 			posix_spawnattr_t attributes;
 			pid_t pid;
@@ -338,26 +342,26 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 			argv[0] = path_str.data();
 			argv[1] = nullptr;
 			bool should_set_home = true;
-			std::string env_home = this->env_key_home + this->data_dir.c_str();
-			char** env = new char*[this->env_count + 7];
+			std::string env_home = std::string(env_key_home) + this->data_dir.string();
+			char** env = new char*[env_count + 7];
 			size_t i;
-			for (i = 0; i < this->env_count; i += 1) {
-				if (should_set_access_token && strncmp(environ[i], this->env_key_access_token.c_str(), this->env_key_access_token.size()) == 0) {
+			for (i = 0; i < env_count; i += 1) {
+				if (should_set_access_token && strncmp(environ[i], env_key_access_token.data(), env_key_access_token.size()) == 0) {
 					should_set_access_token = false;
 					env[i] = env_access_token.data();
-				} else if (should_set_refresh_token && strncmp(environ[i], this->env_key_refresh_token.c_str(), this->env_key_refresh_token.size()) == 0) {
+				} else if (should_set_refresh_token && strncmp(environ[i], env_key_refresh_token.data(), env_key_refresh_token.size()) == 0) {
 					should_set_refresh_token = false;
 					env[i] = env_refresh_token.data();
-				} else if (should_set_session_id && strncmp(environ[i], this->env_key_session_id.c_str(), this->env_key_session_id.size()) == 0) {
+				} else if (should_set_session_id && strncmp(environ[i], env_key_session_id.data(), env_key_session_id.size()) == 0) {
 					should_set_session_id = false;
 					env[i] = env_session_id.data();
-				} else if (should_set_character_id && strncmp(environ[i], this->env_key_character_id.c_str(), this->env_key_character_id.size()) == 0) {
+				} else if (should_set_character_id && strncmp(environ[i], env_key_character_id.data(), env_key_character_id.size()) == 0) {
 					should_set_character_id = false;
 					env[i] = env_character_id.data();
-				} else if (should_set_display_name && strncmp(environ[i], this->env_key_display_name.c_str(), this->env_key_display_name.size()) == 0) {
+				} else if (should_set_display_name && strncmp(environ[i], env_key_display_name.data(), env_key_display_name.size()) == 0) {
 					should_set_display_name = false;
 					env[i] = env_display_name.data();
-				} else if (strncmp(environ[i], this->env_key_home.c_str(), this->env_key_home.size()) == 0) {
+				} else if (strncmp(environ[i], env_key_home.data(), env_key_home.size()) == 0) {
 					should_set_home = false;
 					env[i] = env_home.data();
 				} else {
