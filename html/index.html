@@ -430,14 +430,15 @@
 				}
 
 				(async () => {
-					const promises = credentials.map((x) => { checkRenewCreds(x, exchange_url, client_id); });
-					credentials = (await Promise.all(promises)).filter((x) => {
-						if (x === null) {
-							handleLogin(s, null, x, exchange_url, client_id);
-						}
-						return x === null || x === 0;
-					});
-					saveAllCreds();
+					if (credentials.length > 0) {
+						const promises = credentials.map(async (x) => { return { creds: x, result: await checkRenewCreds(x, exchange_url, client_id) }; });
+						const responses = await Promise.all(promises);
+						credentials = responses.filter((x) => {
+							return x.result === null || x.result === 0;
+						}).map((x) => x.creds);
+						credentials.forEach((x) => { handleLogin(s, null, x, exchange_url, client_id); });
+						saveAllCreds();
+					}
 					loading.remove();
 				})();
 			}
