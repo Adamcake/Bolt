@@ -88,7 +88,7 @@
 						const post_data = new URLSearchParams({
 							grant_type: "refresh_token",
 							client_id: client_id,
-							refresh_token: credentials.refresh_token
+							refresh_token: creds.refresh_token
 						});
 						var xml = new XMLHttpRequest();
 						xml.onreadystatechange = () => {
