@@ -82,7 +82,15 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 	constexpr char tar_xz_inner_path[] = {
 		46, 47, 117, 115, 114, 47, 115, 104, 97, 114, 101, 47, 103, 97, 109, 101,
 		115, 47, 114, 117, 110, 101, 115, 99, 97, 112, 101, 45, 108, 97, 117,
-		110, 99, 104, 101, 114, 47, 114, 117, 110, 101, 115, 99,97, 112, 101
+		110, 99, 104, 101, 114, 47, 114, 117, 110, 101, 115, 99,97, 112, 101, 0
+	};
+	constexpr char launcher_redirect_domain[] = {
+		115, 101, 99, 117, 114, 101, 46, 114, 117, 110, 101, 115, 99, 97, 112, 101,
+		46, 99, 111, 109, 0
+	};
+	constexpr char launcher_redirect_path[] = {
+		47, 109, 61, 119, 101, 98, 108, 111, 103, 105, 110, 47, 108, 97, 117, 110,
+		99, 104, 101, 114, 45, 114, 101, 100, 105, 114, 101, 99, 116, 0
 	};
 
 	// Parse URL
@@ -146,6 +154,14 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 	const std::string_view path(domain_end, next_question == std::string::npos ? url_end : request_url.begin() + next_question);
 	const std::string_view query(request_url.begin() + next_question + 1, next_question == std::string::npos ? request_url.begin() + next_question + 1 : url_end);
 	const std::string_view comment(next_hash == std::string::npos ? request_url.end() : request_url.begin() + next_hash + 1, request_url.end());
+
+	// handler for launcher-redirect url
+	if (domain == launcher_redirect_domain && path == launcher_redirect_path) {
+		disable_default_handling = true;
+		const char* data = "Moved\n";
+		CefString location = CefString(this->internal_url + "oauth.html?" + std::string(query));
+		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 302, "text/plain", location);
+	}
 
 	// handler for another custom request thing, but this one uses localhost, for whatever reason
 	if (domain == "localhost" && path == "/" && comment.starts_with("code=")) {
