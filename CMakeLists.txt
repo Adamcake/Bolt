@@ -70,7 +70,7 @@ if(APPLE)
     # TODO: mac support
 else()
     install(TARGETS bolt DESTINATION opt/bolt-launcher)
-    install(DIRECTORY "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/" "${CEF_ROOT}/Resources/" "${CMAKE_CURRENT_SOURCE_DIR}/html" DESTINATION opt/bolt-launcher)
+    install(DIRECTORY "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/" "${CEF_ROOT}/Resources/" "${CMAKE_CURRENT_SOURCE_DIR}/html" DESTINATION opt/bolt-launcher USE_SOURCE_PERMISSIONS)
 endif()
 
 # Finally, install shell script in bin dir
