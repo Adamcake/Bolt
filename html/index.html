@@ -205,13 +205,15 @@
 				if (close_window) {
 					pending.win.close();
 				}
-				pendingGameAuth.splice(pendingGameAuth.indexOf(pending));
+				pendingGameAuth.splice(pendingGameAuth.indexOf(pending), 1);
 			}
 
 			// body's onload function
 			function start(s) {
+				const s_origin = atob(s.origin);
 				const client_id = atob(s.clientid);
-				const exchange_url = atob(s.origin).concat("/oauth2/token");
+				const exchange_url = s_origin.concat("/oauth2/token");
+				const revoke_url = s_origin.concat("/oauth2/revoke");
 
 				const query = new URLSearchParams(window.location.search);
 				platform = query.get("platform");
@@ -299,10 +301,9 @@
 									if (xml.readyState == 4) {
 										if (xml.status == 200) {
 											const accounts_url = atob(s.auth_api).concat("/accounts");
-											const session_id = JSON.parse(xml.response).sessionId;
-											handleNewSessionId(s, session_id, accounts_url, pending.account_info_promise).then((x) => {
+											pending.creds.session_id = JSON.parse(xml.response).sessionId;
+											handleNewSessionId(s, pending.creds, accounts_url, pending.account_info_promise).then((x) => {
 												if (x) {
-													pending.creds.session_id = session_id;
 													credentials.push(pending.creds);
 													credentialsAreDirty = true;
 													saveAllCreds();
@@ -362,16 +363,51 @@
 						pendingOauth.win.focus();
 					}
 				};
-				
-				logoutButton.innerText = "Log out of all accounts";
+
+				logoutButton.innerText = "Log out";
 				logoutButton.setAttribute("class", "button-red");
-				logoutButton.onclick = () => {
-					msg("Note: the logout button doesn't do anything yet");
+				logoutButton.removeLogin = (opt, creds) => {
+					accountSelect.removeChild(opt);
+					accountSelect.selectedIndex = -1;
+					clearElement(gameAccountSelection);
+					clearElement(launchGameButtons);
+					credentials.splice(creds, 1);
+					credentialsAreDirty = true;
+					saveAllCreds();
 				};
+				logoutButton.onclick = () => {
+					if (accountSelect.selectedIndex < 0) {
+						msg("Logout unsuccessful: no account selected");
+						return;
+					}
+					const opt = accountSelect.options[accountSelect.selectedIndex];
+					const creds = opt.creds;
+					checkRenewCreds(creds, exchange_url, client_id).then((x) => {
+						if (x === null) {
+							revokeOauthCreds(creds.access_token, revoke_url, client_id).then((res) => {
+								if (res === 200) {
+									msg("Successful logout");
+									logoutButton.removeLogin(opt, creds);
+								} else {
+									err(`Logout unsuccessful: status ${res}`);
+								}
+							});
+						} else if (x === 400 || x === 401) {
+							msg("Logout unsuccessful: credentials are invalid, so discarding them anyway");
+							logoutButton.removeLogin(opt, creds);
+						} else {
+							err("Logout unsuccessful: unable to verify credentials due to a network error");
+						}
+					});
+				};
+
+				var text = document.createElement("text");
+				text.innerText = " | ";
 
 				var p = document.createElement("p");
 				p.innerText = "Messages:";
 				loginButtons.appendChild(loginButton);
+				loginButtons.appendChild(text);
 				loginButtons.appendChild(logoutButton);
 				document.body.appendChild(loginButtons);
 				document.body.appendChild(loggedInInfo);
@@ -436,7 +472,7 @@
 			// Handles a new session id as part of the login flow. Can also be called on startup with a
 			// persisted session id. Adds page elements and returns true on success, or returns false
 			// on failure.
-			function handleNewSessionId(s, session_id, accounts_url, account_info_promise) {
+			function handleNewSessionId(s, creds, accounts_url, account_info_promise) {
 				return new Promise((resolve, reject) => {
 					var xml = new XMLHttpRequest();
 					xml.onreadystatechange = () => {
@@ -461,9 +497,9 @@
 										const gen_login_vars = (f, element, opt) => {
 											const acc_id = opt.value;
 											const acc_name = opt.name;
-											f(s, element, null, null, session_id, acc_id, acc_name);
+											f(s, element, null, null, creds.session_id, acc_id, acc_name);
 										};
-										addNewAccount(name_text, gen_login_vars, select);
+										addNewAccount(name_text, creds, gen_login_vars, select);
 										resolve(true);
 									} else {
 										err(`Error getting account info: ${account_info}`, false);
@@ -478,7 +514,7 @@
 					};
 					xml.open('GET', accounts_url, true);
 					xml.setRequestHeader("Accept", "application/json");
-					xml.setRequestHeader("Authorization", "Bearer ".concat(session_id));
+					xml.setRequestHeader("Authorization", "Bearer ".concat(creds.session_id));
 					xml.send();
 				});
 			}
@@ -532,7 +568,7 @@
 						return false;
 					}
 
-					return await handleNewSessionId(s, creds.session_id, atob(s.auth_api).concat("/accounts"), account_info_promise);
+					return await handleNewSessionId(s, creds, atob(s.auth_api).concat("/accounts"), account_info_promise);
 				}
 			}
 
@@ -552,7 +588,7 @@
 							opt.innerText = name_text;
 							select.add(opt);
 							msg(`Successfully added login for ${name_text}`);
-							addNewAccount(name_text, (f, element, opt) => {
+							addNewAccount(name_text, creds, (f, element, opt) => {
 								getShieldTokens(creds, atob(s.shield_url), name_info.displayNameSet ? name_info.displayName : "", refresh_url, client_id).then((e) => {
 									if (typeof e !== "number") {
 										f(s, element, e.access_token, e.refresh_token, null, null, name_info.displayNameSet ? name_info.displayName : null);
@@ -650,13 +686,14 @@
 
 			// adds an option to the accounts drop-down menu at the top of the page
 			// genLoginVars is the function that will be passed to generateLaunchButtons
-			function addNewAccount(name, genLoginVars, select) {
+			function addNewAccount(name, creds, genLoginVars, select) {
 				const index = accountSelect.childElementCount;
 				var opt = document.createElement("option");
 				opt.genLoginVars = genLoginVars;
 				opt.name = name;
 				opt.innerText = name;
 				opt.gameAccountSelect = select;
+				opt.creds = creds;
 				accountSelect.add(opt);
 				accountSelect.selectedIndex = index;
 				accountSelect.onchange();
@@ -765,6 +802,22 @@
 					launch();
 				};
 				xml.send();
+			}
+
+			// revokes the given oauth tokens, returning an http status code.
+			// tokens were revoked only if response is 200
+			function revokeOauthCreds(access_token, revoke_url, client_id) {
+				return new Promise((resolve, reject) => {
+					var xml = new XMLHttpRequest();
+					xml.open('POST', revoke_url, true);
+					xml.onreadystatechange = () => {
+						if (xml.readyState == 4) {
+							resolve(xml.status);
+						}
+					};
+					xml.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+					xml.send(new URLSearchParams({ token: access_token, client_id: client_id }));
+				});
 			}
 
 			// clears all child content from an element
