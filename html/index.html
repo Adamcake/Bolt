@@ -68,6 +68,7 @@
 			const internal_url = "https://bolt-internal";
 			var platform = null;
 			var credentials = [];
+			var credentialsAreDirty = false;
 			var pendingOauth = null;
 			var pendingGameAuth = [];
 			var rs3LinuxInstalledHash = null;
@@ -82,9 +83,10 @@
 			var launchGameButtons = document.createElement("div");
 			var footer = document.createElement("div");
 
-			// checks if `credentials` are about to expire or have already expired,
-			// and renews them using the oauth endpoint if so
-			// returns null on success or an http status code on failure
+			// Checks if `credentials` are about to expire or have already expired,
+			// and renews them using the oauth endpoint if so.
+			// Does not save credentials but sets credentialsAreDirty as appropriate.
+			// Returns null on success or an http status code on failure
 			function checkRenewCreds(creds, url, client_id) {
 				return new Promise((resolve, reject) => {
 					// only renew if less than 30 seconds left
@@ -101,6 +103,7 @@
 									const c = parseCredentials(xml.response);
 									if (c) {
 										Object.assign(creds, c);
+										credentialsAreDirty = true;
 										resolve(null);
 									} else {
 										resolve(0);
@@ -215,6 +218,7 @@
 				rs3LinuxInstalledHash = query.get("rs3_linux_installed_hash");
 				const c = query.get("credentials");
 				if (c) {
+					// no need to set credentialsAreDirty here because the contents came directly from the file
 					credentials = JSON.parse(c);
 				}
 
@@ -241,9 +245,13 @@
 										if (xml.status == 200) {
 											const creds = parseCredentials(xml.response);
 											if (creds) {
-												credentials.push(creds);
-												saveAllCreds();
-												handleLogin(s, pending.win, creds, exchange_url, client_id);
+												handleLogin(s, pending.win, creds, exchange_url, client_id).then((x) => {
+													if (x) {
+														credentials.push(creds);
+														credentialsAreDirty = true;
+														saveAllCreds();
+													}
+												});
 											} else {
 												err(`Error: invalid credentials received`, false);
 												pending.win.close();
@@ -292,45 +300,14 @@
 										if (xml.status == 200) {
 											const accounts_url = atob(s.auth_api).concat("/accounts");
 											const session_id = JSON.parse(xml.response).sessionId;
-											var xml2 = new XMLHttpRequest();
-											xml2.onreadystatechange = () => {
-												if (xml2.readyState == 4) {
-													if (xml2.status == 200) {
-														pending.account_info_promise.then((account_info) => {
-															if (typeof account_info !== "number") {
-																const name_text = `${account_info.displayName}#${account_info.suffix}`;
-																msg(`Successfully added login for ${name_text}`);
-																var select = document.createElement("select");
-																JSON.parse(xml2.response).forEach((acc) => {
-																	var opt = document.createElement("option");
-																	opt.value = acc.accountId;
-																	if (acc.displayName) {
-																		opt.name = acc.displayName;
-																		opt.innerText = acc.displayName;
-																	} else {
-																		opt.innerText = `#${acc.accountId}`;
-																	}
-																	select.appendChild(opt);
-																});
-																const gen_login_vars = (f, element, opt) => {
-																	const acc_id = opt.value;
-																	const acc_name = opt.name;
-																	f(s, element, null, null, session_id, acc_id, acc_name);
-																};
-																addNewAccount(name_text, gen_login_vars, select);
-															} else {
-																err(`Error getting account info: ${account_info}`, false);
-															}
-														});
-													} else {
-														err(`Error: from ${accounts_url}: ${xml2.status}: ${xml2.response}`, false);
-													}
+											handleNewSessionId(s, session_id, accounts_url, pending.account_info_promise).then((x) => {
+												if (x) {
+													pending.creds.session_id = session_id;
+													credentials.push(pending.creds);
+													credentialsAreDirty = true;
+													saveAllCreds();
 												}
-											};
-											xml2.open('GET', accounts_url, true);
-											xml2.setRequestHeader("Accept", "application/json");
-											xml2.setRequestHeader("Authorization", "Bearer ".concat(session_id));
-											xml2.send();
+											});
 										} else {
 											err(`Error: from ${sessions_url}: ${xml.status}: ${xml.response}`, false);
 										}
@@ -435,35 +412,95 @@
 
 				(async () => {
 					if (credentials.length > 0) {
-						const promises = credentials.map(async (x) => { return { creds: x, result: await checkRenewCreds(x, exchange_url, client_id) }; });
+						const old_credentials_size = credentials.length;
+						const promises = credentials.map(async (x) => {
+							const result = await checkRenewCreds(x, exchange_url, client_id);
+							if (result !== null && result !== 0) {
+								err(`Discarding expired login for #${x.sub}`, false);
+							}
+							if (result === null && await handleLogin(s, null, x, exchange_url, client_id)) {
+								return { creds: x, valid: true };
+							} else {
+								return { creds: x, valid: result === 0 };
+							}
+						});
 						const responses = await Promise.all(promises);
-						credentials = responses.filter((x) => {
-							return x.result === null || x.result === 0;
-						}).map((x) => x.creds);
-						credentials.forEach((x) => { handleLogin(s, null, x, exchange_url, client_id); });
+						credentials = responses.filter((x) => x.valid).map((x) => x.creds);
+						credentialsAreDirty |= credentials.length != old_credentials_size;
 						saveAllCreds();
 					}
 					loading.remove();
 				})();
 			}
 
-			// called on new successful login with credentials, delegates to a specific handler based on login_provider value
-			function handleLogin(s, win, creds, exchange_url, client_id) {
+			// Handles a new session id as part of the login flow. Can also be called on startup with a
+			// persisted session id. Adds page elements and returns true on success, or returns false
+			// on failure.
+			function handleNewSessionId(s, session_id, accounts_url, account_info_promise) {
+				return new Promise((resolve, reject) => {
+					var xml = new XMLHttpRequest();
+					xml.onreadystatechange = () => {
+						if (xml.readyState == 4) {
+							if (xml.status == 200) {
+								account_info_promise.then((account_info) => {
+									if (typeof account_info !== "number") {
+										const name_text = `${account_info.displayName}#${account_info.suffix}`;
+										msg(`Successfully added login for ${name_text}`);
+										var select = document.createElement("select");
+										JSON.parse(xml.response).forEach((acc) => {
+											var opt = document.createElement("option");
+											opt.value = acc.accountId;
+											if (acc.displayName) {
+												opt.name = acc.displayName;
+												opt.innerText = acc.displayName;
+											} else {
+												opt.innerText = `#${acc.accountId}`;
+											}
+											select.appendChild(opt);
+										});
+										const gen_login_vars = (f, element, opt) => {
+											const acc_id = opt.value;
+											const acc_name = opt.name;
+											f(s, element, null, null, session_id, acc_id, acc_name);
+										};
+										addNewAccount(name_text, gen_login_vars, select);
+										resolve(true);
+									} else {
+										err(`Error getting account info: ${account_info}`, false);
+										resolve(false);
+									}
+								});
+							} else {
+								err(`Error: from ${accounts_url}: ${xml.status}: ${xml.response}`, false);
+								resolve(false);
+							}
+						}
+					};
+					xml.open('GET', accounts_url, true);
+					xml.setRequestHeader("Accept", "application/json");
+					xml.setRequestHeader("Authorization", "Bearer ".concat(session_id));
+					xml.send();
+				});
+			}
+
+			// Called on new successful login with credentials. Delegates to a specific handler based on login_provider value.
+			// This function is responsible for adding elements to the page (either directly or indirectly via a GameAuth message),
+			// however it does not save credentials. You should call saveAllCreds after calling this function any number of times.
+			// Returns true if the credentials should be treated as valid by the caller immediately after return, or false if not.
+			async function handleLogin(s, win, creds, exchange_url, client_id) {
 				switch (creds.login_provider) {
 					case atob(s.provider):
 						if (win) {
 							win.close();
 						}
-						handleGameLogin(s, creds, exchange_url, client_id);
-						break;
+						return await handleGameLogin(s, creds, exchange_url, client_id);
 					default:
-						handleStandardLogin(s, win, creds, exchange_url, client_id);
-						break;
+						return await handleStandardLogin(s, win, creds, exchange_url, client_id);
 				}
 			}
 
 			// called when login was successful, but with absent or unrecognised login_provider
-			function handleStandardLogin(s, w, creds, refresh_url, client_id) {
+			async function handleStandardLogin(s, w, creds, refresh_url, client_id) {
 				const state = makeRandomState();
 				const nonce = crypto.randomUUID();
 				const location = atob(s.origin).concat("/oauth2/auth?").concat(new URLSearchParams({
@@ -476,38 +513,31 @@
 					client_id: "1fddee4e-b100-4f4e-b2b0-097f9088f9d2",
 					scope: "openid offline"
 				}));
+				var account_info_promise = getStandardAccountInfo(s, creds);
 
 				var win = w;
 				if (win) {
 					win.location.href = location;
+					pendingGameAuth.push({
+						state: state,
+						nonce: nonce,
+						creds: creds,
+						win: win,
+						account_info_promise: account_info_promise
+					});
+					return false;
 				} else {
-					win = window.open(location, "", "width=480,height=720");
+					if (!creds.session_id) {
+						err("Rejecting stored credentials with missing session_id", false);
+						return false;
+					}
+
+					return await handleNewSessionId(s, creds.session_id, atob(s.auth_api).concat("/accounts"), account_info_promise);
 				}
-				pendingGameAuth.push({
-					state: state,
-					nonce: nonce,
-					win: win,
-					account_info_promise: new Promise((resolve, reject) => {
-						const url = atob(s.api).concat("/users/").concat(creds.sub).concat("/displayName");
-						var xml = new XMLHttpRequest();
-						xml.onreadystatechange = () => {
-							if (xml.readyState == 4) {
-								if (xml.status == 200) {
-									resolve(JSON.parse(xml.response));
-								} else {
-									resolve(xml.status);
-								}
-							}
-						};
-						xml.open('GET', url, true);
-						xml.setRequestHeader("Authorization", "Bearer ".concat(creds.access_token));
-						xml.send();
-					})
-				});
 			}
 
 			// called after successful login using a game account as the login_provider
-			function handleGameLogin(s, creds, refresh_url, client_id) {
+			async function handleGameLogin(s, creds, refresh_url, client_id) {
 				const auth_url = atob(s.profile_api).concat("/profile");
 				var xml = new XMLHttpRequest();
 				xml.onreadystatechange = () => {
@@ -543,6 +573,28 @@
 				xml.open('GET', auth_url, true);
 				xml.setRequestHeader("Authorization", "Bearer ".concat(creds.id_token));
 				xml.send();
+				return true;
+			}
+
+			// makes a request to the account_info endpoint and returns the promise
+			// the promise will return either a JSON object on success or a status code on failure
+			function getStandardAccountInfo(s, creds) {
+				return new Promise((resolve, reject) => {
+					const url = `${atob(s.api)}/users/${creds.sub}/displayName`;
+					var xml = new XMLHttpRequest();
+					xml.onreadystatechange = () => {
+						if (xml.readyState == 4) {
+							if (xml.status == 200) {
+								resolve(JSON.parse(xml.response));
+							} else {
+								resolve(xml.status);
+							}
+						}
+					}
+					xml.open('GET', url, true);
+					xml.setRequestHeader("Authorization", "Bearer ".concat(creds.access_token));
+					xml.send();
+				});
 			}
 
 			// use oauth creds to get a response from the "shield" endpoint
@@ -550,8 +602,8 @@
 			function getShieldTokens(creds, url, display_name, refresh_url, client_id) {
 				return new Promise((resolve, reject) => {
 					checkRenewCreds(creds, refresh_url, client_id).then((status) => {
+						saveAllCreds();
 						if (status === null) {
-							saveAllCreds();
 
 							var xml = new XMLHttpRequest();
 							xml.open('POST', url, true);
@@ -582,15 +634,18 @@
 			// sends a request to save all credentials to their config file,
 			// overwriting the previous file, if any
 			async function saveAllCreds() {
-				var xml = new XMLHttpRequest();
-				xml.open('POST', "/save-credentials", true);
-				xml.setRequestHeader("Content-Type", "application/json");
-				xml.onreadystatechange = () => {
-					if (xml.readyState == 4) {
-						msg(`Save-credentials status: ${xml.responseText.trim()}`);
-					}
-				};
-				xml.send(JSON.stringify(credentials));
+				if (credentialsAreDirty) {
+					var xml = new XMLHttpRequest();
+					xml.open('POST', "/save-credentials", true);
+					xml.setRequestHeader("Content-Type", "application/json");
+					xml.onreadystatechange = () => {
+						if (xml.readyState == 4) {
+							msg(`Save-credentials status: ${xml.responseText.trim()}`);
+						}
+					};
+					xml.send(JSON.stringify(credentials));
+					credentialsAreDirty = false;
+				}
 			}
 
 			// adds an option to the accounts drop-down menu at the top of the page
