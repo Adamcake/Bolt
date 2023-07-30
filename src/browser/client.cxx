@@ -12,8 +12,11 @@
 Browser::Client::Client(CefRefPtr<Browser::App> app, std::filesystem::path data_dir): show_devtools(true), data_dir(data_dir) {
 	CefString mime_type_html = "text/html";
 	CefString mime_type_js = "application/javascript";
+	CefString mime_type_css = "text/css";
 	app->SetBrowserProcessHandler(this);
-	this->internal_pages["/index.html"] = InternalFile("html/index.html", mime_type_html);
+	this->internal_pages["/launcher.html"] = InternalFile("html/launcher.html", mime_type_html);
+	this->internal_pages["/launcher.js"] = InternalFile("html/launcher.js", mime_type_js);
+	this->internal_pages["/launcher.css"] = InternalFile("html/launcher.css", mime_type_css);
 	this->internal_pages["/oauth.html"] = InternalFile("html/oauth.html", mime_type_html);
 	this->internal_pages["/game_auth.html"] = InternalFile("html/game_auth.html", mime_type_html);
 	this->internal_pages["/frame.html"] = InternalFile("html/frame.html", mime_type_html);
