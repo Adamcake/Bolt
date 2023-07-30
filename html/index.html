@@ -36,6 +36,10 @@
 				font-size: 28px;
 			}
 
+			.p-err {
+				background-color: #FF30303A;
+			}
+
 			.button-disclaimer {
 				width: 300px;
 				height: 70px;
@@ -718,6 +722,27 @@
 			// adds a message to the message list, returning the inner <p> element
 			function msg(str) {
 				console.log(str);
+				return insertMessage(str);
+			}
+
+			// adds an error message to the message list
+			// if do_throw is true, throws the error message, otherwise returns the new <p> element
+			function err(str, do_throw) {
+				if (!do_throw) {
+					console.error(str);
+				}
+				var p = insertMessage(str);
+				p.setAttribute("class", "p-err");
+				if (do_throw) {
+					throw new Error(str);
+				} else {
+					return p;
+				}
+			}
+
+			// inserts a message into the message list and returns the new <p> element
+			// don't call this directly, call msg or err instead
+			function insertMessage(str) {
 				var p = document.createElement("p");
 				p.innerText = str;
 				var li = document.createElement("li");
@@ -727,20 +752,6 @@
 					messages.removeChild(messages.lastChild);
 				}
 				return p;
-			}
-
-			// adds an error message to the message list
-			// if do_throw is true, throws the error message
-			function err(str, do_throw) {
-				if (!do_throw) {
-					console.error(str);
-				}
-				while (messages.childElementCount > 20) {
-					messages.removeChild(messages.lastChild);
-				}
-				if (do_throw) {
-					throw new Error(str);
-				}
 			}
 		</script>
 	</head>
