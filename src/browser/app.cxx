@@ -53,25 +53,35 @@ void Browser::App::OnUncaughtException(
 	fmt::print("[R] unhandled exception in {}: {}\n", exception->GetScriptResourceName().ToString(), exception->GetMessage().ToString());
 	for (int i = 0; i < trace->GetFrameCount(); i += 1) {
 		CefRefPtr<CefV8StackFrame> frame = trace->GetFrame(i);
-		fmt::print("[R] in {}:{}:{}\n", frame->GetScriptNameOrSourceURL().ToString(), frame->GetLineNumber(), frame->GetColumn());
+		fmt::print("[R] in {}:{}:{}\n", frame->GetScriptName().ToString(), frame->GetLineNumber(), frame->GetColumn());
 	}
-	CefString source_line_ = exception->GetSourceLine();
-	if (source_line_.size() <= 180) {
-		std::string source_line = source_line_.ToString();
-		fmt::print("[R] {}\n[R]", source_line);
-		int i = 0;
-		while (i < exception->GetStartColumn()) {
-			fmt::print("-");
-			i += 1;
-		}
-		while (i < exception->GetEndColumn()) {
-			fmt::print("^");
-			i += 1;
-		}
-		fmt::print("\n");
-	} else {
-		fmt::print("[R] <origin code not shown as it is too long ({} chars)>\n", source_line_.size());
+
+	constexpr int max_dist = 80;
+	std::string source_line = exception->GetSourceLine().ToString();
+	const size_t first_non_whitespace = source_line.find_first_not_of(" \t");
+	const size_t last_non_whitespace = source_line.find_last_not_of(" \t");
+	const std::string_view source_view_trimmed(source_line.begin() + first_non_whitespace, source_line.begin() + last_non_whitespace + 1);
+	const int exc_start_column = exception->GetStartColumn() - first_non_whitespace;
+	const int exc_end_column = exception->GetEndColumn() - first_non_whitespace;
+	const bool do_trim_start = exc_start_column > max_dist;
+	const bool do_trim_end = source_view_trimmed.size() - exc_end_column > max_dist;
+	const std::string_view code_trimmed(
+		source_view_trimmed.data() + (do_trim_start ? exc_start_column - max_dist : 0),
+		do_trim_end ? source_view_trimmed.data() + exc_end_column + max_dist : source_view_trimmed.end()
+	);
+
+	fmt::print("[R] {}{}{}\n[R] {}", do_trim_start ? "..." : "", code_trimmed, do_trim_end ? "..." : "", do_trim_start ? "---" : "");
+	int i = 0;
+	while (i < std::min(exc_start_column, max_dist)) {
+		fmt::print("-");
+		i += 1;
 	}
+	i = 0;
+	while (i < exc_end_column - exc_start_column) {
+		fmt::print("^");
+		i += 1;
+	}
+	fmt::print("\n");
 }
 
 bool Browser::App::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefProcessId, CefRefPtr<CefProcessMessage> message) {
