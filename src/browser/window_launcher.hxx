@@ -19,8 +19,15 @@ namespace Browser {
 			bool&
 		) override;
 
+		/* 
+		Functions called by GetResourceRequestHandler. The result will be returned immediately and must not be null.
+		The request and URL query string are provided for parsing.
+		*/
+
+		CefRefPtr<CefResourceRequestHandler> LaunchDeb(CefRefPtr<CefRequest>, std::string_view);
+
 		private:
-			std::string internal_url = "https://bolt-internal/";
+			const std::string internal_url = "https://bolt-internal/";
 			const std::map<std::string, InternalFile>* internal_pages;
 			std::filesystem::path data_dir;
 			std::filesystem::path creds_path;
