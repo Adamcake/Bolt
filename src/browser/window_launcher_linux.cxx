@@ -23,6 +23,7 @@ constexpr char tar_xz_inner_path[] = {
 	115, 47, 114, 117, 110, 101, 115, 99, 97, 112, 101, 45, 108, 97, 117,
 	110, 99, 104, 101, 114, 47, 114, 117, 110, 101, 115, 99,97, 112, 101, 0
 };
+constexpr char tar_xz_icons_path[] = "./usr/share/icons/";
 
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchDeb(CefRefPtr<CefRequest> request, std::string_view query) {
 	CefRefPtr<CefPostData> post_data = request->GetPostData();
@@ -96,6 +97,8 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchDeb(CefRefPtr<CefR
 			const char* data = "Bad Request";
 			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
 		}
+		std::filesystem::path icons_dir = this->data_dir.parent_path();
+		icons_dir.append("icons");
 		CefPostData::ElementVector vec;
 		post_data->GetElements(vec);
 		size_t deb_size = vec[0]->GetBytesCount();
@@ -154,41 +157,66 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchDeb(CefRefPtr<CefR
 				const char* data = "Malformed .tar.xz file\n";
 				return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
 			}
-			if (strcmp(archive_entry_pathname(entry), tar_xz_inner_path) == 0) {
+
+			const char* entry_pathname = archive_entry_pathname(entry);
+			const size_t entry_pathname_len = strlen(entry_pathname);
+			if (strcmp(entry_pathname, tar_xz_inner_path) == 0) {
 				entry_found = true;
-				break;
+				const long game_size = archive_entry_size(entry);
+				char* game = new char[game_size];
+				written = 0;
+				while (written < game_size) {
+					written += archive_read_data(ar, game + written, game_size - written);
+				}
+				written = 0;
+				int file = open(this->rs3_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0755);
+				if (file == -1) {
+					delete[] game;
+					const char* data = "Failed to save executable; if the game is already running, close it and try again\n";
+					return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 500, "text/plain");
+				}
+				while (written < game_size) {
+					written += write(file, game + written, game_size - written);
+				}
+				close(file);
+				delete[] game;
+			} else if (strncmp(entry_pathname, tar_xz_icons_path, strlen(tar_xz_icons_path)) == 0) {
+				std::filesystem::path icon_path = icons_dir;
+				icon_path.append(entry_pathname + strlen(tar_xz_icons_path));
+				if (entry_pathname[entry_pathname_len - 1] == '/') {
+					mkdir(icon_path.c_str(), 0755);
+				} else {
+					std::filesystem::path icon_path = icons_dir;
+					icon_path.append(entry_pathname + strlen(tar_xz_icons_path));
+					const long icon_size = archive_entry_size(entry);
+					char* icon = new char[icon_size];
+					written = 0;
+					while (written < icon_size) {
+						written += archive_read_data(ar, icon + written, icon_size - written);
+					}
+					written = 0;
+					int file = open(icon_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0755);
+					if (file == -1) {
+						fmt::print("[B] [warning] failed to save an icon: {}\n", icon_path.c_str());
+					} else {
+						while (written < icon_size) {
+							written += write(file, icon + written, icon_size - written);
+						}
+						close(file);
+						delete[] icon;
+					}
+				}
 			}
 		}
-		if (!entry_found) {
-			archive_read_close(xz);
-			archive_read_free(xz);
-			delete[] tar_xz;
-			const char* data = "No target executable in .tar.xz file\n";
-			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
-		}
 
-		const long game_size = archive_entry_size(entry);
-		char* game = new char[game_size];
-		written = 0;
-		while (written < game_size) {
-			written += archive_read_data(ar, game + written, game_size - written);
-		}
 		archive_read_close(xz);
 		archive_read_free(xz);
 		delete[] tar_xz;
 
-		written = 0;
-		int file = open(this->rs3_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0755);
-		if (file == -1) {
-			delete[] game;
-			const char* data = "Failed to save executable; if the game is already running, close it and try again\n";
-			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 500, "text/plain");
+		if (!entry_found) {
+			const char* data = "No target executable in .tar.xz file\n";
+			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
 		}
-		while (written < game_size) {
-			written += write(file, game + written, game_size - written);
-		}
-		close(file);
-		delete[] game;
 	}
 
 	char** e;
