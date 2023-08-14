@@ -11,13 +11,6 @@
 
 extern char **environ;
 
-constexpr std::string_view env_key_home = "HOME=";
-constexpr std::string_view env_key_access_token = "JX_ACCESS_TOKEN=";
-constexpr std::string_view env_key_refresh_token = "JX_REFRESH_TOKEN=";
-constexpr std::string_view env_key_session_id = "JX_SESSION_ID=";
-constexpr std::string_view env_key_character_id = "JX_CHARACTER_ID=";
-constexpr std::string_view env_key_display_name = "JX_DISPLAY_NAME=";
-
 constexpr char tar_xz_inner_path[] = {
 	46, 47, 117, 115, 114, 47, 115, 104, 97, 114, 101, 47, 103, 97, 109, 101,
 	115, 47, 114, 117, 110, 101, 115, 99, 97, 112, 101, 45, 108, 97, 117,
@@ -25,75 +18,98 @@ constexpr char tar_xz_inner_path[] = {
 };
 constexpr char tar_xz_icons_path[] = "./usr/share/icons/";
 
+struct EnvQueryParam {
+	bool should_set = false;
+	bool prepend_env_key;
+	bool allow_override = true;
+	std::string_view env_key;
+	std::string_view key;
+	std::string value;
+
+	// Compares `key` to `key_name`, setting `out` to `prepend`+`value` and setting `should_set` to `true` if
+	// they match, or altering nothing otherwise (including `should_set`).
+	void CheckAndUpdate(std::string_view key, CefString value) {
+		if ((!this->should_set || this->allow_override) && this->key == key) {
+			this->should_set = true;
+			this->value.clear();
+			if (this->prepend_env_key) {
+				this->value = this->env_key;
+			}
+			this->value += CefURIDecode(value, true, UU_SPACES).ToString();
+		}
+	}
+};
+
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchDeb(CefRefPtr<CefRequest> request, std::string_view query) {
-	CefRefPtr<CefPostData> post_data = request->GetPostData();
+	// strings that I don't want to be searchable, which also need to be mutable for passing to env functions
+	char env_pulse_prop_override[] = {
+		80, 85, 76, 83, 69, 95, 80, 82, 79, 80, 95, 79, 86, 69, 82, 82, 73, 68,
+		69, 61, 97, 112, 112, 108, 105, 99, 97, 116, 105, 111, 110, 46, 110,
+		97, 109, 101, 61, 39, 82, 117, 110, 101, 83, 99, 97, 112, 101, 39, 32,
+		97, 112, 112, 108, 105, 99, 97, 116, 105, 111, 110, 46, 105, 99, 111, 110,
+		95, 110, 97, 109, 101, 61, 39, 114, 117, 110, 101, 115, 99, 97, 112, 101,
+		39, 32, 109, 101, 100, 105, 97, 46, 114, 111, 108, 101, 61, 39, 103, 97,
+		109, 101, 39, 0
+	};
+	char env_wmclass[] = {
+		83, 68, 76, 95, 86, 73, 68, 69, 79, 95, 88, 49, 49, 95, 87, 77, 67,
+		76, 65, 83, 83, 61, 82, 117, 110, 101, 83, 99, 97, 112, 101, 0
+	};
+
+	const CefRefPtr<CefPostData> post_data = request->GetPostData();
 	auto cursor = 0;
-	bool has_hash = false;
-	bool should_set_access_token = false;
-	bool should_set_refresh_token = false;
-	bool should_set_session_id = false;
-	bool should_set_character_id = false;
-	bool should_set_display_name = false;
-	std::string hash;
-	std::string env_access_token;
-	std::string env_refresh_token;
-	std::string env_session_id;
-	std::string env_character_id;
-	std::string env_display_name;
-		
+
+	// calculate HOME env strings - we redirect the game's HOME into our data dir
+	const char* home_ = "HOME=";
+	const std::string env_home = home_ + this->data_dir.string();
+	const std::string_view env_key_home = std::string_view(env_home.begin(), env_home.begin() + strlen(home_));
+
+	// array of structures for keeping track of which environment variables we want to set and have already set
+	constexpr size_t env_param_count = 8;
+	EnvQueryParam hash_param = {.should_set = false, .key = "hash"};
+	EnvQueryParam env_params[env_param_count] = {
+		{.should_set = false, .prepend_env_key = true, .env_key = "JX_ACCESS_TOKEN=", .key = "jx_access_token"},
+		{.should_set = false, .prepend_env_key = true, .env_key = "JX_REFRESH_TOKEN=", .key = "jx_refresh_token"},
+		{.should_set = false, .prepend_env_key = true, .env_key = "JX_SESSION_ID=", .key = "jx_session_id"},
+		{.should_set = false, .prepend_env_key = true, .env_key = "JX_CHARACTER_ID=", .key = "jx_character_id"},
+		{.should_set = false, .prepend_env_key = true, .env_key = "JX_DISPLAY_NAME=", .key = "jx_display_name"},
+		{.should_set = true, .prepend_env_key = false, .allow_override = false, .env_key = env_key_home, .value = env_home},
+		{.should_set = true, .prepend_env_key = false, .allow_override = false, .env_key = "PULSE_PROP_OVERRIDE=", .value = env_pulse_prop_override},
+		{.should_set = true, .prepend_env_key = false, .allow_override = false, .env_key = "SDL_VIDEO_X11_WMCLASS=", .value = env_wmclass},
+	};
+	
+	// loop through and parse the query string from the HTTP request we intercepted
 	while (true) {
 		const std::string::size_type next_eq = query.find_first_of('=', cursor);
 		const std::string::size_type next_amp = query.find_first_of('&', cursor);
 		if (next_eq == std::string::npos) break;
 		if (next_eq >= next_amp) {
+			// found an invalid query param with no '=' in it - skip this
 			cursor = next_amp + 1;
 			continue;
 		}
-		std::string_view key(query.begin() + cursor, query.begin() + next_eq);
-		if (key == "hash") {
-			auto value_end = next_amp == std::string::npos ? query.end() : query.begin() + next_amp;
-			CefString value = std::string(std::string_view(query.begin() + next_eq + 1,  value_end));
-			hash = CefURIDecode(value, true, UU_SPACES).ToString();
-			has_hash = true;
-		}
-		if (key == "jx_access_token") {
-			auto value_end = next_amp == std::string::npos ? query.end() : query.begin() + next_amp;
-			CefString value = std::string(std::string_view(query.begin() + next_eq + 1,  value_end));
-			env_access_token = std::string(env_key_access_token) + CefURIDecode(value, true, UU_SPACES).ToString();
-			should_set_access_token = true;
-		}
-		if (key == "jx_refresh_token") {
-			auto value_end = next_amp == std::string::npos ? query.end() : query.begin() + next_amp;
-			CefString value = std::string(std::string_view(query.begin() + next_eq + 1,  value_end));
-			env_refresh_token = std::string(env_key_refresh_token) + CefURIDecode(value, true, UU_SPACES).ToString();
-			should_set_refresh_token = true;
-		}
-		if (key == "jx_session_id") {
-			auto value_end = next_amp == std::string::npos ? query.end() : query.begin() + next_amp;
-			CefString value = std::string(std::string_view(query.begin() + next_eq + 1,  value_end));
-			env_session_id = std::string(env_key_session_id) + CefURIDecode(value, true, UU_SPACES).ToString();
-			should_set_session_id = true;
-		}
-		if (key == "jx_character_id") {
-			auto value_end = next_amp == std::string::npos ? query.end() : query.begin() + next_amp;
-			CefString value = std::string(std::string_view(query.begin() + next_eq + 1,  value_end));
-			env_character_id = std::string(env_key_character_id) + CefURIDecode(value, true, UU_SPACES).ToString();
-			should_set_character_id = true;
-		}
-		if (key == "jx_display_name") {
-			auto value_end = next_amp == std::string::npos ? query.end() : query.begin() + next_amp;
-			CefString value = std::string(std::string_view(query.begin() + next_eq + 1,  value_end));
-			env_display_name = std::string(env_key_display_name) + CefURIDecode(value, true, UU_SPACES).ToString();
-			should_set_display_name = true;
-		}
 
+		// parse the next "key" and "value" from the query, then check if it's relevant to us
+		const std::string_view key(query.begin() + cursor, query.begin() + next_eq);
+		const auto value_end = next_amp == std::string::npos ? query.end() : query.begin() + next_amp;
+		const CefString value = std::string(std::string_view(query.begin() + next_eq + 1,  value_end));
+		for (EnvQueryParam& param: env_params) {
+			param.CheckAndUpdate(key, value);
+		}
+		hash_param.CheckAndUpdate(key, value);
+
+		// if there are no more instances of '&', we've read the last param, so stop here
+		// otherwise continue from the next '&'
 		if (next_amp == std::string::npos) break;
 		cursor = next_amp + 1;
 	}
 
-	if (has_hash) {
-		CefRefPtr<CefPostData> post_data = request->GetPostData();
+	// if there was a "hash" in the query string, we need to save the new game exe and the new hash
+	if (hash_param.should_set) {
+		const CefRefPtr<CefPostData> post_data = request->GetPostData();
 		if (post_data == nullptr || post_data->GetElementCount() != 1) {
+			// hash param must be accompanied by POST data containing the file it's a hash of,
+			// so hash but no POST is a bad request
 			const char* data = "Bad Request";
 			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
 		}
@@ -104,6 +120,8 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchDeb(CefRefPtr<CefR
 		size_t deb_size = vec[0]->GetBytesCount();
 		unsigned char* deb = new unsigned char[deb_size];
 		vec[0]->GetBytes(deb_size, deb);
+
+		// use libarchive to extract data.tar.xz into memory from the supplied .deb (ar compression format)
 		struct archive* ar = archive_read_new();
 		archive_read_support_format_ar(ar);
 		archive_read_open_memory(ar, deb, deb_size);
@@ -113,6 +131,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchDeb(CefRefPtr<CefR
 			int r = archive_read_next_header(ar, &entry);
 			if (r == ARCHIVE_EOF) break;
 			if (r != ARCHIVE_OK) {
+				// POST data contained an invalid .deb file
 				archive_read_close(ar);
 				archive_read_free(ar);
 				delete[] deb;
@@ -125,6 +144,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchDeb(CefRefPtr<CefR
 			}
 		}
 		if (!entry_found) {
+			// The .deb file is valid but does not contain "data.tar.xz" according to libarchive
 			archive_read_close(ar);
 			archive_read_free(ar);
 			delete[] deb;
@@ -142,6 +162,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchDeb(CefRefPtr<CefR
 		archive_read_free(ar);
 		delete[] deb;
 
+		// open data.tar.xz and extract any files into memory that we're interested in
 		struct archive* xz = archive_read_new();
 		archive_read_support_format_tar(xz);
 		archive_read_support_filter_xz(xz);
@@ -151,6 +172,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchDeb(CefRefPtr<CefR
 			int r = archive_read_next_header(xz, &entry);
 			if (r == ARCHIVE_EOF) break;
 			if (r != ARCHIVE_OK) {
+				// .deb file was valid but the data.tar.xz it contained was not
 				archive_read_close(xz);
 				archive_read_free(xz);
 				delete[] tar_xz;
@@ -161,6 +183,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchDeb(CefRefPtr<CefR
 			const char* entry_pathname = archive_entry_pathname(entry);
 			const size_t entry_pathname_len = strlen(entry_pathname);
 			if (strcmp(entry_pathname, tar_xz_inner_path) == 0) {
+				// found the game binary - we need to save this to disk so we can run it
 				entry_found = true;
 				const long game_size = archive_entry_size(entry);
 				char* game = new char[game_size];
@@ -171,6 +194,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchDeb(CefRefPtr<CefR
 				written = 0;
 				int file = open(this->rs3_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0755);
 				if (file == -1) {
+					// failed to open game binary file on disk - probably in use or a permissions issue
 					delete[] game;
 					const char* data = "Failed to save executable; if the game is already running, close it and try again\n";
 					return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 500, "text/plain");
@@ -181,6 +205,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchDeb(CefRefPtr<CefR
 				close(file);
 				delete[] game;
 			} else if (strncmp(entry_pathname, tar_xz_icons_path, strlen(tar_xz_icons_path)) == 0) {
+				// found an icon - save this to the icons directory, maintaining its relative path
 				std::filesystem::path icon_path = icons_dir;
 				icon_path.append(entry_pathname + strlen(tar_xz_icons_path));
 				if (entry_pathname[entry_pathname_len - 1] == '/') {
@@ -197,6 +222,8 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchDeb(CefRefPtr<CefR
 					written = 0;
 					int file = open(icon_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0755);
 					if (file == -1) {
+						// failing to save an icon is not a fatal error, but probably something the
+						// user should know about
 						fmt::print("[B] [warning] failed to save an icon: {}\n", icon_path.c_str());
 					} else {
 						while (written < icon_size) {
@@ -214,15 +241,19 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchDeb(CefRefPtr<CefR
 		delete[] tar_xz;
 
 		if (!entry_found) {
+			// data.tar.tx was valid but did not contain a game binary according to libarchive
 			const char* data = "No target executable in .tar.xz file\n";
 			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
 		}
 	}
 
+	// count how many env vars we have - we need to do this every time as CEF or other modules
+	// may call setenv and unsetenv
 	char** e;
 	for (e = environ; *e; e += 1);
 	size_t env_count = e - environ;
 
+	// set up some structs needed by posix_spawn, and our modified env array
 	posix_spawn_file_actions_t file_actions;
 	posix_spawnattr_t attributes;
 	pid_t pid;
@@ -233,57 +264,33 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchDeb(CefRefPtr<CefR
 	char* argv[2];
 	argv[0] = path_str.data();
 	argv[1] = nullptr;
-	bool should_set_home = true;
-	std::string env_home = std::string(env_key_home) + this->data_dir.string();
-	char** env = new char*[env_count + 7];
+	char** env = new char*[env_count + env_param_count + 1];
+
+	// first, loop through the existing env vars
+	// if its key is one we want to set, overwrite it, otherwise copy the pointer as-is
 	size_t i;
 	for (i = 0; i < env_count; i += 1) {
-		if (should_set_access_token && strncmp(environ[i], env_key_access_token.data(), env_key_access_token.size()) == 0) {
-			should_set_access_token = false;
-			env[i] = env_access_token.data();
-		} else if (should_set_refresh_token && strncmp(environ[i], env_key_refresh_token.data(), env_key_refresh_token.size()) == 0) {
-			should_set_refresh_token = false;
-			env[i] = env_refresh_token.data();
-		} else if (should_set_session_id && strncmp(environ[i], env_key_session_id.data(), env_key_session_id.size()) == 0) {
-			should_set_session_id = false;
-			env[i] = env_session_id.data();
-		} else if (should_set_character_id && strncmp(environ[i], env_key_character_id.data(), env_key_character_id.size()) == 0) {
-			should_set_character_id = false;
-			env[i] = env_character_id.data();
-		} else if (should_set_display_name && strncmp(environ[i], env_key_display_name.data(), env_key_display_name.size()) == 0) {
-			should_set_display_name = false;
-			env[i] = env_display_name.data();
-		} else if (strncmp(environ[i], env_key_home.data(), env_key_home.size()) == 0) {
-			should_set_home = false;
-			env[i] = env_home.data();
-		} else {
+		bool use_default = true;
+		for (EnvQueryParam& param: env_params) {
+			if (param.should_set && strncmp(environ[i], param.env_key.data(), param.env_key.size()) == 0) {
+				param.should_set = false;
+				use_default = false;
+				env[i] = param.value.data();
+				break;
+			}
+		}
+		if (use_default) {
 			env[i] = environ[i];
 		}
 	}
-	if (should_set_access_token) {
-		env[i] = env_access_token.data();
-		i += 1;
+	// ... next, look for any env vars we want to set that we haven't already, and put them at the end...
+	for (EnvQueryParam& param: env_params) {
+		if (param.should_set) {
+			env[i] = param.value.data();
+			i += 1;
+		}
 	}
-	if (should_set_refresh_token) {
-		env[i] = env_refresh_token.data();
-		i += 1;
-	}
-	if (should_set_session_id) {
-		env[i] = env_session_id.data();
-		i += 1;
-	}
-	if (should_set_character_id) {
-		env[i] = env_character_id.data();
-		i += 1;
-	}
-	if (should_set_display_name) {
-		env[i] = env_display_name.data();
-		i += 1;
-	}
-	if (should_set_home) {
-		env[i] = env_home.data();
-		i += 1;
-	}
+	// ... and finally null-terminate the list as required by POSIX
 	env[i] = nullptr;
 
 	int r = posix_spawn(&pid, path_str.c_str(), &file_actions, &attributes, argv, env);
@@ -295,15 +302,15 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchDeb(CefRefPtr<CefR
 	if (r == 0) {
 		fmt::print("[B] Successfully spawned game process with pid {}\n", pid);
 
-		if (has_hash) {
+		if (hash_param.should_set) {
 			size_t written = 0;
 			int file = open(this->rs3_hash_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
 			if (file == -1) {
 				const char* data = "OK, but unable to save hash file\n";
 				return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
 			}
-			while (written < hash.size()) {
-				written += write(file, hash.c_str() + written, hash.size() - written);
+			while (written < hash_param.value.size()) {
+				written += write(file, hash_param.value.c_str() + written, hash_param.value.size() - written);
 			}
 			close(file);
 		}
@@ -311,6 +318,8 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchDeb(CefRefPtr<CefR
 		const char* data = "OK\n";
 		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
 	} else {
+		// posix_spawn failed - this is extremely unlikely to happen in the field, since the only failure
+		// case is EINVAL, which would indicate a trivial mistake in writing this function
 		fmt::print("[B] Error from posix_spawn: {}\n", r);
 		const char* data = "Error spawning process\n";
 		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 500, "text/plain");
