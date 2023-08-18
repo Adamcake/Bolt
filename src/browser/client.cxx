@@ -9,7 +9,9 @@
 #include <fstream>
 #include <spawn.h>
 
-Browser::Client::Client(CefRefPtr<Browser::App> app, std::filesystem::path data_dir): show_devtools(true), data_dir(data_dir) {
+Browser::Client::Client(CefRefPtr<Browser::App> app,std::filesystem::path config_dir, std::filesystem::path data_dir):
+	show_devtools(true), config_dir(config_dir), data_dir(data_dir)
+{
 	CefString mime_type_html = "text/html";
 	CefString mime_type_js = "application/javascript";
 	CefString mime_type_css = "text/css";

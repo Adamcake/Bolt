@@ -20,7 +20,7 @@ namespace Browser {
 	/// https://github.com/chromiumembedded/cef/blob/5735/include/cef_life_span_handler.h
 	/// https://github.com/chromiumembedded/cef/blob/5735/include/cef_request_handler.h
 	struct Client: public CefClient, CefBrowserProcessHandler, CefLifeSpanHandler, CefRequestHandler {
-		Client(CefRefPtr<Browser::App>, std::filesystem::path);
+		Client(CefRefPtr<Browser::App>, std::filesystem::path config_dir, std::filesystem::path data_dir);
 
 		/* CefClient overrides */
 		CefRefPtr<CefLifeSpanHandler> GetLifeSpanHandler() override;
@@ -70,6 +70,7 @@ namespace Browser {
 			CefRefCount ref_count;
 
 			bool show_devtools;
+			std::filesystem::path config_dir;
 			std::filesystem::path data_dir;
 
 			std::map<std::string, InternalFile> internal_pages;

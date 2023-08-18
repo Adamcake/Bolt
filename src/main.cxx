@@ -36,7 +36,7 @@ int XIOErrorHandlerImpl(Display* display) {
 #endif
 
 int BoltRunBrowserProcess(CefMainArgs, CefRefPtr<Browser::App>);
-bool LockDataDirectory(std::filesystem::path&);
+bool LockXdgDirectories(std::filesystem::path&, std::filesystem::path&);
 
 int BoltRunAnyProcess(CefMainArgs main_args) {
 	// CefApp struct - this implements handlers used by multiple processes
@@ -60,14 +60,15 @@ int BoltRunBrowserProcess(CefMainArgs main_args, CefRefPtr<Browser::App> cef_app
 	XSetIOErrorHandler(XIOErrorHandlerImpl);
 #endif
 
-	// find home directory
+	// find and lock the xdg base directories (or an approximation of them on Windows)
+	std::filesystem::path config_dir;
 	std::filesystem::path data_dir;
-	if (!LockDataDirectory(data_dir)) {
+	if (!LockXdgDirectories(config_dir, data_dir)) {
 		return 1;
 	}
 
 	// CefClient struct - central object for main thread, and implements lots of handlers for browser process
-	Browser::Client client_(cef_app, data_dir);
+	Browser::Client client_(cef_app, config_dir, data_dir);
 	CefRefPtr<Browser::Client> client = &client_;
 
 	// CEF settings - only set the ones we're interested in
@@ -118,30 +119,49 @@ int main(int argc, char* argv[]) {
 	return ret;
 }
 
-bool LockDataDirectory(std::filesystem::path& path) {
+bool LockXdgDirectories(std::filesystem::path& config_dir, std::filesystem::path& data_dir) {
+	const char* xdg_config_home = getenv("XDG_CONFIG_HOME");
 	const char* xdg_data_home = getenv("XDG_DATA_HOME");
 	const char* home = getenv("HOME");
+
 	if (xdg_data_home && *xdg_data_home) {
-		path.assign(xdg_data_home);
+		data_dir.assign(xdg_data_home);
 	} else if (home) {
-		path.assign(home);
-		path.append(".local");
-		path.append("share");
+		data_dir.assign(home);
+		data_dir.append(".local");
+		data_dir.append("share");
 	} else {
 		fmt::print("No $XDG_DATA_HOME or $HOME\n");
 		return false;
 	}
-	path.append("bolt-launcher");
-	std::error_code err;
-	std::filesystem::create_directories(path, err);
-	if (err.value() != 0) {
-		fmt::print("Could not create directories (error {}) {}\n", err.value(), path.c_str());
+
+	if (xdg_config_home && *xdg_config_home) {
+		config_dir.assign(xdg_config_home);
+	} else if (home) {
+		config_dir.assign(home);
+		config_dir.append(".config");
+	} else {
+		fmt::print("No $XDG_CONFIG_HOME or $HOME\n");
 		return false;
 	}
 
-	std::filesystem::path fpath = path;
-	fpath.append("lock");
-	int lockfile = open(fpath.c_str(), O_WRONLY | O_CREAT | O_CLOEXEC, 0666);
+	config_dir.append("bolt-launcher");
+	data_dir.append("bolt-launcher");
+	std::error_code err;
+	std::filesystem::create_directories(config_dir, err);
+	if (err.value() != 0) {
+		fmt::print("Could not create config directories (error {}) {}\n", err.value(), data_dir.c_str());
+		return false;
+	}
+	std::filesystem::create_directories(data_dir, err);
+	if (err.value() != 0) {
+		fmt::print("Could not create data directories (error {}) {}\n", err.value(), data_dir.c_str());
+		return false;
+	}
+
+	std::filesystem::path data_lock = data_dir;
+	data_lock.append("lock");
+	int lockfile = open(data_lock.c_str(), O_WRONLY | O_CREAT | O_CLOEXEC, 0666);
 	if (flock(lockfile, LOCK_EX | LOCK_NB)) {
 		fmt::print("Failed to obtain lockfile; is the program already running?\n");
 		return false;
