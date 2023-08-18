@@ -2,12 +2,13 @@
 #define _BOLT_WINDOW_LAUNCHER_HXX_
 
 #include "../browser.hxx"
+#include "include/cef_resource_handler.h"
 
 #include <filesystem>
 
 namespace Browser {
 	struct Launcher: public Window {
-		Launcher(CefRefPtr<CefClient>, Details, bool, const std::map<std::string, InternalFile>* const, std::filesystem::path);
+		Launcher(CefRefPtr<CefClient>, Details, bool, const std::map<std::string, InternalFile>* const, std::filesystem::path, std::filesystem::path);
 
 		CefRefPtr<CefResourceRequestHandler> GetResourceRequestHandler(
 			CefRefPtr<CefBrowser>,
@@ -31,6 +32,7 @@ namespace Browser {
 			const std::map<std::string, InternalFile>* internal_pages;
 			std::filesystem::path data_dir;
 			std::filesystem::path creds_path;
+			std::filesystem::path config_path;
 			std::filesystem::path rs3_path;
 			std::filesystem::path rs3_hash_path;
 	};

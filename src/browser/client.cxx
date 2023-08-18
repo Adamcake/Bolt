@@ -46,7 +46,7 @@ void Browser::Client::OnContextInitialized() {
 	};
 
 	this->windows_lock.lock();
-	CefRefPtr<Browser::Window> w = new Browser::Launcher(this, details, this->show_devtools, &this->internal_pages, this->data_dir);
+	CefRefPtr<Browser::Window> w = new Browser::Launcher(this, details, this->show_devtools, &this->internal_pages, this->config_dir, this->data_dir);
 	this->windows.push_back(w);
 	this->windows_lock.unlock();
 }

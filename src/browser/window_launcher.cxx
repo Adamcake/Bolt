@@ -20,17 +20,23 @@ constexpr std::string_view URI = "launcher.html?platform=windows";
 constexpr std::string_view URI = "launcher.html?platform=mac";
 #endif
 
+CefRefPtr<CefResourceRequestHandler> SaveFileFromPost(CefRefPtr<CefRequest>, const char*);
+
 Browser::Launcher::Launcher(
 	CefRefPtr<CefClient> client,
 	Details details,
 	bool show_devtools,
 	const std::map<std::string, InternalFile>* const internal_pages,
+	std::filesystem::path config_dir,
 	std::filesystem::path data_dir
 ): Window(details, show_devtools), data_dir(data_dir), internal_pages(internal_pages) {
 	std::string url = this->internal_url + std::string(URI);
 
 	this->creds_path = data_dir;
 	this->creds_path.append("creds");
+
+	this->config_path = config_dir;
+	this->config_path.append("launcher.json");
 
 	this->rs3_path = data_dir;
 	this->rs3_path.append("rs3linux");
@@ -60,6 +66,22 @@ Browser::Launcher::Launcher(
 			}
 			CefString str = CefURIEncode(CefString(buf, file_status.st_size), true);
 			url += "&credentials=";
+			url += str.ToString();
+			delete[] buf;
+			close(file);
+		}
+	}
+
+	if (stat(this->config_path.c_str(), &file_status) >= 0) {
+		file = open(this->config_path.c_str(), O_RDONLY);
+		if (file != -1) {
+			char* buf = new char[file_status.st_size];
+			size_t written = 0;
+			while (written < file_status.st_size) {
+				written += read(file, buf + written, file_status.st_size - written);
+			}
+			CefString str = CefURIEncode(CefString(buf, file_status.st_size), true);
+			url += "&config=";
 			url += str.ToString();
 			delete[] buf;
 			close(file);
@@ -176,33 +198,14 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 			return this->LaunchDeb(request, query);
 		}
 
+		// instruction to save user config file to disk
+		if (path == "/save-config") {
+			return SaveFileFromPost(request, this->config_path.c_str());
+		}
+
 		// instruction to save user credentials to disk
 		if (path == "/save-credentials") {
-			CefRefPtr<CefPostData> post_data = request->GetPostData();
-			if (post_data->GetElementCount() != 1) {
-				const char* data = "Bad request\n";
-				return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
-			}
-
-			CefPostData::ElementVector elements;
-			post_data->GetElements(elements);
-			size_t byte_count = elements[0]->GetBytesCount();
-			size_t written = 0;
-			int file = open(this->creds_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
-			if (file == -1) {
-				const char* data = "Failed to open file\n";
-				return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
-			}
-			unsigned char* buf = new unsigned char[byte_count];
-			elements[0]->GetBytes(byte_count, buf);
-			while (written < byte_count) {
-				written += write(file, buf + written, byte_count - written);
-			}
-			close(file);
-			delete[] buf;
-
-			const char* data = "OK\n";
-			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
+			return SaveFileFromPost(request, this->creds_path.c_str());
 		}
 
 		// respond using internal hashmap of filenames
@@ -232,4 +235,32 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 	}
 
 	return nullptr;
+}
+
+CefRefPtr<CefResourceRequestHandler> SaveFileFromPost(CefRefPtr<CefRequest> request, const char* path) {
+	CefRefPtr<CefPostData> post_data = request->GetPostData();
+	if (post_data->GetElementCount() != 1) {
+		const char* data = "Bad request\n";
+		return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+	}
+
+	CefPostData::ElementVector elements;
+	post_data->GetElements(elements);
+	size_t byte_count = elements[0]->GetBytesCount();
+	size_t written = 0;
+	int file = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+	if (file == -1) {
+		const char* data = "Failed to open file\n";
+		return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
+	}
+	unsigned char* buf = new unsigned char[byte_count];
+	elements[0]->GetBytes(byte_count, buf);
+	while (written < byte_count) {
+		written += write(file, buf + written, byte_count - written);
+	}
+	close(file);
+	delete[] buf;
+
+	const char* data = "OK\n";
+	return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
 }
