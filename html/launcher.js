@@ -13,7 +13,6 @@ var logoutButton = document.createElement("button");
 var loggedInInfo = document.createElement("div");
 var loginButtons = document.createElement("div");
 var gameAccountSelection = document.createElement("div");
-var launchGameButtons = document.createElement("div");
 var footer = document.createElement("div");
 
 // Checks if `credentials` are about to expire or have already expired,
@@ -259,18 +258,37 @@ function start(s) {
         }
     });
 
+    var launchGameButtons = document.createElement("div");
+
     var accounts_label = document.createElement("label");
     accounts_label.innerText = "Logged in as:";
     accounts_label.for = accountSelect;
     loggedInInfo.appendChild(accounts_label);
     loggedInInfo.appendChild(accountSelect);
 
+    var game_select = document.createElement("select");
+    s.games.forEach((x, i) => {
+        var opt = document.createElement("option");
+        opt.name = atob(x);
+        opt.innerText = opt.name;
+        opt.value = i;
+        switch (i) {
+            case 0:
+                opt.genLaunchButtons = generateLaunchButtonsRs3;
+                break;
+            case 1:
+                opt.genLaunchButtons = generateLaunchButtonsOsrs;
+                break;
+        }
+        game_select.appendChild(opt);
+    });
+
     accountSelect.onchange = () => {
         clearElement(launchGameButtons);
         clearElement(gameAccountSelection);
         if (accountSelect.selectedIndex >= 0) {
             const opt = accountSelect.options[accountSelect.selectedIndex];
-            generateAccountSelection(opt.genLoginVars, opt.gameAccountSelect);
+            generateAccountSelection(opt.genLoginVars, opt.gameAccountSelect, game_select, launchGameButtons);
         }
     };
 
@@ -633,36 +651,55 @@ function addNewAccount(name, creds, genLoginVars, select) {
 }
 
 // populates the gameAccountSelection element and by extension the launchGameButtons element
-// "f" is the function passed to generateLaunchButtons, "select" is a HTML Select element
-function generateAccountSelection(f, select) {
+// "f" is the function passed to generateLaunchButtons, "select" and "game_select" are HTML Select elements,
+// and "launchGameButtons" is a HTML Div element to be targeted by these buttons' callbacks
+function generateAccountSelection(f, select, game_select, launchGameButtons) {
     clearElement(gameAccountSelection);
     var label = document.createElement("label");
     label.for = select;
-    label.innerText = "Choose a game account:";
+    label.innerText = "Choose a game account and game:";
     select.onchange = () => {
         clearElement(launchGameButtons);
-        if (select.selectedIndex >= 0) {
-            generateLaunchButtons(f, select.options[select.selectedIndex]);
+        if (accountSelect.selectedIndex >= 0 && game_select.selectedIndex >= 0) {
+            const sel = accountSelect.options[accountSelect.selectedIndex].gameAccountSelect;
+            if (sel.selectedIndex >= 0) {
+                game_select.options[game_select.selectedIndex].genLaunchButtons(f, sel.options[sel.selectedIndex], launchGameButtons);
+            }
         }
     };
+    game_select.onchange = select.onchange;
     select.onchange();
     gameAccountSelection.appendChild(label);
     gameAccountSelection.appendChild(select);
+    gameAccountSelection.appendChild(game_select);
 }
 
 // populates the launchGameButtons element with buttons
 // the parameter is a function callback, which must take exactly two arguments:
 // 1. a function which your function should invoke with JX env variables, e.g. launchRS3Linux
 // 2. a HTML Button element, which should be passed to parameter 1 when invoking it, or, if not
-// 3. a HTML Option element, representing the currently selected game account
 //    invoking the callback for some reason, then set disabled=false on parameter 2 before returning
-function generateLaunchButtons(f, opt) {
+// 3. a HTML Option element, representing the currently selected game account
+function generateLaunchButtonsRs3(f, opt, target) {
     if (platform === "linux") {
         var rs3_linux = document.createElement("button");
         rs3_linux.onclick = () => { rs3_linux.disabled = true; f(launchRS3Linux, rs3_linux, opt); };
         rs3_linux.innerText = "Launch RS3";
-        launchGameButtons.appendChild(rs3_linux);
+        target.appendChild(rs3_linux);
     }
+}
+
+// populates the launchGameButtons element with buttons
+// the parameter is a function callback, which must take exactly two arguments:
+// 1. a function which your function should invoke with JX env variables, e.g. launchRS3Linux
+// 2. a HTML Button element, which should be passed to parameter 1 when invoking it, or, if not
+//    invoking the callback for some reason, then set disabled=false on parameter 2 before returning
+// 3. a HTML Option element, representing the currently selected game account
+function generateLaunchButtonsOsrs(f, opt, target) {
+    var rl_linux = document.createElement("button");
+    rl_linux.onclick = () => { rl_linux.disabled = true; f(launchRunelite, rl_linux, opt); };
+    rl_linux.innerText = "Launch Runelite";
+    target.appendChild(rl_linux);
 }
 
 // asynchronously download and launch RS3's official .deb client using the given env variables
@@ -735,6 +772,14 @@ function launchRS3Linux(s, element, jx_access_token, jx_refresh_token, jx_sessio
         launch();
     };
     xml.send();
+}
+
+// locate runelite's .jar either from the user's config or by downloading and caching from flatpak,
+// then attempt to launch it with the given env variables
+function launchRunelite(s, element, jx_access_token, jx_refresh_token, jx_session_id, jx_character_id, jx_display_name) {
+    element.disabled = false;
+    msg("TODO: runelite");
+    // TODO
 }
 
 // revokes the given oauth tokens, returning an http status code.
