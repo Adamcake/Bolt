@@ -74,13 +74,6 @@ namespace Browser {
 			std::filesystem::path data_dir;
 
 			std::map<std::string, InternalFile> internal_pages;
-#if defined(__linux__)
-			std::string launcher_uri = "index.html?platform=linux";
-#elif defined(_WIN32)
-			std::string launcher_uri = "index.html?platform=windows";
-#elif defined(__APPLE__)
-			std::string launcher_uri = "index.html?platform=mac";
-#endif
 
 			// Mutex-locked vector - may be accessed from either UI thread (most of the time) or IO thread (GetResourceRequestHandler)
 			std::vector<CefRefPtr<Browser::Window>> windows;
