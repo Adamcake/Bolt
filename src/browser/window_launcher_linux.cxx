@@ -7,6 +7,7 @@
 #include <archive_entry.h>
 #include <fcntl.h>
 #include <fmt/core.h>
+#include <signal.h>
 #include <spawn.h>
 
 extern char **environ;
@@ -254,13 +255,16 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchDeb(CefRefPtr<CefR
 	size_t env_count = e - environ;
 
 	// set up some structs needed by posix_spawn, and our modified env array
+	sigset_t set;
+	sigfillset(&set);
 	posix_spawn_file_actions_t file_actions;
 	posix_spawnattr_t attributes;
 	pid_t pid;
 	posix_spawn_file_actions_init(&file_actions);
 	posix_spawnattr_init(&attributes);
+	posix_spawnattr_setsigdefault(&attributes, &set);
 	posix_spawnattr_setpgroup(&attributes, 0);
-	posix_spawnattr_setflags(&attributes, POSIX_SPAWN_SETPGROUP);
+	posix_spawnattr_setflags(&attributes, POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_SETSIGMASK);
 	std::string path_str(this->rs3_path.c_str());
 	char* argv[2];
 	argv[0] = path_str.data();
