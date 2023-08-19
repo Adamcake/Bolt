@@ -5,6 +5,8 @@ var credentialsAreDirty = false;
 var pendingOauth = null;
 var pendingGameAuth = [];
 var rs3LinuxInstalledHash = null;
+var config = {};
+var configIsDirty = false;
 
 // globally-available root elements
 var messages = document.createElement("ul");
@@ -155,10 +157,23 @@ function start(s) {
     const query = new URLSearchParams(window.location.search);
     platform = query.get("platform");
     rs3LinuxInstalledHash = query.get("rs3_linux_installed_hash");
-    const c = query.get("credentials");
-    if (c) {
-        // no need to set credentialsAreDirty here because the contents came directly from the file
-        credentials = JSON.parse(c);
+    const creds = query.get("credentials");
+    if (creds) {
+        try {
+            // no need to set credentialsAreDirty here because the contents came directly from the file
+            credentials = JSON.parse(creds);
+        } catch (e) {
+            err(`Couldn't parse credentials file: ${e.toString()}`);
+        }
+    }
+    const conf = query.get("config");
+    if (conf) {
+        try {
+            // as above, no need to set configIsDirty
+            config = JSON.parse(conf);
+        } catch (e) {
+            err(`Couldn't parse config file: ${e.toString()}`);
+        }
     }
 
     window.addEventListener("message", (event) => {
@@ -272,35 +287,48 @@ function start(s) {
     runeliteCustomJarLabel.for = runeliteUseCustomJar;
 
     runeliteUseCustomJar.type = "checkbox";
-    
+    runeliteUseCustomJar.checked = config.runelite_use_custom_jar || false;
 
     runeliteCustomJar.disabled = true;
     runeliteCustomJar.setAttribute("rows", 1);
+    if (config.runelite_custom_jar) runeliteCustomJar.value = config.runelite_custom_jar;
 
     var runeliteCustomJarSelect = document.createElement("button");
     runeliteCustomJarSelect.onclick = () => {
-        runeliteCustomJarSelect.enabled = false;
-        try {
-            // note: this would give only the file contents, whereas we need the path and don't want the contents:
-            //window.showOpenFilePicker({"types": [{"description": "Java Archive (JAR)", "accept": {"application/java-archive": [".jar"]}}]}).then((x) => { });
+        runeliteUseCustomJar.disabled = true;
+        runeliteCustomJarSelect.disabled = true;
 
-            var xml = new XMLHttpRequest();
-            xml.onreadystatechange = () => {
-                if (xml.readyState == 4) {
+        // note: this would give only the file contents, whereas we need the path and don't want the contents:
+        //window.showOpenFilePicker({"types": [{"description": "Java Archive (JAR)", "accept": {"application/java-archive": [".jar"]}}]}).then((x) => { });
+
+        var xml = new XMLHttpRequest();
+        xml.onreadystatechange = () => {
+            if (xml.readyState == 4) {
+                // if the user closes the file picker without selecting a file, status here is 204
+                if (xml.status == 200) {
                     runeliteCustomJar.value = xml.responseText;
+                    config.runelite_custom_jar = xml.responseText;
                 }
-            };
-            xml.open('GET', "/jar-file-picker", true);
-            xml.send();
-        } finally {
-            runeliteCustomJarSelect.disabled = false;
-        }
+                runeliteCustomJarSelect.disabled = false;
+                runeliteUseCustomJar.disabled = false;
+            }
+        };
+        xml.open('GET', "/jar-file-picker", true);
+        xml.send();
     };
     runeliteCustomJarSelect.innerText = "Select File";
     runeliteUseCustomJar.onchange = () => {
         runeliteCustomJarSelect.disabled = !runeliteUseCustomJar.checked;
+        config.runelite_use_custom_jar = runeliteUseCustomJar.checked;
+        if (config.runelite_use_custom_jar) {
+            if (runeliteUseCustomJar.persisted_path) config.runelite_custom_jar = runeliteUseCustomJar.persisted_path;
+        } else {
+            runeliteUseCustomJar.persisted_path = config.runelite_custom_jar;
+            delete config.runelite_custom_jar;
+        }
+        configIsDirty = true;
     };
-    runeliteUseCustomJar.onchange();
+    runeliteCustomJarSelect.disabled = !runeliteUseCustomJar.checked;
 
     settingsOsrs.appendChild(runeliteCustomJarLabel);
     settingsOsrs.appendChild(runeliteUseCustomJar);
@@ -424,7 +452,7 @@ function start(s) {
     loading.setAttribute("class", "div-bg");
     document.body.appendChild(loading);
 
-    if (!c) {
+    if (!creds) {
         var disclaimer = document.createElement("div");
         var close_disclaimer = document.createElement("button");
         disclaimer.setAttribute("class", "div-bg");
@@ -758,6 +786,8 @@ function generateLaunchButtonsOsrs(f, opt, target, settings) {
 
 // asynchronously download and launch RS3's official .deb client using the given env variables
 function launchRS3Linux(s, element, jx_access_token, jx_refresh_token, jx_session_id, jx_character_id, jx_display_name) {
+    saveConfig();
+
     const launch = (hash, deb) => {
         var xml = new XMLHttpRequest();
         var params = {};
@@ -831,6 +861,8 @@ function launchRS3Linux(s, element, jx_access_token, jx_refresh_token, jx_sessio
 // locate runelite's .jar either from the user's config or by downloading and caching from flatpak,
 // then attempt to launch it with the given env variables
 function launchRunelite(s, element, jx_access_token, jx_refresh_token, jx_session_id, jx_character_id, jx_display_name) {
+    saveConfig();
+
     element.disabled = false;
     msg("TODO: runelite");
     // TODO
@@ -850,6 +882,19 @@ function revokeOauthCreds(access_token, revoke_url, client_id) {
         xml.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
         xml.send(new URLSearchParams({ token: access_token, client_id: client_id }));
     });
+}
+
+// sends an asynchronous request to save the current user config to disk
+function saveConfig() {
+    var xml = new XMLHttpRequest();
+    xml.open('POST', "/save-config", true);
+    xml.onreadystatechange = () => {
+        if (xml.readyState == 4) {
+            msg(`Save config status: '${xml.responseText.trim()}'`);
+        }
+    };
+    xml.setRequestHeader("Content-Type", "application/json");
+    xml.send(JSON.stringify(config, null, 4));
 }
 
 // clears all child content from an element
@@ -895,3 +940,4 @@ function insertMessage(str) {
 }
 
 onload = () => start(s());
+onunload = saveConfig;
