@@ -6,6 +6,7 @@ var pendingOauth = null;
 var pendingGameAuth = [];
 var rs3LinuxInstalledHash = null;
 
+// globally-available root elements
 var messages = document.createElement("ul");
 var accountSelect = document.createElement("select");
 var loginButton = document.createElement("button");
@@ -14,6 +15,10 @@ var loggedInInfo = document.createElement("div");
 var loginButtons = document.createElement("div");
 var gameAccountSelection = document.createElement("div");
 var footer = document.createElement("div");
+
+// config setting elements
+var runeliteUseCustomJar = document.createElement("input");
+var runeliteCustomJar = document.createElement("textarea");
 
 // Checks if `credentials` are about to expire or have already expired,
 // and renews them using the oauth endpoint if so.
@@ -259,6 +264,48 @@ function start(s) {
     });
 
     var launchGameButtons = document.createElement("div");
+    var settingsOsrs = document.createElement("div");
+    var settingsRs3 = document.createElement("div");
+
+    var runeliteCustomJarLabel = document.createElement("label");
+    runeliteCustomJarLabel.innerText = "Use custom RuneLite JAR: ";
+    runeliteCustomJarLabel.for = runeliteUseCustomJar;
+
+    runeliteUseCustomJar.type = "checkbox";
+    
+
+    runeliteCustomJar.disabled = true;
+    runeliteCustomJar.setAttribute("rows", 1);
+
+    var runeliteCustomJarSelect = document.createElement("button");
+    runeliteCustomJarSelect.onclick = () => {
+        runeliteCustomJarSelect.enabled = false;
+        try {
+            // note: this would give only the file contents, whereas we need the path and don't want the contents:
+            //window.showOpenFilePicker({"types": [{"description": "Java Archive (JAR)", "accept": {"application/java-archive": [".jar"]}}]}).then((x) => { });
+
+            var xml = new XMLHttpRequest();
+            xml.onreadystatechange = () => {
+                if (xml.readyState == 4) {
+                    runeliteCustomJar.value = xml.responseText;
+                }
+            };
+            xml.open('GET', "/jar-file-picker", true);
+            xml.send();
+        } finally {
+            runeliteCustomJarSelect.disabled = false;
+        }
+    };
+    runeliteCustomJarSelect.innerText = "Select File";
+    runeliteUseCustomJar.onchange = () => {
+        runeliteCustomJarSelect.disabled = !runeliteUseCustomJar.checked;
+    };
+    runeliteUseCustomJar.onchange();
+
+    settingsOsrs.appendChild(runeliteCustomJarLabel);
+    settingsOsrs.appendChild(runeliteUseCustomJar);
+    settingsOsrs.appendChild(runeliteCustomJar);
+    settingsOsrs.appendChild(runeliteCustomJarSelect);
 
     var accounts_label = document.createElement("label");
     accounts_label.innerText = "Logged in as:";
@@ -275,9 +322,11 @@ function start(s) {
         switch (i) {
             case 0:
                 opt.genLaunchButtons = generateLaunchButtonsRs3;
+                opt.settingsElement = settingsRs3;
                 break;
             case 1:
                 opt.genLaunchButtons = generateLaunchButtonsOsrs;
+                opt.settingsElement = settingsOsrs;
                 break;
         }
         game_select.appendChild(opt);
@@ -663,7 +712,8 @@ function generateAccountSelection(f, select, game_select, launchGameButtons) {
         if (accountSelect.selectedIndex >= 0 && game_select.selectedIndex >= 0) {
             const sel = accountSelect.options[accountSelect.selectedIndex].gameAccountSelect;
             if (sel.selectedIndex >= 0) {
-                game_select.options[game_select.selectedIndex].genLaunchButtons(f, sel.options[sel.selectedIndex], launchGameButtons);
+                const opt = game_select.options[game_select.selectedIndex];
+                opt.genLaunchButtons(f, sel.options[sel.selectedIndex], launchGameButtons, opt.settingsElement);
             }
         }
     };
@@ -680,7 +730,9 @@ function generateAccountSelection(f, select, game_select, launchGameButtons) {
 // 2. a HTML Button element, which should be passed to parameter 1 when invoking it, or, if not
 //    invoking the callback for some reason, then set disabled=false on parameter 2 before returning
 // 3. a HTML Option element, representing the currently selected game account
-function generateLaunchButtonsRs3(f, opt, target) {
+function generateLaunchButtonsRs3(f, opt, target, settings) {
+    target.appendChild(settings);
+
     if (platform === "linux") {
         var rs3_linux = document.createElement("button");
         rs3_linux.onclick = () => { rs3_linux.disabled = true; f(launchRS3Linux, rs3_linux, opt); };
@@ -695,7 +747,9 @@ function generateLaunchButtonsRs3(f, opt, target) {
 // 2. a HTML Button element, which should be passed to parameter 1 when invoking it, or, if not
 //    invoking the callback for some reason, then set disabled=false on parameter 2 before returning
 // 3. a HTML Option element, representing the currently selected game account
-function generateLaunchButtonsOsrs(f, opt, target) {
+function generateLaunchButtonsOsrs(f, opt, target, settings) {
+    target.appendChild(settings);
+
     var rl_linux = document.createElement("button");
     rl_linux.onclick = () => { rl_linux.disabled = true; f(launchRunelite, rl_linux, opt); };
     rl_linux.innerText = "Launch Runelite";

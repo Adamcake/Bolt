@@ -20,6 +20,15 @@ button {
     margin-top: 8px;
 }
 
+textarea {
+    margin-left: 4px;
+    margin-right: 4px;
+    margin-top: 8px;
+    resize: horizontal;
+    min-width: 150px;
+    max-width: 60%;
+}
+
 .button-red {
     background-color:#f49088;
 }
