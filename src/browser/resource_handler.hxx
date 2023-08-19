@@ -21,7 +21,9 @@ namespace Browser {
 		void Cancel() override;
 		CefRefPtr<CefResourceHandler> GetResourceHandler(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, CefRefPtr<CefRequest>) override;
 
-		private:
+		protected:
+			ResourceHandler(CefString mime): cursor(0), has_location(false), mime(mime) { }
+
 			const unsigned char* data;
 			size_t data_len;
 			int status;
