@@ -4,6 +4,7 @@
 #include "include/cef_parser.h"
 
 #include <algorithm>
+#include <condition_variable>
 #include <fcntl.h>
 #include <fmt/core.h>
 #include <sys/stat.h>
@@ -21,6 +22,52 @@ constexpr std::string_view URI = "launcher.html?platform=mac";
 #endif
 
 CefRefPtr<CefResourceRequestHandler> SaveFileFromPost(CefRefPtr<CefRequest>, const char*);
+
+struct JarFilePicker: public CefRunFileDialogCallback, Browser::ResourceHandler {
+	JarFilePicker(CefRefPtr<CefBrowser> browser): callback(nullptr), browser_host(browser->GetHost()), ResourceHandler("text/plain") { }
+
+	bool Open(CefRefPtr<CefRequest> request, bool& handle_request, CefRefPtr<CefCallback> callback) override {
+		this->callback = callback;
+		CefString title = "Select a JAR file...";
+		CefString default_file_path = "";
+		std::vector<CefString> accept_filters = { ".jar" };
+		this->browser_host->RunFileDialog(FILE_DIALOG_OPEN, title, "", accept_filters, this);
+		this->browser_host = nullptr;
+		handle_request = false;
+		return true;
+	}
+
+	void Cancel() override {
+		this->browser_host = nullptr;
+		this->callback = nullptr;
+		Browser::ResourceHandler::Cancel();
+	}
+
+	void OnFileDialogDismissed(const std::vector<CefString>& file_paths) override {
+		if (file_paths.size() == 0) {
+			this->status = 204;
+			this->data_len = 0;
+			this->data = nullptr;
+		} else {
+			this->status = 200;
+			this->data_ = file_paths[0].ToString();
+			this->data_len = this->data_.size();
+			this->data = reinterpret_cast<const unsigned char*>(this->data_.data());
+		}
+		
+		if (this->callback) {
+			this->callback->Continue();
+			this->callback = nullptr;
+		}
+	}
+
+	private:
+		CefRefPtr<CefCallback> callback;
+		std::string data_;
+		CefRefPtr<CefBrowserHost> browser_host;
+		IMPLEMENT_REFCOUNTING(JarFilePicker);
+		DISALLOW_COPY_AND_ASSIGN(JarFilePicker);
+};
 
 Browser::Launcher::Launcher(
 	CefRefPtr<CefClient> client,
@@ -206,6 +253,11 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 		// instruction to save user credentials to disk
 		if (path == "/save-credentials") {
 			return SaveFileFromPost(request, this->creds_path.c_str());
+		}
+
+		// instruction to open a file picker for .jar files
+		if (path == "/jar-file-picker") {
+			return new JarFilePicker(browser);
 		}
 
 		// respond using internal hashmap of filenames
