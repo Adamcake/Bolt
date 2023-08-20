@@ -36,7 +36,7 @@ struct EnvQueryParam {
 			if (this->prepend_env_key) {
 				this->value = this->env_key;
 			}
-			this->value += CefURIDecode(value, true, UU_SPACES).ToString();
+			this->value += CefURIDecode(value, true, static_cast<cef_uri_unescape_rule_t>(0b1111)).ToString();
 		}
 	}
 };
