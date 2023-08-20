@@ -5,6 +5,7 @@ var credentialsAreDirty = false;
 var pendingOauth = null;
 var pendingGameAuth = [];
 var rs3LinuxInstalledHash = null;
+var runeliteInstalledHash = null;
 var config = {};
 var configIsDirty = false;
 
@@ -157,6 +158,7 @@ function start(s) {
     const query = new URLSearchParams(window.location.search);
     platform = query.get("platform");
     rs3LinuxInstalledHash = query.get("rs3_linux_installed_hash");
+    runeliteInstalledHash = query.get("runelite_installed_hash");
     const creds = query.get("credentials");
     if (creds) {
         try {
@@ -807,9 +809,6 @@ function launchRS3Linux(s, element, jx_access_token, jx_refresh_token, jx_sessio
                 element.disabled = false;
             }
         };
-        xml.onerror = () => {
-            element.disabled = false;
-        };
         xml.send(deb);
     };
 
@@ -863,9 +862,73 @@ function launchRS3Linux(s, element, jx_access_token, jx_refresh_token, jx_sessio
 function launchRunelite(s, element, jx_access_token, jx_refresh_token, jx_session_id, jx_character_id, jx_display_name) {
     saveConfig();
 
-    element.disabled = false;
-    msg("TODO: runelite");
-    // TODO
+    const launch = (hash, jar, jar_path) => {
+        var xml = new XMLHttpRequest();
+        var params = {};
+        if (hash) params.hash = hash;
+        if (jar_path) params.jar_path = jar_path;
+        if (jx_access_token) params.jx_access_token = jx_access_token;
+        if (jx_refresh_token) params.jx_refresh_token = jx_refresh_token;
+        if (jx_session_id) params.jx_session_id = jx_session_id;
+        if (jx_character_id) params.jx_character_id = jx_character_id;
+        if (jx_display_name) params.jx_display_name = jx_display_name;
+        xml.open(jar ? 'POST': 'GET', "/launch-runelite-jar?".concat(new URLSearchParams(params)), true);
+        xml.onreadystatechange = () => {
+            if (xml.readyState == 4) {
+                msg(`Game launch status: '${xml.responseText.trim()}'`);
+                if (xml.status == 200 && hash) {
+                    runeliteInstalledHash = hash;
+                }
+                element.disabled = false;
+            }
+        };
+        xml.send(jar);
+    };
+
+    if (runeliteUseCustomJar.checked) {
+        launch(null, null, runeliteCustomJar.value);
+        return;
+    }
+
+    var xml = new XMLHttpRequest();
+    const url = "https://raw.githubusercontent.com/flathub/net.runelite.RuneLite/master/net.runelite.RuneLite.json";
+    xml.open('GET', url, true);
+    xml.onreadystatechange = () => {
+        if (xml.readyState == 4) {
+            if (xml.status == 200) {
+                const runelite = JSON.parse(xml.responseText).modules.find((x) => x.name == "runelite").sources.find((x) => x.type == "file" && x.sha256 && x.url && x.url.startsWith("https://github.com/runelite/launcher/"));
+                if (runelite.sha256 !== runeliteInstalledHash) {
+                    var m = msg("Downloading RuneLite...");
+                    var xml_rl = new XMLHttpRequest();
+                    xml_rl.open('GET', runelite.url, true);
+                    xml_rl.responseType = "arraybuffer";
+                    xml_rl.onreadystatechange = () => {
+                        if (xml_rl.readyState == 4) {
+                            if (xml_rl.status == 200) {
+                                launch(runelite.sha256, xml_rl.response);
+                            } else {
+                                err(`Error downloading from ${runelite.url}: ${xml_rl.status}: ${xml_rl.responseText}`);
+                                element.disabled = false;
+                            }
+                        }
+                    };
+                    xml_rl.onprogress = (e) => {
+                        if (e.loaded && e.lengthComputable) {
+                            m.innerText = `Downloading RuneLite... ${(Math.round(1000.0 * e.loaded / e.total) / 10.0).toFixed(1)}%`;
+                        }
+                    };
+                    xml_rl.send();
+                } else {
+                    msg("Latest JAR is already installed");
+                    launch();
+                }
+            } else {
+                err(`Error from ${url}: ${xml.status}: ${xml.responseText}`, false);
+                element.disabled = false;
+            }
+        }
+    }
+    xml.send();
 }
 
 // revokes the given oauth tokens, returning an http status code.
@@ -884,17 +947,25 @@ function revokeOauthCreds(access_token, revoke_url, client_id) {
     });
 }
 
-// sends an asynchronous request to save the current user config to disk
+// sends an asynchronous request to save the current user config to disk, if it has changed
+var saveConfigRunning = false;
 function saveConfig() {
-    var xml = new XMLHttpRequest();
-    xml.open('POST', "/save-config", true);
-    xml.onreadystatechange = () => {
-        if (xml.readyState == 4) {
-            msg(`Save config status: '${xml.responseText.trim()}'`);
-        }
-    };
-    xml.setRequestHeader("Content-Type", "application/json");
-    xml.send(JSON.stringify(config, null, 4));
+    if (configIsDirty && !saveConfigRunning) {
+        saveConfigRunning = true;
+        var xml = new XMLHttpRequest();
+        xml.open('POST', "/save-config", true);
+        xml.onreadystatechange = () => {
+            if (xml.readyState == 4) {
+                msg(`Save config status: '${xml.responseText.trim()}'`);
+                if (xml.status == 200) {
+                    configIsDirty = false;
+                }
+                saveConfigRunning = false;
+            }
+        };
+        xml.setRequestHeader("Content-Type", "application/json");
+        xml.send(JSON.stringify(config, null, 4));
+    }
 }
 
 // clears all child content from an element
