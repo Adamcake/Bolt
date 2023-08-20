@@ -799,7 +799,7 @@ function launchRS3Linux(s, element, jx_access_token, jx_refresh_token, jx_sessio
         if (jx_session_id) params.jx_session_id = jx_session_id;
         if (jx_character_id) params.jx_character_id = jx_character_id;
         if (jx_display_name) params.jx_display_name = jx_display_name;
-        xml.open('POST', "/launch-deb?".concat(new URLSearchParams(params)), true);
+        xml.open('POST', "/launch-rs3-deb?".concat(new URLSearchParams(params)), true);
         xml.onreadystatechange = () => {
             if (xml.readyState == 4) {
                 msg(`Game launch status: '${xml.responseText.trim()}'`);

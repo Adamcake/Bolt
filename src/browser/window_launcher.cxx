@@ -54,7 +54,7 @@ struct JarFilePicker: public CefRunFileDialogCallback, Browser::ResourceHandler 
 			this->data_len = this->data_.size();
 			this->data = reinterpret_cast<const unsigned char*>(this->data_.data());
 		}
-		
+
 		if (this->callback) {
 			this->callback->Continue();
 			this->callback = nullptr;
@@ -241,8 +241,8 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 		disable_default_handling = true;
 
 		// instruction to launch RS3 .deb
-		if (path == "/launch-deb") {
-			return this->LaunchDeb(request, query);
+		if (path == "/launch-rs3-deb") {
+			return this->LaunchRs3Deb(request, query);
 		}
 
 		// instruction to save user config file to disk

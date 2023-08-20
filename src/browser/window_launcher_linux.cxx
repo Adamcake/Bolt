@@ -41,7 +41,7 @@ struct EnvQueryParam {
 	}
 };
 
-CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchDeb(CefRefPtr<CefRequest> request, std::string_view query) {
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<CefRequest> request, std::string_view query) {
 	// strings that I don't want to be searchable, which also need to be mutable for passing to env functions
 	char env_pulse_prop_override[] = {
 		80, 85, 76, 83, 69, 95, 80, 82, 79, 80, 95, 79, 86, 69, 82, 82, 73, 68,

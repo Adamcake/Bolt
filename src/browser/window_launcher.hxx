@@ -25,7 +25,7 @@ namespace Browser {
 		The request and URL query string are provided for parsing.
 		*/
 
-		CefRefPtr<CefResourceRequestHandler> LaunchDeb(CefRefPtr<CefRequest>, std::string_view);
+		CefRefPtr<CefResourceRequestHandler> LaunchRs3Deb(CefRefPtr<CefRequest>, std::string_view);
 
 		private:
 			const std::string internal_url = "https://bolt-internal/";
