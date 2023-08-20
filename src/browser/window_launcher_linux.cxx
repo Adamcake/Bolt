@@ -107,7 +107,6 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<C
 
 	// if there was a "hash" in the query string, we need to save the new game exe and the new hash
 	if (hash_param.should_set) {
-		const CefRefPtr<CefPostData> post_data = request->GetPostData();
 		if (post_data == nullptr || post_data->GetElementCount() != 1) {
 			// hash param must be accompanied by POST data containing the file it's a hash of,
 			// so hash but no POST is a bad request
