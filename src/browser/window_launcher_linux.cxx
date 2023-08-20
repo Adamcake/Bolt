@@ -329,3 +329,175 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<C
 		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 500, "text/plain");
 	}
 }
+
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRefPtr<CefRequest> request, std::string_view query) {
+	const CefRefPtr<CefPostData> post_data = request->GetPostData();
+
+	// array of structures for keeping track of which environment variables we want to set and have already set
+	constexpr size_t env_param_count = 6;
+	EnvQueryParam rl_path_param = {.should_set = false, .key = "jar_path"};
+	EnvQueryParam hash_param = {.should_set = false, .key = "hash"};
+	EnvQueryParam env_params[env_param_count] = {
+		{.should_set = false, .prepend_env_key = true, .env_key = "JX_ACCESS_TOKEN=", .key = "jx_access_token"},
+		{.should_set = false, .prepend_env_key = true, .env_key = "JX_REFRESH_TOKEN=", .key = "jx_refresh_token"},
+		{.should_set = false, .prepend_env_key = true, .env_key = "JX_SESSION_ID=", .key = "jx_session_id"},
+		{.should_set = false, .prepend_env_key = true, .env_key = "JX_CHARACTER_ID=", .key = "jx_character_id"},
+		{.should_set = false, .prepend_env_key = true, .env_key = "JX_DISPLAY_NAME=", .key = "jx_display_name"},
+	};
+
+	// loop through and parse the query string from the HTTP request we intercepted
+	size_t cursor = 0;
+	while (true) {
+		const std::string::size_type next_eq = query.find_first_of('=', cursor);
+		const std::string::size_type next_amp = query.find_first_of('&', cursor);
+		if (next_eq == std::string::npos) break;
+		if (next_eq >= next_amp) {
+			// found an invalid query param with no '=' in it - skip this
+			cursor = next_amp + 1;
+			continue;
+		}
+
+		// parse the next "key" and "value" from the query, then check if it's relevant to us
+		const std::string_view key(query.begin() + cursor, query.begin() + next_eq);
+		const auto value_end = next_amp == std::string::npos ? query.end() : query.begin() + next_amp;
+		const CefString value = std::string(std::string_view(query.begin() + next_eq + 1,  value_end));
+		for (EnvQueryParam& param: env_params) {
+			param.CheckAndUpdate(key, value);
+		}
+		hash_param.CheckAndUpdate(key, value);
+		rl_path_param.CheckAndUpdate(key, value);
+
+		// if there are no more instances of '&', we've read the last param, so stop here
+		// otherwise continue from the next '&'
+		if (next_amp == std::string::npos) break;
+		cursor = next_amp + 1;
+	}
+
+	// path to runelite.jar will either be a user-provided one or one in our data folder,
+	// which we may need to overwrite with a new user-provided file
+	std::filesystem::path jar_path;
+	if (rl_path_param.should_set) {
+		jar_path = rl_path_param.value;
+	} else {
+		jar_path = this->runelite_path;
+
+		// if there was a "hash" in the query string, we need to save the new jar and hash
+		if (hash_param.should_set) {
+			if (post_data == nullptr || post_data->GetElementCount() != 1) {
+				// hash param must be accompanied by POST data containing the file it's a hash of,
+				// so hash but no POST is a bad request
+				const char* data = "Bad Request";
+				return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+			}
+
+			CefPostData::ElementVector vec;
+			post_data->GetElements(vec);
+			size_t jar_size = vec[0]->GetBytesCount();
+			unsigned char* jar = new unsigned char[jar_size];
+			vec[0]->GetBytes(jar_size, jar);
+
+			size_t written = 0;
+			int file = open(jar_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0755);
+			if (file == -1) {
+				// failed to open game binary file on disk - probably in use or a permissions issue
+				delete[] jar;
+				const char* data = "Failed to save JAR; if the game is already running, close it and try again\n";
+				return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 500, "text/plain");
+			}
+			while (written < jar_size) {
+				written += write(file, jar + written, jar_size - written);
+			}
+			close(file);
+			delete[] jar;
+		}
+	}
+
+	// count how many env vars we have - we need to do this every time as CEF or other modules
+	// may call setenv and unsetenv
+	char** e;
+	for (e = environ; *e; e += 1);
+	size_t env_count = e - environ;
+
+	// set up some structs needed by posix_spawn, and our modified env array
+	sigset_t set;
+	sigfillset(&set);
+	posix_spawn_file_actions_t file_actions;
+	posix_spawnattr_t attributes;
+	pid_t pid;
+	posix_spawn_file_actions_init(&file_actions);
+	posix_spawnattr_init(&attributes);
+	posix_spawnattr_setsigdefault(&attributes, &set);
+	posix_spawnattr_setpgroup(&attributes, 0);
+	posix_spawnattr_setflags(&attributes, POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_SETSIGMASK);
+	std::string path_str(jar_path.c_str());
+	char* argv[5];
+	char arg_env[] = "/usr/bin/env";
+	char arg_java[] = "java";
+	char arg_jar[] = "-jar";
+	argv[0] = arg_env;
+	argv[1] = arg_java;
+	argv[2] = arg_jar;
+	argv[3] = path_str.data();
+	argv[4] = nullptr;
+
+	char** env = new char*[env_count + env_param_count + 1];
+
+	// first, loop through the existing env vars
+	// if its key is one we want to set, overwrite it, otherwise copy the pointer as-is
+	size_t i;
+	for (i = 0; i < env_count; i += 1) {
+		bool use_default = true;
+		for (EnvQueryParam& param: env_params) {
+			if (param.should_set && strncmp(environ[i], param.env_key.data(), param.env_key.size()) == 0) {
+				param.should_set = false;
+				use_default = false;
+				env[i] = param.value.data();
+				break;
+			}
+		}
+		if (use_default) {
+			env[i] = environ[i];
+		}
+	}
+	// ... next, look for any env vars we want to set that we haven't already, and put them at the end...
+	for (EnvQueryParam& param: env_params) {
+		if (param.should_set) {
+			env[i] = param.value.data();
+			i += 1;
+		}
+	}
+	// ... and finally null-terminate the list as required by POSIX
+	env[i] = nullptr;
+
+	int r = posix_spawn(&pid, argv[0], &file_actions, &attributes, argv, env);
+	
+	posix_spawnattr_destroy(&attributes);
+	posix_spawn_file_actions_destroy(&file_actions);
+	delete[] env;
+
+	if (r == 0) {
+		fmt::print("[B] Successfully spawned game process with pid {}\n", pid);
+
+		if (hash_param.should_set) {
+			size_t written = 0;
+			int file = open(this->runelite_hash_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+			if (file == -1) {
+				const char* data = "OK, but unable to save hash file\n";
+				return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
+			}
+			while (written < hash_param.value.size()) {
+				written += write(file, hash_param.value.c_str() + written, hash_param.value.size() - written);
+			}
+			close(file);
+		}
+
+		const char* data = "OK\n";
+		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
+	} else {
+		// posix_spawn failed - this is extremely unlikely to happen in the field, since the only failure
+		// case is EINVAL, which would indicate a trivial mistake in writing this function
+		fmt::print("[B] Error from posix_spawn: {}\n", strerror(r));
+		const char* data = "Error spawning process\n";
+		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 500, "text/plain");
+	}
+}

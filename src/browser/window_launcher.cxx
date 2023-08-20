@@ -91,12 +91,29 @@ Browser::Launcher::Launcher(
 	this->rs3_hash_path = data_dir;
 	this->rs3_hash_path.append("rs3linux.sha256");
 
+	this->runelite_path = data_dir;
+	this->runelite_path.append("runelite.jar");
+
+	this->runelite_hash_path = data_dir;
+	this->runelite_hash_path.append("runelite.jar.sha256");
+
 	int file = open(this->rs3_hash_path.c_str(), O_RDONLY);
 	if (file != -1) {
 		char buf[64];
 		ssize_t r = read(file, buf, 64);
 		if (r <= 64) {
 			url += "&rs3_linux_installed_hash=";
+			url.append(buf, r);
+		}
+	}
+	close(file);
+
+	file = open(this->runelite_hash_path.c_str(), O_RDONLY);
+	if (file != -1) {
+		char buf[64];
+		ssize_t r = read(file, buf, 64);
+		if (r <= 64) {
+			url += "&runelite_installed_hash=";
 			url.append(buf, r);
 		}
 	}
@@ -243,6 +260,11 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 		// instruction to launch RS3 .deb
 		if (path == "/launch-rs3-deb") {
 			return this->LaunchRs3Deb(request, query);
+		}
+
+		// instruction to launch RuneLite.jar
+		if (path == "/launch-runelite-jar") {
+			return this->LaunchRuneliteJar(request, query);
 		}
 
 		// instruction to save user config file to disk
