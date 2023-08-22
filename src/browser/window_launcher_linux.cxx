@@ -66,9 +66,8 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<C
 	const std::string_view env_key_home = std::string_view(env_home.begin(), env_home.begin() + strlen(home_));
 
 	// array of structures for keeping track of which environment variables we want to set and have already set
-	constexpr size_t env_param_count = 8;
 	EnvQueryParam hash_param = {.should_set = false, .key = "hash"};
-	EnvQueryParam env_params[env_param_count] = {
+	EnvQueryParam env_params[] = {
 		{.should_set = false, .prepend_env_key = true, .env_key = "JX_ACCESS_TOKEN=", .key = "jx_access_token"},
 		{.should_set = false, .prepend_env_key = true, .env_key = "JX_REFRESH_TOKEN=", .key = "jx_refresh_token"},
 		{.should_set = false, .prepend_env_key = true, .env_key = "JX_SESSION_ID=", .key = "jx_session_id"},
@@ -78,6 +77,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<C
 		{.should_set = true, .prepend_env_key = false, .allow_override = false, .env_key = "PULSE_PROP_OVERRIDE=", .value = env_pulse_prop_override},
 		{.should_set = true, .prepend_env_key = false, .allow_override = false, .env_key = "SDL_VIDEO_X11_WMCLASS=", .value = env_wmclass},
 	};
+	const size_t env_param_count = sizeof(env_params) / sizeof(env_params[0]);
 	
 	// loop through and parse the query string from the HTTP request we intercepted
 	while (true) {
@@ -334,16 +334,16 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 	const CefRefPtr<CefPostData> post_data = request->GetPostData();
 
 	// array of structures for keeping track of which environment variables we want to set and have already set
-	constexpr size_t env_param_count = 6;
 	EnvQueryParam rl_path_param = {.should_set = false, .key = "jar_path"};
 	EnvQueryParam hash_param = {.should_set = false, .key = "hash"};
-	EnvQueryParam env_params[env_param_count] = {
+	EnvQueryParam env_params[] = {
 		{.should_set = false, .prepend_env_key = true, .env_key = "JX_ACCESS_TOKEN=", .key = "jx_access_token"},
 		{.should_set = false, .prepend_env_key = true, .env_key = "JX_REFRESH_TOKEN=", .key = "jx_refresh_token"},
 		{.should_set = false, .prepend_env_key = true, .env_key = "JX_SESSION_ID=", .key = "jx_session_id"},
 		{.should_set = false, .prepend_env_key = true, .env_key = "JX_CHARACTER_ID=", .key = "jx_character_id"},
 		{.should_set = false, .prepend_env_key = true, .env_key = "JX_DISPLAY_NAME=", .key = "jx_display_name"},
 	};
+	const size_t env_param_count = sizeof(env_params) / sizeof(env_params[0]);
 
 	// loop through and parse the query string from the HTTP request we intercepted
 	size_t cursor = 0;
