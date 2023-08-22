@@ -524,7 +524,7 @@ function handleNewSessionId(s, creds, accounts_url, account_info_promise) {
                                 }
                                 select.appendChild(opt);
                             });
-                            const gen_login_vars = (f, element, opt) => {
+                            const gen_login_vars = (f, element, opt, basic_auth_header) => {
                                 const acc_id = opt.value;
                                 const acc_name = opt.name;
                                 f(s, element, null, null, creds.session_id, acc_id, acc_name);
@@ -618,8 +618,8 @@ async function handleGameLogin(s, creds, refresh_url, client_id) {
                 opt.innerText = name_text;
                 select.add(opt);
                 msg(`Successfully added login for ${name_text}`);
-                addNewAccount(name_text, creds, (f, element, opt) => {
-                    getShieldTokens(creds, atob(s.shield_url), name_info.displayNameSet ? name_info.displayName : "", refresh_url, client_id).then((e) => {
+                addNewAccount(name_text, creds, (f, element, opt, basic_auth_header) => {
+                    getShieldTokens(creds, atob(s.shield_url), refresh_url, client_id, basic_auth_header).then((e) => {
                         if (typeof e !== "number") {
                             f(s, element, e.access_token, e.refresh_token, null, null, name_info.displayNameSet ? name_info.displayName : null);
                         } else {
@@ -665,7 +665,7 @@ function getStandardAccountInfo(s, creds) {
 
 // use oauth creds to get a response from the "shield" endpoint
 // returns a JSON object on success or a HTTP status code on failure
-function getShieldTokens(creds, url, display_name, refresh_url, client_id) {
+function getShieldTokens(creds, url, refresh_url, client_id, basic_auth_header) {
     return new Promise((resolve, reject) => {
         checkRenewCreds(creds, refresh_url, client_id).then((status) => {
             saveAllCreds();
@@ -674,7 +674,7 @@ function getShieldTokens(creds, url, display_name, refresh_url, client_id) {
                 var xml = new XMLHttpRequest();
                 xml.open('POST', url, true);
                 xml.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
-                xml.setRequestHeader("Authorization", "Basic Y29tX2phZ2V4X2F1dGhfZGVza3RvcF9yczpwdWJsaWM=");
+                xml.setRequestHeader("Authorization", basic_auth_header);
                 xml.onreadystatechange = () => {
                     if (xml.readyState == 4) {
                         if (xml.status == 200) {
@@ -765,7 +765,7 @@ function generateLaunchButtonsRs3(f, opt, target, settings) {
 
     if (platform === "linux") {
         var rs3_linux = document.createElement("button");
-        rs3_linux.onclick = () => { rs3_linux.disabled = true; f(launchRS3Linux, rs3_linux, opt); };
+        rs3_linux.onclick = () => { rs3_linux.disabled = true; f(launchRS3Linux, rs3_linux, opt, "Basic Y29tX2phZ2V4X2F1dGhfZGVza3RvcF9yczpwdWJsaWM="); };
         rs3_linux.innerText = "Launch RS3";
         target.appendChild(rs3_linux);
     }
@@ -781,7 +781,7 @@ function generateLaunchButtonsOsrs(f, opt, target, settings) {
     target.appendChild(settings);
 
     var rl_linux = document.createElement("button");
-    rl_linux.onclick = () => { rl_linux.disabled = true; f(launchRunelite, rl_linux, opt); };
+    rl_linux.onclick = () => { rl_linux.disabled = true; f(launchRunelite, rl_linux, opt, "Basic Y29tX2phZ2V4X2F1dGhfZGVza3RvcF9vc3JzOnB1YmxpYw=="); };
     rl_linux.innerText = "Launch Runelite";
     target.appendChild(rl_linux);
 }
