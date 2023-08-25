@@ -56,6 +56,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<C
 		83, 68, 76, 95, 86, 73, 68, 69, 79, 95, 88, 49, 49, 95, 87, 77, 67,
 		76, 65, 83, 83, 61, 82, 117, 110, 101, 83, 99, 97, 112, 101, 0
 	};
+	char arg_configuri[] = "--configURI";
 
 	const CefRefPtr<CefPostData> post_data = request->GetPostData();
 	auto cursor = 0;
@@ -67,6 +68,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<C
 
 	// array of structures for keeping track of which environment variables we want to set and have already set
 	EnvQueryParam hash_param = {.should_set = false, .key = "hash"};
+	EnvQueryParam config_uri_param = {.should_set = false, .key = "config_uri"};
 	EnvQueryParam env_params[] = {
 		{.should_set = false, .prepend_env_key = true, .env_key = "JX_ACCESS_TOKEN=", .key = "jx_access_token"},
 		{.should_set = false, .prepend_env_key = true, .env_key = "JX_REFRESH_TOKEN=", .key = "jx_refresh_token"},
@@ -98,6 +100,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<C
 			param.CheckAndUpdate(key, value);
 		}
 		hash_param.CheckAndUpdate(key, value);
+		config_uri_param.CheckAndUpdate(key, value);
 
 		// if there are no more instances of '&', we've read the last param, so stop here
 		// otherwise continue from the next '&'
@@ -265,9 +268,15 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<C
 	posix_spawnattr_setpgroup(&attributes, 0);
 	posix_spawnattr_setflags(&attributes, POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_SETSIGMASK);
 	std::string path_str(this->rs3_path.c_str());
-	char* argv[2];
+	char* argv[4];
 	argv[0] = path_str.data();
-	argv[1] = nullptr;
+	if (config_uri_param.should_set) {
+		argv[1] = arg_configuri;
+		argv[2] = config_uri_param.value.data();
+		argv[3] = nullptr;
+	} else {
+		argv[1] = nullptr;
+	}
 	char** env = new char*[env_count + env_param_count + 1];
 
 	// first, loop through the existing env vars
