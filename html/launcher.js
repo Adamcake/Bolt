@@ -784,19 +784,38 @@ function addNewAccount(name, creds, genLoginVars, select) {
     accountSelect.onchange();
 }
 
-// populates the gameAccountSelection element and by extension the launchGameButtons element
+// populates the gameAccountSelection element and by extension the launch_game_buttons element
 // "f" is the function passed to generateLaunchButtons, "select" and "game_select" are HTML Select elements,
-// and "launchGameButtons" is a HTML Div element to be targeted by these buttons' callbacks
-function generateAccountSelection(f, game_account_select, game_select, launchGameButtons) {
+// and "launch_game_buttons" is a HTML Div element to be targeted by these buttons' callbacks
+function generateAccountSelection(f, game_account_select, game_select, launch_game_buttons) {
     clearElement(gameAccountSelection);
     var label = document.createElement("label");
     label.for = game_account_select;
-    label.innerText = "Choose a game account and game:";
+    label.innerText = "Choose a game account and game: ";
+
+    var settings_container = document.createElement("div");
+    var show_hide_settings = document.createElement("button");
+    
     game_account_select.onchange = () => {
-        clearElement(launchGameButtons);
+        clearElement(launch_game_buttons);
+
         if (game_account_select.selectedIndex >= 0 && game_select.selectedIndex >= 0) {
+            launch_game_buttons.appendChild(settings_container);
             const opt = game_select.options[game_select.selectedIndex];
-            opt.genLaunchButtons(f, game_account_select.options[game_account_select.selectedIndex], launchGameButtons, opt.settingsElement);
+
+            show_hide_settings.show_settings_fn = () => {
+                settings_container.appendChild(opt.settingsElement);
+                show_hide_settings.onclick = show_hide_settings.hide_settings_fn;
+                show_hide_settings.innerText = "Hide Settings";
+            };
+            show_hide_settings.hide_settings_fn = () => {
+                clearElement(settings_container);
+                show_hide_settings.onclick = show_hide_settings.show_settings_fn;
+                show_hide_settings.innerText = "Show Settings";
+            };
+            show_hide_settings.hide_settings_fn();        
+
+            opt.genLaunchButtons(f, game_account_select.options[game_account_select.selectedIndex], launch_game_buttons);
             if (accountSelect.selectedIndex != -1) {
                 if (!config.selected_game_accounts) config.selected_game_accounts = {};
                 const key = accountSelect.options[accountSelect.selectedIndex].creds.sub;
@@ -812,6 +831,7 @@ function generateAccountSelection(f, game_account_select, game_select, launchGam
     gameAccountSelection.appendChild(label);
     gameAccountSelection.appendChild(game_account_select);
     gameAccountSelection.appendChild(game_select);
+    gameAccountSelection.appendChild(show_hide_settings);
 }
 
 // populates the launchGameButtons element with buttons
@@ -820,9 +840,7 @@ function generateAccountSelection(f, game_account_select, game_select, launchGam
 // 2. a HTML Button element, which should be passed to parameter 1 when invoking it, or, if not
 //    invoking the callback for some reason, then set disabled=false on parameter 2 before returning
 // 3. a HTML Option element, representing the currently selected game account
-function generateLaunchButtonsRs3(f, opt, target, settings) {
-    target.appendChild(settings);
-
+function generateLaunchButtonsRs3(f, opt, target) {
     if (platform === "linux") {
         var rs3_linux = document.createElement("button");
         rs3_linux.onclick = () => { rs3_linux.disabled = true; f(launchRS3Linux, rs3_linux, opt, "Basic Y29tX2phZ2V4X2F1dGhfZGVza3RvcF9yczpwdWJsaWM="); };
@@ -837,9 +855,7 @@ function generateLaunchButtonsRs3(f, opt, target, settings) {
 // 2. a HTML Button element, which should be passed to parameter 1 when invoking it, or, if not
 //    invoking the callback for some reason, then set disabled=false on parameter 2 before returning
 // 3. a HTML Option element, representing the currently selected game account
-function generateLaunchButtonsOsrs(f, opt, target, settings) {
-    target.appendChild(settings);
-
+function generateLaunchButtonsOsrs(f, opt, target) {
     var rl_linux = document.createElement("button");
     rl_linux.onclick = () => { rl_linux.disabled = true; f(launchRunelite, rl_linux, opt, "Basic Y29tX2phZ2V4X2F1dGhfZGVza3RvcF9vc3JzOnB1YmxpYw=="); };
     rl_linux.innerText = "Launch Runelite";
