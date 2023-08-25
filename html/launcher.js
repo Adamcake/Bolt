@@ -23,6 +23,7 @@ var footer = document.createElement("div");
 // config setting elements
 var runeliteUseCustomJar = document.createElement("input");
 var runeliteCustomJar = document.createElement("textarea");
+var rsConfigUri = document.createElement("textarea");
 
 // Checks if `credentials` are about to expire or have already expired,
 // and renews them using the oauth endpoint if so.
@@ -284,6 +285,33 @@ function start(s) {
     var launchGameButtons = document.createElement("div");
     var settingsOsrs = document.createElement("div");
     var settingsRs3 = document.createElement("div");
+
+    var rsConfigUriLabel = document.createElement("label");
+    rsConfigUriLabel.innerText = "Config URI: ";
+    rsConfigUriLabel.for = rsConfigUri;
+
+    rsConfigUri.setAttribute("rows", 1);
+    rsConfigUri.onchange = () => {
+        config.rs_config_uri = rsConfigUri.value;
+        configIsDirty = true;
+    };
+    if (config.rs_config_uri) {
+        rsConfigUri.value = config.rs_config_uri;
+    } else {
+        rsConfigUri.value = atob(s.default_config_uri);
+    }
+    settingsRs3.appendChild(rsConfigUriLabel);
+    settingsRs3.appendChild(rsConfigUri);
+
+    var rsConfigUriReset = document.createElement("button");
+    rsConfigUriReset.setAttribute("class", "button-red");
+    rsConfigUriReset.innerText = "Reset To Default";
+    rsConfigUriReset.onclick = () => {
+        rsConfigUri.value = atob(s.default_config_uri);
+        delete config.rs_config_uri;
+        configIsDirty = true;
+    };
+    settingsRs3.appendChild(rsConfigUriReset);
 
     var runeliteCustomJarLabel = document.createElement("label");
     runeliteCustomJarLabel.innerText = "Use custom RuneLite JAR: ";
@@ -831,6 +859,7 @@ function launchRS3Linux(s, element, jx_access_token, jx_refresh_token, jx_sessio
         if (jx_session_id) params.jx_session_id = jx_session_id;
         if (jx_character_id) params.jx_character_id = jx_character_id;
         if (jx_display_name) params.jx_display_name = jx_display_name;
+        if (config.rs_config_uri) params.config_uri = config.rs_config_uri;
         xml.open('POST', "/launch-rs3-deb?".concat(new URLSearchParams(params)), true);
         xml.onreadystatechange = () => {
             if (xml.readyState == 4) {
