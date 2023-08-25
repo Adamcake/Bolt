@@ -311,6 +311,7 @@ function start(s) {
                 if (xml.status == 200) {
                     runeliteCustomJar.value = xml.responseText;
                     config.runelite_custom_jar = xml.responseText;
+                    configIsDirty = true;
                 }
                 runeliteCustomJarSelect.disabled = false;
                 runeliteUseCustomJar.disabled = false;
@@ -372,6 +373,10 @@ function start(s) {
         if (accountSelect.selectedIndex >= 0) {
             const opt = accountSelect.options[accountSelect.selectedIndex];
             generateAccountSelection(opt.genLoginVars, opt.gameAccountSelect, game_select, launchGameButtons);
+            if (!isLoading) {
+                config.selected_account = opt.creds.sub;
+                configIsDirty = true;
+            }
         }
     };
 
@@ -498,6 +503,14 @@ function start(s) {
             credentials = responses.filter((x) => x.valid).map((x) => x.creds);
             credentialsAreDirty |= credentials.length != old_credentials_size;
             saveAllCreds();
+
+            for (var i = 0; i < accountSelect.childElementCount; i += 1) {
+                if (accountSelect.options[i].creds.sub === config.selected_account) {
+                    accountSelect.selectedIndex = i;
+                    accountSelect.onchange();
+                    break;
+                }
+            }
         }
         isLoading = false;
         loading.remove();
@@ -740,7 +753,6 @@ function addNewAccount(name, creds, genLoginVars, select) {
     opt.gameAccountSelect = select;
     opt.creds = creds;
     accountSelect.add(opt);
-    accountSelect.selectedIndex = index;
     accountSelect.onchange();
 }
 
