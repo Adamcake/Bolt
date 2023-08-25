@@ -8,6 +8,7 @@ var rs3LinuxInstalledHash = null;
 var runeliteInstalledHash = null;
 var config = {};
 var configIsDirty = false;
+var isLoading = true;
 
 // globally-available root elements
 var messages = document.createElement("ul");
@@ -498,6 +499,7 @@ function start(s) {
             credentialsAreDirty |= credentials.length != old_credentials_size;
             saveAllCreds();
         }
+        isLoading = false;
         loading.remove();
     })();
 }
@@ -516,9 +518,11 @@ function handleNewSessionId(s, creds, accounts_url, account_info_promise) {
                             const name_text = `${account_info.displayName}#${account_info.suffix}`;
                             msg(`Successfully added login for ${name_text}`);
                             var select = document.createElement("select");
-                            JSON.parse(xml.response).forEach((acc) => {
+                            var select_index = null;
+                            JSON.parse(xml.response).forEach((acc, i) => {
                                 var opt = document.createElement("option");
                                 opt.value = acc.accountId;
+                                opt.seq = acc.accountId;
                                 if (acc.displayName) {
                                     opt.name = acc.displayName;
                                     opt.innerText = acc.displayName;
@@ -526,7 +530,13 @@ function handleNewSessionId(s, creds, accounts_url, account_info_promise) {
                                     opt.innerText = `#${acc.accountId}`;
                                 }
                                 select.appendChild(opt);
+                                if (config.selected_game_accounts && config.selected_game_accounts[creds.sub] === opt.seq) {
+                                    select_index = i;
+                                }
                             });
+                            if (select_index) {
+                                select.selectedIndex = select_index;
+                            }
                             const gen_login_vars = (f, element, opt, basic_auth_header) => {
                                 const acc_id = opt.value;
                                 const acc_name = opt.name;
@@ -619,7 +629,9 @@ async function handleGameLogin(s, creds, refresh_url, client_id) {
                 var select = document.createElement("select");
                 var opt = document.createElement("option");
                 opt.innerText = name_text;
+                opt.seq = creds.sub;
                 select.add(opt);
+                select.selectedIndex = 0;
                 msg(`Successfully added login for ${name_text}`);
                 addNewAccount(name_text, creds, (f, element, opt, basic_auth_header) => {
                     getShieldTokens(creds, atob(s.shield_url), refresh_url, client_id, basic_auth_header).then((e) => {
@@ -735,27 +747,30 @@ function addNewAccount(name, creds, genLoginVars, select) {
 // populates the gameAccountSelection element and by extension the launchGameButtons element
 // "f" is the function passed to generateLaunchButtons, "select" and "game_select" are HTML Select elements,
 // and "launchGameButtons" is a HTML Div element to be targeted by these buttons' callbacks
-function generateAccountSelection(f, select, game_select, launchGameButtons) {
+function generateAccountSelection(f, game_account_select, game_select, launchGameButtons) {
     clearElement(gameAccountSelection);
     var label = document.createElement("label");
-    label.for = select;
+    label.for = game_account_select;
     label.innerText = "Choose a game account and game:";
-    select.onchange = () => {
+    game_account_select.onchange = () => {
         clearElement(launchGameButtons);
-        if (accountSelect.selectedIndex >= 0 && game_select.selectedIndex >= 0) {
-            const sel = accountSelect.options[accountSelect.selectedIndex].gameAccountSelect;
-            if (sel.selectedIndex >= 0) {
-                const opt = game_select.options[game_select.selectedIndex];
-                opt.genLaunchButtons(f, sel.options[sel.selectedIndex], launchGameButtons, opt.settingsElement);
+        if (game_account_select.selectedIndex >= 0 && game_select.selectedIndex >= 0) {
+            const opt = game_select.options[game_select.selectedIndex];
+            opt.genLaunchButtons(f, game_account_select.options[game_account_select.selectedIndex], launchGameButtons, opt.settingsElement);
+            if (accountSelect.selectedIndex != -1) {
+                if (!config.selected_game_accounts) config.selected_game_accounts = {};
+                const key = accountSelect.options[accountSelect.selectedIndex].creds.sub;
+                const val = game_account_select.options[game_account_select.selectedIndex].seq;
+                config.selected_game_accounts[key] = val;
             }
         }
-        config.selected_game_index = game_select.selectedIndex;
+        config.selected_game_index = game_select.selectedIndex;        
         configIsDirty = true;
     };
-    game_select.onchange = select.onchange;
-    select.onchange();
+    game_select.onchange = game_account_select.onchange;
+    game_account_select.onchange();
     gameAccountSelection.appendChild(label);
-    gameAccountSelection.appendChild(select);
+    gameAccountSelection.appendChild(game_account_select);
     gameAccountSelection.appendChild(game_select);
 }
 
