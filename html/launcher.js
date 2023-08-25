@@ -361,6 +361,9 @@ function start(s) {
         }
         game_select.appendChild(opt);
     });
+    if (config.selected_game_index) {
+        game_select.selectedIndex = config.selected_game_index;
+    }
 
     accountSelect.onchange = () => {
         clearElement(launchGameButtons);
@@ -746,6 +749,8 @@ function generateAccountSelection(f, select, game_select, launchGameButtons) {
                 opt.genLaunchButtons(f, sel.options[sel.selectedIndex], launchGameButtons, opt.settingsElement);
             }
         }
+        config.selected_game_index = game_select.selectedIndex;
+        configIsDirty = true;
     };
     game_select.onchange = select.onchange;
     select.onchange();
