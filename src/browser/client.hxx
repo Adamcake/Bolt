@@ -12,15 +12,22 @@
 #include <string>
 #include <vector>
 
+#if defined(CEF_X11)
+#include <xcb/xcb.h>
+#endif
+
 namespace Browser {
 	/// Implementation of CefClient, CefBrowserProcessHandler, CefLifeSpanHandler, CefRequestHandler.
-	/// Store on the stack, but access only via CefRefPtr.
 	/// https://github.com/chromiumembedded/cef/blob/5735/include/cef_client.h
 	/// https://github.com/chromiumembedded/cef/blob/5735/include/cef_browser_process_handler.h
 	/// https://github.com/chromiumembedded/cef/blob/5735/include/cef_life_span_handler.h
 	/// https://github.com/chromiumembedded/cef/blob/5735/include/cef_request_handler.h
 	struct Client: public CefClient, CefBrowserProcessHandler, CefLifeSpanHandler, CefRequestHandler {
 		Client(CefRefPtr<Browser::App>, std::filesystem::path config_dir, std::filesystem::path data_dir);
+
+		/// Must be called from the main thread, and windows_lock must be held when calling.
+		/// Cleans up and eventually causes CefRunMessageLoop() to return.
+		void Exit();
 
 		/* CefClient overrides */
 		CefRefPtr<CefLifeSpanHandler> GetLifeSpanHandler() override;
@@ -60,20 +67,21 @@ namespace Browser {
 			bool&
 		) override;
 
-		Client(const Client&) = delete;
-		Client& operator=(const Client&) = delete;
-		void AddRef() const override { this->ref_count.AddRef(); }
-		bool Release() const override { return this->ref_count.Release(); }
-		bool HasOneRef() const override { return this->ref_count.HasOneRef(); }
-		bool HasAtLeastOneRef() const override { return this->ref_count.HasAtLeastOneRef(); }
 		private:
-			CefRefCount ref_count;
+			DISALLOW_COPY_AND_ASSIGN(Client);
+			IMPLEMENT_REFCOUNTING(Client);
 
+			bool is_closing;
+			size_t closing_windows_remaining;
 			bool show_devtools;
 			std::filesystem::path config_dir;
 			std::filesystem::path data_dir;
 
 			std::map<std::string, InternalFile> internal_pages;
+
+#if defined(CEF_X11)
+			xcb_connection_t* xcb;
+#endif
 
 			// Mutex-locked vector - may be accessed from either UI thread (most of the time) or IO thread (GetResourceRequestHandler)
 			std::vector<CefRefPtr<Browser::Window>> windows;

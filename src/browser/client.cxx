@@ -1,4 +1,5 @@
 #include "client.hxx"
+#include "include/cef_app.h"
 #include "window_launcher.hxx"
 
 #include "include/cef_life_span_handler.h"
@@ -10,7 +11,7 @@
 #include <spawn.h>
 
 Browser::Client::Client(CefRefPtr<Browser::App> app,std::filesystem::path config_dir, std::filesystem::path data_dir):
-	show_devtools(true), config_dir(config_dir), data_dir(data_dir)
+	is_closing(false), show_devtools(true), config_dir(config_dir), data_dir(data_dir)
 {
 	CefString mime_type_html = "text/html";
 	CefString mime_type_js = "application/javascript";
@@ -22,6 +23,28 @@ Browser::Client::Client(CefRefPtr<Browser::App> app,std::filesystem::path config
 	this->internal_pages["/oauth.html"] = InternalFile("html/oauth.html", mime_type_html);
 	this->internal_pages["/game_auth.html"] = InternalFile("html/game_auth.html", mime_type_html);
 	this->internal_pages["/frame.html"] = InternalFile("html/frame.html", mime_type_html);
+
+#if defined(CEF_X11)
+	this->xcb = xcb_connect(nullptr, nullptr);
+#endif
+}
+
+void Browser::Client::Exit() {
+	fmt::print("[B] Exit\n");
+	if (this->windows.size() == 0) {
+		CefQuitMessageLoop();
+#if defined(CEF_X11)
+		xcb_disconnect(this->xcb);
+#endif
+	} else {
+		this->is_closing = true;
+		this->closing_windows_remaining = 0;
+		for (CefRefPtr<Browser::Window>& window: this->windows) {
+			this->closing_windows_remaining += window->CountBrowsers();
+			window->Close();
+		}
+		this->windows.clear();
+	}
 }
 
 CefRefPtr<CefLifeSpanHandler> Browser::Client::GetLifeSpanHandler() {
@@ -78,20 +101,32 @@ void Browser::Client::OnAfterCreated(CefRefPtr<CefBrowser> browser) {
 
 bool Browser::Client::DoClose(CefRefPtr<CefBrowser> browser) {
 	fmt::print("[B] DoClose for browser {}\n", browser->GetIdentifier());
-	std::lock_guard<std::mutex> _(this->windows_lock);
-	this->windows.erase(
-		std::remove_if(
-			this->windows.begin(),
-			this->windows.end(),
-			[&browser](const CefRefPtr<Browser::Window>& window){ return window->CloseBrowser(browser); }
-		),
-		this->windows.end()
-	);
+
+	// if closing, Exit() is already holding the mutex lock, plus there's no need to clean up
+	// individual windows when all are being closed at once
+	if (!this->is_closing) {
+		std::lock_guard<std::mutex> _(this->windows_lock);
+		this->windows.erase(
+			std::remove_if(
+				this->windows.begin(),
+				this->windows.end(),
+				[&browser](const CefRefPtr<Browser::Window>& window){ return window->OnBrowserClosing(browser); }
+			),
+			this->windows.end()
+		);
+	}
 	return false;
 }
 
 void Browser::Client::OnBeforeClose(CefRefPtr<CefBrowser> browser) {
-	fmt::print("[B] OnBeforeClose for browser {}\n", browser->GetIdentifier());
+	fmt::print("[B] OnBeforeClose for browser {}, remaining windows {}\n", browser->GetIdentifier(), this->windows.size());
+	if (this->is_closing) {
+		this->closing_windows_remaining -= 1;
+		if (this->closing_windows_remaining == 0) {
+			// retry Exit(), hoping this time windows.size() will be 0
+			this->Exit();
+		}
+	}
 }
 
 bool Browser::Client::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefProcessId, CefRefPtr<CefProcessMessage> message) {
@@ -113,6 +148,12 @@ bool Browser::Client::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, Ce
 
 	if (name == "__bolt_app_begin_drag") {
 		fmt::print("[B] bolt_app_begin_drag received for browser {}\n", browser->GetIdentifier());
+		return true;
+	}
+
+	if (name == "__bolt_close") {
+		fmt::print("[B] bolt_close message received, exiting\n");
+		this->Exit();
 		return true;
 	}
 

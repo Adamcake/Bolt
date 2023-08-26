@@ -9,7 +9,7 @@
 namespace Browser {
 	/// Represents a visible browser window on the user's screen. This struct wraps a single pointer,
 	/// so it is safe to store anywhere and move around during operation.
-	/// The window will exist either until the user closes it or Window::CloseBrowser() is called.
+	/// The window will exist either until the user closes it or Window::OnBrowserClosed() is called.
 	/// In both cases, CefLifeSpanHandler::OnBeforeClose callback will be called (implemented by Client).
 	/// This struct also acts as the CefWindowDelegate and CefBrowserViewDelegate for the window it represents,
 	/// and the CefResourceRequestHandler for requests originating from this window or any of its children.
@@ -29,10 +29,16 @@ namespace Browser {
 		/// Returns true if the given browser is this window or one of its children, otherwise false
 		bool HasBrowser(CefRefPtr<CefBrowser>) const;
 
+		/// Counts how many browsers this browser is responsible for, including itself and children recursively
+		size_t CountBrowsers() const;
+
+		/// Force-closes this browser and all of its children
+		void Close();
+
 		/// Purges matching windows from this window's list of children
 		/// Returns true if this window itself matches the given browser, false otherwise
 		/// Cannot be called from CefLifeSpanHandler::OnBeforeClose, see CefBrowserViewDelegate::OnBrowserDestroyed for info
-		bool CloseBrowser(CefRefPtr<CefBrowser>);
+		bool OnBrowserClosing(CefRefPtr<CefBrowser>);
 
 		/// Assigns given popup features to to matching windows
 		/// Given popup features will be used for the next child window to open

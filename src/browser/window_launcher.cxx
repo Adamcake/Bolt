@@ -1,4 +1,5 @@
 #include "window_launcher.hxx"
+#include "include/internal/cef_types.h"
 #include "resource_handler.hxx"
 
 #include "include/cef_parser.h"
@@ -256,6 +257,12 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 	// internal pages
 	if (domain == "bolt-internal") {
 		disable_default_handling = true;
+
+		if (path == "/close") {
+			frame->SendProcessMessage(PID_RENDERER, CefProcessMessage::Create("__bolt_close"));
+			const char* data = "OK\n";
+			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
+		}
 
 		// instruction to launch RS3 .deb
 		if (path == "/launch-rs3-deb") {

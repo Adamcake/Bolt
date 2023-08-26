@@ -171,18 +171,31 @@ bool Browser::Window::HasBrowser(CefRefPtr<CefBrowser> browser) const {
 	return ret;
 }
 
-bool Browser::Window::CloseBrowser(CefRefPtr<CefBrowser> browser) {
-	fmt::print("[B] CloseBrowser this={}\n", reinterpret_cast<uintptr_t>(this));
+size_t Browser::Window::CountBrowsers() const {
+	size_t ret = 1;
+	for (const CefRefPtr<Browser::Window>& child: this->children) {
+		ret += child->CountBrowsers();
+	}
+	return ret;
+}
+
+void Browser::Window::Close() {
+	fmt::print("[B] Close this={}\n", reinterpret_cast<uintptr_t>(this));
+	// Children will be closed when CEF calls DoClose for this instance
+	this->browser->GetHost()->CloseBrowser(true);
+}
+
+bool Browser::Window::OnBrowserClosing(CefRefPtr<CefBrowser> browser) {
+	fmt::print("[B] OnBrowserClosing this={}\n", reinterpret_cast<uintptr_t>(this));
 	this->children.erase(
 		std::remove_if(
 			this->children.begin(),
 			this->children.end(),
-			[&browser](const CefRefPtr<Browser::Window>& window){ return window->CloseBrowser(browser); }
+			[&browser](const CefRefPtr<Browser::Window>& window){ return window->OnBrowserClosing(browser); }
 		),
 		this->children.end()
 	);
 	return this->browser->IsSame(browser);
-	fmt::print("[B] CloseBrowser END this={}\n", reinterpret_cast<uintptr_t>(this));
 }
 
 void Browser::Window::SetPopupFeaturesForBrowser(CefRefPtr<CefBrowser> browser, const CefPopupFeatures& popup_features) {

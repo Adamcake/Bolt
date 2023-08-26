@@ -68,8 +68,7 @@ int BoltRunBrowserProcess(CefMainArgs main_args, CefRefPtr<Browser::App> cef_app
 	}
 
 	// CefClient struct - central object for main thread, and implements lots of handlers for browser process
-	Browser::Client client_(cef_app, config_dir, data_dir);
-	CefRefPtr<Browser::Client> client = &client_;
+	CefRefPtr<Browser::Client> client = new Browser::Client(cef_app, config_dir, data_dir);
 
 	// CEF settings - only set the ones we're interested in
 	CefSettings settings = CefSettings();
@@ -92,6 +91,7 @@ int BoltRunBrowserProcess(CefMainArgs main_args, CefRefPtr<Browser::App> cef_app
 
 	// Block on the CEF message loop until CefQuitMessageLoop() is called
 	CefRunMessageLoop();
+	CefShutdown();
 	
 	return 0;
 }
@@ -113,7 +113,6 @@ int main(int argc, char* argv[]) {
 	CefMainArgs main_args(argc + 1, argv_);
 	int ret = BoltRunAnyProcess(main_args);
 
-	CefShutdown();
 	delete[] argv_;
 	delete[] arg_;
 	return ret;
