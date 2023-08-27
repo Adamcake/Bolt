@@ -876,7 +876,11 @@ function launchRS3Linux(s, element, jx_access_token, jx_refresh_token, jx_sessio
         if (jx_session_id) params.jx_session_id = jx_session_id;
         if (jx_character_id) params.jx_character_id = jx_character_id;
         if (jx_display_name) params.jx_display_name = jx_display_name;
-        if (config.rs_config_uri) params.config_uri = config.rs_config_uri;
+        if (config.rs_config_uri) {
+            params.config_uri = config.rs_config_uri;
+        } else {
+            params.config_uri = atob(s.default_config_uri);
+        }
         xml.open('POST', "/launch-rs3-deb?".concat(new URLSearchParams(params)), true);
         xml.onreadystatechange = () => {
             if (xml.readyState == 4) {
