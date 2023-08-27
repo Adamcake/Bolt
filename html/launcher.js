@@ -541,6 +541,7 @@ function start(s) {
             }
         }
         isLoading = false;
+        configIsDirty = false; // overrides all cases where this gets set to "true" due to loading existing config values
         loading.remove();
     })();
 }
