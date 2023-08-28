@@ -25,6 +25,11 @@ namespace Browser {
 	struct Client: public CefClient, CefBrowserProcessHandler, CefLifeSpanHandler, CefRequestHandler {
 		Client(CefRefPtr<Browser::App>, std::filesystem::path config_dir, std::filesystem::path data_dir);
 
+		/// Either opens a launcher window, or focuses an existing one. No more than one launcher window
+		/// may be open at a given time. A launcher window will be opened automatically on startup,
+		/// but this function may be used to open another after previous ones have been closed.
+		void OpenLauncher();
+
 		/// Must be called from the main thread, and windows_lock must be held when calling.
 		/// Cleans up and eventually causes CefRunMessageLoop() to return.
 		void Exit();
