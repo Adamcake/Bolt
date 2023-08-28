@@ -1,5 +1,6 @@
 #include <filesystem>
 #include <fmt/core.h>
+#include <gtk/gtk.h>
 
 #include "browser.hxx"
 #include "browser/app.hxx"
@@ -10,13 +11,18 @@
 #endif
 
 #if defined(__linux__)
+#include <fcntl.h>
+#include <functional>
 #include <sys/file.h>
 #include <sys/stat.h>
-#include <fcntl.h>
+#include <thread>
 #endif
 
 #if defined(CEF_X11)
 #include <X11/Xlib.h>
+
+constexpr int img_size = 24;
+constexpr int img_bps = 8;
 
 int XErrorHandlerImpl(Display* display, XErrorEvent* event) {
 	fmt::print(
@@ -35,6 +41,7 @@ int XIOErrorHandlerImpl(Display* display) {
 }
 #endif
 
+void GtkStart(CefMainArgs&, Browser::Client*);
 int BoltRunBrowserProcess(CefMainArgs, CefRefPtr<Browser::App>);
 bool LockXdgDirectories(std::filesystem::path&, std::filesystem::path&);
 
@@ -54,12 +61,6 @@ int BoltRunAnyProcess(CefMainArgs main_args) {
 }
 
 int BoltRunBrowserProcess(CefMainArgs main_args, CefRefPtr<Browser::App> cef_app) {
-#if defined(CEF_X11)
-	// X11 error handlers
-	XSetErrorHandler(XErrorHandlerImpl);
-	XSetIOErrorHandler(XIOErrorHandlerImpl);
-#endif
-
 	// find and lock the xdg base directories (or an approximation of them on Windows)
 	std::filesystem::path config_dir;
 	std::filesystem::path data_dir;
@@ -88,6 +89,15 @@ int BoltRunBrowserProcess(CefMainArgs main_args, CefRefPtr<Browser::App> cef_app
 		fmt::print("Exiting with error: CefInitialize exit_code {}\n", exit_code);
 		return exit_code;
 	}
+
+	// start gtk and create a tray icon
+	GtkStart(main_args, client.get());
+
+#if defined(CEF_X11)
+	// X11 error handlers - must be installed after gtk_init
+	XSetErrorHandler(XErrorHandlerImpl);
+	XSetIOErrorHandler(XIOErrorHandlerImpl);
+#endif
 
 	// Block on the CEF message loop until CefQuitMessageLoop() is called
 	CefRunMessageLoop();
@@ -223,3 +233,57 @@ int wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, wchar_t* lpCmdLine, i
 	}
 }
 #endif
+
+// all these features exist in gtk3 and are deprecated for no reason at all, so ignore deprecation warnings
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+static void TrayPopupMenu(GtkStatusIcon* status_icon, guint button, guint32 activate_time, gpointer popup_menu) {
+    gtk_menu_popup(GTK_MENU(popup_menu), NULL, NULL, gtk_status_icon_position_menu, status_icon, button, activate_time);
+}
+
+static void TrayActivate(GtkStatusIcon* status_icon, gpointer popup_menu) {
+	TrayPopupMenu(status_icon, gtk_get_current_event()->button.button, gtk_get_current_event_time(), popup_menu);
+};
+
+static void TrayOpenLauncher(GtkMenuItem*, Browser::Client* client) {
+    client->OpenLauncher();
+}
+
+static void TrayExit(GtkMenuItem*, Browser::Client* client) {
+    client->Exit();
+}
+
+void GtkStart(CefMainArgs& args, Browser::Client* client) {
+	gdk_set_allowed_backends("x11");
+	gtk_init(&args.argc, &args.argv);
+	GdkPixbuf* pixbuf = gdk_pixbuf_new_from_data(
+		client->GetTrayIcon(),
+		GDK_COLORSPACE_RGB,
+		true,
+		img_bps,
+		img_size,
+		img_size,
+		img_size * 4,
+		[](unsigned char*, void*){},
+		nullptr
+	);
+	GtkStatusIcon* icon = gtk_status_icon_new_from_pixbuf(pixbuf);
+	gtk_status_icon_set_tooltip_text(icon, "Bolt Launcher");
+	gtk_status_icon_set_title(icon, "Bolt Launcher");
+	GtkWidget* menu = menu = gtk_menu_new();
+	GtkWidget* menu_open = gtk_menu_item_new_with_label("Open");
+	GtkWidget* menu_exit = gtk_menu_item_new_with_label("Exit");
+	g_signal_connect(G_OBJECT(menu_open), "activate", G_CALLBACK(TrayOpenLauncher), client);
+	g_signal_connect(G_OBJECT(menu_exit), "activate", G_CALLBACK(TrayExit), client);
+	gtk_menu_shell_append(GTK_MENU_SHELL(menu), menu_open);
+	gtk_menu_shell_append(GTK_MENU_SHELL(menu), menu_exit);
+	gtk_widget_show_all (menu);
+	g_signal_connect(GTK_STATUS_ICON(icon), "activate", G_CALLBACK(TrayActivate), menu);
+	g_signal_connect(GTK_STATUS_ICON(icon), "popup-menu", G_CALLBACK(TrayPopupMenu), menu);
+	GtkWidget* menu_bar = gtk_menu_bar_new();
+	GtkWidget* menu_item_top_level = gtk_menu_item_new();
+	gtk_menu_shell_append(GTK_MENU_SHELL(menu_bar), menu_item_top_level);
+	GtkWidget* main_menu = gtk_menu_new();
+	gtk_menu_item_set_submenu(GTK_MENU_ITEM(menu_item_top_level), main_menu);
+}
+#pragma GCC diagnostic pop
