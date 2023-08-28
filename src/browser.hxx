@@ -36,6 +36,9 @@ namespace Browser {
 		/// Counts how many browsers this browser is responsible for, including itself and children recursively
 		size_t CountBrowsers() const;
 
+		/// Requests focus for this browser window
+		void Focus() const;
+
 		/// Force-closes this browser and all of its children
 		void Close();
 

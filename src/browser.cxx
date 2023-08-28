@@ -183,6 +183,13 @@ size_t Browser::Window::CountBrowsers() const {
 	return ret;
 }
 
+void Browser::Window::Focus() const {
+	CefRefPtr<CefBrowserHost> host = this->browser->GetHost();
+	if (host) {
+		host->SetFocus(true);
+	}
+}
+
 void Browser::Window::Close() {
 	fmt::print("[B] Close this={}\n", reinterpret_cast<uintptr_t>(this));
 	// Children will be closed when CEF calls DoClose for this instance
