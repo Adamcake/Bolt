@@ -18,6 +18,10 @@ Browser::Window::Window(Browser::Details details, bool show_devtools):
 	fmt::print("[B] Browser::Window popup constructor, this={}\n", reinterpret_cast<uintptr_t>(this));
 }
 
+bool Browser::Window::IsLauncher() const {
+	return false;
+}
+
 void Browser::Window::Init(CefRefPtr<CefClient> client, Browser::Details details, CefString url, bool show_devtools) {
 	CefBrowserSettings browser_settings;
 	browser_settings.background_color = CefColorSetARGB(0, 0, 0, 0);

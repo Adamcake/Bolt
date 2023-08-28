@@ -10,6 +10,8 @@ namespace Browser {
 	struct Launcher: public Window {
 		Launcher(CefRefPtr<CefClient>, Details, bool, const std::map<std::string, InternalFile>* const, std::filesystem::path, std::filesystem::path);
 
+		bool IsLauncher() const override;
+
 		CefRefPtr<CefResourceRequestHandler> GetResourceRequestHandler(
 			CefRefPtr<CefBrowser>,
 			CefRefPtr<CefFrame>,

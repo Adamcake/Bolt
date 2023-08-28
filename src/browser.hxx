@@ -23,6 +23,10 @@ namespace Browser {
 		/// Does not call this->Init internally
 		Window(Details, bool);
 
+		/// Returns true if this window is a launcher, false otherwise.
+		/// Used to verify that only one launcher may be open at a time.
+		virtual bool IsLauncher() const;
+
 		/// Initialise with a browser_view. Should be called from a constructor, if at all.
 		void Init(CefRefPtr<CefClient> client, Details, CefString, bool);
 

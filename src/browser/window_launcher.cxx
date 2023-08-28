@@ -156,6 +156,10 @@ Browser::Launcher::Launcher(
 	this->Init(client, details, url, show_devtools);
 }
 
+bool Browser::Launcher::IsLauncher() const {
+	return true;
+}
+
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandler(
 	CefRefPtr<CefBrowser> browser,
 	CefRefPtr<CefFrame> frame,
