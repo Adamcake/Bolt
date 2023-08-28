@@ -30,6 +30,9 @@ namespace Browser {
 		/// but this function may be used to open another after previous ones have been closed.
 		void OpenLauncher();
 
+		/// Returns 24x24 RGBA data depicting Bolt's tray icon
+		const unsigned char* const GetTrayIcon() const;
+
 		/// Must be called from the main thread, and windows_lock must be held when calling.
 		/// Cleans up and eventually causes CefRunMessageLoop() to return.
 		void Exit();
