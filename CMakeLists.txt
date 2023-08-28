@@ -52,6 +52,7 @@ if(UNIX AND NOT APPLE)
     target_link_libraries(bolt PUBLIC "X11")
     target_link_libraries(bolt PUBLIC "xcb")
     target_link_libraries(bolt PUBLIC "archive")
+    find_package(PkgConfig REQUIRED)
 elseif(MSVC)
     target_compile_options(bolt PUBLIC $<$<CONFIG:>:/MT> $<$<CONFIG:Debug>:/MTd> $<$<CONFIG:Release>:/MT>)
     set_target_properties(bolt PROPERTIES WIN32_EXECUTABLE TRUE)
@@ -65,6 +66,12 @@ elseif(WIN32)
 elseif(APPLE)
     # TODO: mac support
 endif()
+
+# Bolt uses GTK on all platforms, but it must specifically use gtk3
+# to avoid symbols conflicting with CEF's GTK usage on Unix platforms
+pkg_check_modules(GTK3 REQUIRED gtk+-3.0)
+target_include_directories(bolt PUBLIC ${GTK3_INCLUDE_DIRS})
+target_link_libraries(bolt PUBLIC ${GTK3_LIBRARIES})
 
 # Install commands for target dir layout - as per https://bitbucket.org/chromiumembedded/cef/wiki/Tutorial.md
 if(APPLE)
