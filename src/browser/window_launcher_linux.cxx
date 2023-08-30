@@ -342,6 +342,11 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<C
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRefPtr<CefRequest> request, std::string_view query) {
 	const CefRefPtr<CefPostData> post_data = request->GetPostData();
 
+	const std::string user_home = this->data_dir.string();
+	const char* home_ = "HOME=";
+	const std::string env_home = home_ + user_home;
+	const std::string_view env_key_home = std::string_view(env_home.begin(), env_home.begin() + strlen(home_));
+
 	// array of structures for keeping track of which environment variables we want to set and have already set
 	EnvQueryParam rl_path_param = {.should_set = false, .key = "jar_path"};
 	EnvQueryParam hash_param = {.should_set = false, .key = "hash"};
@@ -351,6 +356,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 		{.should_set = false, .prepend_env_key = true, .env_key = "JX_SESSION_ID=", .key = "jx_session_id"},
 		{.should_set = false, .prepend_env_key = true, .env_key = "JX_CHARACTER_ID=", .key = "jx_character_id"},
 		{.should_set = false, .prepend_env_key = true, .env_key = "JX_DISPLAY_NAME=", .key = "jx_display_name"},
+		{.should_set = true, .prepend_env_key = false, .allow_override = false, .env_key = env_key_home, .value = env_home},
 	};
 	const size_t env_param_count = sizeof(env_params) / sizeof(env_params[0]);
 
@@ -438,16 +444,20 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 	posix_spawnattr_setsigdefault(&attributes, &set);
 	posix_spawnattr_setpgroup(&attributes, 0);
 	posix_spawnattr_setflags(&attributes, POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_SETSIGMASK);
-	std::string path_str(jar_path.c_str());
-	char* argv[5];
+	std::string arg_home = "-Duser.home=" + user_home;
+	std::string arg_jvm_argument_home = "-J" + arg_home;
+	std::string path_str = jar_path.string();
+	char* argv[7];
 	char arg_env[] = "/usr/bin/env";
 	char arg_java[] = "java";
 	char arg_jar[] = "-jar";
 	argv[0] = arg_env;
 	argv[1] = arg_java;
-	argv[2] = arg_jar;
-	argv[3] = path_str.data();
-	argv[4] = nullptr;
+	argv[2] = arg_home.data();
+	argv[3] = arg_jar;
+	argv[4] = path_str.data();
+	argv[5] = arg_jvm_argument_home.data();
+	argv[6] = nullptr;
 
 	char** env = new char*[env_count + env_param_count + 1];
 
