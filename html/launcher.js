@@ -180,8 +180,10 @@ function start(s) {
         }
     }
 
+    const allowed_origins = [internal_url, s_origin, atob(s.origin_2fa)];
+    msg(allowed_origins);
     window.addEventListener("message", (event) => {
-        if (event.origin != internal_url && btoa(event.origin).replaceAll('\x3d', '') != s.origin) {
+        if (!allowed_origins.includes(event.origin)) {
             msg(`discarding window message from origin ${event.origin}`);
             return;
         }
