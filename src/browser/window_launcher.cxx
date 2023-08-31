@@ -288,6 +288,25 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 			return SaveFileFromPost(request, this->creds_path.c_str());
 		}
 
+		// instruction to try to open an external URL in the user's browser
+		if (path == "/open-external-url") {
+			CefRefPtr<CefPostData> post_data = request->GetPostData();
+			if (post_data->GetElementCount() != 1) {
+				const char* data = "Bad request\n";
+				return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+			}
+			CefPostData::ElementVector elements;
+			post_data->GetElements(elements);
+			size_t byte_count = elements[0]->GetBytesCount();
+			char* url = new char[byte_count + 1];
+			elements[0]->GetBytes(byte_count, url);
+			url[byte_count] = '\0';
+			this->OpenExternalUrl(url);
+			delete[] url;
+			const char* data = "OK\n";
+			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
+		}
+
 		// instruction to open a file picker for .jar files
 		if (path == "/jar-file-picker") {
 			return new JarFilePicker(browser);

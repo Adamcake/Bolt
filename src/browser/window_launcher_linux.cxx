@@ -520,3 +520,27 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 500, "text/plain");
 	}
 }
+
+void Browser::Launcher::OpenExternalUrl(char* url) const {
+	sigset_t set;
+	sigfillset(&set);
+	posix_spawn_file_actions_t file_actions;
+	posix_spawnattr_t attributes;
+	pid_t pid;
+	posix_spawn_file_actions_init(&file_actions);
+	posix_spawnattr_init(&attributes);
+	posix_spawnattr_setsigdefault(&attributes, &set);
+	posix_spawnattr_setpgroup(&attributes, 0);
+	posix_spawnattr_setflags(&attributes, POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_SETSIGMASK);
+	char arg_env[] = "/usr/bin/env";
+	char arg_xdg_open[] = "xdg-open";
+	char* argv[4];
+	argv[0] = arg_env;
+	argv[1] = arg_xdg_open;
+	argv[2] = url;
+	argv[3] = nullptr;
+	int r = posix_spawn(&pid, argv[0], &file_actions, &attributes, argv, environ);
+	if (r != 0) {
+		fmt::print("[B] Error in OpenExternalUrl from posix_spawn: {}\n", strerror(r));
+	}
+}

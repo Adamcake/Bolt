@@ -22,6 +22,9 @@ namespace Browser {
 			bool&
 		) override;
 
+		/// Attempts to open the given URL externally in the user's browser
+		void OpenExternalUrl(char* url) const;
+
 		/* 
 		Functions called by GetResourceRequestHandler. The result will be returned immediately and must not be null.
 		The request and URL query string are provided for parsing.
