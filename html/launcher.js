@@ -230,7 +230,14 @@ function start(s) {
                 msg(`message: init auth: ${event.data.auth_method}`);
                 break;
             case "externalUrl":
-                msg(`message: external url: ${event.data.url}`);
+                var xml = new XMLHttpRequest();
+                xml.onreadystatechange = () => {
+                    if (xml.readyState == 4) {
+                        msg(`External URL status: '${xml.responseText.trim()}'`);
+                    }
+                };
+                xml.open('POST', '/open-external-url', true);
+                xml.send(event.data.url);
                 break;
             case "gameSessionServerAuth":
                 var pending = pendingGameAuth.find((x) => { return event.data.state == x.state });
