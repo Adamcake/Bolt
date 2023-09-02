@@ -36,10 +36,19 @@ add_subdirectory(${CEF_LIBCEF_DLL_WRAPPER_PATH} libcef_dll_wrapper)
 
 set(WINDOW_LAUNCHER_OS_SPECIFIC src/browser/window_launcher_linux.cxx)
 
+# auto-generated C++ file
+set(BOLT_ICON_DIR ${CMAKE_CURRENT_SOURCE_DIR}/icon)
+add_custom_command(
+    OUTPUT client_cmake_gen.cxx
+    DEPENDS ${BOLT_ICON_DIR}/generator.py ${BOLT_ICON_DIR}/16.png ${BOLT_ICON_DIR}/32.png ${BOLT_ICON_DIR}/64.png ${BOLT_ICON_DIR}/256.png
+    COMMAND python ${BOLT_ICON_DIR}/generator.py ${CMAKE_CURRENT_SOURCE_DIR} ${BOLT_ICON_DIR} ">client_cmake_gen.cxx"
+)
+
 # This line needs to be updated manually with any new/deleted object files; cmake discourages GLOBbing source files
 add_executable(bolt
     modules/fmt/src/format.cc src/main.cxx src/browser.cxx src/browser/app.cxx src/browser/client.cxx
     src/browser/resource_handler.cxx src/browser/window_launcher.cxx ${WINDOW_LAUNCHER_OS_SPECIFIC}
+    client_cmake_gen.cxx
 )
 
 # Various build properties
