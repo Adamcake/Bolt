@@ -1,19 +1,20 @@
 #include "browser.hxx"
+#include "browser/client.hxx"
 #include "include/views/cef_window.h"
 
 #include <algorithm>
 
 #include <fmt/core.h>
 
-Browser::Window::Window(CefRefPtr<CefClient> client, Browser::Details details, CefString url, bool show_devtools):
-	show_devtools(show_devtools), details(details), window(nullptr), browser_view(nullptr), browser(nullptr), pending_child(nullptr)
+Browser::Window::Window(CefRefPtr<Browser::Client> client, Browser::Details details, CefString url, bool show_devtools):
+	client(client.get()), show_devtools(show_devtools), details(details), window(nullptr), browser_view(nullptr), browser(nullptr), pending_child(nullptr)
 {
 	fmt::print("[B] Browser::Window constructor, this={}\n", reinterpret_cast<uintptr_t>(this));
 	this->Init(client, details, url, show_devtools);
 }
 
-Browser::Window::Window(Browser::Details details, bool show_devtools):
-	show_devtools(show_devtools), details(details), window(nullptr), browser_view(nullptr), browser(nullptr), pending_child(nullptr)
+Browser::Window::Window(CefRefPtr<Browser::Client> client, Browser::Details details, bool show_devtools):
+	client(client.get()), show_devtools(show_devtools), details(details), window(nullptr), browser_view(nullptr), browser(nullptr), pending_child(nullptr)
 {
 	fmt::print("[B] Browser::Window popup constructor, this={}\n", reinterpret_cast<uintptr_t>(this));
 }
@@ -37,6 +38,7 @@ void Browser::Window::Init(CefRefPtr<CefClient> client, Browser::Details details
 
 void Browser::Window::OnWindowCreated(CefRefPtr<CefWindow> window) {
 	fmt::print("[B] OnWindowCreated {} this={}\n", window->GetID(), reinterpret_cast<uintptr_t>(this));
+	this->client->OnWindowCreated(window);
 	this->window = std::move(window);
 	this->window->AddChildView(this->browser_view);
 	if (this->details.center_on_open) {
@@ -120,7 +122,7 @@ CefRefPtr<CefBrowserViewDelegate> Browser::Window::GetDelegateForPopupBrowserVie
 		.controls_overlay = false,
 		.is_devtools = is_devtools,
 	};
-	this->pending_child = new Browser::Window(details, this->show_devtools);
+	this->pending_child = new Browser::Window(this->client, details, this->show_devtools);
 	return this->pending_child;
 }
 

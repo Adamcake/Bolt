@@ -10,6 +10,10 @@
 #include <fstream>
 #include <spawn.h>
 
+#if defined(CEF_X11)
+#include <xcb/xcb.h>
+#endif
+
 constexpr Browser::Details LAUNCHER_DETAILS = {
 	.preferred_width = 800,
 	.preferred_height = 608,
@@ -65,6 +69,23 @@ void Browser::Client::Exit() {
 		}
 		this->windows.clear();
 	}
+}
+
+void Browser::Client::OnWindowCreated(CefRefPtr<CefWindow> window) {
+	CefRefPtr<CefImage> image = CefImage::CreateImage();
+	image->AddBitmap(1.0, 16, 16, CEF_COLOR_TYPE_RGBA_8888, CEF_ALPHA_TYPE_POSTMULTIPLIED, this->GetIcon16(), 16 * 16 * 4);
+	window->SetWindowIcon(image);
+
+	CefRefPtr<CefImage> image_big = CefImage::CreateImage();
+	image_big->AddBitmap(1.0, 64, 64, CEF_COLOR_TYPE_RGBA_8888, CEF_ALPHA_TYPE_POSTMULTIPLIED, this->GetIcon64(), 64 * 64 * 4);
+	window->SetWindowAppIcon(image_big);
+
+#if defined(CEF_X11)
+	constexpr char wm_class[] = "BoltLauncher\0BoltLauncher";
+	const unsigned long handle = window->GetWindowHandle();
+	xcb_change_property(this->xcb, XCB_PROP_MODE_REPLACE, handle, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, sizeof(wm_class), wm_class);
+	xcb_flush(this->xcb);
+#endif
 }
 
 CefRefPtr<CefLifeSpanHandler> Browser::Client::GetLifeSpanHandler() {

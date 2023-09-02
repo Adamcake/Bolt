@@ -7,6 +7,8 @@
 #include "include/views/cef_browser_view.h"
 
 namespace Browser {
+	struct Client;
+
 	/// Represents a visible browser window on the user's screen. This struct wraps a single pointer,
 	/// so it is safe to store anywhere and move around during operation.
 	/// The window will exist either until the user closes it or Window::OnBrowserClosed() is called.
@@ -18,10 +20,10 @@ namespace Browser {
 	/// https://github.com/chromiumembedded/cef/blob/5735/include/cef_resource_request_handler.h
 	struct Window: CefWindowDelegate, CefBrowserViewDelegate, CefRequestHandler {
 		/// Calls this->Init internally
-		Window(CefRefPtr<CefClient> client, Details, CefString, bool);
+		Window(CefRefPtr<Browser::Client> client, Details, CefString, bool);
 
 		/// Does not call this->Init internally
-		Window(Details, bool);
+		Window(CefRefPtr<Browser::Client>, Details, bool);
 
 		/// Returns true if this window is a launcher, false otherwise.
 		/// Used to verify that only one launcher may be open at a time.
@@ -87,6 +89,7 @@ namespace Browser {
 		protected:
 			bool show_devtools;
 			Details details;
+			Client* client;
 			CefRefPtr<CefWindow> window;
 			CefRefPtr<CefBrowserView> browser_view;
 			CefRefPtr<CefBrowser> browser;

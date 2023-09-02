@@ -1,3 +1,4 @@
+#include "client.hxx"
 #include "window_launcher.hxx"
 #include "include/internal/cef_types.h"
 #include "resource_handler.hxx"
@@ -71,13 +72,13 @@ struct JarFilePicker: public CefRunFileDialogCallback, Browser::ResourceHandler 
 };
 
 Browser::Launcher::Launcher(
-	CefRefPtr<CefClient> client,
+	CefRefPtr<Browser::Client> client,
 	Details details,
 	bool show_devtools,
 	const std::map<std::string, InternalFile>* const internal_pages,
 	std::filesystem::path config_dir,
 	std::filesystem::path data_dir
-): Window(details, show_devtools), data_dir(data_dir), internal_pages(internal_pages) {
+): Window(client, details, show_devtools), data_dir(data_dir), internal_pages(internal_pages) {
 	std::string url = this->internal_url + std::string(URI);
 
 	this->creds_path = data_dir;
