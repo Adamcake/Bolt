@@ -14,8 +14,11 @@ If you accidentally cloned without submodules (no `modules` directory), you can 
 
 Place your entire CEF binary distribution folder inside the `cef` directory with the name "dist", or create a symbolic link with the same effect.
 
+The build system requires Python to be installed and its Pillow/PIL package to be available. Note that Python is not needed to run Bolt, it's required for the build system only.
+
 If building on Linux, install the following dependencies:
 - X11 development libraries (`libX11-devel` or `libx11-dev` on most package managers)
+- xcb development libraries (`libxcb-devel` or `libxcb1-dev` on most package managers)
 - libarchive development libraries (`libarchive-devel` or `libarchive-dev` on most package managers)
 
 Once that's done, you can start building. Open a command window or terminal in the root directory of this repository, then follow the build instructions for your platform.
@@ -40,6 +43,10 @@ Windows builds have only been tested using Visual Studio 2022 IDE as Release bui
 
 ### Mac
 Not yet supported
+
+## Credit
+Icons - [Kia](https://twitter.com/KiaWildin)
+Flatpak integration - [@nmlynch94](https://github.com/nmlynch94)
 
 ## Disclaimer
 Bolt is an unofficial third-party project and is not in any way affiliated with any of the games or companies it interacts with. Said games and companies are not responsible for any problems with Bolt nor any damage caused by using Bolt.
