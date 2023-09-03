@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Terminal=false
+Name=Bolt
+GenericName=Bolt Launcher
+Comment=Open source third-party Jagex launcher
+Keywords=games;
+Exec=bolt
+Icon=com.adamcake.Bolt
+Categories=Game;Roleplaying;
