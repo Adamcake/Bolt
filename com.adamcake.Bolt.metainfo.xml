@@ -5,6 +5,9 @@
   <developer_name>Adamcake</developer_name>
   <summary>Open source third-party Jagex launcher</summary>
   <description><p>Bolt is a free, open-source, third-party implementation of the Jagex launcher.</p></description>
+  <screenshots>
+    <screenshot type="default">https://raw.githubusercontent.com/flathub/net.runelite.RuneLite/master/screenshot.png</screenshot>
+  </screenshots>
   <releases>
     <release version="0.1.0" date="2023-09-02"/>
   </releases>
@@ -14,6 +17,7 @@
   <categories>
     <category>Game</category>
   </categories>
+  <launchable type="desktop-id">com.adamcake.Bolt.desktop</launchable>
   <content_rating type="oars-1.1">
     <content_attribute id="violence-cartoon">moderate</content_attribute>
     <content_attribute id="violence-fantasy">intense</content_attribute>
