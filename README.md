@@ -45,7 +45,7 @@ Windows builds have only been tested using Visual Studio 2022 IDE as Release bui
 Not yet supported
 
 ## Credit
-Icons - [Kia](https://twitter.com/KiaWildin)
+Icons - [Kia](https://twitter.com/KiaWildin)  
 Flatpak integration - [@nmlynch94](https://github.com/nmlynch94)
 
 ## Disclaimer
