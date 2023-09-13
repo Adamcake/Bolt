@@ -104,12 +104,13 @@ add_subdirectory(${CEF_LIBCEF_DLL_WRAPPER_PATH} libcef_dll_wrapper)
 
 set(WINDOW_LAUNCHER_OS_SPECIFIC src/browser/window_launcher_linux.cxx)
 
-# auto-generated C++ file
-set(BOLT_ICON_DIR ${CMAKE_CURRENT_SOURCE_DIR}/icon)
+# compile an auto-generator, then use it to auto-generate a C++ file containing icon data
+set(BOLT_ICON_DIR "${CMAKE_CURRENT_SOURCE_DIR}/icon")
+add_executable(icon_gen icon/generator.cxx modules/lodepng/lodepng.cpp)
 add_custom_command(
     OUTPUT client_cmake_gen.cxx
-    DEPENDS ${BOLT_ICON_DIR}/generator.py ${BOLT_ICON_DIR}/16.png ${BOLT_ICON_DIR}/32.png ${BOLT_ICON_DIR}/64.png ${BOLT_ICON_DIR}/256.png
-    COMMAND python ${BOLT_ICON_DIR}/generator.py ${CMAKE_CURRENT_SOURCE_DIR} ${BOLT_ICON_DIR} ">client_cmake_gen.cxx"
+    DEPENDS icon_gen ${BOLT_ICON_DIR}/16.png ${BOLT_ICON_DIR}/32.png ${BOLT_ICON_DIR}/64.png ${BOLT_ICON_DIR}/256.png
+    COMMAND icon_gen ${CMAKE_CURRENT_SOURCE_DIR} ${BOLT_ICON_DIR} ">client_cmake_gen.cxx"
 )
 
 # This line needs to be updated manually with any new/deleted object files; cmake discourages GLOBbing source files
