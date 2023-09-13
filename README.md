@@ -14,8 +14,6 @@ If you accidentally cloned without submodules (no `modules` directory), you can 
 
 Place your entire CEF binary distribution folder inside the `cef` directory with the name "dist", or create a symbolic link with the same effect.
 
-The build system requires Python to be installed and its Pillow/PIL package to be available. Note that Python is not needed to run Bolt, it's required for the build system only.
-
 If building on Linux, install the following dependencies:
 - X11 development libraries (`libX11-devel` or `libx11-dev` on most package managers)
 - xcb development libraries (`libxcb-devel` or `libxcb1-dev` on most package managers)
