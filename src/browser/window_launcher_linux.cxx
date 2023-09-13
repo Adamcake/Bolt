@@ -434,6 +434,8 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 	size_t env_count = e - environ;
 
 	// set up some structs needed by posix_spawn, and our modified env array
+	const char* java_home = getenv("JAVA_HOME");
+	std::string java_home_str;
 	sigset_t set;
 	sigfillset(&set);
 	posix_spawn_file_actions_t file_actions;
@@ -447,12 +449,21 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 	std::string arg_home = "-Duser.home=" + user_home;
 	std::string arg_jvm_argument_home = "-J" + arg_home;
 	std::string path_str = jar_path.string();
+
 	char* argv[7];
+	size_t argv_offset;
 	char arg_env[] = "/usr/bin/env";
 	char arg_java[] = "java";
 	char arg_jar[] = "-jar";
-	argv[0] = arg_env;
-	argv[1] = arg_java;
+	if (java_home) {
+		java_home_str = std::string(java_home) + "/bin/java";
+		argv[1] = java_home_str.data();
+		argv_offset = 1;
+	} else {
+		argv[0] = arg_env;
+		argv[1] = arg_java;
+		argv_offset = 0;
+	}
 	argv[2] = arg_home.data();
 	argv[3] = arg_jar;
 	argv[4] = path_str.data();
@@ -488,7 +499,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 	// ... and finally null-terminate the list as required by POSIX
 	env[i] = nullptr;
 
-	int r = posix_spawn(&pid, argv[0], &file_actions, &attributes, argv, env);
+	int r = posix_spawn(&pid, argv[argv_offset], &file_actions, &attributes, argv + argv_offset, env);
 	
 	posix_spawnattr_destroy(&attributes);
 	posix_spawn_file_actions_destroy(&file_actions);
