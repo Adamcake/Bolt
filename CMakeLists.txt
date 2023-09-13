@@ -1,6 +1,69 @@
 cmake_minimum_required(VERSION 3.21) # Minimum CEF requirement, but building with the latest cmake is strongly recommended
 project(Bolt VERSION 0.1 LANGUAGES C CXX)
 if(NOT WIN32)
+    # name of application in metadata, defaulting to "BoltLauncher", but usually overridden to "com.adamcake.Bolt" by flatpak for example
+    if(NOT BOLT_META_NAME)
+        set(BOLT_META_NAME "BoltLauncher")
+    endif()
+
+    # how this program is described in human-readable strings in metadata
+    # not in plaintext for a reason
+    string(ASCII 74 97 103 101 120 32 108 97 117 110 99 104 101 114 BOLT_PROGRAM_NAME)
+
+    # .desktop file contents
+    string(JOIN "\n" BOLT_DESKTOP_INFO
+        "[Desktop Entry]"
+        "Type=Application"
+        "Terminal=false"
+        "Name=Bolt"
+        "GenericName=Bolt Launcher"
+        "Comment=Open source third-party ${BOLT_PROGRAM_NAME}"
+        "Keywords=games;"
+        "Exec=bolt"
+        "Icon=${BOLT_META_NAME}"
+        "Categories=Game;Roleplaying;"
+    )
+    file(GENERATE OUTPUT bolt.desktop CONTENT "${BOLT_DESKTOP_INFO}")
+
+    # metainfo.xml file contents
+    string(JOIN "\n" BOLT_METAINFO
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+        "<component type=\"desktop\">"
+        "<id>${BOLT_META_NAME}</id>"
+        "<name>Bolt Launcher</name>"
+        "<developer_name>Adamcake</developer_name>"
+        "<summary>Open source third-party ${BOLT_PROGRAM_NAME}</summary>"
+        "<description><p>Bolt is a free, open-source, third-party implementation of the ${BOLT_PROGRAM_NAME}.</p></description>"
+        "<screenshots>"
+        "    <screenshot type=\"default\">https://raw.githubusercontent.com/flathub/net.runelite.RuneLite/master/screenshot.png</screenshot>"
+        "</screenshots>"
+        "<releases>"
+        "    <release version=\"0.1.0\" date=\"2023-09-02\"/>"
+        "</releases>"
+        "<metadata_license>CC0-1.0</metadata_license>"
+        "<project_license>AGPL-3.0</project_license>"
+        "<url type=\"homepage\">https://bolt.adamcake.com/</url>"
+        "<categories>"
+        "    <category>Game</category>"
+        "</categories>"
+        "<launchable type=\"desktop-id\">${BOLT_META_NAME}.desktop</launchable>"
+        "<content_rating type=\"oars-1.1\">"
+        "    <content_attribute id=\"violence-cartoon\">moderate</content_attribute>"
+        "    <content_attribute id=\"violence-fantasy\">intense</content_attribute>"
+        "    <content_attribute id=\"violence-bloodshed\">mild</content_attribute>"
+        "    <content_attribute id=\"drugs-alcohol\">moderate</content_attribute>"
+        "    <content_attribute id=\"drugs-narcotics\">mild</content_attribute>"
+        "    <content_attribute id=\"drugs-tobacco\">mild</content_attribute>"
+        "    <content_attribute id=\"sex-themes\">mild</content_attribute>"
+        "    <content_attribute id=\"language-profanity\">mild</content_attribute>"
+        "    <content_attribute id=\"social-chat\">intense</content_attribute>"
+        "    <content_attribute id=\"social-info\">moderate</content_attribute>"
+        "    <content_attribute id=\"money-purchasing\">mild</content_attribute>"
+        "</content_rating>"
+        "</component>"
+    )
+    file(GENERATE OUTPUT metainfo.xml CONTENT "${BOLT_METAINFO}")
+
     # necessary for installing files in both /opt and /usr
     # can be overridden using --install-prefix in the initial cmake setup command
     if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
@@ -11,6 +74,11 @@ if(NOT WIN32)
     # things like flatpak need to override this
     if(NOT BOLT_BINDIR)
         set(BOLT_BINDIR usr/local/bin)
+    endif()
+
+    # defines DESTINATION of metadata like icons (relative to CMAKE_INSTALL_PREFIX, unless set to an absolute path)
+    if(NOT BOLT_SHAREDIR)
+        set(BOLT_SHAREDIR usr/local/share)
     endif()
 
     # Short shell script to be installed in /usr/local/bin, gets renamed to "bolt" later
@@ -90,7 +158,13 @@ else()
     install(DIRECTORY "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/" "${CEF_ROOT}/Resources/" "${CMAKE_CURRENT_SOURCE_DIR}/html" DESTINATION opt/bolt-launcher USE_SOURCE_PERMISSIONS)
 endif()
 
-# Finally, install shell script in bin dir
+# Finally, install shell script and metadata
 if(NOT WIN32)
-    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/bolt-run.sh" RENAME bolt DESTINATION ${BOLT_BINDIR} PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+    install(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/bolt-run.sh" RENAME bolt DESTINATION ${BOLT_BINDIR})
+    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/bolt.desktop" DESTINATION "${BOLT_SHAREDIR}/applications/" RENAME "${BOLT_META_NAME}.desktop")
+    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/metainfo.xml" DESTINATION "${BOLT_SHAREDIR}/metainfo/" RENAME "${BOLT_META_NAME}.metainfo.xml")
+    install(FILES "${BOLT_ICON_DIR}/16.png" DESTINATION "${BOLT_SHAREDIR}/icons/16x16/apps/" RENAME "${BOLT_META_NAME}.png")
+    install(FILES "${BOLT_ICON_DIR}/32.png" DESTINATION "${BOLT_SHAREDIR}/icons/32x32/apps/" RENAME "${BOLT_META_NAME}.png")
+    install(FILES "${BOLT_ICON_DIR}/64.png" DESTINATION "${BOLT_SHAREDIR}/icons/64x64/apps/" RENAME "${BOLT_META_NAME}.png")
+    install(FILES "${BOLT_ICON_DIR}/256.png" DESTINATION "${BOLT_SHAREDIR}/icons/256x256/apps/" RENAME "${BOLT_META_NAME}.png")
 endif()
