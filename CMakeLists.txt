@@ -39,6 +39,7 @@ if(NOT WIN32)
         "    <screenshot type=\"default\">https://raw.githubusercontent.com/flathub/net.runelite.RuneLite/master/screenshot.png</screenshot>"
         "</screenshots>"
         "<releases>"
+        "    <release version=\"0.2.0\" date=\"2023-09-16\"/>"
         "    <release version=\"0.1.0\" date=\"2023-09-02\"/>"
         "</releases>"
         "<metadata_license>CC0-1.0</metadata_license>"
