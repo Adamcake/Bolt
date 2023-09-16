@@ -1,6 +1,0 @@
-[submodule "modules/fmt"]
-	path = modules/fmt
-	url = https://github.com/fmtlib/fmt.git
-[submodule "modules/lodepng"]
-	path = modules/lodepng
-	url = https://github.com/lvandeve/lodepng
