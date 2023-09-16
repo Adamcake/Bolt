@@ -22,6 +22,7 @@ if(NOT WIN32)
         "Exec=bolt"
         "Icon=${BOLT_META_NAME}"
         "Categories=Game;Roleplaying;"
+        ""
     )
     file(GENERATE OUTPUT bolt.desktop CONTENT "${BOLT_DESKTOP_INFO}")
 
@@ -61,6 +62,7 @@ if(NOT WIN32)
         "    <content_attribute id=\"money-purchasing\">mild</content_attribute>"
         "</content_rating>"
         "</component>"
+        ""
     )
     file(GENERATE OUTPUT metainfo.xml CONTENT "${BOLT_METAINFO}")
 
