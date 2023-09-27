@@ -1,8 +1,6 @@
 #include "app.hxx"
 #include "include/internal/cef_types.h"
 
-#include <algorithm>
-
 #include <fmt/core.h>
 
 /*
@@ -68,12 +66,12 @@ void Browser::App::OnUncaughtException(
 	const bool do_trim_end = source_view_trimmed.size() - exc_end_column > max_dist;
 	const std::string_view code_trimmed(
 		source_view_trimmed.data() + (do_trim_start ? exc_start_column - max_dist : 0),
-		do_trim_end ? source_view_trimmed.data() + exc_end_column + max_dist : source_view_trimmed.end()
+		source_view_trimmed.data() + (do_trim_end ? exc_end_column + max_dist : source_view_trimmed.size())
 	);
 
 	fmt::print("[R] {}{}{}\n[R] {}", do_trim_start ? "..." : "", code_trimmed, do_trim_end ? "..." : "", do_trim_start ? "---" : "");
 	int i = 0;
-	while (i < std::min(exc_start_column, max_dist)) {
+	while (i < exc_start_column && i < max_dist) {
 		fmt::print("-");
 		i += 1;
 	}

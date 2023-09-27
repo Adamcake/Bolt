@@ -5,11 +5,11 @@
 
 #include "include/cef_parser.h"
 
-#include <algorithm>
 #include <condition_variable>
 #include <fcntl.h>
 #include <fmt/core.h>
-#include <sys/stat.h>
+#include <fstream>
+#include <sstream>
 
 #if defined(__linux__)
 constexpr std::string_view URI = "launcher.html?platform=linux";
@@ -23,7 +23,7 @@ constexpr std::string_view URI = "launcher.html?platform=windows";
 constexpr std::string_view URI = "launcher.html?platform=mac";
 #endif
 
-CefRefPtr<CefResourceRequestHandler> SaveFileFromPost(CefRefPtr<CefRequest>, const char*);
+CefRefPtr<CefResourceRequestHandler> SaveFileFromPost(CefRefPtr<CefRequest>, const std::filesystem::path::value_type*);
 
 struct JarFilePicker: public CefRunFileDialogCallback, Browser::ResourceHandler {
 	JarFilePicker(CefRefPtr<CefBrowser> browser): callback(nullptr), browser_host(browser->GetHost()), ResourceHandler("text/plain") { }
@@ -79,7 +79,8 @@ Browser::Launcher::Launcher(
 	std::filesystem::path config_dir,
 	std::filesystem::path data_dir
 ): Window(client, details, show_devtools), data_dir(data_dir), internal_pages(internal_pages) {
-	std::string url = this->internal_url + std::string(URI);
+	std::stringstream url(this->internal_url);
+	url << URI;
 
 	this->creds_path = data_dir;
 	this->creds_path.append("creds");
@@ -99,62 +100,41 @@ Browser::Launcher::Launcher(
 	this->runelite_hash_path = data_dir;
 	this->runelite_hash_path.append("runelite.jar.sha256");
 
-	int file = open(this->rs3_hash_path.c_str(), O_RDONLY);
-	if (file != -1) {
-		char buf[64];
-		ssize_t r = read(file, buf, 64);
-		if (r <= 64) {
-			url += "&rs3_linux_installed_hash=";
-			url.append(buf, r);
-		}
-	}
-	close(file);
-
-	file = open(this->runelite_hash_path.c_str(), O_RDONLY);
-	if (file != -1) {
-		char buf[64];
-		ssize_t r = read(file, buf, 64);
-		if (r <= 64) {
-			url += "&runelite_installed_hash=";
-			url.append(buf, r);
-		}
-	}
-	close(file);
-
-	struct stat file_status;
-	if (stat(this->creds_path.c_str(), &file_status) >= 0) {
-		file = open(this->creds_path.c_str(), O_RDONLY);
-		if (file != -1) {
-			char* buf = new char[file_status.st_size];
-			size_t written = 0;
-			while (written < file_status.st_size) {
-				written += read(file, buf + written, file_status.st_size - written);
-			}
-			CefString str = CefURIEncode(CefString(buf, file_status.st_size), true);
-			url += "&credentials=";
-			url += str.ToString();
-			delete[] buf;
-			close(file);
-		}
+	std::ifstream rs_deb_hashfile(this->rs3_hash_path.c_str(), std::ios::in | std::ios::binary);
+	if (!rs_deb_hashfile.fail()) {
+		url << "&rs3_linux_installed_hash=" << rs_deb_hashfile.rdbuf();
 	}
 
-	if (stat(this->config_path.c_str(), &file_status) >= 0) {
-		file = open(this->config_path.c_str(), O_RDONLY);
-		if (file != -1) {
-			char* buf = new char[file_status.st_size];
-			size_t written = 0;
-			while (written < file_status.st_size) {
-				written += read(file, buf + written, file_status.st_size - written);
-			}
-			CefString str = CefURIEncode(CefString(buf, file_status.st_size), true);
-			url += "&config=";
-			url += str.ToString();
-			delete[] buf;
-			close(file);
-		}
+	std::ifstream rl_hashfile(this->runelite_hash_path.c_str(), std::ios::in | std::ios::binary);
+	if (!rl_hashfile.fail()) {
+		url << "&runelite_installed_hash=" << rl_hashfile.rdbuf();
 	}
 
-	this->Init(client, details, url, show_devtools);
+	std::ifstream creds_file(this->creds_path.c_str(), std::ios::in | std::ios::binary);
+	if (!creds_file.fail()) {
+		std::streamsize size = creds_file.tellg();
+		creds_file.seekg(0, std::ios::beg);
+		char* buf = new char[size];
+		if (creds_file.read(buf, size)) {
+			CefString str = CefURIEncode(CefString(buf, size), true);
+			url << "&credentials=" << str.ToString();
+		}
+		delete[] buf;
+	}
+
+	std::ifstream config_file(this->config_path.c_str(), std::ios::in | std::ios::binary);
+	if (!config_file.fail()) {
+		std::streamsize size = config_file.tellg();
+		config_file.seekg(0, std::ios::beg);
+		char* buf = new char[size];
+		if (config_file.read(buf, size)) {
+			CefString str = CefURIEncode(CefString(buf, size), true);
+			url << "&config=" << str.ToString();
+		}
+		delete[] buf;
+	}
+
+	this->Init(client, details, url.str(), show_devtools);
 }
 
 bool Browser::Launcher::IsLauncher() const {
@@ -237,7 +217,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 	const auto url_end = next_hash == std::string::npos ? request_url.end() : request_url.begin() + next_hash;
 	const std::string::size_type next_sep = request_url.find_first_of('/', colon + 3);
 	const std::string::size_type next_question = request_url.find_first_of('?', colon + 3);
-	const auto domain_end = next_sep == std::string::npos && next_question == std::string::npos ? url_end : request_url.begin() + std::min(next_sep, next_question);
+	const auto domain_end = next_sep == std::string::npos && next_question == std::string::npos ? url_end : request_url.begin() + (next_sep < next_question ? next_sep : next_question);
 	const std::string_view domain(request_url.begin() + colon + 3, domain_end);
 	const std::string_view path(domain_end, next_question == std::string::npos ? url_end : request_url.begin() + next_question);
 	const std::string_view query(request_url.begin() + next_question + 1, next_question == std::string::npos ? request_url.begin() + next_question + 1 : url_end);
@@ -342,7 +322,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 	return nullptr;
 }
 
-CefRefPtr<CefResourceRequestHandler> SaveFileFromPost(CefRefPtr<CefRequest> request, const char* path) {
+CefRefPtr<CefResourceRequestHandler> SaveFileFromPost(CefRefPtr<CefRequest> request, const std::filesystem::path::value_type* path) {
 	CefRefPtr<CefPostData> post_data = request->GetPostData();
 	if (post_data->GetElementCount() != 1) {
 		const char* data = "Bad request\n";
@@ -352,18 +332,15 @@ CefRefPtr<CefResourceRequestHandler> SaveFileFromPost(CefRefPtr<CefRequest> requ
 	CefPostData::ElementVector elements;
 	post_data->GetElements(elements);
 	size_t byte_count = elements[0]->GetBytesCount();
-	size_t written = 0;
-	int file = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-	if (file == -1) {
+	
+	std::ofstream file(path, std::ios::out | std::ios::binary);
+	if (file.fail()) {
 		const char* data = "Failed to open file\n";
-		return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
+		return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 500, "text/plain");
 	}
-	unsigned char* buf = new unsigned char[byte_count];
+	char* buf = new char[byte_count];
 	elements[0]->GetBytes(byte_count, buf);
-	while (written < byte_count) {
-		written += write(file, buf + written, byte_count - written);
-	}
-	close(file);
+	file.write(buf, byte_count);
 	delete[] buf;
 
 	const char* data = "OK\n";

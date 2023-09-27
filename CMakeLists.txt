@@ -105,7 +105,12 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CEF_ROOT}/cmake")
 find_package(CEF REQUIRED)
 add_subdirectory(${CEF_LIBCEF_DLL_WRAPPER_PATH} libcef_dll_wrapper)
 
-set(WINDOW_LAUNCHER_OS_SPECIFIC src/browser/window_launcher_linux.cxx)
+# select an implementation for OS-specific behaviour of launcher window
+if(WIN32)
+    set(WINDOW_LAUNCHER_OS_SPECIFIC src/browser/window_launcher_win.cxx)
+else()
+    set(WINDOW_LAUNCHER_OS_SPECIFIC src/browser/window_launcher_posix.cxx)
+endif()
 
 # compile an auto-generator, then use it to auto-generate a C++ file containing icon data
 set(BOLT_ICON_DIR "${CMAKE_CURRENT_SOURCE_DIR}/icon")
@@ -133,7 +138,6 @@ if(UNIX AND NOT APPLE)
     target_link_libraries(bolt PUBLIC "X11")
     target_link_libraries(bolt PUBLIC "xcb")
     target_link_libraries(bolt PUBLIC "archive")
-    find_package(PkgConfig REQUIRED)
 elseif(MSVC)
     target_compile_options(bolt PUBLIC $<$<CONFIG:>:/MT> $<$<CONFIG:Debug>:/MTd> $<$<CONFIG:Release>:/MT>)
     set_target_properties(bolt PROPERTIES WIN32_EXECUTABLE TRUE)
@@ -141,6 +145,7 @@ elseif(MSVC)
     target_link_libraries(bolt PUBLIC "${CEF_ROOT}/$(ConfigurationName)/libcef.lib")
     target_link_libraries(bolt PUBLIC "${CEF_ROOT}/$(ConfigurationName)/cef_sandbox.lib")
 elseif(WIN32)
+    # note: this is not used on Windows if compiler is MSVC; tht above section is used instead
     set_target_properties(bolt PROPERTIES WIN32_EXECUTABLE TRUE)
     target_link_libraries(bolt PUBLIC "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/libcef.lib")
     target_link_libraries(bolt PUBLIC "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/cef_sandbox.lib")
@@ -150,9 +155,13 @@ endif()
 
 # Bolt uses GTK on all platforms, but it must specifically use gtk3
 # to avoid symbols conflicting with CEF's GTK usage on Unix platforms
+find_package(PkgConfig REQUIRED)
 pkg_check_modules(GTK3 REQUIRED gtk+-3.0)
 target_include_directories(bolt PUBLIC ${GTK3_INCLUDE_DIRS})
 target_link_libraries(bolt PUBLIC ${GTK3_LIBRARIES})
+if(MSVC)
+    target_link_directories(bolt PUBLIC ${GTK3_LIBRARY_DIRS})
+endif()
 
 # Install commands for target dir layout - as per https://bitbucket.org/chromiumembedded/cef/wiki/Tutorial.md
 if(APPLE)

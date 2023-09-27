@@ -8,7 +8,6 @@
 #include <fcntl.h>
 #include <fmt/core.h>
 #include <fstream>
-#include <spawn.h>
 
 #if defined(CEF_X11)
 #include <xcb/xcb.h>

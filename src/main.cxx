@@ -20,10 +20,6 @@
 
 #if defined(CEF_X11)
 #include <X11/Xlib.h>
-
-constexpr int img_size = 24;
-constexpr int img_bps = 8;
-
 int XErrorHandlerImpl(Display* display, XErrorEvent* event) {
 	fmt::print(
 		"X error received: type {}, serial {}, error_code {}, request_code {}, minor_code {}\n",
@@ -41,7 +37,12 @@ int XIOErrorHandlerImpl(Display* display) {
 }
 #endif
 
-void GtkStart(CefMainArgs&, Browser::Client*);
+constexpr int img_size = 24;
+constexpr int img_bps = 8;
+
+#define PROGRAM_DIRNAME "bolt-launcher"
+
+void GtkStart(int argc, char** argv, Browser::Client*);
 int BoltRunBrowserProcess(CefMainArgs, CefRefPtr<Browser::App>);
 bool LockXdgDirectories(std::filesystem::path&, std::filesystem::path&);
 
@@ -81,7 +82,13 @@ int BoltRunBrowserProcess(CefMainArgs main_args, CefRefPtr<Browser::App> cef_app
 	std::filesystem::path cef_cache_path = data_dir;
 	cef_cache_path.append("CefCache");
 	std::filesystem::create_directories(cef_cache_path);
-	cef_string_from_utf8(cef_cache_path.c_str(), strlen(cef_cache_path.c_str()), &settings.cache_path);
+#if defined(WIN32)
+	const wchar_t* cache_path = cef_cache_path.c_str();
+	cef_string_from_wide(cache_path, wcslen(cache_path), &settings.cache_path);
+#else
+	const char* cache_path = cef_cache_path.c_str();
+	cef_string_from_utf8(cache_path, strlen(cache_path), &settings.cache_path);
+#endif
 
 	// Initialize CEF
 	int exit_code = CefInitialize(main_args, settings, cef_app, nullptr);
@@ -91,7 +98,11 @@ int BoltRunBrowserProcess(CefMainArgs main_args, CefRefPtr<Browser::App> cef_app
 	}
 
 	// start gtk and create a tray icon
-	GtkStart(main_args, client.get());
+#if defined(WIN32)
+	GtkStart(__argc, __argv, client.get());
+#else
+	GtkStart(main_args.argc, main_args.argv, client.get());
+#endif
 
 #if defined(CEF_X11)
 	// X11 error handlers - must be installed after gtk_init
@@ -154,8 +165,8 @@ bool LockXdgDirectories(std::filesystem::path& config_dir, std::filesystem::path
 		return false;
 	}
 
-	config_dir.append("bolt-launcher");
-	data_dir.append("bolt-launcher");
+	config_dir.append(PROGRAM_DIRNAME);
+	data_dir.append(PROGRAM_DIRNAME);
 	std::error_code err;
 	std::filesystem::create_directories(config_dir, err);
 	if (err.value() != 0) {
@@ -182,6 +193,8 @@ bool LockXdgDirectories(std::filesystem::path& config_dir, std::filesystem::path
 
 #if defined(_WIN32)
 int wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, wchar_t* lpCmdLine, int nCmdShow) {
+	setlocale(LC_CTYPE, "");
+	
 	// Provide CEF with command-line arguments
 	// Re-run with --disable-web-security if it's not already there, because a certain company's API endpoints
 	// don't have correct access control settings; remove this setting if they ever get their stuff together
@@ -232,6 +245,45 @@ int wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, wchar_t* lpCmdLine, i
 		return 0;
 	}
 }
+
+bool LockXdgDirectories(std::filesystem::path& config_dir, std::filesystem::path& data_dir) {
+	const char* appdata = getenv("appdata");
+	std::filesystem::path appdata_dir;
+	if (appdata && *appdata) {
+		appdata_dir.assign(appdata);
+		appdata_dir.append(PROGRAM_DIRNAME);
+	} else {
+		fmt::print("No appdata in environment\n");
+		return false;
+	}
+
+	config_dir = appdata_dir;
+	config_dir.append("config");
+	data_dir = appdata_dir;
+	data_dir.append("data");
+
+	std::error_code err;
+	std::filesystem::create_directories(config_dir, err);
+	if (err.value() != 0) {
+		fmt::print("Could not create config directories (error {}) {}/{}\n", err.value(), appdata, PROGRAM_DIRNAME);
+		return false;
+	}
+	std::filesystem::create_directories(data_dir, err);
+	if (err.value() != 0) {
+		fmt::print("Could not create data directories (error {}) {}/{}\n", err.value(), appdata, PROGRAM_DIRNAME);
+		return false;
+	}
+
+	std::filesystem::path data_lock = appdata_dir;
+	data_lock.append("lock");
+	HANDLE lockfile = CreateFileW(data_lock.c_str(), GENERIC_READ, 0, NULL, CREATE_ALWAYS, 0, NULL);
+	if (lockfile == INVALID_HANDLE_VALUE) {
+		fmt::print("Failed to obtain lockfile; is the program already running? (error: {})\n", GetLastError());
+		return false;
+	} else {
+		return true;
+	}
+}
 #endif
 
 // all these features exist in gtk3 and are deprecated for no reason at all, so ignore deprecation warnings
@@ -253,9 +305,9 @@ static void TrayExit(GtkMenuItem*, Browser::Client* client) {
     client->Exit();
 }
 
-void GtkStart(CefMainArgs& args, Browser::Client* client) {
+void GtkStart(int argc, char** argv, Browser::Client* client) {
 	gdk_set_allowed_backends("x11");
-	gtk_init(&args.argc, &args.argv);
+	gtk_init(&argc, &argv);
 	GdkPixbuf* pixbuf = gdk_pixbuf_new_from_data(
 		client->GetTrayIcon(),
 		GDK_COLORSPACE_RGB,

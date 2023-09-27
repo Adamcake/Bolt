@@ -14,7 +14,7 @@ If you accidentally cloned without submodules (no `modules` directory), you can 
 
 Place your entire CEF binary distribution folder inside the `cef` directory with the name "dist", or create a symbolic link with the same effect.
 
-If building on Linux, install the following dependencies:
+You will need **GTK3 development libraries** and cmake's **pkg-config** installed. If building on Linux, the following are also required:
 - X11 development libraries (`libX11-devel` or `libx11-dev` on most package managers)
 - xcb development libraries (`libxcb-devel` or `libxcb1-dev` on most package managers)
 - libarchive development libraries (`libarchive-devel` or `libarchive-dev` on most package managers)
@@ -28,15 +28,16 @@ Once that's done, you can start building. Open a command window or terminal in t
   - note: specify CC and CXX env variables at this stage to direct cmake to the C and C++ compilers you want it to use
 - `cmake --build build`
 - `cmake --install build --prefix build`
+  - note: the last line creates a staging build in the `build` directory, this needs to be done between changing and running the program every time
   - note: if a `--prefix` is not specified, Bolt will be installed to /usr/local, requiring root privileges
 
 After that, the helper script `./build/bolt.sh` can be used to launch Bolt from its staging location.
 
 ### Windows
-Windows builds have only been tested using Visual Studio 2022 IDE as Release builds. Other configurations may work but have not been tested.
-- `cmake -S . -B build -G "Visual Studio 17" -A x64`
+Windows builds have only been tested using Visual Studio 2022 (a.k.a. Visual Studio 17) in Release mode, per recommendations by chromium/cef. Other configurations may work but have not been tested.
+- `cmake -S . -B build -G "Visual Studio 17"`
   - note: use `-A Win32` instead for 32-bit targets
-- Open the .sln file in the `build` directory with Visual Studio and press F5 to build
+- Open the .sln file created in the `build` directory and go to "Build" > "Build Solution"
 - Create a new directory and copy all of the following into it: bolt.exe, the entire contents of the "Release" and "Resources" directories from your CEF distribution, and the "html" folder from this repository. Then you can run bolt.exe from that directory.
 
 ### Mac
