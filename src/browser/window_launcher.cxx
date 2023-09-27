@@ -5,6 +5,7 @@
 
 #include "include/cef_parser.h"
 
+#include <algorithm>
 #include <condition_variable>
 #include <fcntl.h>
 #include <fmt/core.h>
@@ -79,8 +80,8 @@ Browser::Launcher::Launcher(
 	std::filesystem::path config_dir,
 	std::filesystem::path data_dir
 ): Window(client, details, show_devtools), data_dir(data_dir), internal_pages(internal_pages) {
-	std::stringstream url(this->internal_url);
-	url << URI;
+	std::stringstream url;
+	url << this->internal_url << URI;
 
 	this->creds_path = data_dir;
 	this->creds_path.append("creds");
