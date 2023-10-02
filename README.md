@@ -1,8 +1,13 @@
 # Bolt
 A third-party launcher and helper for your favourite MMO
 
+## Installing
+For Linux/Steamdeck users, Bolt is available on flatpak: `flatpak install com.adamcake.Bolt`
+
+Others should see the "releases" section on the right.
+
 ## Building
-If you just want to get Bolt installed then you don't need to build it from source! Check the "Releases" section on the right.
+If you just want to get Bolt installed then you don't need to build it from source! See the "Installing" section.
 
 But if you do want to build from source, the first thing you should know is that Bolt is based on [Chromium Embedded Framework](https://bitbucket.org/chromiumembedded/cef) (CEF), so to build it, you'll first need either to [build](https://bitbucket.org/chromiumembedded/cef/wiki/MasterBuildQuickStart.md) or [download](https://adamcake.com/cef) a binary distribution of CEF.
 
