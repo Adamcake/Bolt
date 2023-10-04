@@ -99,9 +99,11 @@ int BoltRunBrowserProcess(CefMainArgs main_args, CefRefPtr<Browser::App> cef_app
 
 	// start gtk and create a tray icon
 #if defined(WIN32)
-	GtkStart(__argc, __argv, client.get());
+	// note: is there any possible way to pass command line on Windows?
+	// __argv is nullptr, and all other methods get wchars when gtk needs normal chars...
+	GtkStart(0, nullptr, client.get());
 #else
-	GtkStart(main_args.argc, main_args.argv, client.get());
+	GtkStart(&main_args.argc, &main_args.argv, client.get());
 #endif
 
 #if defined(CEF_X11)
@@ -306,7 +308,9 @@ static void TrayExit(GtkMenuItem*, Browser::Client* client) {
 }
 
 void GtkStart(int argc, char** argv, Browser::Client* client) {
+#if defined(CEF_X11)
 	gdk_set_allowed_backends("x11");
+#endif
 	gtk_init(&argc, &argv);
 	GdkPixbuf* pixbuf = gdk_pixbuf_new_from_data(
 		client->GetTrayIcon(),
