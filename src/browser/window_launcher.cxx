@@ -112,27 +112,23 @@ Browser::Launcher::Launcher(
 	}
 
 	std::ifstream creds_file(this->creds_path.c_str(), std::ios::in | std::ios::binary);
+	std::string creds_str;
 	if (!creds_file.fail()) {
-		std::streamsize size = creds_file.tellg();
-		creds_file.seekg(0, std::ios::beg);
-		char* buf = new char[size];
-		if (creds_file.read(buf, size)) {
-			CefString str = CefURIEncode(CefString(buf, size), true);
-			url << "&credentials=" << str.ToString();
-		}
-		delete[] buf;
+		std::stringstream ss;
+		ss << creds_file.rdbuf();
+		creds_str = CefURIEncode(CefString(ss.str()), true).ToString();
+		url << "&credentials=" << creds_str;
+		creds_file.close();
 	}
 
 	std::ifstream config_file(this->config_path.c_str(), std::ios::in | std::ios::binary);
+	std::string config_str;
 	if (!config_file.fail()) {
-		std::streamsize size = config_file.tellg();
-		config_file.seekg(0, std::ios::beg);
-		char* buf = new char[size];
-		if (config_file.read(buf, size)) {
-			CefString str = CefURIEncode(CefString(buf, size), true);
-			url << "&config=" << str.ToString();
-		}
-		delete[] buf;
+		std::stringstream ss;
+		ss << config_file.rdbuf();
+		config_str = CefURIEncode(CefString(ss.str()), true).ToString();
+		url << "&config=" << config_str;
+		config_file.close();
 	}
 
 	this->Init(client, details, url.str(), show_devtools);
