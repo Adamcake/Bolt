@@ -103,7 +103,7 @@ int BoltRunBrowserProcess(CefMainArgs main_args, CefRefPtr<Browser::App> cef_app
 	// __argv is nullptr, and all other methods get wchars when gtk needs normal chars...
 	GtkStart(0, nullptr, client.get());
 #else
-	GtkStart(&main_args.argc, &main_args.argv, client.get());
+	GtkStart(main_args.argc, main_args.argv, client.get());
 #endif
 
 #if defined(CEF_X11)
