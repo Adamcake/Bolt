@@ -13,6 +13,12 @@
 #include <xcb/xcb.h>
 #endif
 
+#if defined(BOLT_DEV_SHOW_DEVTOOLS)
+constexpr bool SHOW_DEVTOOLS = true;
+#else
+constexpr bool SHOW_DEVTOOLS = false;
+#endif
+
 constexpr Browser::Details LAUNCHER_DETAILS = {
 	.preferred_width = 800,
 	.preferred_height = 608,
@@ -23,7 +29,7 @@ constexpr Browser::Details LAUNCHER_DETAILS = {
 };
 
 Browser::Client::Client(CefRefPtr<Browser::App> app,std::filesystem::path config_dir, std::filesystem::path data_dir):
-	is_closing(false), show_devtools(false), config_dir(config_dir), data_dir(data_dir)
+	is_closing(false), show_devtools(SHOW_DEVTOOLS), config_dir(config_dir), data_dir(data_dir)
 {
 	CefString mime_type_html = "text/html";
 	CefString mime_type_js = "application/javascript";
