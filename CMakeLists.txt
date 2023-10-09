@@ -91,6 +91,10 @@ if(NOT WIN32)
     file(GENERATE OUTPUT bolt.sh CONTENT "#!/bin/sh -eu\nexport XDG_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/config\nexport XDG_DATA_HOME=${CMAKE_CURRENT_BINARY_DIR}/data\ncd ${CMAKE_CURRENT_BINARY_DIR}/opt/bolt-launcher\nexec ./bolt \"$@\"\n" FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 endif()
 
+if(BOLT_DEV_SHOW_DEVTOOLS)
+    add_compile_definitions(BOLT_DEV_SHOW_DEVTOOLS)
+endif()
+
 # Generate compile_commands.json, for use by language servers for highlighting/autocomplete/etc
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
