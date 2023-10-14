@@ -350,6 +350,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 	// array of structures for keeping track of which environment variables we want to set and have already set
 	EnvQueryParam rl_path_param = {.should_set = false, .key = "jar_path"};
 	EnvQueryParam hash_param = {.should_set = false, .key = "hash"};
+	EnvQueryParam scale_param = {.should_set = false, .key = "scale"};
 	EnvQueryParam env_params[] = {
 		{.should_set = false, .prepend_env_key = true, .env_key = "JX_ACCESS_TOKEN=", .key = "jx_access_token"},
 		{.should_set = false, .prepend_env_key = true, .env_key = "JX_REFRESH_TOKEN=", .key = "jx_refresh_token"},
@@ -380,6 +381,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 			param.CheckAndUpdate(key, value);
 		}
 		hash_param.CheckAndUpdate(key, value);
+		scale_param.CheckAndUpdate(key, value);
 		rl_path_param.CheckAndUpdate(key, value);
 
 		// if there are no more instances of '&', we've read the last param, so stop here
@@ -450,11 +452,12 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 	std::string arg_jvm_argument_home = "-J" + arg_home;
 	std::string path_str = jar_path.string();
 
-	char* argv[7];
+	char* argv[9];
 	size_t argv_offset;
 	char arg_env[] = "/usr/bin/env";
 	char arg_java[] = "java";
 	char arg_jar[] = "-jar";
+	char arg_scale[] = "--scale";
 	if (java_home) {
 		java_home_str = std::string(java_home) + "/bin/java";
 		argv[1] = java_home_str.data();
@@ -468,7 +471,13 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 	argv[3] = arg_jar;
 	argv[4] = path_str.data();
 	argv[5] = arg_jvm_argument_home.data();
-	argv[6] = nullptr;
+	if (scale_param.should_set) {
+		argv[6] = arg_scale;
+		argv[7] = scale_param.value.data();
+		argv[8] = nullptr;
+	} else {
+		argv[6] = nullptr;
+	}
 
 	char** env = new char*[env_count + env_param_count + 1];
 
