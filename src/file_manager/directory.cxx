@@ -47,7 +47,7 @@ void Watch(std::filesystem::path path, CefRefPtr<FileManager::FileManager> file_
 FileManager::Directory::Directory(std::filesystem::path path): path(path) {
 #if defined(__linux__)
 	this->inotify_fd = inotify_init1(IN_CLOEXEC);
-	this->inotify_wd = inotify_add_watch(this->inotify_fd, path.c_str(), IN_CREATE | IN_DELETE | IN_MODIFY | IN_MOVE | IN_MOVE_SELF | IN_DELETE_SELF | IN_IGNORED);
+	this->inotify_wd = inotify_add_watch(this->inotify_fd, path.c_str(), IN_CREATE | IN_DELETE | IN_CLOSE_WRITE | IN_MOVE | IN_MOVE_SELF | IN_DELETE_SELF | IN_IGNORED);
 	this->inotify_thread = std::thread(Watch, path, this, this->inotify_fd, this->inotify_wd);
 #endif
 }
