@@ -91,15 +91,16 @@ if(NOT WIN32)
     file(GENERATE OUTPUT bolt.sh CONTENT "#!/bin/sh -eu\nexport XDG_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/config\nexport XDG_DATA_HOME=${CMAKE_CURRENT_BINARY_DIR}/data\ncd ${CMAKE_CURRENT_BINARY_DIR}/opt/bolt-launcher\nexec ./bolt \"$@\"\n" FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 endif()
 
-if(BOLT_DEV_SHOW_DEVTOOLS)
-    add_compile_definitions(BOLT_DEV_SHOW_DEVTOOLS)
-endif()
-
 # Generate compile_commands.json, for use by language servers for highlighting/autocomplete/etc
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Tell git to ignore everything in the new build directory
 file(GENERATE OUTPUT .gitignore CONTENT "*")
+
+# source html directory
+if(NOT BOLT_HTML_DIR)
+    set(BOLT_HTML_DIR "${CMAKE_CURRENT_SOURCE_DIR}/html")
+endif()
 
 # libcef C++ wrapper
 if(NOT CEF_ROOT)
@@ -116,19 +117,6 @@ else()
     set(WINDOW_LAUNCHER_OS_SPECIFIC src/browser/window_launcher_posix.cxx)
 endif()
 
-# compile the generator for embedded launcher file contents
-if(NOT BOLT_HTML_DIR)
-    set(BOLT_HTML_DIR "${CMAKE_CURRENT_SOURCE_DIR}/html")
-endif()
-add_executable(html_gen html/generator.cxx)
-set_target_properties(html_gen PROPERTIES CXX_STANDARD 20 CXX_EXTENSIONS OFF)
-file(GLOB_RECURSE BOLT_HTML_FILE_LIST FOLLOW_SYMLINKS LIST_DIRECTORIES false CONFIGURE_DEPENDS "${BOLT_HTML_DIR}/*")
-add_custom_command(
-    OUTPUT file_manager_launcher_gen.cxx
-    DEPENDS html_gen ${BOLT_HTML_FILE_LIST}
-    COMMAND html_gen "${CMAKE_CURRENT_SOURCE_DIR}" "${BOLT_HTML_DIR}" ${BOLT_HTML_FILE_LIST} ">file_manager_launcher_gen.cxx"
-)
-
 # compile an auto-generator, then use it to auto-generate a C++ file containing icon data
 set(BOLT_ICON_DIR "${CMAKE_CURRENT_SOURCE_DIR}/icon")
 add_executable(icon_gen icon/generator.cxx modules/lodepng/lodepng.cpp)
@@ -139,11 +127,24 @@ add_custom_command(
     COMMAND icon_gen "${CMAKE_CURRENT_SOURCE_DIR}" "${BOLT_ICON_DIR}" ">client_cmake_gen.cxx"
 )
 
+# compile the generator for embedded launcher file contents
+if(NOT BOLT_DEV_LAUNCHER_DIRECTORY)
+    add_executable(html_gen html/generator.cxx)
+    set_target_properties(html_gen PROPERTIES CXX_STANDARD 20 CXX_EXTENSIONS OFF)
+    file(GLOB_RECURSE BOLT_HTML_FILE_LIST FOLLOW_SYMLINKS LIST_DIRECTORIES false CONFIGURE_DEPENDS "${BOLT_HTML_DIR}/*")
+    add_custom_command(
+        OUTPUT file_manager_launcher_gen.cxx
+        DEPENDS html_gen ${BOLT_HTML_FILE_LIST}
+        COMMAND html_gen "${CMAKE_CURRENT_SOURCE_DIR}" "${BOLT_HTML_DIR}" ${BOLT_HTML_FILE_LIST} ">file_manager_launcher_gen.cxx"
+    )
+    set(BOLT_FILE_MANAGER_LAUNCHER_GEN file_manager_launcher_gen.cxx)
+endif()
+
 # This line needs to be updated manually with any new/deleted object files; cmake discourages GLOBbing source files
 add_executable(bolt
     modules/fmt/src/format.cc src/main.cxx src/browser.cxx src/browser/app.cxx src/browser/client.cxx
     src/browser/resource_handler.cxx src/browser/window_launcher.cxx ${WINDOW_LAUNCHER_OS_SPECIFIC}
-    client_cmake_gen.cxx file_manager_launcher_gen.cxx
+    src/file_manager/directory.cxx client_cmake_gen.cxx ${BOLT_FILE_MANAGER_LAUNCHER_GEN}
 )
 
 # Various build properties
@@ -169,6 +170,16 @@ elseif(WIN32)
     target_link_libraries(bolt PUBLIC "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/cef_sandbox.lib")
 elseif(APPLE)
     # TODO: mac support
+endif()
+
+# compilation setting for enabling chromium dev tools
+if(BOLT_DEV_SHOW_DEVTOOLS)
+    target_compile_definitions(bolt PUBLIC BOLT_DEV_SHOW_DEVTOOLS)
+endif()
+
+# compilation setting for directory-watching for launcher UI
+if(BOLT_DEV_LAUNCHER_DIRECTORY)
+    target_compile_definitions(bolt PUBLIC BOLT_DEV_LAUNCHER_DIRECTORY="${BOLT_HTML_DIR}")
 endif()
 
 # Bolt uses GTK on all platforms, but it must specifically use gtk3
