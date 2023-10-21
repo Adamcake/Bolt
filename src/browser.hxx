@@ -49,6 +49,9 @@ namespace Browser {
 		/// Force-closes this browser and all of its children
 		void Close();
 
+		/// Closes all of this window's child windows except its devtools window, if open.
+		void CloseChildrenExceptDevtools();
+
 		/// Purges matching windows from this window's list of children
 		/// Returns true if this window itself matches the given browser, false otherwise
 		/// Cannot be called from CefLifeSpanHandler::OnBeforeClose, see CefBrowserViewDelegate::OnBrowserDestroyed for info

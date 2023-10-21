@@ -204,6 +204,14 @@ void Browser::Window::Close() {
 	this->browser->GetHost()->CloseBrowser(true);
 }
 
+void Browser::Window::CloseChildrenExceptDevtools() {
+	for (CefRefPtr<Browser::Window>& window: this->children) {
+		if (!window->details.is_devtools) {
+			window->Close();
+		}
+	}
+}
+
 bool Browser::Window::OnBrowserClosing(CefRefPtr<CefBrowser> browser) {
 	fmt::print("[B] OnBrowserClosing this={}\n", reinterpret_cast<uintptr_t>(this));
 	this->children.erase(
