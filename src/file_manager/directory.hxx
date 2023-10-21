@@ -14,6 +14,7 @@ namespace FileManager {
 #if defined(__linux__)
 		std::thread inotify_thread;
 		int inotify_fd;
+		int inotify_wd;
 #endif
 
 		public:
