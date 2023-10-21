@@ -87,6 +87,16 @@ void Browser::Client::OnWindowCreated(CefRefPtr<CefWindow> window) {
 #endif
 }
 
+#if defined(BOLT_DEV_LAUNCHER_DIRECTORY)
+void Browser::Client::OnFileChange() {
+	std::lock_guard<std::mutex> _(this->windows_lock);
+	auto it = std::find_if(this->windows.begin(), this->windows.end(), [](CefRefPtr<Window>& win) { return win->IsLauncher(); });
+	if (it != this->windows.end()) {
+		(*it)->Refresh();
+	}
+}
+#endif
+
 CefRefPtr<CefLifeSpanHandler> Browser::Client::GetLifeSpanHandler() {
 	return this;
 }
@@ -184,6 +194,12 @@ bool Browser::Client::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, Ce
 	if (name == "__bolt_close") {
 		fmt::print("[B] bolt_close message received, exiting\n");
 		this->Exit();
+		return true;
+	}
+
+	if (name == "__bolt_refresh") {
+		fmt::print("[B] bolt_refresh message received, refreshing browser {}\n", browser->GetIdentifier());
+		browser->ReloadIgnoreCache();
 		return true;
 	}
 

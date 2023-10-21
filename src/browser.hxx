@@ -34,6 +34,9 @@ namespace Browser {
 		/// Initialise with a browser_view. Should be called from a constructor, if at all.
 		void Init(CefRefPtr<CefClient> client, Details, CefString, bool);
 
+		/// Refreshes this browser, ignoring cache. Can be called from any thread in the browser process.
+		void Refresh() const;
+
 		/// Returns true if the given browser is this window or one of its children, otherwise false
 		bool HasBrowser(CefRefPtr<CefBrowser>) const;
 
