@@ -1,5 +1,6 @@
 #ifndef _BOLT_FILE_MANAGER_HXX_
 #define _BOLT_FILE_MANAGER_HXX_
+#include "include/cef_base.h"
 #include "include/internal/cef_string.h"
 
 #include <string_view>
@@ -16,7 +17,7 @@ namespace FileManager {
 		CefString mime_type;
 	};
 
-	class FileManager {
+	class FileManager: public CefBaseRefCounted {
 		public:
 			/// Fetches a file, as if from a web server, by its abolsute path.
 			/// For example, in the url "https://adamcake.com/index.html", the path would be "/index.html".

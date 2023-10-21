@@ -76,7 +76,7 @@ Browser::Launcher::Launcher(
 	CefRefPtr<Browser::Client> client,
 	Details details,
 	bool show_devtools,
-	const FileManager::FileManager* const file_manager,
+	CefRefPtr<FileManager::FileManager> file_manager,
 	std::filesystem::path config_dir,
 	std::filesystem::path data_dir
 ): Window(client, details, show_devtools), data_dir(data_dir), file_manager(file_manager) {
@@ -293,14 +293,20 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 		// respond using internal hashmap of filenames
 		FileManager::File file = this->file_manager->get(path);
 		if (file.contents) {
-			return new ResourceHandler(file.contents, file.size, 200, file.mime_type);
+			return new ResourceHandler(file, this->file_manager);
 		} else {
+			this->file_manager->free(file);
 			const char* data = "Not Found\n";
 			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 404, "text/plain");
 		}
 	}
 
 	return nullptr;
+}
+
+void Browser::Launcher::OnBrowserDestroyed(CefRefPtr<CefBrowserView> view, CefRefPtr<CefBrowser> browser) {
+	Window::OnBrowserDestroyed(view, browser);
+	this->file_manager = nullptr;
 }
 
 CefRefPtr<CefResourceRequestHandler> SaveFileFromPost(CefRefPtr<CefRequest> request, const std::filesystem::path::value_type* path) {

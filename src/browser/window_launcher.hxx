@@ -10,7 +10,7 @@
 
 namespace Browser {
 	struct Launcher: public Window {
-		Launcher(CefRefPtr<Browser::Client>, Details, bool, const FileManager::FileManager* const, std::filesystem::path, std::filesystem::path);
+		Launcher(CefRefPtr<Browser::Client>, Details, bool, CefRefPtr<FileManager::FileManager>, std::filesystem::path, std::filesystem::path);
 
 		bool IsLauncher() const override;
 
@@ -23,6 +23,8 @@ namespace Browser {
 			const CefString&,
 			bool&
 		) override;
+
+		void OnBrowserDestroyed(CefRefPtr<CefBrowserView>, CefRefPtr<CefBrowser>) override;
 
 		/// Attempts to open the given URL externally in the user's browser
 		void OpenExternalUrl(char* url) const;
@@ -37,7 +39,7 @@ namespace Browser {
 
 		private:
 			const std::string internal_url = "https://bolt-internal/";
-			const FileManager::FileManager* file_manager;
+			CefRefPtr<FileManager::FileManager> file_manager;
 			std::filesystem::path data_dir;
 			std::filesystem::path creds_path;
 			std::filesystem::path config_path;

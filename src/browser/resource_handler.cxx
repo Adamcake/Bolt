@@ -31,6 +31,7 @@ bool Browser::ResourceHandler::Read(void* data_out, int bytes_to_read, int& byte
 		memcpy(data_out, this->data + this->cursor, bytes_read);
 		this->cursor = this->data_len;
 	}
+	if (this->cursor == this->data_len) this->finish();
 	return true;
 }
 
@@ -49,8 +50,16 @@ bool Browser::ResourceHandler::Skip(int64 bytes_to_skip, int64& bytes_skipped, C
 
 void Browser::ResourceHandler::Cancel() {
 	this->cursor = this->data_len;
+	this->finish();
 }
 
 CefRefPtr<CefResourceHandler> Browser::ResourceHandler::GetResourceHandler(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, CefRefPtr<CefRequest>) {
 	return this;
+}
+
+void Browser::ResourceHandler::finish() {
+	if (this->file_manager) {
+		this->file_manager->free(FileManager::File { .contents = this->data, .size = this->data_len, .mime_type = this->mime });
+		this->file_manager = nullptr;
+	}
 }

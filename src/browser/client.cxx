@@ -29,6 +29,9 @@ constexpr Browser::Details LAUNCHER_DETAILS = {
 };
 
 Browser::Client::Client(CefRefPtr<Browser::App> app,std::filesystem::path config_dir, std::filesystem::path data_dir):
+#if defined(BOLT_DEV_LAUNCHER_DIRECTORY)
+	CLIENT_FILEHANDLER(BOLT_DEV_LAUNCHER_DIRECTORY),
+#endif
 	is_closing(false), show_devtools(SHOW_DEVTOOLS), config_dir(config_dir), data_dir(data_dir)
 {
 	app->SetBrowserProcessHandler(this);
@@ -42,7 +45,7 @@ void Browser::Client::OpenLauncher() {
 	std::lock_guard<std::mutex> _(this->windows_lock);
 	auto it = std::find_if(this->windows.begin(), this->windows.end(), [](CefRefPtr<Window>& win) { return win->IsLauncher(); });
 	if (it == this->windows.end()) {
-		CefRefPtr<Window> w = new Launcher(this, LAUNCHER_DETAILS, this->show_devtools, &this->file_manager, this->config_dir, this->data_dir);
+		CefRefPtr<Window> w = new Launcher(this, LAUNCHER_DETAILS, this->show_devtools, this, this->config_dir, this->data_dir);
 		this->windows.push_back(w);
 	} else {
 		(*it)->Focus();
@@ -97,7 +100,7 @@ void Browser::Client::OnContextInitialized() {
 	// After main() enters its event loop, this function will be called on the main thread when CEF
 	// context is ready to go, so, as suggested by CEF examples, Bolt treats this as an entry point.
 	std::lock_guard<std::mutex> _(this->windows_lock);
-	CefRefPtr<Browser::Window> w = new Launcher(this, LAUNCHER_DETAILS, this->show_devtools, &this->file_manager, this->config_dir, this->data_dir);
+	CefRefPtr<Browser::Window> w = new Launcher(this, LAUNCHER_DETAILS, this->show_devtools, this, this->config_dir, this->data_dir);
 	this->windows.push_back(w);
 }
 

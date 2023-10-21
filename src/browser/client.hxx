@@ -18,8 +18,10 @@
 
 #if defined(BOLT_DEV_LAUNCHER_DIRECTORY)
 #include "../file_manager/directory.hxx"
+typedef FileManager::Directory CLIENT_FILEHANDLER;
 #else
 #include "../file_manager/launcher.hxx"
+typedef FileManager::Launcher CLIENT_FILEHANDLER;
 #endif
 
 namespace Browser {
@@ -28,7 +30,7 @@ namespace Browser {
 	/// https://github.com/chromiumembedded/cef/blob/5735/include/cef_browser_process_handler.h
 	/// https://github.com/chromiumembedded/cef/blob/5735/include/cef_life_span_handler.h
 	/// https://github.com/chromiumembedded/cef/blob/5735/include/cef_request_handler.h
-	struct Client: public CefClient, CefBrowserProcessHandler, CefLifeSpanHandler, CefRequestHandler {
+	struct Client: public CefClient, CefBrowserProcessHandler, CefLifeSpanHandler, CefRequestHandler, CLIENT_FILEHANDLER {
 		Client(CefRefPtr<Browser::App>, std::filesystem::path config_dir, std::filesystem::path data_dir);
 
 		/// Either opens a launcher window, or focuses an existing one. No more than one launcher window
@@ -97,12 +99,6 @@ namespace Browser {
 			bool show_devtools;
 			std::filesystem::path config_dir;
 			std::filesystem::path data_dir;
-
-#if defined(BOLT_DEV_LAUNCHER_DIRECTORY)
-			FileManager::Directory file_manager = FileManager::Directory(BOLT_DEV_LAUNCHER_DIRECTORY);
-#else
-			FileManager::Launcher file_manager;
-#endif
 
 #if defined(CEF_X11)
 			xcb_connection_t* xcb;

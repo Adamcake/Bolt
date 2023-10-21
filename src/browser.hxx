@@ -1,6 +1,8 @@
 #ifndef _BOLT_BROWSER_HXX_
 #define _BOLT_BROWSER_HXX_
 #include "browser/common.hxx"
+#include "file_manager.hxx"
+
 #include "include/cef_client.h"
 #include "include/internal/cef_ptr.h"
 #include "include/views/cef_window.h"
@@ -93,6 +95,7 @@ namespace Browser {
 			CefRefPtr<CefWindow> window;
 			CefRefPtr<CefBrowserView> browser_view;
 			CefRefPtr<CefBrowser> browser;
+			CefRefPtr<FileManager::FileManager> file_manager;
 			CefRefPtr<Window> pending_child;
 			std::vector<CefRefPtr<Window>> children;
 			CefPopupFeatures popup_features;
