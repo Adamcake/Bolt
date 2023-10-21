@@ -20,7 +20,7 @@ namespace FileManager {
 					this->files.end(),
 					[&path](const auto& e) { return strncmp(e.first, path.data(), path.size()) == 0 && e.first[path.size()] == '\0'; }
 				);
-				return (it == this->files.end()) ? File { .contents = nullptr } : it->second;
+				return (it == this->files.end()) ? File { .contents = nullptr, .size = 0 } : it->second;
 			}
 	};
 }
