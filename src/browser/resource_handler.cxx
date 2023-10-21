@@ -49,8 +49,10 @@ bool Browser::ResourceHandler::Skip(int64 bytes_to_skip, int64& bytes_skipped, C
 }
 
 void Browser::ResourceHandler::Cancel() {
-	this->cursor = this->data_len;
-	this->finish();
+	if (this->cursor != this->data_len) {
+		this->cursor = this->data_len;
+		this->finish();
+	}
 }
 
 CefRefPtr<CefResourceHandler> Browser::ResourceHandler::GetResourceHandler(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, CefRefPtr<CefRequest>) {
