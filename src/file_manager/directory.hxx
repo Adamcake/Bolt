@@ -14,6 +14,7 @@ namespace FileManager {
 			Directory(std::filesystem::path);
 
 			File get(std::string_view) const override;
+			void free(File) const override;
 	};
 }
 

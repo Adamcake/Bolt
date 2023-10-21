@@ -26,3 +26,7 @@ FileManager::File FileManager::Directory::get(std::string_view uri) const {
 		.mime_type = CefGetMimeType(path.string())
 	};
 }
+
+void FileManager::Directory::free(File file) const {
+	delete[] file.contents;
+}

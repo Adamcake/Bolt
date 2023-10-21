@@ -21,6 +21,10 @@ namespace FileManager {
 			/// Fetches a file, as if from a web server, by its abolsute path.
 			/// For example, in the url "https://adamcake.com/index.html", the path would be "/index.html".
 			virtual File get(std::string_view path) const = 0;
+
+			/// Any File obtained from get() must be passed to free() exactly once and must never be
+			/// accessed after passing it to free().
+			virtual void free(File) const = 0;
 	};
 }
 

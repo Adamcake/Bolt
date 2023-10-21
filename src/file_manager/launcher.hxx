@@ -22,6 +22,8 @@ namespace FileManager {
 				);
 				return (it == this->files.end()) ? File { .contents = nullptr, .size = 0 } : it->second;
 			}
+
+			void free(File) const override {}
 	};
 }
 
