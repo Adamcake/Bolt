@@ -171,7 +171,6 @@ void Browser::Client::OnBeforeClose(CefRefPtr<CefBrowser> browser) {
 }
 
 bool Browser::Client::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefProcessId, CefRefPtr<CefProcessMessage> message) {
-	std::lock_guard<std::mutex> _(this->windows_lock);
 	CefString name = message->GetName();
 
 	if (name == "__bolt_app_settings") {
@@ -199,7 +198,18 @@ bool Browser::Client::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, Ce
 	}
 
 	if (name == "__bolt_refresh") {
+		this->windows_lock.lock();
 		fmt::print("[B] bolt_refresh message received, refreshing browser {}\n", browser->GetIdentifier());
+		auto it = std::find_if(
+			this->windows.begin(),
+			this->windows.end(),
+			[&browser](const CefRefPtr<Browser::Window>& window){ return window->HasBrowser(browser); }
+		);
+		if (it != this->windows.end()) {
+			auto browser = *it;
+			this->windows_lock.unlock();
+			browser->CloseChildrenExceptDevtools();
+		}
 		browser->ReloadIgnoreCache();
 		return true;
 	}
