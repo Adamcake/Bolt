@@ -31,16 +31,7 @@ constexpr Browser::Details LAUNCHER_DETAILS = {
 Browser::Client::Client(CefRefPtr<Browser::App> app,std::filesystem::path config_dir, std::filesystem::path data_dir):
 	is_closing(false), show_devtools(SHOW_DEVTOOLS), config_dir(config_dir), data_dir(data_dir)
 {
-	CefString mime_type_html = "text/html";
-	CefString mime_type_js = "application/javascript";
-	CefString mime_type_css = "text/css";
 	app->SetBrowserProcessHandler(this);
-	this->internal_pages["/launcher.html"] = InternalFile("html/launcher.html", mime_type_html);
-	this->internal_pages["/launcher.js"] = InternalFile("html/launcher.js", mime_type_js);
-	this->internal_pages["/launcher.css"] = InternalFile("html/launcher.css", mime_type_css);
-	this->internal_pages["/oauth.html"] = InternalFile("html/oauth.html", mime_type_html);
-	this->internal_pages["/game_auth.html"] = InternalFile("html/game_auth.html", mime_type_html);
-	this->internal_pages["/frame.html"] = InternalFile("html/frame.html", mime_type_html);
 
 #if defined(CEF_X11)
 	this->xcb = xcb_connect(nullptr, nullptr);
@@ -51,7 +42,7 @@ void Browser::Client::OpenLauncher() {
 	std::lock_guard<std::mutex> _(this->windows_lock);
 	auto it = std::find_if(this->windows.begin(), this->windows.end(), [](CefRefPtr<Window>& win) { return win->IsLauncher(); });
 	if (it == this->windows.end()) {
-		CefRefPtr<Window> w = new Launcher(this, LAUNCHER_DETAILS, this->show_devtools, &this->internal_pages, this->config_dir, this->data_dir);
+		CefRefPtr<Window> w = new Launcher(this, LAUNCHER_DETAILS, this->show_devtools, &this->file_manager, this->config_dir, this->data_dir);
 		this->windows.push_back(w);
 	} else {
 		(*it)->Focus();
@@ -106,7 +97,7 @@ void Browser::Client::OnContextInitialized() {
 	// After main() enters its event loop, this function will be called on the main thread when CEF
 	// context is ready to go, so, as suggested by CEF examples, Bolt treats this as an entry point.
 	std::lock_guard<std::mutex> _(this->windows_lock);
-	CefRefPtr<Browser::Window> w = new Browser::Launcher(this, LAUNCHER_DETAILS, this->show_devtools, &this->internal_pages, this->config_dir, this->data_dir);
+	CefRefPtr<Browser::Window> w = new Launcher(this, LAUNCHER_DETAILS, this->show_devtools, &this->file_manager, this->config_dir, this->data_dir);
 	this->windows.push_back(w);
 }
 

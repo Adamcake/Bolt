@@ -76,10 +76,10 @@ Browser::Launcher::Launcher(
 	CefRefPtr<Browser::Client> client,
 	Details details,
 	bool show_devtools,
-	const std::map<std::string, InternalFile>* const internal_pages,
+	const FileManager::FileManager* const file_manager,
 	std::filesystem::path config_dir,
 	std::filesystem::path data_dir
-): Window(client, details, show_devtools), data_dir(data_dir), internal_pages(internal_pages) {
+): Window(client, details, show_devtools), data_dir(data_dir), file_manager(file_manager) {
 	std::stringstream url;
 	url << this->internal_url << URI;
 
@@ -291,26 +291,10 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 		}
 
 		// respond using internal hashmap of filenames
-		auto it = std::find_if(
-			this->internal_pages->begin(),
-			this->internal_pages->end(),
-			[&path](const auto& e) { return e.first == path; }
-		);
-		if (it != this->internal_pages->end()) {
-			if (it->second.success) {
-				return new ResourceHandler(
-					it->second.data.data(),
-					it->second.data.size(),
-					200,
-					it->second.mime_type
-				);
-			} else {
-				// this file failed to load during startup for some reason - 500
-				const char* data = "Internal Server Error\n";
-				return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 500, "text/plain");
-			}
+		FileManager::File file = this->file_manager->get(path);
+		if (file.contents) {
+			return new ResourceHandler(file.contents, file.size, 200, file.mime_type);
 		} else {
-			// no matching internal page - 404
 			const char* data = "Not Found\n";
 			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 404, "text/plain");
 		}

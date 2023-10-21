@@ -16,6 +16,12 @@
 #include <xcb/xcb.h>
 #endif
 
+#if defined(BOLT_DEV_LAUNCHER_DIRECTORY)
+
+#else
+#include "../file_manager/launcher.hxx"
+#endif
+
 namespace Browser {
 	/// Implementation of CefClient, CefBrowserProcessHandler, CefLifeSpanHandler, CefRequestHandler.
 	/// https://github.com/chromiumembedded/cef/blob/5735/include/cef_client.h
@@ -92,7 +98,11 @@ namespace Browser {
 			std::filesystem::path config_dir;
 			std::filesystem::path data_dir;
 
-			std::map<std::string, InternalFile> internal_pages;
+#if defined(BOLT_DEV_LAUNCHER_DIRECTORY)
+			
+#else
+			FileManager::Launcher file_manager;
+#endif
 
 #if defined(CEF_X11)
 			xcb_connection_t* xcb;
