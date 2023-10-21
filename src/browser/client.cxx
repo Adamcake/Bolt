@@ -55,6 +55,7 @@ void Browser::Client::OpenLauncher() {
 void Browser::Client::Exit() {
 	fmt::print("[B] Exit\n");
 	if (this->windows.size() == 0) {
+		this->StopFileManager();
 		CefQuitMessageLoop();
 #if defined(CEF_X11)
 		xcb_disconnect(this->xcb);
