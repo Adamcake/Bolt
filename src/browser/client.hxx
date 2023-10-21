@@ -17,7 +17,7 @@
 #endif
 
 #if defined(BOLT_DEV_LAUNCHER_DIRECTORY)
-
+#include "../file_manager/directory.hxx"
 #else
 #include "../file_manager/launcher.hxx"
 #endif
@@ -99,7 +99,7 @@ namespace Browser {
 			std::filesystem::path data_dir;
 
 #if defined(BOLT_DEV_LAUNCHER_DIRECTORY)
-			
+			FileManager::Directory file_manager = FileManager::Directory(BOLT_DEV_LAUNCHER_DIRECTORY);
 #else
 			FileManager::Launcher file_manager;
 #endif
