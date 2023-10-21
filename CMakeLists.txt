@@ -116,20 +116,34 @@ else()
     set(WINDOW_LAUNCHER_OS_SPECIFIC src/browser/window_launcher_posix.cxx)
 endif()
 
+# compile the generator for embedded launcher file contents
+if(NOT BOLT_HTML_DIR)
+    set(BOLT_HTML_DIR "${CMAKE_CURRENT_SOURCE_DIR}/html")
+endif()
+add_executable(html_gen html/generator.cxx)
+set_target_properties(html_gen PROPERTIES CXX_STANDARD 20 CXX_EXTENSIONS OFF)
+file(GLOB_RECURSE BOLT_HTML_FILE_LIST FOLLOW_SYMLINKS LIST_DIRECTORIES false CONFIGURE_DEPENDS "${BOLT_HTML_DIR}/*")
+add_custom_command(
+    OUTPUT file_manager_launcher_gen.cxx
+    DEPENDS html_gen ${BOLT_HTML_FILE_LIST}
+    COMMAND html_gen "${CMAKE_CURRENT_SOURCE_DIR}" "${BOLT_HTML_DIR}" ${BOLT_HTML_FILE_LIST} ">file_manager_launcher_gen.cxx"
+)
+
 # compile an auto-generator, then use it to auto-generate a C++ file containing icon data
 set(BOLT_ICON_DIR "${CMAKE_CURRENT_SOURCE_DIR}/icon")
 add_executable(icon_gen icon/generator.cxx modules/lodepng/lodepng.cpp)
+set_target_properties(icon_gen PROPERTIES CXX_STANDARD 20 CXX_EXTENSIONS OFF)
 add_custom_command(
     OUTPUT client_cmake_gen.cxx
     DEPENDS icon_gen ${BOLT_ICON_DIR}/16.png ${BOLT_ICON_DIR}/32.png ${BOLT_ICON_DIR}/64.png ${BOLT_ICON_DIR}/256.png
-    COMMAND icon_gen ${CMAKE_CURRENT_SOURCE_DIR} ${BOLT_ICON_DIR} ">client_cmake_gen.cxx"
+    COMMAND icon_gen "${CMAKE_CURRENT_SOURCE_DIR}" "${BOLT_ICON_DIR}" ">client_cmake_gen.cxx"
 )
 
 # This line needs to be updated manually with any new/deleted object files; cmake discourages GLOBbing source files
 add_executable(bolt
     modules/fmt/src/format.cc src/main.cxx src/browser.cxx src/browser/app.cxx src/browser/client.cxx
     src/browser/resource_handler.cxx src/browser/window_launcher.cxx ${WINDOW_LAUNCHER_OS_SPECIFIC}
-    client_cmake_gen.cxx
+    client_cmake_gen.cxx file_manager_launcher_gen.cxx
 )
 
 # Various build properties
@@ -172,7 +186,7 @@ if(APPLE)
     # TODO: mac support
 else()
     install(TARGETS bolt DESTINATION opt/bolt-launcher)
-    install(DIRECTORY "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/" "${CEF_ROOT}/Resources/" "${CMAKE_CURRENT_SOURCE_DIR}/html" DESTINATION opt/bolt-launcher USE_SOURCE_PERMISSIONS)
+    install(DIRECTORY "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/" "${CEF_ROOT}/Resources/" DESTINATION opt/bolt-launcher USE_SOURCE_PERMISSIONS)
 endif()
 
 # Finally, install shell script and metadata
