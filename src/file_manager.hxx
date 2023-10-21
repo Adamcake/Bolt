@@ -29,6 +29,9 @@ namespace FileManager {
 
 			/// Called by this class when the contents have changed, in cases where monitoring is possible.
 			virtual void OnFileChange() {}
+
+			/// Should be called shortly before being destroyed
+			virtual void StopFileManager() {}
 	};
 }
 
