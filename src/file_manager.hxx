@@ -26,6 +26,9 @@ namespace FileManager {
 			/// Any File obtained from get() must be passed to free() exactly once and must never be
 			/// accessed after passing it to free().
 			virtual void free(File) const = 0;
+
+			/// Called by this class when the contents have changed, in cases where monitoring is possible.
+			virtual void OnFileChange() {}
 	};
 }
 
