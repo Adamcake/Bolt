@@ -349,7 +349,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 
 	// array of structures for keeping track of which environment variables we want to set and have already set
 	EnvQueryParam rl_path_param = {.should_set = false, .key = "jar_path"};
-	EnvQueryParam hash_param = {.should_set = false, .key = "hash"};
+	EnvQueryParam id_param = {.should_set = false, .key = "id"};
 	EnvQueryParam scale_param = {.should_set = false, .key = "scale"};
 	EnvQueryParam env_params[] = {
 		{.should_set = false, .prepend_env_key = true, .env_key = "JX_ACCESS_TOKEN=", .key = "jx_access_token"},
@@ -380,7 +380,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 		for (EnvQueryParam& param: env_params) {
 			param.CheckAndUpdate(key, value);
 		}
-		hash_param.CheckAndUpdate(key, value);
+		id_param.CheckAndUpdate(key, value);
 		scale_param.CheckAndUpdate(key, value);
 		rl_path_param.CheckAndUpdate(key, value);
 
@@ -398,8 +398,8 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 	} else {
 		jar_path = this->runelite_path;
 
-		// if there was a "hash" in the query string, we need to save the new jar and hash
-		if (hash_param.should_set) {
+		// if there was an "id" in the query string, we need to save the new jar and hash
+		if (id_param.should_set) {
 			if (post_data == nullptr || post_data->GetElementCount() != 1) {
 				// hash param must be accompanied by POST data containing the file it's a hash of,
 				// so hash but no POST is a bad request
@@ -517,15 +517,15 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 	if (r == 0) {
 		fmt::print("[B] Successfully spawned game process with pid {}\n", pid);
 
-		if (hash_param.should_set) {
+		if (id_param.should_set) {
 			size_t written = 0;
-			int file = open(this->runelite_hash_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+			int file = open(this->runelite_id_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
 			if (file == -1) {
-				const char* data = "OK, but unable to save hash file\n";
+				const char* data = "OK, but unable to save ID file\n";
 				return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
 			}
-			while (written < hash_param.value.size()) {
-				written += write(file, hash_param.value.c_str() + written, hash_param.value.size() - written);
+			while (written < id_param.value.size()) {
+				written += write(file, id_param.value.c_str() + written, id_param.value.size() - written);
 			}
 			close(file);
 		}

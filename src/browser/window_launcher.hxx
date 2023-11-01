@@ -46,7 +46,7 @@ namespace Browser {
 			std::filesystem::path rs3_path;
 			std::filesystem::path rs3_hash_path;
 			std::filesystem::path runelite_path;
-			std::filesystem::path runelite_hash_path;
+			std::filesystem::path runelite_id_path;
 	};
 }
 

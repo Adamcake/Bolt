@@ -98,17 +98,17 @@ Browser::Launcher::Launcher(
 	this->runelite_path = data_dir;
 	this->runelite_path.append("runelite.jar");
 
-	this->runelite_hash_path = data_dir;
-	this->runelite_hash_path.append("runelite.jar.sha256");
+	this->runelite_id_path = data_dir;
+	this->runelite_id_path.append("runelite_id.bin");
 
 	std::ifstream rs_deb_hashfile(this->rs3_hash_path.c_str(), std::ios::in | std::ios::binary);
 	if (!rs_deb_hashfile.fail()) {
 		url << "&rs3_linux_installed_hash=" << rs_deb_hashfile.rdbuf();
 	}
 
-	std::ifstream rl_hashfile(this->runelite_hash_path.c_str(), std::ios::in | std::ios::binary);
+	std::ifstream rl_hashfile(this->runelite_id_path.c_str(), std::ios::in | std::ios::binary);
 	if (!rl_hashfile.fail()) {
-		url << "&runelite_installed_hash=" << rl_hashfile.rdbuf();
+		url << "&runelite_installed_id=" << rl_hashfile.rdbuf();
 	}
 
 	std::ifstream creds_file(this->creds_path.c_str(), std::ios::in | std::ios::binary);
