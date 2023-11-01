@@ -81,7 +81,7 @@ Browser::Launcher::Launcher(
 	std::filesystem::path data_dir
 ): Window(client, details, show_devtools), data_dir(data_dir), file_manager(file_manager) {
 	std::stringstream url;
-	url << this->internal_url << URI;
+	url << this->internal_url << URI << "&flathub=" << BOLT_FLATHUB_BUILD;
 
 	this->creds_path = data_dir;
 	this->creds_path.append("creds");
