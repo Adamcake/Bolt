@@ -177,6 +177,13 @@ if(BOLT_DEV_SHOW_DEVTOOLS)
     target_compile_definitions(bolt PUBLIC BOLT_DEV_SHOW_DEVTOOLS)
 endif()
 
+# flag indicating flathub is creating this build, used only for some minor UI changes
+if(BOLT_FLATHUB_BUILD)
+    target_compile_definitions(bolt PUBLIC BOLT_FLATHUB_BUILD=1)
+else()
+    target_compile_definitions(bolt PUBLIC BOLT_FLATHUB_BUILD=0)
+endif()
+
 # compilation setting for directory-watching for launcher UI
 if(BOLT_DEV_LAUNCHER_DIRECTORY)
     target_compile_definitions(bolt PUBLIC BOLT_DEV_LAUNCHER_DIRECTORY="${BOLT_HTML_DIR}")
