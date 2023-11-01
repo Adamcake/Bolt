@@ -5,7 +5,7 @@ var credentialsAreDirty = false;
 var pendingOauth = null;
 var pendingGameAuth = [];
 var rs3LinuxInstalledHash = null;
-var runeliteInstalledHash = null;
+var runeliteInstalledID = null;
 var config = {};
 var configIsDirty = false;
 var isLoading = true;
@@ -162,7 +162,7 @@ function start(s) {
     const query = new URLSearchParams(window.location.search);
     platform = query.get("platform");
     rs3LinuxInstalledHash = query.get("rs3_linux_installed_hash");
-    runeliteInstalledHash = query.get("runelite_installed_hash");
+    runeliteInstalledID = query.get("runelite_installed_id");
     const creds = query.get("credentials");
     if (creds) {
         try {
@@ -990,10 +990,10 @@ function launchRS3Linux(s, element, jx_access_token, jx_refresh_token, jx_sessio
 function launchRunelite(s, element, jx_access_token, jx_refresh_token, jx_session_id, jx_character_id, jx_display_name) {
     saveConfig();
 
-    const launch = (hash, jar, jar_path) => {
+    const launch = (id, jar, jar_path) => {
         var xml = new XMLHttpRequest();
         var params = {};
-        if (hash) params.hash = hash;
+        if (id) params.id = id;
         if (jar_path) params.jar_path = jar_path;
         if (jx_access_token) params.jx_access_token = jx_access_token;
         if (jx_refresh_token) params.jx_refresh_token = jx_refresh_token;
@@ -1005,8 +1005,8 @@ function launchRunelite(s, element, jx_access_token, jx_refresh_token, jx_sessio
         xml.onreadystatechange = () => {
             if (xml.readyState == 4) {
                 msg(`Game launch status: '${xml.responseText.trim()}'`);
-                if (xml.status == 200 && hash) {
-                    runeliteInstalledHash = hash;
+                if (xml.status == 200 && id) {
+                    runeliteInstalledID = id;
                 }
                 element.disabled = false;
             }
@@ -1020,21 +1020,21 @@ function launchRunelite(s, element, jx_access_token, jx_refresh_token, jx_sessio
     }
 
     var xml = new XMLHttpRequest();
-    const url = "https://raw.githubusercontent.com/flathub/net.runelite.RuneLite/master/net.runelite.RuneLite.json";
+    const url = "https://api.github.com/repos/runelite/launcher/releases";
     xml.open('GET', url, true);
     xml.onreadystatechange = () => {
         if (xml.readyState == 4) {
             if (xml.status == 200) {
-                const runelite = JSON.parse(xml.responseText).modules.find((x) => x.name == "runelite").sources.find((x) => x.type == "file" && x.sha256 && x.url && x.url.startsWith("https://github.com/runelite/launcher/"));
-                if (runelite.sha256 !== runeliteInstalledHash) {
+                const runelite = JSON.parse(xml.responseText).map((x) => x.assets).flat().find((x) => x.name.toLowerCase() == "runelite.jar");
+                if (runelite.id !== runeliteInstalledID) {
                     var m = msg("Downloading RuneLite...");
                     var xml_rl = new XMLHttpRequest();
-                    xml_rl.open('GET', runelite.url, true);
+                    xml_rl.open('GET', runelite.browser_download_url, true);
                     xml_rl.responseType = "arraybuffer";
                     xml_rl.onreadystatechange = () => {
                         if (xml_rl.readyState == 4) {
                             if (xml_rl.status == 200) {
-                                launch(runelite.sha256, xml_rl.response);
+                                launch(runelite.id, xml_rl.response);
                             } else {
                                 err(`Error downloading from ${runelite.url}: ${xml_rl.status}: ${xml_rl.responseText}`);
                                 element.disabled = false;
