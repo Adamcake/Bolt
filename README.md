@@ -2,7 +2,9 @@
 A third-party launcher and helper for your favourite MMO
 
 ## Installing
-For Linux/Steamdeck users, Bolt is available on flatpak: `flatpak install com.adamcake.Bolt`
+For Linux/Steamdeck users, Bolt is available on the following package managers:
+- flatpak: `com.adamcake.Bolt`
+- AUR: `bolt-launcher`
 
 Others should see the "releases" section on the right.
 
@@ -47,6 +49,12 @@ Windows builds have only been tested using Visual Studio 2022 (a.k.a. Visual Stu
 
 ### Mac
 Not yet supported
+
+## Maintenance
+When doing the initial cmake setup step, the following options exist which you may find useful. These are to be used for local development only.
+- `-D BOLT_HTML_DIR=/some/directory`: the location of the launcher's internal webpage content, `html/` by default
+- `-D BOLT_DEV_SHOW_DEVTOOLS=1`: enables chromium developer tools for the launcher
+- `-D BOLT_DEV_LAUNCHER_DIRECTORY=1`: instead of embedding the contents of the html dir into the output executable, the files will be served from disk at runtime; on supported platforms the launcher will automatically reload the page when those files are changed
 
 ## Credit
 Icons - [Kia](https://twitter.com/KiaWildin)  
