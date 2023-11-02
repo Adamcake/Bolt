@@ -101,6 +101,12 @@ Browser::Launcher::Launcher(
 	this->runelite_id_path = data_dir;
 	this->runelite_id_path.append("runelite_id.bin");
 
+	this->hdos_path = data_dir;
+	this->hdos_path.append("hdos.jar");
+
+	this->hdos_version_path = data_dir;
+	this->hdos_version_path.append("hdos_version.bin");
+
 	std::ifstream rs_deb_hashfile(this->rs3_hash_path.c_str(), std::ios::in | std::ios::binary);
 	if (!rs_deb_hashfile.fail()) {
 		url << "&rs3_linux_installed_hash=" << rs_deb_hashfile.rdbuf();
@@ -109,6 +115,11 @@ Browser::Launcher::Launcher(
 	std::ifstream rl_hashfile(this->runelite_id_path.c_str(), std::ios::in | std::ios::binary);
 	if (!rl_hashfile.fail()) {
 		url << "&runelite_installed_id=" << rl_hashfile.rdbuf();
+	}
+
+	std::ifstream hdos_hashfile(this->hdos_version_path.c_str(), std::ios::in | std::ios::binary);
+	if (!hdos_hashfile.fail()) {
+		url << "&hdos_installed_version=" << hdos_hashfile.rdbuf();
 	}
 
 	std::ifstream creds_file(this->creds_path.c_str(), std::ios::in | std::ios::binary);
@@ -254,6 +265,11 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 		// instruction to launch RuneLite.jar
 		if (path == "/launch-runelite-jar") {
 			return this->LaunchRuneliteJar(request, query);
+		}
+
+		// instruction to launch RuneLite.jar
+		if (path == "/launch-hdos-jar") {
+			return this->LaunchHdosJar(request, query);
 		}
 
 		// instruction to save user config file to disk

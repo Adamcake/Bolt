@@ -36,6 +36,7 @@ namespace Browser {
 
 		CefRefPtr<CefResourceRequestHandler> LaunchRs3Deb(CefRefPtr<CefRequest>, std::string_view);
 		CefRefPtr<CefResourceRequestHandler> LaunchRuneliteJar(CefRefPtr<CefRequest>, std::string_view);
+		CefRefPtr<CefResourceRequestHandler> LaunchHdosJar(CefRefPtr<CefRequest>, std::string_view);
 
 		private:
 			const std::string internal_url = "https://bolt-internal/";
@@ -47,6 +48,8 @@ namespace Browser {
 			std::filesystem::path rs3_hash_path;
 			std::filesystem::path runelite_path;
 			std::filesystem::path runelite_id_path;
+			std::filesystem::path hdos_path;
+			std::filesystem::path hdos_version_path;
 	};
 }
 

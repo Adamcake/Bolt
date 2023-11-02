@@ -20,12 +20,13 @@ constexpr char tar_xz_inner_path[] = {
 constexpr char tar_xz_icons_path[] = "./usr/share/icons/";
 
 struct EnvQueryParam {
-	bool should_set = false;
-	bool prepend_env_key;
-	bool allow_override = true;
-	std::string_view env_key;
-	std::string_view key;
-	std::string value;
+	bool should_set = false;    // is this present in the query?
+	bool prepend_env_key;       // prepend this->env_key to the output value (if not overriding by append)?
+	bool allow_override = true; // allow replacement of a variable that's already in the env?
+	bool allow_append = false;  // allow appending to a variable that's already in the env?
+	std::string_view env_key;   // used only if prepend_env_key is true
+	std::string_view key;       // query param, if applicable
+	std::string value;          // output value
 
 	// Compares `key` to `key_name`, setting `out` to `prepend`+`value` and setting `should_set` to `true` if
 	// they match, or altering nothing otherwise (including `should_set`).
@@ -288,6 +289,9 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<C
 			if (param.should_set && strncmp(environ[i], param.env_key.data(), param.env_key.size()) == 0) {
 				param.should_set = false;
 				use_default = false;
+				if (param.allow_append) {
+					param.value = std::string(param.env_key) + std::string(environ[i] + param.env_key.size()) + ' ' + (param.value.data() + param.env_key.size());
+				}
 				env[i] = param.value.data();
 				break;
 			}
@@ -490,6 +494,9 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 			if (param.should_set && strncmp(environ[i], param.env_key.data(), param.env_key.size()) == 0) {
 				param.should_set = false;
 				use_default = false;
+				if (param.allow_append) {
+					param.value = std::string(param.env_key) + std::string(environ[i] + param.env_key.size()) + ' ' + (param.value.data() + param.env_key.size());
+				}
 				env[i] = param.value.data();
 				break;
 			}
@@ -526,6 +533,194 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 			}
 			while (written < id_param.value.size()) {
 				written += write(file, id_param.value.c_str() + written, id_param.value.size() - written);
+			}
+			close(file);
+		}
+
+		const char* data = "OK\n";
+		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
+	} else {
+		// posix_spawn failed - this is extremely unlikely to happen in the field, since the only failure
+		// case is EINVAL, which would indicate a trivial mistake in writing this function
+		fmt::print("[B] Error from posix_spawn: {}\n", strerror(r));
+		const char* data = "Error spawning process\n";
+		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 500, "text/plain");
+	}
+}
+
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<CefRequest> request, std::string_view query) {
+	const CefRefPtr<CefPostData> post_data = request->GetPostData();
+
+	const std::string user_home = this->data_dir.string();
+	const char* home_ = "HOME=";
+	const std::string env_home = home_ + user_home;
+	const std::string_view env_key_home = std::string_view(env_home.begin(), env_home.begin() + strlen(home_));
+
+	const char* java_options_ = "_JAVA_OPTIONS=";
+	const std::string env_java_options = std::string(java_options_) + "-Duser.home=" + user_home;
+	const std::string_view env_key_java_options = std::string_view(env_java_options.begin(), env_java_options.begin() + strlen(java_options_));
+
+	// array of structures for keeping track of which environment variables we want to set and have already set
+	EnvQueryParam version_param = {.should_set = false, .key = "version"};
+	EnvQueryParam env_params[] = {
+		{.should_set = false, .prepend_env_key = true, .env_key = "JX_ACCESS_TOKEN=", .key = "jx_access_token"},
+		{.should_set = false, .prepend_env_key = true, .env_key = "JX_REFRESH_TOKEN=", .key = "jx_refresh_token"},
+		{.should_set = false, .prepend_env_key = true, .env_key = "JX_SESSION_ID=", .key = "jx_session_id"},
+		{.should_set = false, .prepend_env_key = true, .env_key = "JX_CHARACTER_ID=", .key = "jx_character_id"},
+		{.should_set = false, .prepend_env_key = true, .env_key = "JX_DISPLAY_NAME=", .key = "jx_display_name"},
+		{.should_set = true, .prepend_env_key = false, .allow_override = false, .env_key = env_key_home, .value = env_home},
+		{.should_set = true, .prepend_env_key = false, .allow_override = false, .allow_append = true, .env_key = env_key_java_options, .value = env_java_options},
+	};
+	const size_t env_param_count = sizeof(env_params) / sizeof(env_params[0]);
+
+	// loop through and parse the query string from the HTTP request we intercepted
+	size_t cursor = 0;
+	while (true) {
+		const std::string::size_type next_eq = query.find_first_of('=', cursor);
+		const std::string::size_type next_amp = query.find_first_of('&', cursor);
+		if (next_eq == std::string::npos) break;
+		if (next_eq >= next_amp) {
+			// found an invalid query param with no '=' in it - skip this
+			cursor = next_amp + 1;
+			continue;
+		}
+
+		// parse the next "key" and "value" from the query, then check if it's relevant to us
+		const std::string_view key(query.begin() + cursor, query.begin() + next_eq);
+		const auto value_end = next_amp == std::string::npos ? query.end() : query.begin() + next_amp;
+		const CefString value = std::string(std::string_view(query.begin() + next_eq + 1,  value_end));
+		for (EnvQueryParam& param: env_params) {
+			param.CheckAndUpdate(key, value);
+		}
+		version_param.CheckAndUpdate(key, value);
+
+		// if there are no more instances of '&', we've read the last param, so stop here
+		// otherwise continue from the next '&'
+		if (next_amp == std::string::npos) break;
+		cursor = next_amp + 1;
+	}
+
+	// if there was a "version" in the query string, we need to save the new jar and hash
+	if (version_param.should_set) {
+		if (post_data == nullptr || post_data->GetElementCount() != 1) {
+			// hash param must be accompanied by POST data containing the file it's a hash of,
+			// so hash but no POST is a bad request
+			const char* data = "Bad Request";
+			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+		}
+
+		CefPostData::ElementVector vec;
+		post_data->GetElements(vec);
+		size_t jar_size = vec[0]->GetBytesCount();
+		unsigned char* jar = new unsigned char[jar_size];
+		vec[0]->GetBytes(jar_size, jar);
+
+		size_t written = 0;
+		int file = open(this->hdos_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0755);
+		if (file == -1) {
+			// failed to open game binary file on disk - probably in use or a permissions issue
+			delete[] jar;
+			const char* data = "Failed to save JAR; if the game is already running, close it and try again\n";
+			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 500, "text/plain");
+		}
+		while (written < jar_size) {
+			written += write(file, jar + written, jar_size - written);
+		}
+		close(file);
+		delete[] jar;
+	}
+
+	// count how many env vars we have - we need to do this every time as CEF or other modules
+	// may call setenv and unsetenv
+	char** e;
+	for (e = environ; *e; e += 1);
+	size_t env_count = e - environ;
+
+	// set up some structs needed by posix_spawn, and our modified env array
+	const char* java_home = getenv("JAVA_HOME");
+	std::string java_home_str;
+	sigset_t set;
+	sigfillset(&set);
+	posix_spawn_file_actions_t file_actions;
+	posix_spawnattr_t attributes;
+	pid_t pid;
+	posix_spawn_file_actions_init(&file_actions);
+	posix_spawnattr_init(&attributes);
+	posix_spawnattr_setsigdefault(&attributes, &set);
+	posix_spawnattr_setpgroup(&attributes, 0);
+	posix_spawnattr_setflags(&attributes, POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_SETSIGMASK);
+	std::string path_str = this->hdos_path.string();
+
+	char* argv[6];
+	size_t argv_offset;
+	char arg_env[] = "/usr/bin/env";
+	char arg_java[] = "java";
+	char arg_jar[] = "-jar";
+	std::string arg_home = "-Duser.home=" + user_home;
+	if (java_home) {
+		java_home_str = std::string(java_home) + "/bin/java";
+		argv[1] = java_home_str.data();
+		argv_offset = 1;
+	} else {
+		argv[0] = arg_env;
+		argv[1] = arg_java;
+		argv_offset = 0;
+	}
+	argv[2] = arg_home.data();
+	argv[3] = arg_jar;
+	argv[4] = path_str.data();
+	argv[5] = nullptr;
+
+	char** env = new char*[env_count + env_param_count + 1];
+
+	// first, loop through the existing env vars
+	// if its key is one we want to set, overwrite it, otherwise copy the pointer as-is
+	size_t i;
+	for (i = 0; i < env_count; i += 1) {
+		bool use_default = true;
+		for (EnvQueryParam& param: env_params) {
+			if (param.should_set && strncmp(environ[i], param.env_key.data(), param.env_key.size()) == 0) {
+				param.should_set = false;
+				use_default = false;
+				if (param.allow_append) {
+					param.value = std::string(param.env_key) + std::string(environ[i] + param.env_key.size()) + ' ' + (param.value.data() + param.env_key.size());
+				}
+				env[i] = param.value.data();
+				break;
+			}
+		}
+		if (use_default) {
+			env[i] = environ[i];
+		}
+	}
+	// ... next, look for any env vars we want to set that we haven't already, and put them at the end...
+	for (EnvQueryParam& param: env_params) {
+		if (param.should_set) {
+			env[i] = param.value.data();
+			i += 1;
+		}
+	}
+	// ... and finally null-terminate the list as required by POSIX
+	env[i] = nullptr;
+
+	int r = posix_spawn(&pid, argv[argv_offset], &file_actions, &attributes, argv + argv_offset, env);
+	
+	posix_spawnattr_destroy(&attributes);
+	posix_spawn_file_actions_destroy(&file_actions);
+	delete[] env;
+
+	if (r == 0) {
+		fmt::print("[B] Successfully spawned game process with pid {}\n", pid);
+
+		if (version_param.should_set) {
+			size_t written = 0;
+			int file = open(this->hdos_version_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+			if (file == -1) {
+				const char* data = "OK, but unable to save ID file\n";
+				return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
+			}
+			while (written < version_param.value.size()) {
+				written += write(file, version_param.value.c_str() + written, version_param.value.size() - written);
 			}
 			close(file);
 		}
