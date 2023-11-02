@@ -6,9 +6,11 @@ var pendingOauth = null;
 var pendingGameAuth = [];
 var rs3LinuxInstalledHash = null;
 var runeliteInstalledID = null;
+var hdosInstalledVersion = null;
 var config = {};
 var configIsDirty = false;
 var isLoading = true;
+var isFlathub = null;
 
 // globally-available root elements
 var messages = document.createElement("ul");
@@ -161,8 +163,10 @@ function start(s) {
 
     const query = new URLSearchParams(window.location.search);
     platform = query.get("platform");
+    isFlathub = query.get("flathub") || false;
     rs3LinuxInstalledHash = query.get("rs3_linux_installed_hash");
     runeliteInstalledID = query.get("runelite_installed_id");
+    hdosInstalledVersion = query.get("hdos_installed_version");
     const creds = query.get("credentials");
     if (creds) {
         try {
@@ -887,10 +891,13 @@ function generateAccountSelection(f, game_account_select, game_select, launch_ga
 // 2. a HTML Button element, which should be passed to parameter 1 when invoking it, or, if not
 //    invoking the callback for some reason, then set disabled=false on parameter 2 before returning
 // 3. a HTML Option element, representing the currently selected game account
+// 4. the "Basic" auth header used for legacy-style logins to this game
 function generateLaunchButtonsRs3(f, opt, target) {
+    const basic_auth = "Basic Y29tX2phZ2V4X2F1dGhfZGVza3RvcF9yczpwdWJsaWM=";
+
     if (platform === "linux") {
         var rs3_linux = document.createElement("button");
-        rs3_linux.onclick = () => { rs3_linux.disabled = true; f(launchRS3Linux, rs3_linux, opt, "Basic Y29tX2phZ2V4X2F1dGhfZGVza3RvcF9yczpwdWJsaWM="); };
+        rs3_linux.onclick = () => { rs3_linux.disabled = true; f(launchRS3Linux, rs3_linux, opt, basic_auth); };
         rs3_linux.innerText = "Launch RS3";
         target.appendChild(rs3_linux);
     }
@@ -902,11 +909,19 @@ function generateLaunchButtonsRs3(f, opt, target) {
 // 2. a HTML Button element, which should be passed to parameter 1 when invoking it, or, if not
 //    invoking the callback for some reason, then set disabled=false on parameter 2 before returning
 // 3. a HTML Option element, representing the currently selected game account
+// 4. the "Basic" auth header used for legacy-style logins to this game
 function generateLaunchButtonsOsrs(f, opt, target) {
-    var rl_linux = document.createElement("button");
-    rl_linux.onclick = () => { rl_linux.disabled = true; f(launchRunelite, rl_linux, opt, "Basic Y29tX2phZ2V4X2F1dGhfZGVza3RvcF9vc3JzOnB1YmxpYw=="); };
-    rl_linux.innerText = "Launch Runelite";
-    target.appendChild(rl_linux);
+    const basic_auth = "Basic Y29tX2phZ2V4X2F1dGhfZGVza3RvcF9vc3JzOnB1YmxpYw==";
+
+    var rl = document.createElement("button");
+    rl.onclick = () => { rl.disabled = true; f(launchRunelite, rl, opt, basic_auth); };
+    rl.innerText = "Launch Runelite";
+    target.appendChild(rl);
+
+    var hdos = document.createElement("button");
+    hdos.onclick = () => { hdos.disabled = true; f(launchHdos, hdos, opt, basic_auth); };
+    hdos.innerText = "Launch HDOS";
+    target.appendChild(hdos);
 }
 
 // asynchronously download and launch RS3's official .deb client using the given env variables
@@ -985,7 +1000,7 @@ function launchRS3Linux(s, element, jx_access_token, jx_refresh_token, jx_sessio
     xml.send();
 }
 
-// locate runelite's .jar either from the user's config or by downloading and caching from flatpak,
+// locate runelite's .jar either from the user's config or by parsing github releases,
 // then attempt to launch it with the given env variables
 function launchRunelite(s, element, jx_access_token, jx_refresh_token, jx_session_id, jx_character_id, jx_display_name) {
     saveConfig();
@@ -1049,6 +1064,88 @@ function launchRunelite(s, element, jx_access_token, jx_refresh_token, jx_sessio
                     xml_rl.send();
                 } else {
                     msg("Latest JAR is already installed");
+                    launch();
+                }
+            } else {
+                err(`Error from ${url}: ${xml.status}: ${xml.responseText}`, false);
+                element.disabled = false;
+            }
+        }
+    }
+    xml.send();
+}
+
+// locate hdos's .jar from their CDN, then attempt to launch it with the given env variables
+function launchHdos(s, element, jx_access_token, jx_refresh_token, jx_session_id, jx_character_id, jx_display_name) {
+    saveConfig();
+
+    const launch = (version, jar) => {
+        var xml = new XMLHttpRequest();
+        var params = {};
+        if (version) params.version = version;
+        if (jx_access_token) params.jx_access_token = jx_access_token;
+        if (jx_refresh_token) params.jx_refresh_token = jx_refresh_token;
+        if (jx_session_id) params.jx_session_id = jx_session_id;
+        if (jx_character_id) params.jx_character_id = jx_character_id;
+        if (jx_display_name) params.jx_display_name = jx_display_name;
+        xml.open('POST', "/launch-hdos-jar?".concat(new URLSearchParams(params)), true);
+        xml.onreadystatechange = () => {
+            if (xml.readyState == 4) {
+                msg(`Game launch status: '${xml.responseText.trim()}'`);
+                if (xml.status == 200 && version) {
+                    hdosInstalledVersion = version;
+                }
+                element.disabled = false;
+            }
+        };
+        xml.send(jar);
+    };
+
+    // On Java 17+, the HDOS launcher passes "--add-opens java.desktop/java.awt=ALL-UNNAMED" as a single
+    // command-line arg. That's not two args, it's one one huge single arg which happens to have a space
+    // in it. This causes Java to produce an error because args don't work like that. If HDOS ever fixes
+    // their config, remove this error.
+    if (isFlathub) {
+        err("NOTE: HDOS is unlikely to work with Java 17+, please go and tell the HDOS devs to fix their getdown config if it doesn't work.");
+    }
+
+    var xml = new XMLHttpRequest();
+    const url = "https://cdn.hdos.dev/client/getdown.txt";
+    xml.open('GET', url, true);
+    xml.onreadystatechange = () => {
+        if (xml.readyState == 4) {
+            if (xml.status == 200) {
+                const version_regex = xml.responseText.match(/^launcher\.version *= *(.*?)$/m);
+                if (version_regex || version_regex.length == 2) {
+                    const latest_version = version_regex[1];
+                    if (latest_version !== hdosInstalledVersion) {
+                        const jar_url = `https://cdn.hdos.dev/launcher/v${latest_version}/hdos-launcher.jar`;
+                        var m = msg("Downloading HDOS...");
+                        var xml_hdos = new XMLHttpRequest();
+                        xml_hdos.open('GET', jar_url, true);
+                        xml_hdos.responseType = "arraybuffer";
+                        xml_hdos.onreadystatechange = () => {
+                            if (xml_hdos.readyState == 4) {
+                                if (xml_hdos.status == 200) {
+                                    launch(latest_version, xml_hdos.response);
+                                } else {
+                                    err(`Error downloading from ${runelite.url}: ${xml_hdos.status}: ${xml_hdos.responseText}`);
+                                    element.disabled = false;
+                                }
+                            }
+                        };
+                        xml_hdos.onprogress = (e) => {
+                            if (e.loaded && e.lengthComputable) {
+                                m.innerText = `Downloading HDOS... ${(Math.round(1000.0 * e.loaded / e.total) / 10.0).toFixed(1)}%`;
+                            }
+                        };
+                        xml_hdos.send();
+                    } else {
+                        msg("Latest JAR is already installed");
+                        launch();
+                    }
+                } else {
+                    msg("Couldn't parse latest launcher version");
                     launch();
                 }
             } else {
