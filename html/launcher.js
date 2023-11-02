@@ -163,7 +163,7 @@ function start(s) {
 
     const query = new URLSearchParams(window.location.search);
     platform = query.get("platform");
-    isFlathub = query.get("flathub") || false;
+    isFlathub = query.get("flathub") != "0";
     rs3LinuxInstalledHash = query.get("rs3_linux_installed_hash");
     runeliteInstalledID = query.get("runelite_installed_id");
     hdosInstalledVersion = query.get("hdos_installed_version");
