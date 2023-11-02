@@ -377,7 +377,7 @@ function start(s) {
     runeliteCustomJarSelect.disabled = !runeliteUseCustomJar.checked;
 
     var runeliteScaleLabel = document.createElement("label");
-    runeliteScaleLabel.innerText = "Scale: ";
+    runeliteScaleLabel.innerText = "RuneLite scale setting: ";
     runeliteScaleLabel.for = runeliteScale;
 
     runeliteUseScale.type = "checkbox";
