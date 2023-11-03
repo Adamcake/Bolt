@@ -86,7 +86,8 @@ if(NOT WIN32)
     endif()
 
     # Short shell script to be installed in /usr/local/bin, gets renamed to "bolt" later
-    file(GENERATE OUTPUT bolt-run.sh CONTENT "#!/bin/sh -eu\ncd ${CMAKE_INSTALL_PREFIX}/opt/bolt-launcher\nexec ./bolt \"$@\"\n")
+    file(RELATIVE_PATH BOLT_SCRIPT_CD_PATH "${CMAKE_INSTALL_PREFIX}/${BOLT_BINDIR}" "${CMAKE_INSTALL_PREFIX}/opt/bolt-launcher")
+    file(GENERATE OUTPUT bolt-run.sh CONTENT "#!/bin/sh -eu\ncd \"$(dirname \"$0\")/${BOLT_SCRIPT_CD_PATH}\"\nexec ./bolt \"$@\"\n")
 
     # auto-generated helper for running from build dir; this file does not get installed
     file(GENERATE OUTPUT bolt.sh CONTENT "#!/bin/sh -eu\nexport XDG_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/config\nexport XDG_DATA_HOME=${CMAKE_CURRENT_BINARY_DIR}/data\ncd ${CMAKE_CURRENT_BINARY_DIR}/opt/bolt-launcher\nexec ./bolt \"$@\"\n" FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
