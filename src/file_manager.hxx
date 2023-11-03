@@ -13,8 +13,8 @@ namespace FileManager {
 		/// Number of bytes in contents
 		size_t size;
 
-		/// MIME type of this file - not initialised if contents is nullptr
-		CefString mime_type;
+		/// MIME type of this file - not initialised if `contents` is nullptr
+		const char* mime_type;
 	};
 
 	class FileManager: public CefBaseRefCounted {

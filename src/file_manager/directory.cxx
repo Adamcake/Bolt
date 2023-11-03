@@ -1,6 +1,5 @@
 #include "directory.hxx"
-
-#include "include/cef_parser.h"
+#include "../mime.hxx"
 
 #include <fmt/core.h>
 #include <fstream>
@@ -64,10 +63,16 @@ FileManager::File FileManager::Directory::get(std::string_view uri) const {
 		delete[] buffer;
 		return File { .contents = nullptr, .size = 0 };
 	}
+	const char* mime_type = GetMimeType(path);
+	if (!mime_type) {
+		fmt::print("ERROR: unknown file extension \"{}\" ({}), please add it to mime.cxx and rebuild\n", path.extension().c_str(), path.c_str());
+		delete[] buffer;
+		return File { .contents = nullptr, .size = 0 };
+	}
 	return File {
 		.contents = reinterpret_cast<unsigned char*>(buffer),
 		.size = size,
-		.mime_type = CefGetMimeType(path.string())
+		.mime_type = mime_type
 	};
 }
 

@@ -11,9 +11,9 @@ namespace Browser {
 	/// https://github.com/chromiumembedded/cef/blob/5735/include/cef_resource_request_handler.h
 	/// https://github.com/chromiumembedded/cef/blob/5735/include/cef_resource_handler.h
 	struct ResourceHandler: public CefResourceRequestHandler, CefResourceHandler {
-		ResourceHandler(const unsigned char* data, size_t len, int status, CefString mime):
+		ResourceHandler(const unsigned char* data, size_t len, int status, const char* mime):
 			data(data), data_len(len), status(status), mime(mime), has_location(false), cursor(0), file_manager(nullptr) { }
-		ResourceHandler(const unsigned char* data, size_t len, int status, CefString mime, CefString location):
+		ResourceHandler(const unsigned char* data, size_t len, int status, const char* mime, CefString location):
 			data(data), data_len(len), status(status), mime(mime), location(location), has_location(true), cursor(0), file_manager(nullptr) { }
 		
 		/// This constructor assumes the file does exist i.e. all params are initialised, and status will be 200
@@ -28,14 +28,14 @@ namespace Browser {
 		CefRefPtr<CefResourceHandler> GetResourceHandler(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, CefRefPtr<CefRequest>) override;
 
 		protected:
-			ResourceHandler(CefString mime): cursor(0), has_location(false), mime(mime) { }
+			ResourceHandler(const char* mime): cursor(0), has_location(false), mime(mime) { }
 
 			void finish();
 
 			const unsigned char* data;
 			size_t data_len;
 			int status;
-			CefString mime;
+			const char* mime;
 			CefString location;
 			bool has_location;
 			size_t cursor;

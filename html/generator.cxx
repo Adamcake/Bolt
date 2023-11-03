@@ -1,3 +1,5 @@
+#include "../src/mime.hxx"
+
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -61,7 +63,13 @@ int main(int argc, const char** argv) {
         if (i != 0) {
             std::cout << ",";
         }
-        std::cout << "{\"" << uri_name << "\", File {.contents = _" << i << ", .size = " << file.size << ", .mime_type = CefGetMimeType(\"" << uri_name << "\")}}";
+        std::filesystem::path path(uri_name);
+        const char* mime_type = GetMimeType(path);
+        if (!mime_type) {
+            std::cerr << "ERROR: unknown file extension \"" << path.extension().c_str() << "\" (" << uri_name << "), please add it to mime.cxx and rebuild" << std::endl;
+            return 3;
+        }
+        std::cout << "{\"" << uri_name << "\", File {.contents = _" << i << ", .size = " << file.size << ", .mime_type = \"" << mime_type << "\"}}";
         i += 1;
     }
     std::cout << "}){}" << std::endl;

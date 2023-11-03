@@ -131,7 +131,7 @@ add_custom_command(
 
 # compile the generator for embedded launcher file contents
 if(NOT BOLT_DEV_LAUNCHER_DIRECTORY)
-    add_executable(html_gen html/generator.cxx)
+    add_executable(html_gen html/generator.cxx src/mime.cxx)
     set_target_properties(html_gen PROPERTIES CXX_STANDARD 20 CXX_EXTENSIONS OFF)
     file(GLOB_RECURSE BOLT_HTML_FILE_LIST FOLLOW_SYMLINKS LIST_DIRECTORIES false CONFIGURE_DEPENDS "${BOLT_HTML_DIR}/*")
     add_custom_command(
@@ -146,7 +146,7 @@ endif()
 add_executable(bolt
     modules/fmt/src/format.cc src/main.cxx src/browser.cxx src/browser/app.cxx src/browser/client.cxx
     src/browser/resource_handler.cxx src/browser/window_launcher.cxx ${WINDOW_LAUNCHER_OS_SPECIFIC}
-    src/file_manager/directory.cxx client_cmake_gen.cxx ${BOLT_FILE_MANAGER_LAUNCHER_GEN}
+    src/mime.cxx src/file_manager/directory.cxx client_cmake_gen.cxx ${BOLT_FILE_MANAGER_LAUNCHER_GEN}
 )
 
 # Various build properties
