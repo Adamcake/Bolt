@@ -26,13 +26,7 @@ bool Browser::Window::IsLauncher() const {
 void Browser::Window::Init(CefRefPtr<CefClient> client, Browser::Details details, CefString url, bool show_devtools) {
 	CefBrowserSettings browser_settings;
 	browser_settings.background_color = CefColorSetARGB(0, 0, 0, 0);
-	if (details.controls_overlay) {
-		CefRefPtr<CefDictionaryValue> dict = CefDictionaryValue::Create();
-		dict->SetString("BoltAppUrl", url);
-		this->browser_view = CefBrowserView::CreateBrowserView(client, "https://bolt-internal/frame.html", browser_settings, std::move(dict), nullptr, this);
-	} else {
-		this->browser_view = CefBrowserView::CreateBrowserView(client, url, browser_settings, nullptr, nullptr, this);
-	}
+	this->browser_view = CefBrowserView::CreateBrowserView(client, url, browser_settings, nullptr, nullptr, this);
 	CefWindow::CreateTopLevelWindow(this);
 }
 
@@ -125,7 +119,6 @@ CefRefPtr<CefBrowserViewDelegate> Browser::Window::GetDelegateForPopupBrowserVie
 		.center_on_open = !this->popup_features.xSet || !this->popup_features.ySet,
 		.resizeable = true,
 		.frame = true,
-		.controls_overlay = false,
 		.is_devtools = is_devtools,
 	};
 	this->pending_child = new Browser::Window(this->client, details, this->show_devtools);

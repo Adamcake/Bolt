@@ -17,7 +17,6 @@ namespace Browser {
 		bool center_on_open; // startx and starty will be ignored if center_on_open is true
 		bool resizeable;
 		bool frame;
-		bool controls_overlay;
 		bool is_devtools = false;
 	};
 

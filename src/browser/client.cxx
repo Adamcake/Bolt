@@ -25,7 +25,6 @@ constexpr Browser::Details LAUNCHER_DETAILS = {
 	.center_on_open = true,
 	.resizeable = true,
 	.frame = true,
-	.controls_overlay = false,
 };
 
 Browser::Client::Client(CefRefPtr<Browser::App> app,std::filesystem::path config_dir, std::filesystem::path data_dir):
