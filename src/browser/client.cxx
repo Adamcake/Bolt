@@ -80,9 +80,11 @@ void Browser::Client::OnWindowCreated(CefRefPtr<CefWindow> window) {
 	window->SetWindowAppIcon(image_big);
 
 #if defined(CEF_X11)
+	// note: the wm_class array includes a '\0' at the end, which should not be included in the actual WM_CLASS
 	constexpr char wm_class[] = "BoltLauncher\0BoltLauncher";
+	constexpr size_t wm_class_size = sizeof(wm_class) - 1;
 	const unsigned long handle = window->GetWindowHandle();
-	xcb_change_property(this->xcb, XCB_PROP_MODE_REPLACE, handle, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, sizeof(wm_class), wm_class);
+	xcb_change_property(this->xcb, XCB_PROP_MODE_REPLACE, handle, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, wm_class_size, wm_class);
 	xcb_flush(this->xcb);
 #endif
 }
