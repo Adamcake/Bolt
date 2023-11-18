@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.21) # Minimum CEF requirement, but building with the latest cmake is strongly recommended
 project(Bolt VERSION 0.4 LANGUAGES C CXX)
+
+# e.g. becomes "libbolt-overlay.so" on linux
+set(BOLT_OVERLAY_NAME "bolt-overlay")
+
 if(NOT WIN32)
     # name of application in metadata, defaulting to "BoltLauncher", but usually overridden to "com.adamcake.Bolt" by flatpak for example
     if(NOT BOLT_META_NAME)
@@ -81,6 +85,11 @@ if(NOT WIN32)
         set(BOLT_BINDIR usr/local/bin)
     endif()
 
+    # as above but lib instead of bin
+    if(NOT BOLT_LIBDIR)
+        set(BOLT_LIBDIR usr/local/lib)
+    endif()
+
     # defines DESTINATION of metadata like icons (relative to CMAKE_INSTALL_PREFIX, unless set to an absolute path)
     if(NOT BOLT_SHAREDIR)
         set(BOLT_SHAREDIR usr/local/share)
@@ -91,7 +100,22 @@ if(NOT WIN32)
     file(GENERATE OUTPUT bolt-run.sh CONTENT "#!/bin/sh -eu\ncd \"$(dirname \"$0\")/${BOLT_SCRIPT_CD_PATH}\"\nexec ./bolt \"$@\"\n")
 
     # auto-generated helper for running from build dir; this file does not get installed
-    file(GENERATE OUTPUT bolt.sh CONTENT "#!/bin/sh -eu\nexport XDG_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/config\nexport XDG_DATA_HOME=${CMAKE_CURRENT_BINARY_DIR}/data\ncd ${CMAKE_CURRENT_BINARY_DIR}/opt/bolt-launcher\nexec ./bolt \"$@\"\n" FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+    # appends to LD_LIBRARY_PATH only if the overlay library is being built, otherwise the dir won't exist
+    if(NOT BOLT_SKIP_LIBRARIES)
+        set(BOLT_OVERLAY_LIB_EXPORT "export LD_LIBRARY_PATH=\${LD_LIBRARY_PATH:+\${LD_LIBRARY_PATH}:}${CMAKE_CURRENT_BINARY_DIR}/${BOLT_LIBDIR}")
+    endif()
+    string(JOIN "\n" BOLT_STAGING_SCRIPT
+        "#!/bin/sh -eu"
+        "# This is a helper script for running a staging build, i.e. a build that has been installed in this directory."
+        "# This script will not be installed anywhere by `cmake --install`, as it's for development/staging purposes only."
+        "${BOLT_OVERLAY_LIB_EXPORT}"
+        "export XDG_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/config"
+        "export XDG_DATA_HOME=${CMAKE_CURRENT_BINARY_DIR}/data"
+        "cd ${CMAKE_CURRENT_BINARY_DIR}/opt/bolt-launcher"
+        "exec ./bolt \"$@\""
+        ""
+    )
+    file(GENERATE OUTPUT bolt.sh CONTENT ${BOLT_STAGING_SCRIPT} FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 endif()
 
 # Generate compile_commands.json, for use by language servers for highlighting/autocomplete/etc
@@ -208,6 +232,15 @@ if(APPLE)
 else()
     install(TARGETS bolt DESTINATION opt/bolt-launcher)
     install(DIRECTORY "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/" "${CEF_ROOT}/Resources/" DESTINATION opt/bolt-launcher USE_SOURCE_PERMISSIONS)
+endif()
+
+# Build helper libraries
+if(NOT BOLT_SKIP_LIBRARIES)
+    if(UNIX AND NOT APPLE)
+        add_library(${BOLT_OVERLAY_NAME} SHARED src/library/so/main.c src/library/gl.c)
+        install(TARGETS ${BOLT_OVERLAY_NAME} DESTINATION "${BOLT_LIBDIR}")
+        target_compile_definitions(bolt PUBLIC BOLT_LIB_NAME="${BOLT_OVERLAY_NAME}")
+    endif()
 endif()
 
 # Finally, install shell script and metadata
