@@ -10,45 +10,56 @@ struct GLList contexts = {0};
 _Thread_local struct GLContext* current_context = NULL;
 
 #define LIST_GROWTH_STEP 256
+#define PTR_LIST_CAPACITY 256*256
 #define CONTEXTS_CAPACITY 64 // not growable so we just have to hard-code a number and hope it's enough forever
 
 #define MAKE_GETTERS(STRUCT, NAME, ID_TYPE) \
 struct STRUCT* _bolt_find_##NAME(struct GLList* list, ID_TYPE id) { \
+    struct STRUCT** pointer_cache = list->pointers; \
     if (id == 0) return NULL; \
+    uint8_t cacheable = (id < PTR_LIST_CAPACITY); \
+    if (cacheable && pointer_cache[id] != NULL) return pointer_cache[id]; \
     for (size_t i = 0; i < list->capacity; i += 1) { \
         struct STRUCT* ptr = &((struct STRUCT*)(list->data))[i]; \
         if (ptr->id == id) { \
+            if (cacheable) pointer_cache[id] = ptr; \
             return ptr; \
         } \
     } \
     return NULL; \
 } \
 struct STRUCT* _bolt_get_##NAME(struct GLList* list, ID_TYPE id) { \
+    struct STRUCT** pointer_cache = list->pointers; \
     if (id == 0) return NULL; \
-    struct STRUCT* first_zero = NULL; \
+    uint8_t cacheable = (id < PTR_LIST_CAPACITY); \
+    if (cacheable && pointer_cache[id] != NULL) return pointer_cache[id]; \
     for (size_t i = 0; i < list->capacity; i += 1) { \
         struct STRUCT* ptr = &((struct STRUCT*)(list->data))[i]; \
         if (ptr->id == id) { \
+            if (cacheable) pointer_cache[id] = ptr; \
             return ptr; \
-        } else if (ptr->id == 0) { \
-            first_zero = ptr; \
         } \
     } \
-    if (first_zero) { \
-        first_zero->id = id; \
-        return first_zero; \
-    } else { \
+    if (list->first_empty >= list->capacity) { \
         size_t old_capacity = list->capacity; \
         list->capacity += LIST_GROWTH_STEP; \
         struct STRUCT* new_ptr = calloc(list->capacity, sizeof(struct STRUCT)); \
         memcpy(new_ptr, list->data, old_capacity * sizeof(struct STRUCT)); \
-        new_ptr[old_capacity].id = id; \
         free(list->data); \
         list->data = new_ptr; \
-        return &new_ptr[old_capacity]; \
+        memset(pointer_cache, 0, sizeof(struct STRUCT*) * PTR_LIST_CAPACITY); \
     } \
+    struct STRUCT* ptr = &((struct STRUCT*)(list->data))[list->first_empty]; \
+    pointer_cache[id] = ptr; \
+    ptr->id = id; \
+    struct STRUCT* inc_ptr = ptr; \
+    while (list->first_empty < PTR_LIST_CAPACITY && inc_ptr->id != 0) { \
+        inc_ptr += 1; \
+        list->first_empty += 1; \
+    } \
+    return ptr; \
 }
-MAKE_GETTERS(GLArrayBuffer, array, unsigned int)
+MAKE_GETTERS(GLArrayBuffer, buffer, unsigned int)
 MAKE_GETTERS(GLProgram, program, unsigned int)
 MAKE_GETTERS(GLTexture2D, texture, unsigned int)
 
@@ -108,14 +119,14 @@ void _bolt_destroy_context(void* egl_context) {
     }
 }
 
-struct GLArrayBuffer* _bolt_get_buffer_internal(struct GLContext* context, uint32_t target, uint8_t create) {
+struct GLArrayBuffer* _bolt_context_get_buffer_internal(struct GLContext* context, uint32_t target, uint8_t create) {
     switch (target) {
         case GL_ARRAY_BUFFER:
-            if (create) return _bolt_get_array(context->shared_arrays, context->arrays.current);
-            else return _bolt_find_array(context->shared_arrays, context->arrays.current);
+            if (create) return _bolt_get_buffer(context->shared_buffers, context->bound_vertex_array_id);
+            else return _bolt_find_buffer(context->shared_buffers, context->bound_vertex_array_id);
         case GL_ELEMENT_ARRAY_BUFFER:
-            if (create) return _bolt_get_array(context->shared_element_arrays, context->element_arrays.current);
-            else return _bolt_find_array(context->shared_element_arrays, context->element_arrays.current);
+            if (create) return _bolt_get_buffer(context->shared_buffers, context->bound_element_array_id);
+            else return _bolt_find_buffer(context->shared_buffers, context->bound_element_array_id);
         default:
             return NULL;
     }
@@ -124,20 +135,13 @@ struct GLArrayBuffer* _bolt_get_buffer_internal(struct GLContext* context, uint3
 // gets pointer to the current active buffer or makes a new one if one doesn't already exist
 // can still return NULL if `target` is a value irrelevant to this program, or there is no space left for buffers
 struct GLArrayBuffer* _bolt_context_get_buffer(struct GLContext* context, uint32_t target) {
-    return _bolt_get_buffer_internal(context, target, 1);
+    struct GLArrayBuffer* a = _bolt_context_get_buffer_internal(context, target, 1);
+    return a;
 }
 
 // gets a pointer to the current active buffer of the given type, or returns NULL if there isn't one
 struct GLArrayBuffer* _bolt_context_find_buffer(struct GLContext* context, uint32_t target) {
-    return _bolt_get_buffer_internal(context, target, 0);
-}
-
-// gets a pointer to the specific named buffer, or returns NULL if it isn't tracked
-// note: there's no "get" equivalent of this function because it wouldn't know which list to create it in
-struct GLArrayBuffer* _bolt_context_find_named_buffer(struct GLContext* context, unsigned int buffer) {
-    struct GLArrayBuffer* ret = _bolt_find_array(context->shared_arrays, buffer);
-    if (!ret) _bolt_find_array(context->shared_element_arrays, buffer);
-    return ret;
+    return _bolt_context_get_buffer_internal(context, target, 0);
 }
 
 void _bolt_set_attr_binding(struct GLAttrBinding* binding, const void* buffer, const void* offset, unsigned int stride, uint32_t type, uint8_t normalise) {
@@ -224,49 +228,54 @@ void _bolt_glcontext_init(struct GLContext* context, void* egl_context, void* eg
     if (shared) {
         context->uniform_buffer = shared->uniform_buffer;
         context->shared_programs = &shared->programs;
-        context->shared_arrays = &shared->arrays;
-        context->shared_element_arrays = &shared->element_arrays;
+        context->shared_buffers = &shared->buffers;
         context->shared_textures = &shared->textures;
     } else {
         context->is_shared_owner = 1;
         context->uniform_buffer = malloc(16384); // seems to be the actual size on GPUs
+        context->programs.pointers = calloc(PTR_LIST_CAPACITY, sizeof(void*));
+        context->buffers.pointers = calloc(PTR_LIST_CAPACITY, sizeof(void*));
+        context->textures.pointers = calloc(PTR_LIST_CAPACITY, sizeof(void*));
         context->shared_programs = &context->programs;
-        context->shared_arrays = &context->arrays;
-        context->shared_element_arrays = &context->element_arrays;
+        context->shared_buffers = &context->buffers;
         context->shared_textures = &context->textures;
     }
 }
 
 void _bolt_glcontext_free(struct GLContext* context) {
     if (context->is_shared_owner) {
+        free(context->programs.pointers);
+        free(context->buffers.pointers);
+        free(context->textures.pointers);
         free(context->uniform_buffer);
-        free(context->arrays.data);
-        free(context->element_arrays.data);
         free(context->programs.data);
+        free(context->buffers.data);
         free(context->textures.data);
     }
 }
 
 void _bolt_context_destroy_buffers(struct GLContext* context, unsigned int n, const unsigned int* list) {
     for (size_t i = 0; i < n; i += 1) {
-        struct GLArrayBuffer* array = _bolt_find_array(context->shared_arrays, list[i]);
-        if (!array) array = _bolt_find_array(context->shared_element_arrays, list[i]);
-        if (!array) continue;
-        free(array->data);
-        array->data = NULL;
-        array->id = 0;
-        array->len = 0;
+        struct GLArrayBuffer* buffer = _bolt_find_buffer(context->shared_buffers, list[i]);
+        if (!buffer) continue;
+        free(buffer->data);
+        buffer->data = NULL;
+        buffer->id = 0;
+        buffer->len = 0;
+        if (list[i] < PTR_LIST_CAPACITY) ((struct GLArrayBuffer**)(context->shared_buffers->pointers))[list[i]] = NULL;
+        if (context->shared_buffers->first_empty > list[i]) context->shared_buffers->first_empty = list[i];
     }
 }
 
 void _bolt_context_destroy_textures(struct GLContext* context, unsigned int n, const unsigned int* list) {
     for (size_t i = 0; i < n; i += 1) {
         struct GLTexture2D* tex = _bolt_find_texture(context->shared_textures, list[i]);
-        if (tex) {
-            free(tex->data);
-            tex->data = 0;
-            tex->width = 0;
-            tex->height = 0;
-        }
+        if (!tex) continue;
+        free(tex->data);
+        tex->data = NULL;
+        tex->width = 0;
+        tex->height = 0;
+        if (list[i] < PTR_LIST_CAPACITY) ((struct GLTexture2D**)(context->shared_textures->pointers))[list[i]] = NULL;
+        if (context->shared_textures->first_empty > list[i]) context->shared_textures->first_empty = list[i];
     }
 }

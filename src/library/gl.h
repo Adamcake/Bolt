@@ -26,8 +26,9 @@
 // my haphazard implementation of an arena allocator
 struct GLList {
     void* data;
+    void* pointers;
     size_t capacity;
-    unsigned int current;
+    size_t first_empty;
 };
 
 struct GLArrayBuffer {
@@ -40,8 +41,8 @@ struct GLArrayBuffer {
     uint32_t mapping_len;
     uint32_t mapping_access_type;
 };
-struct GLArrayBuffer* _bolt_find_array(struct GLList*, unsigned int);
-struct GLArrayBuffer* _bolt_get_array(struct GLList*, unsigned int);
+struct GLArrayBuffer* _bolt_find_buffer(struct GLList*, unsigned int);
+struct GLArrayBuffer* _bolt_get_buffer(struct GLList*, unsigned int);
 
 struct GLTexture2D {
     unsigned char* data;
@@ -84,13 +85,15 @@ void _bolt_get_attr_binding(const struct GLAttrBinding*, size_t, size_t, float*)
 struct GLContext {
     uintptr_t id;
     struct GLList programs;
-    struct GLList arrays;
-    struct GLList element_arrays;
+    struct GLList buffers;
     struct GLList textures;
     struct GLList* shared_programs;
-    struct GLList* shared_arrays;
-    struct GLList* shared_element_arrays;
+    struct GLList* shared_buffers;
     struct GLList* shared_textures;
+    size_t bound_program_id;
+    size_t bound_vertex_array_id;
+    size_t bound_element_array_id;
+    size_t bound_texture_id;
     uint8_t current_program_is_important;
     uint8_t is_attached;
     uint8_t deferred_destroy;

@@ -317,8 +317,8 @@ void _bolt_glLinkProgram(unsigned int program) {
 void _bolt_glUseProgram(unsigned int program) {
     real_glUseProgram(program);
     struct GLContext* c = _bolt_context();
-    if (program != c->programs.current) {
-        c->programs.current = program;
+    if (program != c->bound_program_id) {
+        c->bound_program_id = program;
         const struct GLProgram* p = _bolt_find_program(c->shared_programs, program);
         c->current_program_is_important = (p && p->is_important);
     }
@@ -327,8 +327,9 @@ void _bolt_glUseProgram(unsigned int program) {
 void _bolt_glTexStorage2D(uint32_t target, int levels, uint32_t internalformat, unsigned int width, unsigned int height) {
     real_glTexStorage2D(target, levels, internalformat, width, height);
     struct GLContext* c = _bolt_context();
-    struct GLTexture2D* tex = _bolt_get_texture(c->shared_textures, c->textures.current);
+    struct GLTexture2D* tex = _bolt_get_texture(c->shared_textures, c->bound_texture_id);
     if (tex) {
+        free(tex->data);
         tex->data = malloc(width * height * 4);
         tex->width = width;
         tex->height = height;
@@ -356,20 +357,19 @@ void _bolt_glVertexAttribPointer(unsigned int index, int size, uint32_t type, ui
     if (buffer) {
         _bolt_set_attr_binding(&c->attributes[index], buffer->data, pointer, stride, type, normalised);
     } else {
-        printf("warning: glVertexAttribPointer didn't find buffer %u\n", c->arrays.current);
+        printf("warning: glVertexAttribPointer didn't find buffer %lu\n", c->bound_vertex_array_id);
     }
 }
 
 void _bolt_glBindBuffer(uint32_t target, unsigned int buffer) {
     real_glBindBuffer(target, buffer);
     struct GLContext* c = _bolt_context();
-    //_bolt_context_get_buffer(c, target); // forces tracking
     switch (target) {
         case GL_ARRAY_BUFFER:
-            c->arrays.current = buffer;
+            c->bound_vertex_array_id = buffer;
             break;
         case GL_ELEMENT_ARRAY_BUFFER:
-            c->element_arrays.current = buffer;
+            c->bound_element_array_id = buffer;
             break;
     }
 }
@@ -422,7 +422,7 @@ void _bolt_glCompressedTexSubImage2D(uint32_t target, int level, int xoffset, in
     // weird lossy-compression formats with RGB-565 and way too much space dedicated to alpha channels
     // https://www.khronos.org/opengl/wiki/S3_Texture_Compression
     if (format == GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT || format == GL_COMPRESSED_RGBA_S3TC_DXT5_EXT || format == GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT) {
-        struct GLTexture2D* tex = _bolt_find_texture(c->shared_textures, c->textures.current);
+        struct GLTexture2D* tex = _bolt_find_texture(c->shared_textures, c->bound_texture_id);
         if (!tex) {
             return;
         }
@@ -490,7 +490,7 @@ void _bolt_glCopyTexSubImage2D(uint32_t target, int level, int xoffset, int yoff
     real_glCopyTexSubImage2D(target, level, xoffset, yoffset, x, y, width, height);
     struct GLContext* c = _bolt_context();
     if (target == GL_TEXTURE_2D && level == 0) {
-        struct GLTexture2D* tex = _bolt_find_texture(c->shared_textures, c->textures.current);
+        struct GLTexture2D* tex = _bolt_find_texture(c->shared_textures, c->bound_texture_id);
         if (!tex) return;
         for (size_t i = 0; i < height; i += 1) {
             memcpy(tex->data + (tex->width * yoffset * 4) + (xoffset * 4), tex->data + (tex->width * y * 4) + (x * 4), width * 4);
@@ -624,7 +624,7 @@ void glBindTexture(uint32_t target, unsigned int texture) {
     real_glBindTexture(target, texture);
     struct GLContext* c = _bolt_context();
     if (target == GL_TEXTURE_2D) {
-        c->textures.current = texture;
+        c->bound_texture_id = texture;
     }
 }
 
@@ -632,7 +632,7 @@ void glTexSubImage2D(uint32_t target, int level, int xoffset, int yoffset, unsig
     real_glTexSubImage2D(target, level, xoffset, yoffset, width, height, format, type, pixels);
     struct GLContext* c = _bolt_context();
     if (target == GL_TEXTURE_2D && format == GL_RGBA) {
-        struct GLTexture2D* tex = _bolt_find_texture(c->shared_textures, c->textures.current);
+        struct GLTexture2D* tex = _bolt_find_texture(c->shared_textures, c->bound_texture_id);
         if (tex && !(xoffset < 0 || yoffset < 0 || xoffset + width > tex->width || yoffset + height > tex->height)) {
             for (unsigned int y = 0; y < height; y += 1) {
                 unsigned char* dest_ptr = tex->data + ((tex->width * (y + yoffset)) + xoffset) * 4;
