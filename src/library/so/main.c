@@ -3,11 +3,11 @@
 #include <unistd.h>
 #undef _GNU_SOURCE
 
-#include <stdatomic.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
 
 #include "../gl.h"
 
@@ -15,8 +15,58 @@
 uint8_t inited = 0;
 #define INIT() if (!inited) _bolt_init_functions();
 
-pthread_mutex_t context_lock;
-pthread_mutex_t buffer_lock;
+enum BoltMessageType {
+    Message_Quit,
+    Message_glCreateProgram,
+    Message_glLinkProgram,
+    Message_glUseProgram,
+    Message_glEnableVertexAttribArray,
+    Message_glDisableVertexAttribArray,
+    Message_glBindAttribLocation,
+    Message_glVertexAttribPointer,
+    Message_glUniform1i,
+    Message_glUniformMatrix4fv,
+    Message_glBindBuffer,
+    Message_glBufferData,
+    Message_glBufferStorage,
+    Message_glMapBufferRange,
+    Message_glFlushMappedBufferRange,
+    Message_glUnmapBuffer,
+    Message_glDeleteBuffers,
+    Message_glBindFramebuffer,
+    Message_glCompressedTexSubImage2D,
+    Message_glCopyImageSubData,
+    Message_glDrawElements,
+    Message_glBindTexture,
+    Message_glTexStorage2D,
+    Message_glTexSubImage2D,
+    Message_glDeleteTextures,
+};
+int read_socket;
+int write_socket;
+pthread_t worker_thread;
+uint8_t worker_thread_running = 0;
+void* _bolt_worker_thread(void*);
+struct BoltMessage {
+    struct GLContext* context;
+    void* data;
+    unsigned int x;
+    unsigned int y;
+    unsigned int w;
+    unsigned int h;
+    unsigned int index;
+    unsigned int asset;
+    unsigned int stride;
+    uint32_t type;
+    uint32_t target;
+    uint32_t format;
+    uint8_t bool_value;
+    uint8_t do_free_data;
+    enum BoltMessageType instruction;
+};
+#define SEND_MSG(...) {struct BoltMessage _message = __VA_ARGS__; write(write_socket, &_message, sizeof(struct BoltMessage));}
+
+pthread_mutex_t egl_lock;
 
 const char* libc_name = "libc.so.6";
 const char* libegl_name = "libEGL.so.1";
@@ -39,6 +89,7 @@ unsigned int (*real_eglMakeCurrent)(void*, void*, void*, void*) = NULL;
 unsigned int (*real_eglDestroyContext)(void*, void*) = NULL;
 unsigned int (*real_eglInitialize)(void*, void*, void*) = NULL;
 void* (*real_eglCreateContext)(void*, void*, void*, const void*) = NULL;
+unsigned int (*real_eglTerminate)(void*) = NULL;
 
 void* (*real_xcb_poll_for_event)(void*) = NULL;
 void* (*real_xcb_wait_for_event)(void*) = NULL;
@@ -59,7 +110,6 @@ void (*real_glDeleteBuffers)(unsigned int, const unsigned int*) = NULL;
 void (*real_glBindFramebuffer)(uint32_t, unsigned int) = NULL;
 void (*real_glFramebufferTextureLayer)(uint32_t, uint32_t, unsigned int, int, int) = NULL;
 void (*real_glCompressedTexSubImage2D)(uint32_t, int, int, int, unsigned int, unsigned int, uint32_t, unsigned int, const void*) = NULL;
-void (*real_glCopyTexSubImage2D)(uint32_t, int, int, int, int, int, unsigned int, unsigned int) = NULL;
 void (*real_glCopyImageSubData)(unsigned int, uint32_t, int, int, int, int, unsigned int, uint32_t, int, int, int, int, unsigned int, unsigned int, unsigned int) = NULL;
 void (*real_glEnableVertexAttribArray)(unsigned int) = NULL;
 void (*real_glDisableVertexAttribArray)(unsigned int) = NULL;
@@ -191,6 +241,8 @@ void _bolt_init_libegl(unsigned long addr, const Elf32_Word* gnu_hash_table, con
     if (sym) real_eglInitialize = sym->st_value + libegl_addr;
     sym = _bolt_lookup_symbol("eglCreateContext", gnu_hash_table, hash_table, string_table, symbol_table);
     if (sym) real_eglCreateContext = sym->st_value + libegl_addr;
+    sym = _bolt_lookup_symbol("eglTerminate", gnu_hash_table, hash_table, string_table, symbol_table);
+    if (sym) real_eglTerminate = sym->st_value + libegl_addr;
 }
 
 void _bolt_init_libgl(unsigned long addr, const Elf32_Word* gnu_hash_table, const ElfW(Word)* hash_table, const char* string_table, const ElfW(Sym)* symbol_table) {
@@ -261,38 +313,21 @@ int _bolt_dl_iterate_callback(struct dl_phdr_info* info, size_t size, void* args
 }
 
 void _bolt_init_functions() {
-    pthread_mutex_init(&context_lock, NULL);
-    pthread_mutex_init(&buffer_lock, NULL);
+    pthread_mutex_init(&egl_lock, NULL);
     dl_iterate_phdr(_bolt_dl_iterate_callback, NULL);
     inited = 1;
 }
 
 unsigned int _bolt_glCreateProgram() {
     unsigned int id = real_glCreateProgram();
-    struct GLContext* c = _bolt_context();
-    struct GLProgram* program = _bolt_get_program(c->shared_programs, id);
-    program->loc_aVertexPosition2D = -1;
-    program->loc_aVertexColour = -1;
-    program->loc_aTextureUV = -1;
-    program->loc_aTextureUVAtlasMin = -1;
-    program->loc_aTextureUVAtlasExtents = -1;
-    program->loc_uProjectionMatrix = -1;
-    program->loc_uDiffuseMap = -1;
-    program->is_important = 0;
+    SEND_MSG({.context = _bolt_context(), .instruction = Message_glCreateProgram, .asset = id})
     return id;
 }
 
 void _bolt_glBindAttribLocation(unsigned int program, unsigned int index, const char* name) {
     real_glBindAttribLocation(program, index, name);
-    struct GLContext* c = _bolt_context();
-    struct GLProgram* p = _bolt_find_program(c->shared_programs, program);
-    if (p) {
-        if (!strcmp(name, "aVertexPosition2D")) p->loc_aVertexPosition2D = index;
-        if (!strcmp(name, "aVertexColour")) p->loc_aVertexColour = index;
-        if (!strcmp(name, "aTextureUV")) p->loc_aTextureUV = index;
-        if (!strcmp(name, "aTextureUVAtlasMin")) p->loc_aTextureUVAtlasMin = index;
-        if (!strcmp(name, "aTextureUVAtlasExtents")) p->loc_aTextureUVAtlasExtents = index;
-    }
+    // I think `name` always points to an embedded string in the exe, so we don't need to reallocate it here
+    SEND_MSG({.context = _bolt_context(), .instruction = Message_glBindAttribLocation, .asset = program, .index = index, .data = (void*)name, .do_free_data = 0})
 }
 
 void _bolt_glGetUniformLocation(unsigned int program, const char* name) {
@@ -301,114 +336,64 @@ void _bolt_glGetUniformLocation(unsigned int program, const char* name) {
 
 void _bolt_glLinkProgram(unsigned int program) {
     real_glLinkProgram(program);
-    struct GLContext* c = _bolt_context();
-    struct GLProgram* p = _bolt_find_program(c->shared_programs, program);
-    if (p && p->loc_aVertexPosition2D != -1 && p->loc_aVertexColour != -1 && p->loc_aTextureUV != -1 && p->loc_aTextureUVAtlasMin != -1 && p->loc_aTextureUVAtlasExtents != -1) {
-        int uDiffuseMap = real_glGetUniformLocation(program, "uDiffuseMap");
-        int uProjectionMatrix = real_glGetUniformLocation(program, "uProjectionMatrix");
-        if (uDiffuseMap != -1 && uProjectionMatrix != -1) {
-            p->loc_uDiffuseMap = uDiffuseMap;
-            p->loc_uProjectionMatrix = uProjectionMatrix;
-            p->is_important = 1;
-        }
-    }
+    SEND_MSG({.context = _bolt_context(), .instruction = Message_glLinkProgram, .asset = program})
 }
 
 void _bolt_glUseProgram(unsigned int program) {
     real_glUseProgram(program);
-    struct GLContext* c = _bolt_context();
-    if (program != c->bound_program_id) {
-        c->bound_program_id = program;
-        const struct GLProgram* p = _bolt_find_program(c->shared_programs, program);
-        c->current_program_is_important = (p && p->is_important);
-    }
+    SEND_MSG({.context = _bolt_context(), .instruction = Message_glUseProgram, .asset = program})
 }
 
 void _bolt_glTexStorage2D(uint32_t target, int levels, uint32_t internalformat, unsigned int width, unsigned int height) {
     real_glTexStorage2D(target, levels, internalformat, width, height);
-    struct GLContext* c = _bolt_context();
-    struct GLTexture2D* tex = _bolt_get_texture(c->shared_textures, c->bound_texture_id);
-    if (tex) {
-        free(tex->data);
-        tex->data = malloc(width * height * 4);
-        tex->width = width;
-        tex->height = height;
-    }
+    SEND_MSG({.context = _bolt_context(), .instruction = Message_glTexStorage2D, .target = target, .w = width, .h = height})
 }
 
 void _bolt_glUniform1i(int location, int v0) {
     real_glUniform1i(location, v0);
-    struct GLContext* c = _bolt_context();
-    int* ptr = (int*)(&c->uniform_buffer[location * 16]);
-    *ptr = v0;
+    SEND_MSG({.context = _bolt_context(), .instruction = Message_glUniform1i, .index = location, .asset = v0})
 }
 
 void _bolt_glUniformMatrix4fv(int location, unsigned int count, uint8_t transpose, const float* value) {
     real_glUniformMatrix4fv(location, count, transpose, value);
-    struct GLContext* c = _bolt_context();
-    int* ptr = (int*)(&c->uniform_buffer[location * 16]);
-    memcpy(ptr, value, 4 * 4 * sizeof(float));
+    struct {
+        struct BoltMessage head;
+        float tail[16];
+    } message = {.head = {.context = _bolt_context(), .instruction = Message_glUniformMatrix4fv, .index = location, .bool_value = transpose}};
+    memcpy(message.tail, value, 4 * 4 * sizeof(float));
+    write(write_socket, &message, sizeof(message));
 }
 
 void _bolt_glVertexAttribPointer(unsigned int index, int size, uint32_t type, uint8_t normalised, unsigned int stride, const void* pointer) {
     real_glVertexAttribPointer(index, size, type, normalised, stride, pointer);
-    struct GLContext* c = _bolt_context();
-    struct GLArrayBuffer* buffer = _bolt_context_find_buffer(c, GL_ARRAY_BUFFER);
-    if (buffer) {
-        _bolt_set_attr_binding(&c->attributes[index], buffer->data, pointer, stride, type, normalised);
-    } else {
-        printf("warning: glVertexAttribPointer didn't find buffer %lu\n", c->bound_vertex_array_id);
-    }
+    SEND_MSG({.context = _bolt_context(), .instruction = Message_glVertexAttribPointer, .index = index, .type = type, .bool_value = normalised, .stride = stride, .data = (void*)(uintptr_t)pointer})
 }
 
 void _bolt_glBindBuffer(uint32_t target, unsigned int buffer) {
     real_glBindBuffer(target, buffer);
-    struct GLContext* c = _bolt_context();
-    switch (target) {
-        case GL_ARRAY_BUFFER:
-            c->bound_vertex_array_id = buffer;
-            break;
-        case GL_ELEMENT_ARRAY_BUFFER:
-            c->bound_element_array_id = buffer;
-            break;
-    }
+    SEND_MSG({.context = _bolt_context(), .instruction = Message_glBindBuffer, .target = target, .asset = buffer});
 }
 
 void _bolt_glBufferData(uint32_t target, uintptr_t size, const void* data, uint32_t usage) {
     real_glBufferData(target, size, data, usage);
     struct GLContext* c = _bolt_context();
-    pthread_mutex_lock(&buffer_lock);
-    struct GLArrayBuffer* buffer = _bolt_context_get_buffer(c, target);
-    if (buffer) {
-        buffer->len = size;
-        free(buffer->data);
-        buffer->data = malloc(size);
-        if (data) memcpy(buffer->data, data, size);
+    SEND_MSG({.context = c, .instruction = Message_glBufferData, .target = target, .w = size, .data = (void*)(uintptr_t)data, .do_free_data = 0})
+    if (data) {
+        uint8_t r;
+        read(c->sockets[0], &r, 1);
     }
-    pthread_mutex_unlock(&buffer_lock);
 }
 
 void _bolt_glDeleteBuffers(unsigned int n, const unsigned int* buffers) {
     real_glDeleteBuffers(n, buffers);
-    struct GLContext* c = _bolt_context();
-    _bolt_context_destroy_buffers(c, n, buffers);
+    void* ptr = malloc(n * sizeof(unsigned int));
+    memcpy(ptr, buffers, n * sizeof(unsigned int));
+    SEND_MSG({.context = _bolt_context(), .instruction = Message_glDeleteBuffers, .w = n, .data = ptr, .do_free_data = 1})
 }
 
 void _bolt_glBindFramebuffer(uint32_t target, unsigned int framebuffer) {
     real_glBindFramebuffer(target, framebuffer);
-    struct GLContext* c = _bolt_context();
-    switch (target) {
-        case 36008:
-            c->current_read_framebuffer = framebuffer;
-            break;
-        case 36009:
-            c->current_draw_framebuffer = framebuffer;
-            break;
-        case 36160:
-            c->current_read_framebuffer = framebuffer;
-            c->current_draw_framebuffer = framebuffer;
-            break;
-    }
+    SEND_MSG({.context = _bolt_context(), .instruction = Message_glBindFramebuffer, .target = target, .asset = framebuffer})
 }
 
 void _bolt_glFramebufferTextureLayer(uint32_t target, uint32_t attachment, unsigned int texture, int level, int layer) {
@@ -417,203 +402,79 @@ void _bolt_glFramebufferTextureLayer(uint32_t target, uint32_t attachment, unsig
 
 void _bolt_glCompressedTexSubImage2D(uint32_t target, int level, int xoffset, int yoffset, unsigned int width, unsigned int height, uint32_t format, unsigned int imageSize, const void* data) {
     real_glCompressedTexSubImage2D(target, level, xoffset, yoffset, width, height, format, imageSize, data);
-    struct GLContext* c = _bolt_context();
     if (target != GL_TEXTURE_2D || level != 0) return;
-    // weird lossy-compression formats with RGB-565 and way too much space dedicated to alpha channels
-    // https://www.khronos.org/opengl/wiki/S3_Texture_Compression
-    if (format == GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT || format == GL_COMPRESSED_RGBA_S3TC_DXT5_EXT || format == GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT) {
-        struct GLTexture2D* tex = _bolt_find_texture(c->shared_textures, c->bound_texture_id);
-        if (!tex) {
-            return;
-        }
-        int out_xoffset = xoffset;
-        int out_yoffset = yoffset;
-        for (size_t ii = 0; ii < (width * height); ii += 16) {
-            const uint8_t* ptr = data + ii;
-            uint8_t* out_ptr = tex->data + (out_yoffset * tex->width * 4) + (out_xoffset * 4);
-            uint16_t c0 = *(ptr + 8) + (*(ptr + 9) << 8);
-            uint16_t c1 = *(ptr + 10) + (*(ptr + 11) << 8);
-            uint8_t c0_rgb[3];
-            uint8_t c1_rgb[3];
-            _bolt_unpack_rgb565(c0, c0_rgb);
-            _bolt_unpack_rgb565(c1, c1_rgb);
-            const uint8_t c0_greater = c0 > c1;
-            const uint32_t ctable = *(ptr + 12) + (*(ptr + 13) << 8) + (*(ptr + 14) << 16) + (*(ptr + 15) << 24);
-            
-            for (size_t j = 0; j < 4; j += 1) {
-                for (size_t i = 0; i < 4; i += 1) {
-                    if (out_xoffset + i >= 0 && out_yoffset + j >= 0 && out_xoffset + i < tex->width && out_yoffset + j < tex->height) {
-                        uint8_t* pixel_ptr = out_ptr + (tex->width * i * 4) + (j * 4);
-                        const uint32_t code = (ctable >> (2 * (4 * i + j))) & 3;
-                        switch(code) {
-                            case 0:
-                                memcpy(pixel_ptr, c0_rgb, 3);
-                                break;
-                            case 1:
-                                memcpy(pixel_ptr, c1_rgb, 3);
-                                break;
-                            case 2:
-                                if (c0_greater) {
-                                    pixel_ptr[0] = (2*c0_rgb[0]+c1_rgb[0])/3;
-                                    pixel_ptr[1] = (2*c0_rgb[1]+c1_rgb[1])/3;
-                                    pixel_ptr[2] = (2*c0_rgb[2]+c1_rgb[2])/3;
-                                } else {
-                                    pixel_ptr[0] = (c0_rgb[0]+c1_rgb[0])/2;
-                                    pixel_ptr[1] = (c0_rgb[1]+c1_rgb[1])/2;
-                                    pixel_ptr[2] = (c0_rgb[2]+c1_rgb[2])/2;
-                                }
-                                break;
-                            case 3:
-                                if (c0_greater) {
-                                    pixel_ptr[0] = (2*c1_rgb[0]+c0_rgb[0])/3;
-                                    pixel_ptr[1] = (2*c1_rgb[1]+c0_rgb[1])/3;
-                                    pixel_ptr[2] = (2*c1_rgb[2]+c0_rgb[2])/3;
-                                } else {
-                                    memset(pixel_ptr, 0, 3);
-                                }
-                                break;
-                        }
-                    }
-                }
-            }
-    
-            out_xoffset += 4;
-            if (out_xoffset >= xoffset + width) {
-                out_xoffset = xoffset;
-                out_yoffset += 4;
-            }
-        }
-    }
-}
-
-void _bolt_glCopyTexSubImage2D(uint32_t target, int level, int xoffset, int yoffset, int x, int y, unsigned int width, unsigned int height) {
-    real_glCopyTexSubImage2D(target, level, xoffset, yoffset, x, y, width, height);
     struct GLContext* c = _bolt_context();
-    if (target == GL_TEXTURE_2D && level == 0) {
-        struct GLTexture2D* tex = _bolt_find_texture(c->shared_textures, c->bound_texture_id);
-        if (!tex) return;
-        for (size_t i = 0; i < height; i += 1) {
-            memcpy(tex->data + (tex->width * yoffset * 4) + (xoffset * 4), tex->data + (tex->width * y * 4) + (x * 4), width * 4);
-        }
-    }
+    SEND_MSG({.context = c, .instruction = Message_glCompressedTexSubImage2D, .x = xoffset, .y = yoffset, .w = width, .h = height, .format = format, .data = (void*)(uintptr_t)data, .do_free_data = 0})
+    uint8_t r;
+    read(c->sockets[0], &r, 1);
 }
 
 void _bolt_glCopyImageSubData(unsigned int srcName, uint32_t srcTarget, int srcLevel, int srcX, int srcY, int srcZ,
                               unsigned int dstName, uint32_t dstTarget, int dstLevel, int dstX, int dstY, int dstZ,
                               unsigned int srcWidth, unsigned int srcHeight, unsigned int srcDepth) {
     real_glCopyImageSubData(srcName, srcTarget, srcLevel, srcX, srcY, srcZ, dstName, dstTarget, dstLevel, dstX, dstY, dstZ, srcWidth, srcHeight, srcDepth);
-    struct GLContext* c = _bolt_context();
     if (srcTarget == GL_TEXTURE_2D && dstTarget == GL_TEXTURE_2D && srcLevel == 0 && dstLevel == 0) {
-        struct GLTexture2D* src = _bolt_find_texture(c->shared_textures, srcName);
-        struct GLTexture2D* dst = _bolt_find_texture(c->shared_textures, dstName);
-        if (!src || !dst) return;
-        for (size_t i = 0; i < srcHeight; i += 1) {
-            memcpy(dst->data + (dstY * dst->width * 4) + (dstX * 4), src->data + (srcY * src->width * 4) + (srcX * 4), srcWidth * 4);
-        }
+        struct {
+            struct BoltMessage head;
+            int tail[8];
+        } message = {
+            .head = {.context = _bolt_context(), .instruction = Message_glCopyImageSubData},
+            .tail = {srcName, srcX, srcY, dstName, dstX, dstY, srcWidth, srcHeight},
+        };
+        write(write_socket, &message, sizeof(message));
     }
 }
 
 void _bolt_glEnableVertexAttribArray(unsigned int index) {
     real_glEnableVertexAttribArray(index);
-    struct GLContext* c = _bolt_context();
-    c->attributes[index].enabled = 1;
+    SEND_MSG({.context = _bolt_context(), .instruction = Message_glEnableVertexAttribArray, .index = index})
 }
 
 void _bolt_glDisableVertexAttribArray(unsigned int index) {
     real_glEnableVertexAttribArray(index);
-    struct GLContext* c = _bolt_context();
-    c->attributes[index].enabled = 0;
+    SEND_MSG({.context = _bolt_context(), .instruction = Message_glDisableVertexAttribArray, .index = index})
 }
 
 void* _bolt_glMapBufferRange(uint32_t target, intptr_t offset, uintptr_t length, uint32_t access) {
     void* ptr = real_glMapBufferRange(target, offset, length, access);
     struct GLContext* c = _bolt_context();
-    struct GLArrayBuffer* buffer = _bolt_context_find_buffer(c, target);
-    if (buffer) {
-        buffer->mapping = ptr;
-        buffer->mapping_offset = offset;
-        buffer->mapping_len = length;
-        buffer->mapping_access_type = access;
-    }
+    SEND_MSG({.context = c, .instruction = Message_glMapBufferRange, .data = ptr, .target = target, .x = offset, .w = length, .format = access})
+    uint8_t r;
+    read(c->sockets[0], &r, 1);
     return ptr;
 }
 
 void _bolt_glFlushMappedBufferRange(uint32_t target, intptr_t offset, uintptr_t length) {
     real_glFlushMappedBufferRange(target, offset, length);
     struct GLContext* c = _bolt_context();
-    struct GLArrayBuffer* buffer = _bolt_context_find_buffer(c, target);
-    if (buffer && buffer->mapping) {
-        memcpy(buffer->data + buffer->mapping_offset + offset, buffer->mapping + offset, length);
-    }
+    SEND_MSG({.context = c, .instruction = Message_glFlushMappedBufferRange, .target = target, .x = offset, .w = length})
+    uint8_t r;
+    read(c->sockets[0], &r, 1);
 }
 
 uint8_t _bolt_glUnmapBuffer(uint32_t target) {
     struct GLContext* c = _bolt_context();
-    struct GLArrayBuffer* buffer = _bolt_context_find_buffer(c, target);
-    if (buffer) {
-        if(buffer->mapping && buffer->mapping_access_type & GL_MAP_WRITE_BIT && !(buffer->mapping_access_type & GL_MAP_FLUSH_EXPLICIT_BIT)) {
-            memcpy(buffer->data + buffer->mapping_offset, buffer->mapping, buffer->mapping_len);
-        }
-        buffer->mapping = NULL;
-    }
+    SEND_MSG({.context = c, .instruction = Message_glUnmapBuffer, .target = target})
+    uint8_t r;
+    read(c->sockets[0], &r, 1);
     return real_glUnmapBuffer(target);
 }
 
 void _bolt_glBufferStorage(uint32_t target, uintptr_t size, const void* data, uintptr_t flags) {
     real_glBufferStorage(target, size, data, flags);
     struct GLContext* c = _bolt_context();
-    pthread_mutex_lock(&buffer_lock);
-    struct GLArrayBuffer* buffer = _bolt_context_get_buffer(c, target);
-    if (buffer) {
-        buffer->len = size;
-        free(buffer->data);
-        buffer->data = malloc(size);
-        if (data) memcpy(buffer->data, data, size);
+    SEND_MSG({.context = c, .instruction = Message_glBufferStorage, .target = target, .w = size, .data = (void*)(uintptr_t)data, .do_free_data = 0})
+    if (data) {
+        uint8_t r = 0;
+        read(c->sockets[0], &r, 1);
     }
-    pthread_mutex_unlock(&buffer_lock);
 }
 
 void glDrawElements(uint32_t mode, unsigned int count, uint32_t type, const void* indices) {
     real_glDrawElements(mode, count, type, indices);
-    struct GLContext* c = _bolt_context();
-    //if (c->current_program_is_important && type == GL_UNSIGNED_SHORT && mode == GL_TRIANGLES && c->current_draw_framebuffer == 0 && c->arrays.current && c->element_arrays.current) {
-    //    struct GLArrayBuffer* element_array = _bolt_context_find_buffer(c, GL_ELEMENT_ARRAY_BUFFER);
-    //    const unsigned short* indices = element_array->data + (uintptr_t)indices;
-    //    struct GLProgram* current_program = _bolt_find_program(c->shared_programs, c->programs.current);
-    //    const struct GLAttrBinding* atlas_min = &c->attributes[current_program->loc_aTextureUVAtlasMin];
-    //    const struct GLAttrBinding* atlas_max = &c->attributes[current_program->loc_aTextureUVAtlasExtents];
-    //    const struct GLAttrBinding* tex_uv = &c->attributes[current_program->loc_aTextureUV];
-    //    int diffuse_map = *(int*)(&c->uniform_buffer[current_program->loc_uDiffuseMap * 16]);
-    //    if (atlas_min->enabled && atlas_max->enabled && tex_uv->enabled) {
-    //        printf("(%u) glDrawElements loc=%u atlas_min normalised=%u\n", gettid(), current_program->loc_aTextureUVAtlasMin, (unsigned int)atlas_min->normalise);
-    //        for (size_t i = 0; i + 2 < count; i += 3) {
-    //            unsigned short index1 = ((unsigned short*)indices)[i];
-    //            unsigned short index2 = ((unsigned short*)indices)[i + 1];
-    //            unsigned short index3 = ((unsigned short*)indices)[i + 2];
-    //            float min1[2];
-    //            float min2[2];
-    //            float min3[2];
-    //            float max1[2];
-    //            float max2[2];
-    //            float max3[2];
-    //            float uv1[2];
-    //            float uv2[2];
-    //            float uv3[2];
-    //            _bolt_get_attr_binding(atlas_min, index1, 2, min1);
-    //            _bolt_get_attr_binding(atlas_min, index2, 2, min2);
-    //            _bolt_get_attr_binding(atlas_min, index3, 2, min3);
-    //            _bolt_get_attr_binding(atlas_max, index1, 2, max1);
-    //            _bolt_get_attr_binding(atlas_max, index2, 2, max2);
-    //            _bolt_get_attr_binding(atlas_max, index3, 2, max3);
-    //            _bolt_get_attr_binding(tex_uv, index1, 2, uv1);
-    //            _bolt_get_attr_binding(tex_uv, index2, 2, uv2);
-    //            _bolt_get_attr_binding(tex_uv, index3, 2, uv3);
-    //            printf("drawing triangle, uDiffuseMap=%i, atlas extents %f,%f,%f,%f | %f,%f,%f,%f | %f,%f,%f,%f UV %f,%f %f,%f %f,%f\n",
-    //                diffuse_map, min1[0], min1[1], max1[0], max1[1], min2[0], min2[1], max2[0], max2[1], min3[0], min3[1], max3[0], max3[1],
-    //                uv1[0], uv1[1], uv2[0], uv2[1], uv3[0], uv3[1]);
-    //        }
-    //    }
-    //}
+    if (type == GL_UNSIGNED_SHORT && mode == GL_TRIANGLES) {
+        SEND_MSG({.context = _bolt_context(), .instruction = Message_glDrawElements, .w = count, .data = (void*)(uintptr_t)indices})
+    }
 }
 
 void glDrawArrays(uint32_t mode, int first, unsigned int count) {
@@ -622,31 +483,24 @@ void glDrawArrays(uint32_t mode, int first, unsigned int count) {
 
 void glBindTexture(uint32_t target, unsigned int texture) {
     real_glBindTexture(target, texture);
-    struct GLContext* c = _bolt_context();
-    if (target == GL_TEXTURE_2D) {
-        c->bound_texture_id = texture;
-    }
+    SEND_MSG({.context = _bolt_context(), .instruction = Message_glBindTexture, .target = target, .asset = texture})
 }
 
 void glTexSubImage2D(uint32_t target, int level, int xoffset, int yoffset, unsigned int width, unsigned int height, uint32_t format, uint32_t type, const void* pixels) {
     real_glTexSubImage2D(target, level, xoffset, yoffset, width, height, format, type, pixels);
     struct GLContext* c = _bolt_context();
-    if (target == GL_TEXTURE_2D && format == GL_RGBA) {
-        struct GLTexture2D* tex = _bolt_find_texture(c->shared_textures, c->bound_texture_id);
-        if (tex && !(xoffset < 0 || yoffset < 0 || xoffset + width > tex->width || yoffset + height > tex->height)) {
-            for (unsigned int y = 0; y < height; y += 1) {
-                unsigned char* dest_ptr = tex->data + ((tex->width * (y + yoffset)) + xoffset) * 4;
-                const void* src_ptr = pixels + (width * y * 4);
-                memcpy(dest_ptr, src_ptr, width * 4);
-            }
-        }
+    if (level == 0 && format == GL_RGBA) {
+        SEND_MSG({.context = c, .instruction = Message_glTexSubImage2D, .target = target, .x = xoffset, .y = yoffset, .w = width, .h = height, .format = format, .type = type, .data = (void*)(uintptr_t)pixels, .do_free_data = 0})
+        uint8_t r = 0;
+        read(c->sockets[0], &r, 1);
     }
 }
 
 void glDeleteTextures(unsigned int n, const unsigned int* textures) {
     real_glDeleteTextures(n, textures);
-    struct GLContext* c = _bolt_context();
-    _bolt_context_destroy_textures(c, n, textures);
+    void* ptr = malloc(n * sizeof(unsigned int));
+    memcpy(ptr, textures, n * sizeof(unsigned int));
+    SEND_MSG({.context = _bolt_context(), .instruction = Message_glDeleteTextures, .w = n, .data = ptr, .do_free_data = 1})
 }
 
 unsigned int eglSwapBuffers(void*, void*);
@@ -654,6 +508,7 @@ unsigned int eglMakeCurrent(void*, void*, void*, void*);
 unsigned int eglDestroyContext(void*, void*);
 unsigned int eglInitialize(void*, void*, void*);
 void* eglCreateContext(void*, void*, void*, const void*);
+unsigned int eglTerminate(void*);
 
 void* eglGetProcAddress(const char* name) {
     //printf("eglGetProcAddress(%s)\n", name);
@@ -680,6 +535,10 @@ void* eglGetProcAddress(const char* name) {
         real_eglCreateContext = real_eglGetProcAddress("eglCreateContext");
         return eglCreateContext;
     }
+    if (!strcmp(name, "eglTerminate")) {
+        real_eglTerminate = real_eglGetProcAddress("eglTerminate");
+        return eglTerminate;
+    }
 #define PROC_ADDRESS_MAP(FUNC) if (!strcmp(name, #FUNC)) { real_##FUNC = real_eglGetProcAddress(#FUNC); return real_##FUNC ? _bolt_##FUNC : NULL; }
     PROC_ADDRESS_MAP(glCreateProgram)
     PROC_ADDRESS_MAP(glBindAttribLocation)
@@ -696,7 +555,6 @@ void* eglGetProcAddress(const char* name) {
     PROC_ADDRESS_MAP(glBindFramebuffer)
     PROC_ADDRESS_MAP(glFramebufferTextureLayer)
     PROC_ADDRESS_MAP(glCompressedTexSubImage2D)
-    PROC_ADDRESS_MAP(glCopyTexSubImage2D)
     PROC_ADDRESS_MAP(glCopyImageSubData)
     PROC_ADDRESS_MAP(glEnableVertexAttribArray)
     PROC_ADDRESS_MAP(glDisableVertexAttribArray)
@@ -787,9 +645,9 @@ unsigned int eglSwapBuffers(void* display, void* surface) {
 unsigned int eglMakeCurrent(void* display, void* draw, void* read, void* context) {
     unsigned int ret = real_eglMakeCurrent(display, draw, read, context);
     if (ret) {
-        pthread_mutex_lock(&context_lock);
+        pthread_mutex_lock(&egl_lock);
         _bolt_make_context_current(context);
-        pthread_mutex_unlock(&context_lock);
+        pthread_mutex_unlock(&egl_lock);
     }
     return ret;
 }
@@ -797,24 +655,50 @@ unsigned int eglMakeCurrent(void* display, void* draw, void* read, void* context
 unsigned int eglDestroyContext(void* display, void* context) {
     unsigned int ret = real_eglDestroyContext(display, context);
     if (ret) {
-        pthread_mutex_lock(&context_lock);
+        pthread_mutex_lock(&egl_lock);
         _bolt_destroy_context(context);
-        pthread_mutex_unlock(&context_lock);
+        pthread_mutex_unlock(&egl_lock);
     }
     return ret;
 }
 
 unsigned int eglInitialize(void* display, void* major, void* minor) {
     INIT();
-    return real_eglInitialize(display, major, minor);
+    unsigned int ret = real_eglInitialize(display, major, minor);
+    pthread_mutex_lock(&egl_lock);
+    if (ret && !worker_thread_running) {
+        int socks[2];
+        socketpair(AF_UNIX, SOCK_STREAM, 0, socks);
+        read_socket = socks[1];
+        int err = pthread_create(&worker_thread, NULL, _bolt_worker_thread, NULL);
+        if (err) {
+            printf("warning: pthread_create returned error %i\n", err);
+        }
+        write_socket = socks[0];
+        worker_thread_running = 1;
+    }
+    pthread_mutex_unlock(&egl_lock);
+    return ret;
 }
 
 void* eglCreateContext(void* display, void* config, void* share_context, const void* attrib_list) {
     void* ret = real_eglCreateContext(display, config, share_context, attrib_list);
-    pthread_mutex_lock(&context_lock);
+    pthread_mutex_lock(&egl_lock);
     _bolt_create_context(ret, share_context);
-    pthread_mutex_unlock(&context_lock);
+    pthread_mutex_unlock(&egl_lock);
     return ret;
+}
+
+unsigned int eglTerminate(void* display) {
+    pthread_mutex_lock(&egl_lock);
+    if (worker_thread_running) {
+        SEND_MSG({ .instruction = Message_Quit });
+        pthread_join(worker_thread, NULL);
+        close(write_socket);
+        worker_thread_running = 0;
+    }
+    pthread_mutex_unlock(&egl_lock);
+    return real_eglTerminate(display);
 }
 
 void* xcb_poll_for_event(void* c) {
@@ -850,6 +734,7 @@ void* _bolt_dl_lookup(void* handle, const char* symbol) {
         if (strcmp(symbol, "eglDestroyContext") == 0) return eglDestroyContext;
         if (strcmp(symbol, "eglInitialize") == 0) return eglInitialize;
         if (strcmp(symbol, "eglCreateContext") == 0) return eglCreateContext;
+        if (strcmp(symbol, "eglTerminate") == 0) return eglTerminate;
     } else if (handle == libgl_addr) {
         if (strcmp(symbol, "glDrawElements") == 0) return glDrawElements;
         if (strcmp(symbol, "glDrawArrays") == 0) return glDrawArrays;
@@ -877,6 +762,7 @@ void* dlopen(const char* filename, int flags) {
             real_eglDestroyContext = real_dlsym(ret, "eglDestroyContext");
             real_eglInitialize = real_dlsym(ret, "eglInitialize");
             real_eglCreateContext = real_dlsym(ret, "eglCreateContext");
+            real_eglTerminate = real_dlsym(ret, "eglTerminate");
         }
         if (!libgl_addr && !strcmp(filename, libgl_name)) {
             libgl_addr = ret;
@@ -913,4 +799,358 @@ int dlclose(void* handle) {
     if (handle == libc_addr) libc_addr = NULL;
     if (handle == libegl_addr) libegl_addr = NULL;
     return real_dlclose(handle);
+}
+
+// dedicated thread for handling most tasks in a synchronous order, invoked by eglInitialize
+void* _bolt_worker_thread(void* arg) {
+    struct BoltMessage message;
+    while (1) {
+        if (read(read_socket, &message, sizeof(message)) != sizeof(message)) continue;
+        struct GLContext* c = message.context;
+        switch (message.instruction) {
+            case Message_Quit: {
+                close(read_socket);
+                return NULL;
+            }
+            case Message_glCreateProgram: {
+                struct GLProgram* program = _bolt_get_program(c->shared_programs, message.asset);
+                program->loc_aVertexPosition2D = -1;
+                program->loc_aVertexColour = -1;
+                program->loc_aTextureUV = -1;
+                program->loc_aTextureUVAtlasMin = -1;
+                program->loc_aTextureUVAtlasExtents = -1;
+                program->loc_uProjectionMatrix = -1;
+                program->loc_uDiffuseMap = -1;
+                program->is_important = 0;
+                break;
+            }
+            case Message_glBindAttribLocation: {
+                struct GLProgram* p = _bolt_find_program(c->shared_programs, message.asset);
+                const char* name = (const char*)message.data;
+                if (p) {
+                    if (!strcmp(name, "aVertexPosition2D")) p->loc_aVertexPosition2D = message.index;
+                    if (!strcmp(name, "aVertexColour")) p->loc_aVertexColour = message.index;
+                    if (!strcmp(name, "aTextureUV")) p->loc_aTextureUV = message.index;
+                    if (!strcmp(name, "aTextureUVAtlasMin")) p->loc_aTextureUVAtlasMin = message.index;
+                    if (!strcmp(name, "aTextureUVAtlasExtents")) p->loc_aTextureUVAtlasExtents = message.index;
+                }
+                if (message.do_free_data) free(message.data);
+                break;
+            }
+            case Message_glLinkProgram: {
+                struct GLProgram* p = _bolt_find_program(c->shared_programs, message.asset);
+                if (p && p->loc_aVertexPosition2D != -1 && p->loc_aVertexColour != -1 && p->loc_aTextureUV != -1 && p->loc_aTextureUVAtlasMin != -1 && p->loc_aTextureUVAtlasExtents != -1) {
+                    int uDiffuseMap = real_glGetUniformLocation(message.asset, "uDiffuseMap");
+                    int uProjectionMatrix = real_glGetUniformLocation(message.asset, "uProjectionMatrix");
+                    if (uDiffuseMap != -1 && uProjectionMatrix != -1) {
+                        p->loc_uDiffuseMap = uDiffuseMap;
+                        p->loc_uProjectionMatrix = uProjectionMatrix;
+                        p->is_important = 1;
+                    }
+                }
+                break;
+            }
+            case Message_glUseProgram: {
+                if (message.asset != c->bound_program_id) {
+                    c->bound_program_id = message.asset;
+                    const struct GLProgram* p = _bolt_find_program(c->shared_programs, message.asset);
+                    c->current_program_is_important = (p && p->is_important);
+                }
+                break;
+            }
+            case Message_glTexStorage2D: {
+                struct GLTexture2D* tex = _bolt_get_texture(c->shared_textures, c->bound_texture_id);
+                if (tex) {
+                    free(tex->data);
+                    tex->data = malloc(message.w * message.h * 4);
+                    tex->width = message.w;
+                    tex->height = message.h;
+                }
+                break;
+            }
+            case Message_glUniform1i: {
+                int* ptr = (int*)(&c->uniform_buffer[message.index * 16]);
+                *ptr = message.asset;
+                break;
+            }
+            case Message_glUniformMatrix4fv: {
+                int* ptr = (int*)(&c->uniform_buffer[message.index * 16]);
+                read(read_socket, ptr, 4 * 4 * sizeof(float));
+                break;
+            }
+            case Message_glVertexAttribPointer: {
+                struct GLArrayBuffer* buffer = _bolt_context_find_buffer(c, GL_ARRAY_BUFFER);
+                if (buffer) {
+                    _bolt_set_attr_binding(&c->attributes[message.index], buffer->data, message.data, message.stride, message.type, message.bool_value);
+                } else {
+                    printf("warning: glVertexAttribPointer didn't find buffer %lu\n", c->bound_vertex_array_id);
+                }
+                break;
+            }
+            case Message_glBindBuffer: {
+                switch (message.target) {
+                    case GL_ARRAY_BUFFER:
+                        c->bound_vertex_array_id = message.asset;
+                        break;
+                    case GL_ELEMENT_ARRAY_BUFFER:
+                        c->bound_element_array_id = message.asset;
+                        break;
+                }
+                break;
+            }
+            case Message_glBufferData: {
+                struct GLArrayBuffer* buffer = _bolt_context_get_buffer(c, message.target);
+                if (buffer) {
+                    buffer->len = message.w;
+                    
+                    free(buffer->data);
+                    
+                    if (message.do_free_data) {
+                        buffer->data = message.data;
+                    } else {
+                        buffer->data = malloc(message.w);
+                        if (message.data) memcpy(buffer->data, message.data, message.w);
+                    }
+                } else if (message.do_free_data) {
+                    free(message.data);
+                }
+                if (message.data) {
+                    uint8_t r = 0;
+                    write(c->sockets[1], &r, 1);
+                }
+                break;
+            }
+            case Message_glDeleteBuffers: {
+                _bolt_context_destroy_buffers(c, message.w, message.data);
+                if (message.do_free_data) free(message.data);
+                break;
+            }
+            case Message_glBindFramebuffer: {
+                switch (message.target) {
+                    case 36008:
+                        c->current_read_framebuffer = message.asset;
+                        break;
+                    case 36009:
+                        c->current_draw_framebuffer = message.asset;
+                        break;
+                    case 36160:
+                        c->current_read_framebuffer = message.asset;
+                        c->current_draw_framebuffer = message.asset;
+                        break;
+                }
+                break;
+            }
+            case Message_glCompressedTexSubImage2D: {
+                // weird lossy-compression formats with RGB-565 and way too much space dedicated to alpha channels
+                // https://www.khronos.org/opengl/wiki/S3_Texture_Compression
+                if (message.format == GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT || message.format == GL_COMPRESSED_RGBA_S3TC_DXT5_EXT || message.format == GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT) {
+                    struct GLTexture2D* tex = _bolt_find_texture(c->shared_textures, c->bound_texture_id);
+                    if (tex) {
+                        int out_xoffset = message.x;
+                        int out_yoffset = message.y;
+                        for (size_t ii = 0; ii < (message.w * message.h); ii += 16) {
+                            const uint8_t* ptr = message.data + ii;
+                            uint8_t* out_ptr = tex->data + (out_yoffset * tex->width * 4) + (out_xoffset * 4);
+                            uint16_t c0 = *(ptr + 8) + (*(ptr + 9) << 8);
+                            uint16_t c1 = *(ptr + 10) + (*(ptr + 11) << 8);
+                            uint8_t c0_rgb[3];
+                            uint8_t c1_rgb[3];
+                            _bolt_unpack_rgb565(c0, c0_rgb);
+                            _bolt_unpack_rgb565(c1, c1_rgb);
+                            const uint8_t c0_greater = c0 > c1;
+                            const uint32_t ctable = *(ptr + 12) + (*(ptr + 13) << 8) + (*(ptr + 14) << 16) + (*(ptr + 15) << 24);
+                            
+                            for (size_t j = 0; j < 4; j += 1) {
+                                for (size_t i = 0; i < 4; i += 1) {
+                                    if (out_xoffset + i >= 0 && out_yoffset + j >= 0 && out_xoffset + i < tex->width && out_yoffset + j < tex->height) {
+                                        uint8_t* pixel_ptr = out_ptr + (tex->width * i * 4) + (j * 4);
+                                        const uint32_t code = (ctable >> (2 * (4 * i + j))) & 3;
+                                        switch(code) {
+                                            case 0:
+                                                memcpy(pixel_ptr, c0_rgb, 3);
+                                                break;
+                                            case 1:
+                                                memcpy(pixel_ptr, c1_rgb, 3);
+                                                break;
+                                            case 2:
+                                                if (c0_greater) {
+                                                    pixel_ptr[0] = (2*c0_rgb[0]+c1_rgb[0])/3;
+                                                    pixel_ptr[1] = (2*c0_rgb[1]+c1_rgb[1])/3;
+                                                    pixel_ptr[2] = (2*c0_rgb[2]+c1_rgb[2])/3;
+                                                } else {
+                                                    pixel_ptr[0] = (c0_rgb[0]+c1_rgb[0])/2;
+                                                    pixel_ptr[1] = (c0_rgb[1]+c1_rgb[1])/2;
+                                                    pixel_ptr[2] = (c0_rgb[2]+c1_rgb[2])/2;
+                                                }
+                                                break;
+                                            case 3:
+                                                if (c0_greater) {
+                                                    pixel_ptr[0] = (2*c1_rgb[0]+c0_rgb[0])/3;
+                                                    pixel_ptr[1] = (2*c1_rgb[1]+c0_rgb[1])/3;
+                                                    pixel_ptr[2] = (2*c1_rgb[2]+c0_rgb[2])/3;
+                                                } else {
+                                                    memset(pixel_ptr, 0, 3);
+                                                }
+                                                break;
+                                        }
+                                    }
+                                }
+                            }
+                    
+                            out_xoffset += 4;
+                            if (out_xoffset >= message.x + message.w) {
+                                out_xoffset = message.x;
+                                out_yoffset += 4;
+                            }
+                        }
+                    }
+                }
+                uint8_t r = 0;
+                write(c->sockets[1], &r, 1);
+                if (message.do_free_data) free(message.data);
+                break;
+            }
+            case Message_glCopyImageSubData: {
+                // {srcName, srcX, srcY, dstName, dstX, dstY, srcWidth, srcHeight}
+                int tail[8];
+                read(read_socket, tail, 8 * sizeof(int));
+                struct GLTexture2D* src = _bolt_find_texture(c->shared_textures, tail[0]);
+                struct GLTexture2D* dst = _bolt_find_texture(c->shared_textures, tail[3]);
+                if (!src || !dst) break;
+                for (size_t i = 0; i < tail[7]; i += 1) {
+                    memcpy(dst->data + (tail[5] * dst->width * 4) + (tail[4] * 4), src->data + (tail[2] * src->width * 4) + (tail[1] * 4), tail[6] * 4);
+                }
+                break;
+            }
+            case Message_glEnableVertexAttribArray: {
+                c->attributes[message.index].enabled = 1;
+                break;
+            }
+            case Message_glDisableVertexAttribArray: {
+                c->attributes[message.index].enabled = 0;
+                break;
+            }
+            case Message_glMapBufferRange: {
+                struct GLArrayBuffer* buffer = _bolt_context_find_buffer(c, message.target);
+                if (buffer) {
+                    buffer->mapping = message.data;
+                    buffer->mapping_offset = message.x;
+                    buffer->mapping_len = message.w;
+                    buffer->mapping_access_type = message.format;
+                }
+                uint8_t r = 0;
+                write(c->sockets[1], &r, 1);
+                break;
+            }
+            case Message_glFlushMappedBufferRange: {
+                struct GLArrayBuffer* buffer = _bolt_context_find_buffer(c, message.target);
+                if (buffer && buffer->mapping) {
+                    memcpy(buffer->data + buffer->mapping_offset + message.x, buffer->mapping + message.x, message.w);
+                }
+                uint8_t r = 0;
+                write(c->sockets[1], &r, 1);
+                break;
+            }
+            case Message_glUnmapBuffer: {
+                struct GLArrayBuffer* buffer = _bolt_context_find_buffer(c, message.target);
+                if (buffer) {
+                    if(buffer->mapping && buffer->mapping_access_type & GL_MAP_WRITE_BIT && !(buffer->mapping_access_type & GL_MAP_FLUSH_EXPLICIT_BIT)) {
+                        memcpy(buffer->data + buffer->mapping_offset, buffer->mapping, buffer->mapping_len);
+                    }
+                    buffer->mapping = NULL;
+                }
+                uint8_t r = 0;
+                write(c->sockets[1], &r, 1);
+                break;
+            }
+            case Message_glBufferStorage: {
+                struct GLArrayBuffer* buffer = _bolt_context_get_buffer(c, message.target);
+                if (buffer) {
+                    buffer->len = message.w;
+                    free(buffer->data);
+                    if (message.do_free_data) {
+                        buffer->data = message.data;
+                    } else {
+                        buffer->data = malloc(message.w);
+                        if (message.data) memcpy(buffer->data, message.data, message.w);
+                    }
+                } else if (message.do_free_data) {
+                    free(message.data);
+                }
+                if (message.data) {
+                    uint8_t r = 0;
+                    write(c->sockets[1], &r, 1);
+                }
+                break;
+            }
+            case Message_glDrawElements: {
+                //if (c->current_program_is_important && c->current_draw_framebuffer == 0 && c->bound_vertex_array_id && c->bound_element_array_id) {
+                //    struct GLArrayBuffer* element_array = _bolt_context_find_buffer(c, GL_ELEMENT_ARRAY_BUFFER);
+                //    const unsigned short* indices = element_array->data + (uintptr_t)message.data;
+                //    struct GLProgram* current_program = _bolt_find_program(c->shared_programs, c->bound_program_id);
+                //    const struct GLAttrBinding* atlas_min = &c->attributes[current_program->loc_aTextureUVAtlasMin];
+                //    const struct GLAttrBinding* atlas_max = &c->attributes[current_program->loc_aTextureUVAtlasExtents];
+                //    const struct GLAttrBinding* tex_uv = &c->attributes[current_program->loc_aTextureUV];
+                //    int diffuse_map = *(int*)(&c->uniform_buffer[current_program->loc_uDiffuseMap * 16]);
+                //    if (atlas_min->enabled && atlas_max->enabled && tex_uv->enabled) {
+                //        printf("(%u) glDrawElements loc=%u atlas_min normalised=%u\n", gettid(), current_program->loc_aTextureUVAtlasMin, (unsigned int)atlas_min->normalise);
+                //        for (size_t i = 0; i + 2 < message.w; i += 3) {
+                //            unsigned short index1 = ((unsigned short*)indices)[i];
+                //            unsigned short index2 = ((unsigned short*)indices)[i + 1];
+                //            unsigned short index3 = ((unsigned short*)indices)[i + 2];
+                //            float min1[2];
+                //            float min2[2];
+                //            float min3[2];
+                //            float max1[2];
+                //            float max2[2];
+                //            float max3[2];
+                //            float uv1[2];
+                //            float uv2[2];
+                //            float uv3[2];
+                //            _bolt_get_attr_binding(atlas_min, index1, 2, min1);
+                //            _bolt_get_attr_binding(atlas_min, index2, 2, min2);
+                //            _bolt_get_attr_binding(atlas_min, index3, 2, min3);
+                //            _bolt_get_attr_binding(atlas_max, index1, 2, max1);
+                //            _bolt_get_attr_binding(atlas_max, index2, 2, max2);
+                //            _bolt_get_attr_binding(atlas_max, index3, 2, max3);
+                //            _bolt_get_attr_binding(tex_uv, index1, 2, uv1);
+                //            _bolt_get_attr_binding(tex_uv, index2, 2, uv2);
+                //            _bolt_get_attr_binding(tex_uv, index3, 2, uv3);
+                //            printf("drawing triangle, uDiffuseMap=%i, atlas extents %f,%f,%f,%f | %f,%f,%f,%f | %f,%f,%f,%f UV %f,%f %f,%f %f,%f\n",
+                //                diffuse_map, min1[0], min1[1], max1[0], max1[1], min2[0], min2[1], max2[0], max2[1], min3[0], min3[1], max3[0], max3[1],
+                //                uv1[0], uv1[1], uv2[0], uv2[1], uv3[0], uv3[1]);
+                //        }
+                //    }
+                //}
+                break;
+            }
+            case Message_glBindTexture: {
+                if (message.target == GL_TEXTURE_2D) {
+                    c->bound_texture_id = message.asset;
+                }
+                break;
+            }
+            case Message_glTexSubImage2D: {
+                if (message.target == GL_TEXTURE_2D && message.format == GL_RGBA) {
+                    struct GLTexture2D* tex = _bolt_find_texture(c->shared_textures, c->bound_texture_id);
+                    if (tex && !(message.x < 0 || message.y < 0 || message.x + message.w > tex->width || message.y + message.h > tex->height)) {
+                        for (unsigned int y = 0; y < message.h; y += 1) {
+                            unsigned char* dest_ptr = tex->data + ((tex->width * (y + message.y)) + message.x) * 4;
+                            const void* src_ptr = message.data + (message.w * y * 4);
+                            memcpy(dest_ptr, src_ptr, message.w * 4);
+                        }
+                    }
+                }
+                uint8_t r = 0;
+                write(c->sockets[1], &r, 1);
+                if (message.do_free_data) free(message.data);
+                break;
+            }
+            case Message_glDeleteTextures: {
+                _bolt_context_destroy_textures(c, message.w, message.data);
+                if (message.do_free_data) free(message.data);
+                break;
+            }
+        }
+    }
 }

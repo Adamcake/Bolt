@@ -2,6 +2,8 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <sys/socket.h>
+#include <unistd.h>
 
 void _bolt_glcontext_init(struct GLContext*, void*, void*);
 void _bolt_glcontext_free(struct GLContext*);
@@ -53,7 +55,7 @@ struct STRUCT* _bolt_get_##NAME(struct GLList* list, ID_TYPE id) { \
     pointer_cache[id] = ptr; \
     ptr->id = id; \
     struct STRUCT* inc_ptr = ptr; \
-    while (list->first_empty < PTR_LIST_CAPACITY && inc_ptr->id != 0) { \
+    while (list->first_empty < list->capacity && inc_ptr->id != 0) { \
         inc_ptr += 1; \
         list->first_empty += 1; \
     } \
@@ -224,6 +226,7 @@ void _bolt_glcontext_init(struct GLContext* context, void* egl_context, void* eg
         }
     }
     memset(context, 0, sizeof(*context));
+    socketpair(AF_UNIX, SOCK_STREAM, 0, context->sockets);
     context->id = (uintptr_t)egl_context;
     if (shared) {
         context->uniform_buffer = shared->uniform_buffer;
@@ -243,6 +246,8 @@ void _bolt_glcontext_init(struct GLContext* context, void* egl_context, void* eg
 }
 
 void _bolt_glcontext_free(struct GLContext* context) {
+    close(context->sockets[0]);
+    close(context->sockets[1]);
     if (context->is_shared_owner) {
         free(context->programs.pointers);
         free(context->buffers.pointers);
