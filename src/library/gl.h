@@ -84,7 +84,6 @@ void _bolt_get_attr_binding(const struct GLAttrBinding*, size_t, size_t, float*)
 // are actually safe assumptions in valid OpenGL usage.
 struct GLContext {
     uintptr_t id;
-    int sockets[2];
     struct GLList programs;
     struct GLList buffers;
     struct GLList textures;
@@ -103,6 +102,13 @@ struct GLContext {
     unsigned int current_read_framebuffer;
     struct GLAttrBinding attributes[16];
     unsigned char* uniform_buffer;
+};
+
+struct GLFence {
+    uint8_t signal;
+    uintptr_t real_fence;
+    pthread_mutex_t mutex;
+    pthread_cond_t cond;
 };
 
 struct GLContext* _bolt_context();

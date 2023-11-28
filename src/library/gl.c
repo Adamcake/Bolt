@@ -35,11 +35,12 @@ struct STRUCT* _bolt_get_##NAME(struct GLList* list, ID_TYPE id) { \
     if (id == 0) return NULL; \
     uint8_t cacheable = (id < PTR_LIST_CAPACITY); \
     if (cacheable && pointer_cache[id] != NULL) return pointer_cache[id]; \
-    for (size_t i = 0; i < list->capacity; i += 1) { \
-        struct STRUCT* ptr = &((struct STRUCT*)(list->data))[i]; \
-        if (ptr->id == id) { \
-            if (cacheable) pointer_cache[id] = ptr; \
-            return ptr; \
+    else if (!cacheable) { \
+        for (size_t i = 0; i < list->capacity; i += 1) { \
+            struct STRUCT* ptr = &((struct STRUCT*)(list->data))[i]; \
+            if (ptr->id == id) { \
+                return ptr; \
+            } \
         } \
     } \
     if (list->first_empty >= list->capacity) { \
@@ -47,9 +48,12 @@ struct STRUCT* _bolt_get_##NAME(struct GLList* list, ID_TYPE id) { \
         list->capacity += LIST_GROWTH_STEP; \
         struct STRUCT* new_ptr = calloc(list->capacity, sizeof(struct STRUCT)); \
         memcpy(new_ptr, list->data, old_capacity * sizeof(struct STRUCT)); \
+        intptr_t ptr_offset = (intptr_t)new_ptr - (intptr_t)list->data; \
         free(list->data); \
         list->data = new_ptr; \
-        memset(pointer_cache, 0, sizeof(struct STRUCT*) * PTR_LIST_CAPACITY); \
+        for (size_t i = 0; i < PTR_LIST_CAPACITY; i += 1) { \
+            if (pointer_cache[i]) pointer_cache[i] = (struct STRUCT*)((uintptr_t)(pointer_cache[i]) + ptr_offset);\
+        } \
     } \
     struct STRUCT* ptr = &((struct STRUCT*)(list->data))[list->first_empty]; \
     pointer_cache[id] = ptr; \
@@ -226,7 +230,6 @@ void _bolt_glcontext_init(struct GLContext* context, void* egl_context, void* eg
         }
     }
     memset(context, 0, sizeof(*context));
-    socketpair(AF_UNIX, SOCK_STREAM, 0, context->sockets);
     context->id = (uintptr_t)egl_context;
     if (shared) {
         context->uniform_buffer = shared->uniform_buffer;
@@ -246,8 +249,6 @@ void _bolt_glcontext_init(struct GLContext* context, void* egl_context, void* eg
 }
 
 void _bolt_glcontext_free(struct GLContext* context) {
-    close(context->sockets[0]);
-    close(context->sockets[1]);
     if (context->is_shared_owner) {
         free(context->programs.pointers);
         free(context->buffers.pointers);
