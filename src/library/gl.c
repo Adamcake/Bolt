@@ -123,31 +123,6 @@ void _bolt_destroy_context(void* egl_context) {
     }
 }
 
-struct GLArrayBuffer* _bolt_context_get_buffer_internal(struct GLContext* context, uint32_t target, uint8_t create) {
-    switch (target) {
-        case GL_ARRAY_BUFFER:
-            if (create) return _bolt_get_buffer(context->shared_buffers, context->bound_vertex_array_id);
-            else return _bolt_find_buffer(context->shared_buffers, context->bound_vertex_array_id);
-        case GL_ELEMENT_ARRAY_BUFFER:
-            if (create) return _bolt_get_buffer(context->shared_buffers, context->bound_element_array_id);
-            else return _bolt_find_buffer(context->shared_buffers, context->bound_element_array_id);
-        default:
-            return NULL;
-    }
-}
-
-// gets pointer to the current active buffer or makes a new one if one doesn't already exist
-// can still return NULL if `target` is a value irrelevant to this program, or there is no space left for buffers
-struct GLArrayBuffer* _bolt_context_get_buffer(struct GLContext* context, uint32_t target) {
-    struct GLArrayBuffer* a = _bolt_context_get_buffer_internal(context, target, 1);
-    return a;
-}
-
-// gets a pointer to the current active buffer of the given type, or returns NULL if there isn't one
-struct GLArrayBuffer* _bolt_context_find_buffer(struct GLContext* context, uint32_t target) {
-    return _bolt_context_get_buffer_internal(context, target, 0);
-}
-
 void _bolt_set_attr_binding(struct GLAttrBinding* binding, unsigned int buffer, int size, const void* offset, unsigned int stride, uint32_t type, uint8_t normalise) {
     binding->buffer = buffer;
     binding->offset = (uintptr_t)offset;

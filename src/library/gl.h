@@ -23,6 +23,8 @@
 #define GL_COMPRESSED_RGBA_S3TC_DXT5_EXT 0x83F3
 #define GL_ARRAY_BUFFER 34962
 #define GL_ELEMENT_ARRAY_BUFFER 34963
+#define GL_ARRAY_BUFFER_BINDING 34964
+#define GL_ELEMENT_ARRAY_BUFFER_BINDING 34965
 
 // my haphazard implementation of an arena allocator
 struct GLList {
@@ -89,8 +91,6 @@ struct GLContext {
     struct GLList* shared_buffers;
     struct GLList* shared_textures;
     size_t bound_program_id;
-    size_t bound_vertex_array_id;
-    size_t bound_element_array_id;
     size_t bound_texture_id;
     uint8_t current_program_is_important;
     uint8_t is_attached;
