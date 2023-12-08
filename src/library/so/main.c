@@ -555,7 +555,12 @@ void glFlush() {
     SEND_MSG({.instruction = Message_glFlush, .data = &data})
     real_glFlush();
     pthread_mutex_lock(&data.mutex);
-    while (!data.done) pthread_cond_wait(&data.cond, &data.mutex);
+    while (!data.done) {
+        pthread_mutex_lock(&egl_lock);
+        uint8_t running = worker_thread_running;
+        pthread_mutex_unlock(&egl_lock);
+        if (running) pthread_cond_wait(&data.cond, &data.mutex);
+    }
     pthread_mutex_unlock(&data.mutex);
     pthread_mutex_destroy(&data.mutex);
     pthread_cond_destroy(&data.cond);
