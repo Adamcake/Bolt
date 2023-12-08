@@ -15,6 +15,7 @@
 #define GL_INT 5124
 #define GL_FLOAT 5126
 #define GL_TRIANGLES 4
+#define GL_MAP_READ_BIT 1
 #define GL_MAP_WRITE_BIT 2
 #define GL_MAP_FLUSH_EXPLICIT_BIT 16
 #define GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT 0x8C4F
@@ -34,12 +35,10 @@ struct GLList {
 struct GLArrayBuffer {
     void* data;
     unsigned int id;
-    unsigned int len;
-
-    void* mapping;
     int32_t mapping_offset;
     uint32_t mapping_len;
     uint32_t mapping_access_type;
+    uint8_t mapped;
 };
 struct GLArrayBuffer* _bolt_find_buffer(struct GLList*, unsigned int);
 struct GLArrayBuffer* _bolt_get_buffer(struct GLList*, unsigned int);
@@ -68,15 +67,14 @@ struct GLProgram* _bolt_find_program(struct GLList*, unsigned int);
 struct GLProgram* _bolt_get_program(struct GLList*, unsigned int);
 
 struct GLAttrBinding {
-    const void* ptr;
+    unsigned int buffer;
     unsigned int stride;
+    uintptr_t offset;
+    int size;
     uint32_t type;
     uint8_t normalise;
     uint8_t enabled;
 };
-
-void _bolt_set_attr_binding(struct GLAttrBinding*, const void*, const void*, unsigned int, uint32_t, uint8_t);
-void _bolt_get_attr_binding(const struct GLAttrBinding*, size_t, size_t, float*);
 
 // Context-specific information - this is thread-specific on EGL, not sure about elsewhere
 // this method of context-sharing takes advantage of the fact that the game never chains shares together
@@ -101,7 +99,6 @@ struct GLContext {
     unsigned int current_draw_framebuffer;
     unsigned int current_read_framebuffer;
     struct GLAttrBinding attributes[16];
-    unsigned char* uniform_buffer;
 };
 
 struct GLFence {
@@ -120,5 +117,7 @@ struct GLArrayBuffer* _bolt_context_find_buffer(struct GLContext*, uint32_t);
 struct GLArrayBuffer* _bolt_context_find_named_buffer(struct GLContext*, unsigned int);
 void _bolt_context_destroy_buffers(struct GLContext*, unsigned int, const unsigned int*);
 void _bolt_context_destroy_textures(struct GLContext*, unsigned int, const unsigned int*);
+void _bolt_set_attr_binding(struct GLAttrBinding*, unsigned int, int, const void*, unsigned int, uint32_t, uint8_t);
+uint8_t _bolt_get_attr_binding(struct GLContext*, const struct GLAttrBinding*, size_t, size_t, float*);
 
 #endif

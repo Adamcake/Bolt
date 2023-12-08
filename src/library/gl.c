@@ -2,8 +2,6 @@
 
 #include <stdio.h>
 #include <string.h>
-#include <sys/socket.h>
-#include <unistd.h>
 
 void _bolt_glcontext_init(struct GLContext*, void*, void*);
 void _bolt_glcontext_free(struct GLContext*);
@@ -150,21 +148,21 @@ struct GLArrayBuffer* _bolt_context_find_buffer(struct GLContext* context, uint3
     return _bolt_context_get_buffer_internal(context, target, 0);
 }
 
-void _bolt_set_attr_binding(struct GLAttrBinding* binding, const void* buffer, const void* offset, unsigned int stride, uint32_t type, uint8_t normalise) {
-    binding->ptr = buffer + (uintptr_t)offset;
+void _bolt_set_attr_binding(struct GLAttrBinding* binding, unsigned int buffer, int size, const void* offset, unsigned int stride, uint32_t type, uint8_t normalise) {
+    binding->buffer = buffer;
+    binding->offset = (uintptr_t)offset;
+    binding->size = size;
     binding->stride = stride;
     binding->normalise = normalise;
     binding->type = type;
 }
 
-void _bolt_get_attr_binding(const struct GLAttrBinding* binding, size_t index, size_t num_out, float* out) {
-    if (binding->ptr == 0) {
-        // I don't think this is meant to happen, but in this game it does
-        memset(out, 0, num_out * sizeof(float));
-        return;
-    }
+uint8_t _bolt_get_attr_binding(struct GLContext* c, const struct GLAttrBinding* binding, size_t index, size_t num_out, float* out) {
+    struct GLArrayBuffer* buffer = _bolt_find_buffer(c->shared_buffers, binding->buffer);
+    if (!buffer || !buffer->data) return 0;
+    uintptr_t buf_offset = binding->offset + (binding->stride * index);
 
-    const void* ptr = binding->ptr + (binding->stride * index);
+    const void* ptr = buffer->data + buf_offset;
     if (!binding->normalise) {
         switch (binding->type) {
             case GL_FLOAT:
@@ -216,6 +214,7 @@ void _bolt_get_attr_binding(const struct GLAttrBinding* binding, size_t index, s
                 break;
         }
     }
+    return 1;
 }
 
 void _bolt_glcontext_init(struct GLContext* context, void* egl_context, void* egl_shared) {
@@ -232,13 +231,11 @@ void _bolt_glcontext_init(struct GLContext* context, void* egl_context, void* eg
     memset(context, 0, sizeof(*context));
     context->id = (uintptr_t)egl_context;
     if (shared) {
-        context->uniform_buffer = shared->uniform_buffer;
         context->shared_programs = &shared->programs;
         context->shared_buffers = &shared->buffers;
         context->shared_textures = &shared->textures;
     } else {
         context->is_shared_owner = 1;
-        context->uniform_buffer = malloc(16384); // seems to be the actual size on GPUs
         context->programs.pointers = calloc(PTR_LIST_CAPACITY, sizeof(void*));
         context->buffers.pointers = calloc(PTR_LIST_CAPACITY, sizeof(void*));
         context->textures.pointers = calloc(PTR_LIST_CAPACITY, sizeof(void*));
@@ -253,7 +250,6 @@ void _bolt_glcontext_free(struct GLContext* context) {
         free(context->programs.pointers);
         free(context->buffers.pointers);
         free(context->textures.pointers);
-        free(context->uniform_buffer);
         free(context->programs.data);
         free(context->buffers.data);
         free(context->textures.data);
@@ -264,10 +260,9 @@ void _bolt_context_destroy_buffers(struct GLContext* context, unsigned int n, co
     for (size_t i = 0; i < n; i += 1) {
         struct GLArrayBuffer* buffer = _bolt_find_buffer(context->shared_buffers, list[i]);
         if (!buffer) continue;
+        buffer->id = 0;
         free(buffer->data);
         buffer->data = NULL;
-        buffer->id = 0;
-        buffer->len = 0;
         if (list[i] < PTR_LIST_CAPACITY) ((struct GLArrayBuffer**)(context->shared_buffers->pointers))[list[i]] = NULL;
         if (context->shared_buffers->first_empty > list[i]) context->shared_buffers->first_empty = list[i];
     }

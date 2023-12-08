@@ -17,6 +17,7 @@ uint8_t inited = 0;
 
 enum BoltMessageType {
     Message_Quit,
+    Message_Context,
     Message_glCreateProgram,
     Message_glLinkProgram,
     Message_glUseProgram,
@@ -24,29 +25,29 @@ enum BoltMessageType {
     Message_glDisableVertexAttribArray,
     Message_glBindAttribLocation,
     Message_glVertexAttribPointer,
-    Message_glUniform1i,
-    Message_glUniformMatrix4fv,
     Message_glBindBuffer,
     Message_glBufferData,
     Message_glBufferStorage,
     Message_glMapBufferRange,
-    Message_glFlushMappedBufferRange,
     Message_glUnmapBuffer,
     Message_glDeleteBuffers,
     Message_glBindFramebuffer,
     Message_glCompressedTexSubImage2D,
     Message_glCopyImageSubData,
+    Message_glFlushMappedBufferRange,
     Message_glDrawElements,
     Message_glBindTexture,
     Message_glTexStorage2D,
     Message_glTexSubImage2D,
     Message_glDeleteTextures,
-    Message_glFenceSync,
+    Message_eglSwapBuffers,
+    Message_glFlush,
 };
 int read_socket;
 int write_socket;
 pthread_t worker_thread;
 uint8_t worker_thread_running = 0;
+uint8_t worker_context_exists = 0;
 void* _bolt_worker_thread(void*);
 struct BoltMessage {
     struct GLContext* context;
@@ -66,6 +67,14 @@ struct BoltMessage {
     enum BoltMessageType instruction;
 };
 #define SEND_MSG(...) {struct BoltMessage _message = __VA_ARGS__; write(write_socket, &_message, sizeof(struct BoltMessage));}
+
+struct BoltSyncData {
+    void* ptr;
+    pthread_mutex_t mutex;
+    pthread_cond_t cond;
+    uint8_t done;
+};
+
 
 pthread_mutex_t egl_lock;
 
@@ -99,6 +108,8 @@ void* (*real_xcb_wait_for_event)(void*) = NULL;
 unsigned int (*real_glCreateProgram)() = NULL;
 void (*real_glBindAttribLocation)(unsigned int, unsigned int, const char*) = NULL;
 int (*real_glGetUniformLocation)(unsigned int, const char*) = NULL;
+void (*real_glGetUniformfv)(unsigned int, int, float*) = NULL;
+void (*real_glGetUniformiv)(unsigned int, int, int*) = NULL;
 void (*real_glLinkProgram)(unsigned int) = NULL;
 void (*real_glUseProgram)(unsigned int) = NULL;
 void (*real_glTexStorage2D)(uint32_t, int, uint32_t, unsigned int, unsigned int) = NULL;
@@ -115,12 +126,10 @@ void (*real_glCopyImageSubData)(unsigned int, uint32_t, int, int, int, int, unsi
 void (*real_glEnableVertexAttribArray)(unsigned int) = NULL;
 void (*real_glDisableVertexAttribArray)(unsigned int) = NULL;
 void* (*real_glMapBufferRange)(uint32_t, intptr_t, uintptr_t, uint32_t) = NULL;
-void (*real_glFlushMappedBufferRange)(uint32_t, intptr_t, uintptr_t) = NULL;
 uint8_t (*real_glUnmapBuffer)(uint32_t) = NULL;
 void (*real_glBufferStorage)(unsigned int, uintptr_t, const void*, uintptr_t) = NULL;
-uintptr_t (*real_glFenceSync)(uint32_t, uint32_t) = NULL;
-void (*real_glWaitSync)(uintptr_t, uint32_t, uint64_t) = NULL;
-void (*real_glDeleteSync)(uintptr_t) = NULL;
+void (*real_glFlushMappedBufferRange)(uint32_t, intptr_t, uintptr_t) = NULL;
+void (*real_glBufferSubData)(uint32_t, intptr_t, uintptr_t, const void*) = NULL;
 
 /* opengl functions that are usually loaded dynamically from libGL.so */
 void (*real_glDrawElements)(uint32_t, unsigned int, uint32_t, const void*) = NULL;
@@ -128,6 +137,8 @@ void (*real_glDrawArrays)(uint32_t, int, unsigned int) = NULL;
 void (*real_glBindTexture)(uint32_t, unsigned int) = NULL;
 void (*real_glTexSubImage2D)(uint32_t, int, int, int, unsigned int, unsigned int, uint32_t, uint32_t, const void*) = NULL;
 void (*real_glDeleteTextures)(unsigned int, const unsigned int*) = NULL;
+uint32_t (*real_glGetError)() = NULL;
+void (*real_glFlush)() = NULL;
 
 void _bolt_unpack_rgb565(uint16_t packed, uint8_t out[3]) {
     out[0] = (packed >> 11) & 0b00011111;
@@ -261,6 +272,10 @@ void _bolt_init_libgl(unsigned long addr, const Elf32_Word* gnu_hash_table, cons
     if (sym) real_glTexSubImage2D = sym->st_value + libgl_addr;
     sym = _bolt_lookup_symbol("glDeleteTextures", gnu_hash_table, hash_table, string_table, symbol_table);
     if (sym) real_glDeleteTextures = sym->st_value + libgl_addr;
+    sym = _bolt_lookup_symbol("glGetError", gnu_hash_table, hash_table, string_table, symbol_table);
+    if (sym) real_glGetError = sym->st_value + libgl_addr;
+    sym = _bolt_lookup_symbol("glFlush", gnu_hash_table, hash_table, string_table, symbol_table);
+    if (sym) real_glFlush = sym->st_value + libgl_addr;
 }
 
 void _bolt_init_libxcb(unsigned long addr, const Elf32_Word* gnu_hash_table, const ElfW(Word)* hash_table, const char* string_table, const ElfW(Sym)* symbol_table) {
@@ -338,9 +353,19 @@ void _bolt_glGetUniformLocation(unsigned int program, const char* name) {
     real_glGetUniformLocation(program, name);
 }
 
+void _bolt_glGetUniformfv(unsigned int program, int location, float* params) {
+    real_glGetUniformfv(program, location, params);
+}
+
+void _bolt_glGetUniformiv(unsigned int program, int location, int* params) {
+    real_glGetUniformiv(program, location, params);
+}
+
 void _bolt_glLinkProgram(unsigned int program) {
     real_glLinkProgram(program);
-    SEND_MSG({.context = _bolt_context(), .instruction = Message_glLinkProgram, .asset = program})
+    int uDiffuseMap = real_glGetUniformLocation(program, "uDiffuseMap");
+    int uProjectionMatrix = real_glGetUniformLocation(program, "uProjectionMatrix");
+    SEND_MSG({.context = _bolt_context(), .instruction = Message_glLinkProgram, .asset = program, .x = uDiffuseMap, .y = uProjectionMatrix})
 }
 
 void _bolt_glUseProgram(unsigned int program) {
@@ -353,24 +378,9 @@ void _bolt_glTexStorage2D(uint32_t target, int levels, uint32_t internalformat, 
     SEND_MSG({.context = _bolt_context(), .instruction = Message_glTexStorage2D, .target = target, .w = width, .h = height})
 }
 
-void _bolt_glUniform1i(int location, int v0) {
-    real_glUniform1i(location, v0);
-    SEND_MSG({.context = _bolt_context(), .instruction = Message_glUniform1i, .index = location, .asset = v0})
-}
-
-void _bolt_glUniformMatrix4fv(int location, unsigned int count, uint8_t transpose, const float* value) {
-    real_glUniformMatrix4fv(location, count, transpose, value);
-    struct {
-        struct BoltMessage head;
-        float tail[16];
-    } message = {.head = {.context = _bolt_context(), .instruction = Message_glUniformMatrix4fv, .index = location, .bool_value = transpose}};
-    memcpy(message.tail, value, 4 * 4 * sizeof(float));
-    write(write_socket, &message, sizeof(message));
-}
-
 void _bolt_glVertexAttribPointer(unsigned int index, int size, uint32_t type, uint8_t normalised, unsigned int stride, const void* pointer) {
     real_glVertexAttribPointer(index, size, type, normalised, stride, pointer);
-    SEND_MSG({.context = _bolt_context(), .instruction = Message_glVertexAttribPointer, .index = index, .type = type, .bool_value = normalised, .stride = stride, .data = (void*)(uintptr_t)pointer})
+    SEND_MSG({.context = _bolt_context(), .instruction = Message_glVertexAttribPointer, .index = index, .type = type, .w = size, .bool_value = normalised, .stride = stride, .data = (void*)(uintptr_t)pointer})
 }
 
 void _bolt_glBindBuffer(uint32_t target, unsigned int buffer) {
@@ -380,7 +390,11 @@ void _bolt_glBindBuffer(uint32_t target, unsigned int buffer) {
 
 void _bolt_glBufferData(uint32_t target, uintptr_t size, const void* data, uint32_t usage) {
     real_glBufferData(target, size, data, usage);
-    SEND_MSG({.context = _bolt_context(), .instruction = Message_glBufferData, .target = target, .w = size, .data = (void*)(uintptr_t)data, .do_free_data = 0})
+    if (target == GL_ARRAY_BUFFER || target == GL_ELEMENT_ARRAY_BUFFER) {
+        void* buffer = malloc(size);
+        if (data) memcpy(buffer, data, size);
+        SEND_MSG({.context = _bolt_context(), .instruction = Message_glBufferData, .target = target, .data = buffer, .w = size, .do_free_data = 1})
+    }
 }
 
 void _bolt_glDeleteBuffers(unsigned int n, const unsigned int* buffers) {
@@ -433,72 +447,75 @@ void _bolt_glDisableVertexAttribArray(unsigned int index) {
 }
 
 void* _bolt_glMapBufferRange(uint32_t target, intptr_t offset, uintptr_t length, uint32_t access) {
-    void* ptr = real_glMapBufferRange(target, offset, length, access);
-    struct GLContext* c = _bolt_context();
-    SEND_MSG({.context = c, .instruction = Message_glMapBufferRange, .data = ptr, .target = target, .x = offset, .w = length, .format = access})
-    return ptr;
-}
-
-void _bolt_glFlushMappedBufferRange(uint32_t target, intptr_t offset, uintptr_t length) {
-    real_glFlushMappedBufferRange(target, offset, length);
-    //struct GLContext* c = _bolt_context();
-    //SEND_MSG({.context = c, .instruction = Message_glFlushMappedBufferRange, .target = target, .x = offset, .w = length})
+    if (target == GL_ARRAY_BUFFER || target == GL_ELEMENT_ARRAY_BUFFER) {
+        struct BoltSyncData data;
+        data.done = 0;
+        pthread_mutex_init(&data.mutex, NULL);
+        pthread_cond_init(&data.cond, NULL);
+        SEND_MSG({.context = _bolt_context(), .data = &data, .instruction = Message_glMapBufferRange, .target = target, .x = offset, .w = length, .format = access})
+        pthread_mutex_lock(&data.mutex);
+        while (!data.done) pthread_cond_wait(&data.cond, &data.mutex);
+        pthread_mutex_unlock(&data.mutex);
+        pthread_mutex_destroy(&data.mutex);
+        pthread_cond_destroy(&data.cond);
+        return data.ptr;
+    } else {
+        return real_glMapBufferRange(target, offset, length, access);
+    }
 }
 
 uint8_t _bolt_glUnmapBuffer(uint32_t target) {
-    struct GLContext* c = _bolt_context();
-    SEND_MSG({.context = c, .instruction = Message_glUnmapBuffer, .target = target})
-    return real_glUnmapBuffer(target);
+    if (target == GL_ARRAY_BUFFER || target == GL_ELEMENT_ARRAY_BUFFER) {
+        struct BoltSyncData data;
+        data.done = 0;
+        pthread_mutex_init(&data.mutex, NULL);
+        pthread_cond_init(&data.cond, NULL);
+        SEND_MSG({.context = _bolt_context(), .instruction = Message_glUnmapBuffer, .data = &data, .target = target})
+        pthread_mutex_lock(&data.mutex);
+        while (!data.done) pthread_cond_wait(&data.cond, &data.mutex);
+        pthread_mutex_unlock(&data.mutex);
+        pthread_mutex_destroy(&data.mutex);
+        pthread_cond_destroy(&data.cond);
+        return 1;
+    } else {
+        return real_glUnmapBuffer(target);
+    }
 }
 
 void _bolt_glBufferStorage(uint32_t target, uintptr_t size, const void* data, uintptr_t flags) {
     real_glBufferStorage(target, size, data, flags);
-    SEND_MSG({.context = _bolt_context(), .instruction = Message_glBufferStorage, .target = target, .w = size, .data = (void*)(uintptr_t)data, .do_free_data = 0})
-}
-
-uintptr_t _bolt_glFenceSync(uint32_t condition, uint32_t flags) {
-    uintptr_t fence_id = real_glFenceSync(condition, flags);
-    if (fence_id) {
-        struct GLFence* fence = calloc(1, sizeof(struct GLFence));
-        fence->real_fence = fence_id;
-        pthread_mutex_init(&fence->mutex, NULL);
-        pthread_cond_init(&fence->cond, NULL);
-        struct BoltMessage message = {.instruction = Message_glFenceSync, .data = fence};
-        if (write(write_socket, &message, sizeof(struct BoltMessage)) == -1) {
-            // eglTerminate has already completed, so this make sure this fence won't be blocked on
-            fence->signal = 1;
-        }
-        return (uintptr_t)fence;
+    if (target == GL_ARRAY_BUFFER || target == GL_ELEMENT_ARRAY_BUFFER) {
+        void* buffer = malloc(size);
+        if (data) memcpy(buffer, data, size);
+        SEND_MSG({.context = _bolt_context(), .instruction = Message_glBufferStorage, .target = target, .data = buffer, .w = size, .do_free_data = 1})
     }
-    return 0;
 }
 
-void _bolt_glWaitSync(uintptr_t sync, uint32_t flags, uint64_t timeout) {
-    struct GLFence* fence = (struct GLFence*)sync;
-    pthread_mutex_lock(&fence->mutex);
-    while (!fence->signal) pthread_cond_wait(&fence->cond, &fence->mutex);
-    pthread_mutex_unlock(&fence->mutex);
-
-    // some strange undocumented behaviour here, the game never actually calls glDeleteSync and just
-    // expects this cleanup to happen automatically, so we do it here to avoid leaking the memory
-    real_glDeleteSync(fence->real_fence);
-    pthread_mutex_destroy(&fence->mutex);
-    pthread_cond_destroy(&fence->cond);
-    free(fence);
+void _bolt_glFlushMappedBufferRange(uint32_t target, intptr_t offset, uintptr_t length) {
+    if (target == GL_ARRAY_BUFFER || target == GL_ELEMENT_ARRAY_BUFFER) {
+        struct BoltSyncData data;
+        data.done = 0;
+        pthread_mutex_init(&data.mutex, NULL);
+        pthread_cond_init(&data.cond, NULL);
+        SEND_MSG({.context = _bolt_context(), .data = &data, .instruction = Message_glFlushMappedBufferRange, .target = target, .x = offset, .w = length})
+        pthread_mutex_lock(&data.mutex);
+        while (!data.done) pthread_cond_wait(&data.cond, &data.mutex);
+        pthread_mutex_unlock(&data.mutex);
+        pthread_mutex_destroy(&data.mutex);
+        pthread_cond_destroy(&data.cond);
+    } else {
+        real_glFlushMappedBufferRange(target, offset, length);
+    }
 }
 
-void _bolt_glDeleteSync(uintptr_t sync) {
-    struct GLFence* fence = (struct GLFence*)sync;
-    real_glDeleteSync(fence->real_fence);
-    //pthread_mutex_destroy(&fence->mutex);
-    //pthread_cond_destroy(&fence->cond);
-    //free(fence);
+void _bolt_glBufferSubData(uint32_t target, intptr_t offset, uintptr_t size, const void* data) {
+    real_glBufferSubData(target, offset, size, data);
 }
 
 void glDrawElements(uint32_t mode, unsigned int count, uint32_t type, const void* indices) {
     real_glDrawElements(mode, count, type, indices);
     if (type == GL_UNSIGNED_SHORT && mode == GL_TRIANGLES) {
-        SEND_MSG({.context = _bolt_context(), .instruction = Message_glDrawElements, .w = count, .data = (void*)(uintptr_t)indices})
+        SEND_MSG({.context = _bolt_context(), .instruction = Message_glDrawElements, .data = (void*)(uintptr_t)indices, .w = count})
     }
 }
 
@@ -524,6 +541,24 @@ void glDeleteTextures(unsigned int n, const unsigned int* textures) {
     void* ptr = malloc(n * sizeof(unsigned int));
     memcpy(ptr, textures, n * sizeof(unsigned int));
     SEND_MSG({.context = _bolt_context(), .instruction = Message_glDeleteTextures, .w = n, .data = ptr, .do_free_data = 1})
+}
+
+uint32_t glGetError() {
+    return real_glGetError();
+}
+
+void glFlush() {
+    struct BoltSyncData data;
+    data.done = 0;
+    pthread_mutex_init(&data.mutex, NULL);
+    pthread_cond_init(&data.cond, NULL);
+    SEND_MSG({.instruction = Message_glFlush, .data = &data})
+    real_glFlush();
+    pthread_mutex_lock(&data.mutex);
+    while (!data.done) pthread_cond_wait(&data.cond, &data.mutex);
+    pthread_mutex_unlock(&data.mutex);
+    pthread_mutex_destroy(&data.mutex);
+    pthread_cond_destroy(&data.cond);
 }
 
 unsigned int eglSwapBuffers(void*, void*);
@@ -566,11 +601,11 @@ void* eglGetProcAddress(const char* name) {
     PROC_ADDRESS_MAP(glCreateProgram)
     PROC_ADDRESS_MAP(glBindAttribLocation)
     PROC_ADDRESS_MAP(glGetUniformLocation)
+    PROC_ADDRESS_MAP(glGetUniformfv)
+    PROC_ADDRESS_MAP(glGetUniformiv)
     PROC_ADDRESS_MAP(glLinkProgram)
     PROC_ADDRESS_MAP(glUseProgram)
     PROC_ADDRESS_MAP(glTexStorage2D)
-    PROC_ADDRESS_MAP(glUniform1i)
-    PROC_ADDRESS_MAP(glUniformMatrix4fv)
     PROC_ADDRESS_MAP(glVertexAttribPointer)
     PROC_ADDRESS_MAP(glBindBuffer)
     PROC_ADDRESS_MAP(glBufferData)
@@ -582,89 +617,25 @@ void* eglGetProcAddress(const char* name) {
     PROC_ADDRESS_MAP(glEnableVertexAttribArray)
     PROC_ADDRESS_MAP(glDisableVertexAttribArray)
     PROC_ADDRESS_MAP(glMapBufferRange)
-    PROC_ADDRESS_MAP(glFlushMappedBufferRange)
     PROC_ADDRESS_MAP(glUnmapBuffer)
     PROC_ADDRESS_MAP(glBufferStorage)
-    PROC_ADDRESS_MAP(glFenceSync)
-    PROC_ADDRESS_MAP(glWaitSync)
-    PROC_ADDRESS_MAP(glDeleteSync)
+    PROC_ADDRESS_MAP(glFlushMappedBufferRange)
+    PROC_ADDRESS_MAP(glBufferSubData)
 #undef PROC_ADDRESS_MAP
     return real_eglGetProcAddress(name);
 }
 
 unsigned int eglSwapBuffers(void* display, void* surface) {
-    struct GLContext* c = _bolt_context();
-    //size_t mem_textures = 0;
-    //size_t mem_arrays = 0;
-    //for (size_t i = 0; i < MAX_TEXTURES; i += 1) {
-    //    mem_textures += textures[i].width * textures[i].height * 4;
-    //}
-    //for (size_t i = 0; i < MAX_ARRAYS; i += 1) {
-    //    mem_arrays += arrays[i].len;
-    //}
-    //printf("[L] --- eglSwapBuffers - mem stats tex=%lu arr=%lu tot=%lu\n", mem_textures, mem_arrays, mem_textures + mem_arrays);
-    //asd += 1;
-    //if (asd == 80) {
-    //    void (*glGetTextureImage)(unsigned int, int, uint32_t, uint32_t, unsigned int, void*) = real_eglGetProcAddress("glGetTextureImage");
-    //    unsigned char* buf = malloc(8192 * 8192 * 4);
-    //    for (size_t i = 0; i < c->shared_textures->capacity; i += 1) {
-    //        struct GLTexture2D* tex = &((struct GLTexture2D*)c->shared_textures->data)[i];
-    //        if (tex->id && tex->data) {
-    //            size_t w = tex->width;
-    //            size_t h = tex->height;
-    //            size_t filesize = w * h * 4;
-    //            unsigned char bmpfileheader[14] = {'B','M', 0,0,0,0, 0,0, 0,0, 54,0,0,0};
-    //            unsigned char bmpinfoheader[40] = {40,0,0,0, 0,0,0,0, 0,0,0,0, 1,0, 32,0};
-    //            bmpfileheader[ 2] = (unsigned char)(filesize    );
-    //            bmpfileheader[ 3] = (unsigned char)(filesize>> 8);
-    //            bmpfileheader[ 4] = (unsigned char)(filesize>>16);
-    //            bmpfileheader[ 5] = (unsigned char)(filesize>>24);
-    //            bmpinfoheader[ 4] = (unsigned char)(       w    );
-    //            bmpinfoheader[ 5] = (unsigned char)(       w>> 8);
-    //            bmpinfoheader[ 6] = (unsigned char)(       w>>16);
-    //            bmpinfoheader[ 7] = (unsigned char)(       w>>24);
-    //            bmpinfoheader[ 8] = (unsigned char)(       h    );
-    //            bmpinfoheader[ 9] = (unsigned char)(       h>> 8);
-    //            bmpinfoheader[10] = (unsigned char)(       h>>16);
-    //            bmpinfoheader[11] = (unsigned char)(       h>>24);
-    //            char filename[256];
-    //            snprintf(filename, 256, "/home/adam/image/tex%u-%u.bmp", gettid(), tex->id);
-    //            FILE* f = fopen(filename, "wb");
-    //            fwrite(bmpfileheader,1,14,f);
-    //            fwrite(bmpinfoheader,1,40,f);
-    //            fwrite(tex->data, 1, filesize, f);
-    //            fclose(f);
-    //        }
-    //        if (tex->id && tex->data) {
-    //            size_t w = tex->width;
-    //            size_t h = tex->height;
-    //            size_t filesize = w * h * 4;
-    //            glGetTextureImage(i, 0, GL_RGBA, 5121, filesize, buf);
-    //            unsigned char bmpfileheader[14] = {'B','M', 0,0,0,0, 0,0, 0,0, 54,0,0,0};
-    //            unsigned char bmpinfoheader[40] = {40,0,0,0, 0,0,0,0, 0,0,0,0, 1,0, 32,0};
-    //            bmpfileheader[ 2] = (unsigned char)(filesize    );
-    //            bmpfileheader[ 3] = (unsigned char)(filesize>> 8);
-    //            bmpfileheader[ 4] = (unsigned char)(filesize>>16);
-    //            bmpfileheader[ 5] = (unsigned char)(filesize>>24);
-    //            bmpinfoheader[ 4] = (unsigned char)(       w    );
-    //            bmpinfoheader[ 5] = (unsigned char)(       w>> 8);
-    //            bmpinfoheader[ 6] = (unsigned char)(       w>>16);
-    //            bmpinfoheader[ 7] = (unsigned char)(       w>>24);
-    //            bmpinfoheader[ 8] = (unsigned char)(       h    );
-    //            bmpinfoheader[ 9] = (unsigned char)(       h>> 8);
-    //            bmpinfoheader[10] = (unsigned char)(       h>>16);
-    //            bmpinfoheader[11] = (unsigned char)(       h>>24);
-    //            char filename[256];
-    //            snprintf(filename, 256, "/home/adam/image/gl%u-%u.bmp", gettid(), tex->id);
-    //            FILE* f = fopen(filename, "wb");
-    //            fwrite(bmpfileheader,1,14,f);
-    //            fwrite(bmpinfoheader,1,40,f);
-    //            fwrite(buf, 1, filesize, f);
-    //            fclose(f);
-    //        }
-    //    }
-    //    free(buf);
-    //}
+    struct BoltSyncData data;
+    data.done = 0;
+    pthread_mutex_init(&data.mutex, NULL);
+    pthread_cond_init(&data.cond, NULL);
+    SEND_MSG({.context = _bolt_context(), .instruction = Message_eglSwapBuffers, .data = &data})
+    pthread_mutex_lock(&data.mutex);
+    while (!data.done) pthread_cond_wait(&data.cond, &data.mutex);
+    pthread_mutex_unlock(&data.mutex);
+    pthread_mutex_destroy(&data.mutex);
+    pthread_cond_destroy(&data.cond);
     return real_eglSwapBuffers(display, surface);
 }
 
@@ -711,6 +682,11 @@ void* eglCreateContext(void* display, void* config, void* share_context, const v
     void* ret = real_eglCreateContext(display, config, share_context, attrib_list);
     pthread_mutex_lock(&egl_lock);
     _bolt_create_context(ret, share_context);
+    if (!worker_context_exists && share_context) {
+        void* worker_context = real_eglCreateContext(display, config, share_context, attrib_list);
+        SEND_MSG({.context = worker_context, .data = display, .instruction = Message_Context})
+        worker_context_exists = 1;
+    }
     pthread_mutex_unlock(&egl_lock);
     return ret;
 }
@@ -722,6 +698,7 @@ unsigned int eglTerminate(void* display) {
         pthread_join(worker_thread, NULL);
         close(write_socket);
         worker_thread_running = 0;
+        worker_context_exists = 0;
     }
     pthread_mutex_unlock(&egl_lock);
     return real_eglTerminate(display);
@@ -767,6 +744,8 @@ void* _bolt_dl_lookup(void* handle, const char* symbol) {
         if (strcmp(symbol, "glBindTexture") == 0) return glBindTexture;
         if (strcmp(symbol, "glTexSubImage2D") == 0) return glTexSubImage2D;
         if (strcmp(symbol, "glDeleteTextures") == 0) return glDeleteTextures;
+        if (strcmp(symbol, "glGetError") == 0) return glGetError;
+        if (strcmp(symbol, "glFlush") == 0) return glFlush;
     } else if (handle == libxcb_addr) {
         if (strcmp(symbol, "xcb_poll_for_event") == 0) return xcb_poll_for_event;
         if (strcmp(symbol, "xcb_wait_for_event") == 0) return xcb_wait_for_event;
@@ -798,6 +777,8 @@ void* dlopen(const char* filename, int flags) {
             real_glBindTexture = real_dlsym(ret, "glBindTexture");
             real_glTexSubImage2D = real_dlsym(ret, "glTexSubImage2D");
             real_glDeleteTextures = real_dlsym(ret, "glDeleteTextures");
+            real_glGetError = real_dlsym(ret, "glGetError");
+            real_glFlush = real_dlsym(ret, "glFlush");
         }
         if (!libxcb_addr && !strcmp(filename, libxcb_name)) {
             libxcb_addr = ret;
@@ -829,6 +810,8 @@ int dlclose(void* handle) {
 
 // dedicated thread for handling most tasks in a synchronous order, invoked by eglInitialize
 void* _bolt_worker_thread(void* arg) {
+    void* display = NULL;
+    void* context = NULL;
     struct BoltMessage message;
     while (1) {
         if (read(read_socket, &message, sizeof(message)) != sizeof(message)) continue;
@@ -836,7 +819,14 @@ void* _bolt_worker_thread(void* arg) {
         switch (message.instruction) {
             case Message_Quit: {
                 close(read_socket);
+                if (display) real_eglDestroyContext(display, context);
                 return NULL;
+            }
+            case Message_Context: {
+                display = message.data;
+                context = c;
+                uint32_t b = real_eglMakeCurrent(display, NULL, NULL, context);
+                break;
             }
             case Message_glCreateProgram: {
                 struct GLProgram* program = _bolt_get_program(c->shared_programs, message.asset);
@@ -866,8 +856,9 @@ void* _bolt_worker_thread(void* arg) {
             case Message_glLinkProgram: {
                 struct GLProgram* p = _bolt_find_program(c->shared_programs, message.asset);
                 if (p && p->loc_aVertexPosition2D != -1 && p->loc_aVertexColour != -1 && p->loc_aTextureUV != -1 && p->loc_aTextureUVAtlasMin != -1 && p->loc_aTextureUVAtlasExtents != -1) {
-                    int uDiffuseMap = real_glGetUniformLocation(message.asset, "uDiffuseMap");
-                    int uProjectionMatrix = real_glGetUniformLocation(message.asset, "uProjectionMatrix");
+                    // yeah, this is lazy
+                    int uDiffuseMap = (int)message.x;
+                    int uProjectionMatrix = (int)message.y;
                     if (uDiffuseMap != -1 && uProjectionMatrix != -1) {
                         p->loc_uDiffuseMap = uDiffuseMap;
                         p->loc_uProjectionMatrix = uProjectionMatrix;
@@ -894,23 +885,8 @@ void* _bolt_worker_thread(void* arg) {
                 }
                 break;
             }
-            case Message_glUniform1i: {
-                int* ptr = (int*)(&c->uniform_buffer[message.index * 16]);
-                *ptr = message.asset;
-                break;
-            }
-            case Message_glUniformMatrix4fv: {
-                int* ptr = (int*)(&c->uniform_buffer[message.index * 16]);
-                read(read_socket, ptr, 4 * 4 * sizeof(float));
-                break;
-            }
             case Message_glVertexAttribPointer: {
-                struct GLArrayBuffer* buffer = _bolt_context_find_buffer(c, GL_ARRAY_BUFFER);
-                if (buffer) {
-                    _bolt_set_attr_binding(&c->attributes[message.index], buffer->data, message.data, message.stride, message.type, message.bool_value);
-                } else {
-                    printf("warning: glVertexAttribPointer didn't find buffer %lu\n", c->bound_vertex_array_id);
-                }
+                _bolt_set_attr_binding(&c->attributes[message.index], c->bound_vertex_array_id, message.w, message.data, message.stride, message.type, message.bool_value);
                 break;
             }
             case Message_glBindBuffer: {
@@ -924,19 +900,12 @@ void* _bolt_worker_thread(void* arg) {
                 }
                 break;
             }
-            case Message_glBufferData: {
+            case Message_glBufferData:
+            case Message_glBufferStorage: {
                 struct GLArrayBuffer* buffer = _bolt_context_get_buffer(c, message.target);
                 if (buffer) {
-                    buffer->len = message.w;
-                    
                     free(buffer->data);
-                    
-                    if (message.do_free_data) {
-                        buffer->data = message.data;
-                    } else {
-                        buffer->data = malloc(message.w);
-                        if (message.data) memcpy(buffer->data, message.data, message.w);
-                    }
+                    buffer->data = message.data;
                 } else if (message.do_free_data) {
                     free(message.data);
                 }
@@ -1052,86 +1021,85 @@ void* _bolt_worker_thread(void* arg) {
             }
             case Message_glMapBufferRange: {
                 struct GLArrayBuffer* buffer = _bolt_context_find_buffer(c, message.target);
-                if (buffer) {
-                    buffer->mapping = message.data;
-                    buffer->mapping_offset = message.x;
-                    buffer->mapping_len = message.w;
-                    buffer->mapping_access_type = message.format;
-                }
-                break;
-            }
-            case Message_glFlushMappedBufferRange: {
-                struct GLArrayBuffer* buffer = _bolt_context_find_buffer(c, message.target);
-                if (buffer && buffer->mapping) {
-                    memcpy(buffer->data + buffer->mapping_offset + message.x, buffer->mapping + message.x, message.w);
-                }
+                buffer->mapped = 1;
+                buffer->mapping_offset = message.x;
+                buffer->mapping_len = message.w;
+                buffer->mapping_access_type = message.format;
+                struct BoltSyncData* data = message.data;
+                pthread_mutex_lock(&data->mutex);
+                data->ptr = buffer->data + message.x;
+                data->done = 1;
+                pthread_cond_signal(&data->cond);
+                pthread_mutex_unlock(&data->mutex);
                 break;
             }
             case Message_glUnmapBuffer: {
                 struct GLArrayBuffer* buffer = _bolt_context_find_buffer(c, message.target);
-                if (buffer) {
-                    if(buffer->mapping && buffer->mapping_access_type & GL_MAP_WRITE_BIT && !(buffer->mapping_access_type & GL_MAP_FLUSH_EXPLICIT_BIT)) {
-                        memcpy(buffer->data + buffer->mapping_offset, buffer->mapping, buffer->mapping_len);
-                    }
-                    buffer->mapping = NULL;
+                struct BoltSyncData* data = message.data;
+                if (!(buffer->mapping_access_type & GL_MAP_FLUSH_EXPLICIT_BIT)) {
+                    real_glBindBuffer(message.target, message.target == GL_ARRAY_BUFFER ? c->bound_vertex_array_id : c->bound_element_array_id);
+                    real_glBufferSubData(message.target, buffer->mapping_offset, buffer->mapping_len, buffer->data + buffer->mapping_offset);
                 }
+                buffer->mapped = 0;
+                pthread_mutex_lock(&data->mutex);
+                data->done = 1;
+                pthread_cond_signal(&data->cond);
+                pthread_mutex_unlock(&data->mutex);
                 break;
             }
-            case Message_glBufferStorage: {
-                struct GLArrayBuffer* buffer = _bolt_context_get_buffer(c, message.target);
-                if (buffer) {
-                    buffer->len = message.w;
-                    free(buffer->data);
-                    if (message.do_free_data) {
-                        buffer->data = message.data;
-                    } else {
-                        buffer->data = malloc(message.w);
-                        if (message.data) memcpy(buffer->data, message.data, message.w);
-                    }
-                } else if (message.do_free_data) {
-                    free(message.data);
-                }
+            case Message_glFlushMappedBufferRange: {
+                struct GLArrayBuffer* buffer = _bolt_context_find_buffer(c, message.target);
+                struct BoltSyncData* data = message.data;
+                real_glBindBuffer(message.target, message.target == GL_ARRAY_BUFFER ? c->bound_vertex_array_id : c->bound_element_array_id);
+                real_glBufferSubData(message.target, buffer->mapping_offset + message.x, message.w, buffer->data + buffer->mapping_offset + message.x);
+                pthread_mutex_lock(&data->mutex);
+                data->done = 1;
+                pthread_cond_signal(&data->cond);
+                pthread_mutex_unlock(&data->mutex);
+                real_glFlush();
                 break;
             }
             case Message_glDrawElements: {
-                if (c->current_program_is_important && c->current_draw_framebuffer == 0 && c->bound_vertex_array_id && c->bound_element_array_id) {
-                    struct GLArrayBuffer* element_array = _bolt_context_find_buffer(c, GL_ELEMENT_ARRAY_BUFFER);
-                    const unsigned short* indices = element_array->data + (uintptr_t)message.data;
-                    struct GLProgram* current_program = _bolt_find_program(c->shared_programs, c->bound_program_id);
-                    const struct GLAttrBinding* atlas_min = &c->attributes[current_program->loc_aTextureUVAtlasMin];
-                    const struct GLAttrBinding* atlas_max = &c->attributes[current_program->loc_aTextureUVAtlasExtents];
-                    const struct GLAttrBinding* tex_uv = &c->attributes[current_program->loc_aTextureUV];
-                    int diffuse_map = *(int*)(&c->uniform_buffer[current_program->loc_uDiffuseMap * 16]);
-                    if (atlas_min->enabled && atlas_max->enabled && tex_uv->enabled) {
-                        printf("(%u) glDrawElements diffuse_map=%i (%u) atlas_min normalised=%u\n", gettid(), diffuse_map, current_program->loc_uDiffuseMap, (unsigned int)atlas_min->normalise);
-                        //for (size_t i = 0; i + 2 < message.w; i += 3) {
-                        //    unsigned short index1 = ((unsigned short*)indices)[i];
-                        //    unsigned short index2 = ((unsigned short*)indices)[i + 1];
-                        //    unsigned short index3 = ((unsigned short*)indices)[i + 2];
-                        //    float min1[2];
-                        //    float min2[2];
-                        //    float min3[2];
-                        //    float max1[2];
-                        //    float max2[2];
-                        //    float max3[2];
-                        //    float uv1[2];
-                        //    float uv2[2];
-                        //    float uv3[2];
-                        //    _bolt_get_attr_binding(atlas_min, index1, 2, min1);
-                        //    _bolt_get_attr_binding(atlas_min, index2, 2, min2);
-                        //    _bolt_get_attr_binding(atlas_min, index3, 2, min3);
-                        //    _bolt_get_attr_binding(atlas_max, index1, 2, max1);
-                        //    _bolt_get_attr_binding(atlas_max, index2, 2, max2);
-                        //    _bolt_get_attr_binding(atlas_max, index3, 2, max3);
-                        //    _bolt_get_attr_binding(tex_uv, index1, 2, uv1);
-                        //    _bolt_get_attr_binding(tex_uv, index2, 2, uv2);
-                        //    _bolt_get_attr_binding(tex_uv, index3, 2, uv3);
-                        //    printf("drawing triangle, uDiffuseMap=%i, atlas extents %f,%f,%f,%f | %f,%f,%f,%f | %f,%f,%f,%f UV %f,%f %f,%f %f,%f\n",
-                        //        diffuse_map, min1[0], min1[1], max1[0], max1[1], min2[0], min2[1], max2[0], max2[1], min3[0], min3[1], max3[0], max3[1],
-                        //        uv1[0], uv1[1], uv2[0], uv2[1], uv3[0], uv3[1]);
-                        //}
-                    }
-                }
+                //if (c->current_program_is_important && c->current_draw_framebuffer == 0 && c->bound_vertex_array_id && message.w > 0) {
+                //    struct GLArrayBuffer* element_buffer = _bolt_context_find_buffer(c, GL_ELEMENT_ARRAY_BUFFER);
+                //    if (!element_buffer || !element_buffer->data) break;
+                //    const unsigned short* indices = element_buffer->data + (uintptr_t)message.data;
+                //    struct GLProgram* current_program = _bolt_find_program(c->shared_programs, c->bound_program_id);
+                //    const struct GLAttrBinding* atlas_min = &c->attributes[current_program->loc_aTextureUVAtlasMin];
+                //    const struct GLAttrBinding* atlas_max = &c->attributes[current_program->loc_aTextureUVAtlasExtents];
+                //    const struct GLAttrBinding* tex_uv = &c->attributes[current_program->loc_aTextureUV];
+                //    int diffuse_map;
+                //    real_glGetUniformiv(c->bound_program_id, current_program->loc_uDiffuseMap, &diffuse_map);
+                //    if (atlas_min->enabled && atlas_max->enabled && tex_uv->enabled) {
+                //        printf("(%u) glDrawElements diffuse_map=%i (%u) atlas_min normalised=%u\n", gettid(), diffuse_map, current_program->loc_uDiffuseMap, (unsigned int)atlas_min->normalise);
+                //        for (size_t i = 0; i + 2 < message.w; i += 3) {
+                //            unsigned short index1 = indices[i];
+                //            unsigned short index2 = indices[i + 1];
+                //            unsigned short index3 = indices[i + 2];
+                //            float min1[2];
+                //            float min2[2];
+                //            float min3[2];
+                //            float max1[2];
+                //            float max2[2];
+                //            float max3[2];
+                //            float uv1[2];
+                //            float uv2[2];
+                //            float uv3[2];
+                //            _bolt_get_attr_binding(c, atlas_min, index1, 2, min1);
+                //            _bolt_get_attr_binding(c, atlas_min, index2, 2, min2);
+                //            _bolt_get_attr_binding(c, atlas_min, index3, 2, min3);
+                //            _bolt_get_attr_binding(c, atlas_max, index1, 2, max1);
+                //            _bolt_get_attr_binding(c, atlas_max, index2, 2, max2);
+                //            _bolt_get_attr_binding(c, atlas_max, index3, 2, max3);
+                //            _bolt_get_attr_binding(c, tex_uv, index1, 2, uv1);
+                //            _bolt_get_attr_binding(c, tex_uv, index2, 2, uv2);
+                //            _bolt_get_attr_binding(c, tex_uv, index3, 2, uv3);
+                //            printf("drawing triangle, uDiffuseMap=%i, atlas extents %f,%f,%f,%f | %f,%f,%f,%f | %f,%f,%f,%f UV %f,%f %f,%f %f,%f\n",
+                //                diffuse_map, min1[0], min1[1], max1[0], max1[1], min2[0], min2[1], max2[0], max2[1], min3[0], min3[1], max3[0], max3[1],
+                //                uv1[0], uv1[1], uv2[0], uv2[1], uv3[0], uv3[1]);
+                //        }
+                //    }
+                //}
                 break;
             }
             case Message_glBindTexture: {
@@ -1159,14 +1127,19 @@ void* _bolt_worker_thread(void* arg) {
                 if (message.do_free_data) free(message.data);
                 break;
             }
-            case Message_glFenceSync: {
-                struct GLFence* fence = (struct GLFence*)message.data;
-                real_glWaitSync(fence->real_fence, 0, -1);
-                pthread_mutex_lock(&fence->mutex);
-                fence->signal = 1;
-                pthread_cond_signal(&fence->cond);
-                pthread_mutex_unlock(&fence->mutex);
-                break;
+            case Message_eglSwapBuffers: {
+                struct BoltSyncData* data = message.data;
+                pthread_mutex_lock(&data->mutex);
+                data->done = 1;
+                pthread_cond_signal(&data->cond);
+                pthread_mutex_unlock(&data->mutex);
+            }
+            case Message_glFlush: {
+                struct BoltSyncData* data = message.data;
+                pthread_mutex_lock(&data->mutex);
+                data->done = 1;
+                pthread_cond_signal(&data->cond);
+                pthread_mutex_unlock(&data->mutex);
             }
         }
     }
