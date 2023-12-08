@@ -556,6 +556,7 @@ uint32_t glGetError() {
 }
 
 void glFlush() {
+    sync_before_next_draw = 0;
     struct BoltSyncData data;
     data.done = 0;
     pthread_mutex_init(&data.mutex, NULL);
@@ -573,7 +574,6 @@ void glFlush() {
     pthread_mutex_unlock(&data.mutex);
     pthread_mutex_destroy(&data.mutex);
     pthread_cond_destroy(&data.cond);
-    sync_before_next_draw = 0;
 }
 
 unsigned int eglSwapBuffers(void*, void*);
@@ -1127,14 +1127,16 @@ void* _bolt_worker_thread(void* arg) {
                 data->done = 1;
                 pthread_cond_signal(&data->cond);
                 pthread_mutex_unlock(&data->mutex);
+                break;
             }
             case Message_glFlush: {
                 struct BoltSyncData* data = message.data;
+                real_glFlush();
                 pthread_mutex_lock(&data->mutex);
                 data->done = 1;
                 pthread_cond_signal(&data->cond);
                 pthread_mutex_unlock(&data->mutex);
-                real_glFlush();
+                break;
             }
         }
     }
