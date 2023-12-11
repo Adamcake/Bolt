@@ -1101,14 +1101,6 @@ function launchHdos(s, element, jx_access_token, jx_refresh_token, jx_session_id
         xml.send(jar);
     };
 
-    // On Java 17+, the HDOS launcher passes "--add-opens java.desktop/java.awt=ALL-UNNAMED" as a single
-    // command-line arg. That's not two args, it's one one huge single arg which happens to have a space
-    // in it. This causes Java to produce an error because args don't work like that. If HDOS ever fixes
-    // their config, remove this error.
-    if (isFlathub) {
-        err("NOTE: HDOS is unlikely to work with Java 17+, please go and tell the HDOS devs to fix their getdown config if it doesn't work.");
-    }
-
     var xml = new XMLHttpRequest();
     const url = "https://cdn.hdos.dev/client/getdown.txt";
     xml.open('GET', url, true);
