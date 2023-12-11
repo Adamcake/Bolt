@@ -216,6 +216,12 @@ if(BOLT_DEV_LAUNCHER_DIRECTORY)
     target_compile_definitions(bolt PUBLIC BOLT_DEV_LAUNCHER_DIRECTORY="${BOLT_HTML_DIR}")
 endif()
 
+# fake java wrapper for running hdos
+if(NOT WIN32)
+    add_executable(java src/fake_java.c)
+    install(TARGETS java DESTINATION opt/bolt-launcher/java-proxy/bin)
+endif()
+
 # Bolt uses GTK on all platforms, but it must specifically use gtk3
 # to avoid symbols conflicting with CEF's GTK usage on Unix platforms
 find_package(PkgConfig REQUIRED)
