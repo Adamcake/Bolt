@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21) # Minimum CEF requirement, but building with the latest cmake is strongly recommended
-project(Bolt VERSION 0.4 LANGUAGES C CXX)
+project(Bolt VERSION 0.5 LANGUAGES C CXX)
 
 # e.g. becomes "libbolt-overlay.so" on linux
 set(BOLT_OVERLAY_NAME "bolt-overlay")
@@ -43,6 +43,7 @@ if(NOT WIN32)
         "    <screenshot type=\"default\">https://raw.githubusercontent.com/flathub/net.runelite.RuneLite/master/screenshot.png</screenshot>"
         "</screenshots>"
         "<releases>"
+        "    <release version=\"0.5.0\" date=\"2023-12-11\"/>"
         "    <release version=\"0.4.0\" date=\"2023-11-03\"/>"
         "    <release version=\"0.3.0\" date=\"2023-11-02\"/>"
         "    <release version=\"0.2.0\" date=\"2023-09-16\"/>"
@@ -241,13 +242,13 @@ else()
 endif()
 
 # Build helper libraries
-if(NOT BOLT_SKIP_LIBRARIES)
-    if(UNIX AND NOT APPLE)
-        add_library(${BOLT_OVERLAY_NAME} SHARED src/library/so/main.c src/library/gl.c)
-        install(TARGETS ${BOLT_OVERLAY_NAME} DESTINATION "${BOLT_LIBDIR}")
-        target_compile_definitions(bolt PUBLIC BOLT_LIB_NAME="${BOLT_OVERLAY_NAME}")
-    endif()
-endif()
+#if(NOT BOLT_SKIP_LIBRARIES)
+#    if(UNIX AND NOT APPLE)
+#        add_library(${BOLT_OVERLAY_NAME} SHARED src/library/so/main.c src/library/gl.c)
+#        install(TARGETS ${BOLT_OVERLAY_NAME} DESTINATION "${BOLT_LIBDIR}")
+#        target_compile_definitions(bolt PUBLIC BOLT_LIB_NAME="${BOLT_OVERLAY_NAME}")
+#    endif()
+#endif()
 
 # Finally, install shell script and metadata
 if(NOT WIN32)
