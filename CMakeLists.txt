@@ -219,8 +219,8 @@ endif()
 
 # fake java wrapper for running hdos
 if(NOT WIN32)
-    add_executable(java src/fake_java.c)
-    install(TARGETS java DESTINATION opt/bolt-launcher/java-proxy/bin)
+    add_executable(java-proxy src/fake_java.c)
+    install(TARGETS java-proxy DESTINATION opt/bolt-launcher)
 endif()
 
 # Bolt uses GTK on all platforms, but it must specifically use gtk3
