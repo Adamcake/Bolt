@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21) # Minimum CEF requirement, but building with the latest cmake is strongly recommended
-project(Bolt VERSION 0.5 LANGUAGES C CXX)
+project(Bolt VERSION 0.6 LANGUAGES C CXX)
 
 # e.g. becomes "libbolt-overlay.so" on linux
 set(BOLT_OVERLAY_NAME "bolt-overlay")
@@ -43,6 +43,7 @@ if(NOT WIN32)
         "    <screenshot type=\"default\">https://raw.githubusercontent.com/flathub/net.runelite.RuneLite/master/screenshot.png</screenshot>"
         "</screenshots>"
         "<releases>"
+        "    <release version=\"0.6.0\" date=\"2023-12-15\"/>"
         "    <release version=\"0.5.0\" date=\"2023-12-11\"/>"
         "    <release version=\"0.4.0\" date=\"2023-11-03\"/>"
         "    <release version=\"0.3.0\" date=\"2023-11-02\"/>"
