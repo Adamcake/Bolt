@@ -43,8 +43,8 @@ textarea {
 }
 
 .button-disclaimer {
-    width: 300px;
-    height: 70px;
+    width: auto;
+    height: auto;
     text-align: center;
     font-size: 48px;
     background-color: #6868E0;
