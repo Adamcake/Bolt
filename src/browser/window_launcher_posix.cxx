@@ -568,16 +568,30 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<
 	const char* env_key_java_path = "BOLT_JAVA_PATH=";
 	std::string java_path_str = std::string(java_home) + "/bin/java";
 	
-	std::filesystem::path java_proxy_path = std::filesystem::current_path();
-	java_proxy_path.append("java-proxy");
-	std::filesystem::path java_proxy_lib_path = java_proxy_path;
+	std::filesystem::path java_proxy_bin_path = std::filesystem::current_path();
+	java_proxy_bin_path.append("java-proxy");
+	std::filesystem::path java_proxy_data_dir_path = this->data_dir;
+	java_proxy_data_dir_path.append("java-proxy");
+	std::filesystem::remove_all(java_proxy_data_dir_path);
+	std::filesystem::create_directory(java_proxy_data_dir_path);
+	std::filesystem::path java_proxy_lib_path = java_proxy_data_dir_path;
 	java_proxy_lib_path.append("lib");
-	std::filesystem::path java_proxy_conf_path = java_proxy_path;
+	std::filesystem::path java_proxy_conf_path = java_proxy_data_dir_path;
 	java_proxy_conf_path.append("conf");
+	std::filesystem::path java_proxy_java_path = java_proxy_data_dir_path;
+	java_proxy_java_path.append("bin");
+	std::filesystem::create_directory(java_proxy_java_path);
+	java_proxy_java_path.append("java");
 	const std::string java_lib_str = std::string(java_home) + "/lib";
 	const std::string java_conf_str = std::string(java_home) + "/conf";
-	symlink(java_lib_str.c_str(), java_proxy_lib_path.c_str());
-	symlink(java_conf_str.c_str(), java_proxy_conf_path.c_str());
+	int err = 0;
+	err += !!symlink(java_lib_str.c_str(), java_proxy_lib_path.c_str());
+	err += !!symlink(java_conf_str.c_str(), java_proxy_conf_path.c_str());
+	err += !!symlink(java_proxy_bin_path.c_str(), java_proxy_java_path.c_str());
+	if (err) {
+		const char* data = "Unable to create symlinks\n";
+		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 500, "text/plain");
+	}
 
 	// array of structures for keeping track of which environment variables we want to set and have already set
 	EnvQueryParam version_param = {.should_set = false, .key = "version"};
@@ -671,7 +685,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<
 
 	char* argv[6];
 	char arg_jar[] = "-jar";
-	std::string arg_java_home = "-Djava.home=" + java_proxy_path.string();
+	std::string arg_java_home = "-Djava.home=" + java_proxy_data_dir_path.string();
 	argv[0] = java_path_str.data();
 	argv[1] = arg_user_home.data();
 	argv[2] = arg_java_home.data();
