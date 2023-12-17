@@ -677,6 +677,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<
 	posix_spawnattr_t attributes;
 	pid_t pid;
 	posix_spawn_file_actions_init(&file_actions);
+	posix_spawn_file_actions_addclose(&file_actions, STDIN_FILENO);
 	posix_spawnattr_init(&attributes);
 	posix_spawnattr_setsigdefault(&attributes, &set);
 	posix_spawnattr_setpgroup(&attributes, 0);
