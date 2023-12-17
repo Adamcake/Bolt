@@ -264,7 +264,6 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<C
 	posix_spawnattr_t attributes;
 	pid_t pid;
 	posix_spawn_file_actions_init(&file_actions);
-	posix_spawn_file_actions_addclose(&file_actions, STDIN_FILENO);
 	posix_spawnattr_init(&attributes);
 	posix_spawnattr_setsigdefault(&attributes, &set);
 	posix_spawnattr_setpgroup(&attributes, 0);
@@ -552,14 +551,47 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<CefRequest> request, std::string_view query) {
 	const CefRefPtr<CefPostData> post_data = request->GetPostData();
 
+	const char* java_home = getenv("JAVA_HOME");
+	if (!java_home) {
+		const char* data = "JAVA_HOME environment variable is required to run HDOS\n";
+		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+	}
+
 	const std::string user_home = this->data_dir.string();
 	const char* home_ = "HOME=";
 	const std::string env_home = home_ + user_home;
 	const std::string_view env_key_home = std::string_view(env_home.begin(), env_home.begin() + strlen(home_));
 
-	const char* java_options_ = "_JAVA_OPTIONS=";
-	const std::string env_java_options = std::string(java_options_) + "-Duser.home=" + user_home;
-	const std::string_view env_key_java_options = std::string_view(env_java_options.begin(), env_java_options.begin() + strlen(java_options_));
+	const char* env_key_user_home = "BOLT_ARG_HOME=";
+	std::string arg_user_home = "-Duser.home=" + user_home;
+
+	const char* env_key_java_path = "BOLT_JAVA_PATH=";
+	std::string java_path_str = std::string(java_home) + "/bin/java";
+	
+	std::filesystem::path java_proxy_bin_path = std::filesystem::current_path();
+	java_proxy_bin_path.append("java-proxy");
+	std::filesystem::path java_proxy_data_dir_path = this->data_dir;
+	java_proxy_data_dir_path.append("java-proxy");
+	std::filesystem::remove_all(java_proxy_data_dir_path);
+	std::filesystem::create_directory(java_proxy_data_dir_path);
+	std::filesystem::path java_proxy_lib_path = java_proxy_data_dir_path;
+	java_proxy_lib_path.append("lib");
+	std::filesystem::path java_proxy_conf_path = java_proxy_data_dir_path;
+	java_proxy_conf_path.append("conf");
+	std::filesystem::path java_proxy_java_path = java_proxy_data_dir_path;
+	java_proxy_java_path.append("bin");
+	std::filesystem::create_directory(java_proxy_java_path);
+	java_proxy_java_path.append("java");
+	const std::string java_lib_str = std::string(java_home) + "/lib";
+	const std::string java_conf_str = std::string(java_home) + "/conf";
+	int err = 0;
+	err += !!symlink(java_lib_str.c_str(), java_proxy_lib_path.c_str());
+	err += !!symlink(java_conf_str.c_str(), java_proxy_conf_path.c_str());
+	err += !!symlink(java_proxy_bin_path.c_str(), java_proxy_java_path.c_str());
+	if (err) {
+		const char* data = "Unable to create symlinks\n";
+		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 500, "text/plain");
+	}
 
 	// array of structures for keeping track of which environment variables we want to set and have already set
 	EnvQueryParam version_param = {.should_set = false, .key = "version"};
@@ -570,7 +602,8 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<
 		{.should_set = false, .prepend_env_key = true, .env_key = "JX_CHARACTER_ID=", .key = "jx_character_id"},
 		{.should_set = false, .prepend_env_key = true, .env_key = "JX_DISPLAY_NAME=", .key = "jx_display_name"},
 		{.should_set = true, .prepend_env_key = false, .allow_override = false, .env_key = env_key_home, .value = env_home},
-		{.should_set = true, .prepend_env_key = false, .allow_override = false, .allow_append = true, .env_key = env_key_java_options, .value = env_java_options},
+		{.should_set = true, .prepend_env_key = false, .allow_override = false, .env_key = env_key_user_home, .value = env_key_user_home + arg_user_home},
+		{.should_set = true, .prepend_env_key = false, .allow_override = false, .env_key = env_key_java_path, .value = env_key_java_path + java_path_str},
 	};
 	const size_t env_param_count = sizeof(env_params) / sizeof(env_params[0]);
 
@@ -638,8 +671,6 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<
 	size_t env_count = e - environ;
 
 	// set up some structs needed by posix_spawn, and our modified env array
-	const char* java_home = getenv("JAVA_HOME");
-	std::string java_home_str;
 	sigset_t set;
 	sigfillset(&set);
 	posix_spawn_file_actions_t file_actions;
@@ -653,21 +684,11 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<
 	std::string path_str = this->hdos_path.string();
 
 	char* argv[6];
-	size_t argv_offset;
-	char arg_env[] = "/usr/bin/env";
-	char arg_java[] = "java";
 	char arg_jar[] = "-jar";
-	std::string arg_home = "-Duser.home=" + user_home;
-	if (java_home) {
-		java_home_str = std::string(java_home) + "/bin/java";
-		argv[1] = java_home_str.data();
-		argv_offset = 1;
-	} else {
-		argv[0] = arg_env;
-		argv[1] = arg_java;
-		argv_offset = 0;
-	}
-	argv[2] = arg_home.data();
+	std::string arg_java_home = "-Djava.home=" + java_proxy_data_dir_path.string();
+	argv[0] = java_path_str.data();
+	argv[1] = arg_user_home.data();
+	argv[2] = arg_java_home.data();
 	argv[3] = arg_jar;
 	argv[4] = path_str.data();
 	argv[5] = nullptr;
@@ -704,7 +725,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<
 	// ... and finally null-terminate the list as required by POSIX
 	env[i] = nullptr;
 
-	int r = posix_spawn(&pid, argv[argv_offset], &file_actions, &attributes, argv + argv_offset, env);
+	int r = posix_spawn(&pid, argv[0], &file_actions, &attributes, argv, env);
 	
 	posix_spawnattr_destroy(&attributes);
 	posix_spawn_file_actions_destroy(&file_actions);
