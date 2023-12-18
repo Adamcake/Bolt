@@ -1041,7 +1041,7 @@ function launchRunelite(s, element, jx_access_token, jx_refresh_token, jx_sessio
         if (xml.readyState == 4) {
             if (xml.status == 200) {
                 const runelite = JSON.parse(xml.responseText).map((x) => x.assets).flat().find((x) => x.name.toLowerCase() == "runelite.jar");
-                if (runelite.id !== runeliteInstalledID) {
+                if (runelite.id != runeliteInstalledID) {
                     var m = msg("Downloading RuneLite...");
                     var xml_rl = new XMLHttpRequest();
                     xml_rl.open('GET', runelite.browser_download_url, true);
