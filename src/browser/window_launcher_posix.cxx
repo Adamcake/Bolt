@@ -12,12 +12,110 @@
 
 extern char **environ;
 
-constexpr char tar_xz_inner_path[] = {
-	46, 47, 117, 115, 114, 47, 115, 104, 97, 114, 101, 47, 103, 97, 109, 101,
-	115, 47, 114, 117, 110, 101, 115, 99, 97, 112, 101, 45, 108, 97, 117,
-	110, 99, 104, 101, 114, 47, 114, 117, 110, 101, 115, 99,97, 112, 101, 0
-};
-constexpr char tar_xz_icons_path[] = "./usr/share/icons/";
+// standard set of JX_ environment/query parameters, for use in an env_params list
+#define JX_ENV_PARAMS \
+	{.should_set = false, .prepend_env_key = true, .env_key = "JX_ACCESS_TOKEN=", .key = "jx_access_token"}, \
+	{.should_set = false, .prepend_env_key = true, .env_key = "JX_REFRESH_TOKEN=", .key = "jx_refresh_token"}, \
+	{.should_set = false, .prepend_env_key = true, .env_key = "JX_SESSION_ID=", .key = "jx_session_id"}, \
+	{.should_set = false, .prepend_env_key = true, .env_key = "JX_CHARACTER_ID=", .key = "jx_character_id"}, \
+	{.should_set = false, .prepend_env_key = true, .env_key = "JX_DISPLAY_NAME=", .key = "jx_display_name"}
+
+// iterates the key-value pairs in an HTTP query, performing ACTION on them
+#define ITERATE_QUERY(ACTION, QUERY) { \
+	size_t cursor = 0; \
+	while (true) { \
+		const std::string::size_type next_eq = QUERY.find_first_of('=', cursor); \
+		const std::string::size_type next_amp = QUERY.find_first_of('&', cursor); \
+		if (next_eq == std::string::npos) break; \
+		if (next_eq >= next_amp) { \
+			cursor = next_amp + 1; \
+			continue; \
+		} \
+		const std::string_view key(QUERY.begin() + cursor, QUERY.begin() + next_eq); \
+		const auto value_end = next_amp == std::string::npos ? QUERY.end() : QUERY.begin() + next_amp; \
+		const CefString value = std::string(std::string_view(QUERY.begin() + next_eq + 1,  value_end)); \
+		ACTION \
+		if (next_amp == std::string::npos) break; \
+		cursor = next_amp + 1; \
+	} \
+}
+
+// calls SpawnProcess using the given argv and an envp calculated from the given env_params,
+// then attempts to save the related hash file, and finally returns an appropriate HTTP response
+#define SPAWN_FROM_PARAMS_AND_RETURN(ARGV, ENV_PARAMS, HASH_PARAM, HASH_PATH) { \
+	char** e; \
+	for (e = environ; *e; e += 1); \
+	size_t env_count = e - environ; \
+	const size_t env_param_count = sizeof(ENV_PARAMS) / sizeof(ENV_PARAMS[0]); \
+	char** env = new char*[env_count + env_param_count + 1]; \
+	size_t i; \
+	for (i = 0; i < env_count; i += 1) { \
+		bool use_default = true; \
+		for (EnvQueryParam& param: ENV_PARAMS) { \
+			if (param.should_set && strncmp(environ[i], param.env_key.data(), param.env_key.size()) == 0) { \
+				param.should_set = false; \
+				use_default = false; \
+				if (param.allow_append) { \
+					param.value = std::string(param.env_key) + std::string(environ[i] + param.env_key.size()) + ' ' + (param.value.data() + param.env_key.size()); \
+				} \
+				env[i] = param.value.data(); \
+				break; \
+			} \
+		} \
+		if (use_default) { \
+			env[i] = environ[i]; \
+		} \
+	} \
+	for (EnvQueryParam& param: ENV_PARAMS) { \
+		if (param.should_set) { \
+			env[i] = param.value.data(); \
+			i += 1; \
+		} \
+	} \
+	env[i] = nullptr; \
+	pid_t pid; \
+	int r = SpawnProcess(ARGV, env, &pid); \
+	delete[] env; \
+	if (r == 0) { \
+		fmt::print("[B] Successfully spawned game process with pid {}\n", pid); \
+		if (HASH_PARAM.should_set) { \
+			size_t written = 0; \
+			int file = open(HASH_PATH, O_WRONLY | O_CREAT | O_TRUNC, 0644); \
+			if (file == -1) { \
+				const char* data = "OK, but unable to save hash file\n"; \
+				return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain"); \
+			} \
+			while (written < HASH_PARAM.value.size()) { \
+				written += write(file, HASH_PARAM.value.c_str() + written, HASH_PARAM.value.size() - written); \
+			} \
+			close(file); \
+		} \
+		const char* data = "OK\n"; \
+		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain"); \
+	} else { \
+		fmt::print("[B] Error from posix_spawn: {}\n", r); \
+		const char* data = "Error spawning process\n"; \
+		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 500, "text/plain"); \
+	} \
+}
+
+// spawns a process using posix_spawn, the given argc and argv, and the target specified at argv[0]
+int SpawnProcess(char** argv, char** envp, pid_t* pid) {
+	sigset_t set;
+	sigfillset(&set);
+	posix_spawn_file_actions_t file_actions;
+	posix_spawnattr_t attributes;
+	posix_spawn_file_actions_init(&file_actions);
+	posix_spawn_file_actions_addclose(&file_actions, STDIN_FILENO);
+	posix_spawnattr_init(&attributes);
+	posix_spawnattr_setsigdefault(&attributes, &set);
+	posix_spawnattr_setpgroup(&attributes, 0);
+	posix_spawnattr_setflags(&attributes, POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_SETSIGMASK);
+	int r = posix_spawn(pid, argv[0], &file_actions, &attributes, argv, envp);
+	posix_spawnattr_destroy(&attributes);
+	posix_spawn_file_actions_destroy(&file_actions);
+	return r;
+}
 
 struct EnvQueryParam {
 	bool should_set = false;    // is this present in the query?
@@ -57,10 +155,14 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<C
 		83, 68, 76, 95, 86, 73, 68, 69, 79, 95, 88, 49, 49, 95, 87, 77, 67,
 		76, 65, 83, 83, 61, 82, 117, 110, 101, 83, 99, 97, 112, 101, 0
 	};
-	char arg_configuri[] = "--configURI";
+	constexpr char tar_xz_inner_path[] = {
+		46, 47, 117, 115, 114, 47, 115, 104, 97, 114, 101, 47, 103, 97, 109, 101,
+		115, 47, 114, 117, 110, 101, 115, 99, 97, 112, 101, 45, 108, 97, 117,
+		110, 99, 104, 101, 114, 47, 114, 117, 110, 101, 115, 99,97, 112, 101, 0
+	};
+	constexpr char tar_xz_icons_path[] = "./usr/share/icons/";
 
 	const CefRefPtr<CefPostData> post_data = request->GetPostData();
-	auto cursor = 0;
 
 	// calculate HOME env strings - we redirect the game's HOME into our data dir
 	const char* home_ = "HOME=";
@@ -71,43 +173,20 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<C
 	EnvQueryParam hash_param = {.should_set = false, .key = "hash"};
 	EnvQueryParam config_uri_param = {.should_set = false, .key = "config_uri"};
 	EnvQueryParam env_params[] = {
-		{.should_set = false, .prepend_env_key = true, .env_key = "JX_ACCESS_TOKEN=", .key = "jx_access_token"},
-		{.should_set = false, .prepend_env_key = true, .env_key = "JX_REFRESH_TOKEN=", .key = "jx_refresh_token"},
-		{.should_set = false, .prepend_env_key = true, .env_key = "JX_SESSION_ID=", .key = "jx_session_id"},
-		{.should_set = false, .prepend_env_key = true, .env_key = "JX_CHARACTER_ID=", .key = "jx_character_id"},
-		{.should_set = false, .prepend_env_key = true, .env_key = "JX_DISPLAY_NAME=", .key = "jx_display_name"},
+		JX_ENV_PARAMS,
 		{.should_set = true, .prepend_env_key = false, .allow_override = false, .env_key = env_key_home, .value = env_home},
 		{.should_set = true, .prepend_env_key = false, .allow_override = false, .env_key = "PULSE_PROP_OVERRIDE=", .value = env_pulse_prop_override},
 		{.should_set = true, .prepend_env_key = false, .allow_override = false, .env_key = "SDL_VIDEO_X11_WMCLASS=", .value = env_wmclass},
 	};
-	const size_t env_param_count = sizeof(env_params) / sizeof(env_params[0]);
 	
 	// loop through and parse the query string from the HTTP request we intercepted
-	while (true) {
-		const std::string::size_type next_eq = query.find_first_of('=', cursor);
-		const std::string::size_type next_amp = query.find_first_of('&', cursor);
-		if (next_eq == std::string::npos) break;
-		if (next_eq >= next_amp) {
-			// found an invalid query param with no '=' in it - skip this
-			cursor = next_amp + 1;
-			continue;
-		}
-
-		// parse the next "key" and "value" from the query, then check if it's relevant to us
-		const std::string_view key(query.begin() + cursor, query.begin() + next_eq);
-		const auto value_end = next_amp == std::string::npos ? query.end() : query.begin() + next_amp;
-		const CefString value = std::string(std::string_view(query.begin() + next_eq + 1,  value_end));
+	ITERATE_QUERY({
 		for (EnvQueryParam& param: env_params) {
 			param.CheckAndUpdate(key, value);
 		}
 		hash_param.CheckAndUpdate(key, value);
 		config_uri_param.CheckAndUpdate(key, value);
-
-		// if there are no more instances of '&', we've read the last param, so stop here
-		// otherwise continue from the next '&'
-		if (next_amp == std::string::npos) break;
-		cursor = next_amp + 1;
-	}
+	}, query)
 
 	// if there was a "hash" in the query string, we need to save the new game exe and the new hash
 	if (hash_param.should_set) {
@@ -251,96 +330,17 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<C
 		}
 	}
 
-	// count how many env vars we have - we need to do this every time as CEF or other modules
-	// may call setenv and unsetenv
-	char** e;
-	for (e = environ; *e; e += 1);
-	size_t env_count = e - environ;
-
-	// set up some structs needed by posix_spawn, and our modified env array
-	sigset_t set;
-	sigfillset(&set);
-	posix_spawn_file_actions_t file_actions;
-	posix_spawnattr_t attributes;
-	pid_t pid;
-	posix_spawn_file_actions_init(&file_actions);
-	posix_spawnattr_init(&attributes);
-	posix_spawnattr_setsigdefault(&attributes, &set);
-	posix_spawnattr_setpgroup(&attributes, 0);
-	posix_spawnattr_setflags(&attributes, POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_SETSIGMASK);
+	// setup argv for the new process
 	std::string path_str(this->rs3_path.c_str());
-	char* argv[4];
-	argv[0] = path_str.data();
-	if (config_uri_param.should_set) {
-		argv[1] = arg_configuri;
-		argv[2] = config_uri_param.value.data();
-		argv[3] = nullptr;
-	} else {
-		argv[1] = nullptr;
-	}
-	char** env = new char*[env_count + env_param_count + 1];
+	char arg_configuri[] = "--configURI";
+	char* argv[] = {
+		path_str.data(),
+		config_uri_param.should_set ? arg_configuri : nullptr,
+		config_uri_param.should_set ? config_uri_param.value.data() : nullptr,
+		nullptr,
+	};
 
-	// first, loop through the existing env vars
-	// if its key is one we want to set, overwrite it, otherwise copy the pointer as-is
-	size_t i;
-	for (i = 0; i < env_count; i += 1) {
-		bool use_default = true;
-		for (EnvQueryParam& param: env_params) {
-			if (param.should_set && strncmp(environ[i], param.env_key.data(), param.env_key.size()) == 0) {
-				param.should_set = false;
-				use_default = false;
-				if (param.allow_append) {
-					param.value = std::string(param.env_key) + std::string(environ[i] + param.env_key.size()) + ' ' + (param.value.data() + param.env_key.size());
-				}
-				env[i] = param.value.data();
-				break;
-			}
-		}
-		if (use_default) {
-			env[i] = environ[i];
-		}
-	}
-	// ... next, look for any env vars we want to set that we haven't already, and put them at the end...
-	for (EnvQueryParam& param: env_params) {
-		if (param.should_set) {
-			env[i] = param.value.data();
-			i += 1;
-		}
-	}
-	// ... and finally null-terminate the list as required by POSIX
-	env[i] = nullptr;
-
-	int r = posix_spawn(&pid, path_str.c_str(), &file_actions, &attributes, argv, env);
-	
-	posix_spawnattr_destroy(&attributes);
-	posix_spawn_file_actions_destroy(&file_actions);
-	delete[] env;
-
-	if (r == 0) {
-		fmt::print("[B] Successfully spawned game process with pid {}\n", pid);
-
-		if (hash_param.should_set) {
-			size_t written = 0;
-			int file = open(this->rs3_hash_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
-			if (file == -1) {
-				const char* data = "OK, but unable to save hash file\n";
-				return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
-			}
-			while (written < hash_param.value.size()) {
-				written += write(file, hash_param.value.c_str() + written, hash_param.value.size() - written);
-			}
-			close(file);
-		}
-
-		const char* data = "OK\n";
-		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
-	} else {
-		// posix_spawn failed - this is extremely unlikely to happen in the field, since the only failure
-		// case is EINVAL, which would indicate a trivial mistake in writing this function
-		fmt::print("[B] Error from posix_spawn: {}\n", r);
-		const char* data = "Error spawning process\n";
-		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 500, "text/plain");
-	}
+	SPAWN_FROM_PARAMS_AND_RETURN(argv, env_params, hash_param, this->rs3_hash_path.c_str())
 }
 
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRefPtr<CefRequest> request, std::string_view query) {
@@ -356,43 +356,19 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 	EnvQueryParam id_param = {.should_set = false, .key = "id"};
 	EnvQueryParam scale_param = {.should_set = false, .key = "scale"};
 	EnvQueryParam env_params[] = {
-		{.should_set = false, .prepend_env_key = true, .env_key = "JX_ACCESS_TOKEN=", .key = "jx_access_token"},
-		{.should_set = false, .prepend_env_key = true, .env_key = "JX_REFRESH_TOKEN=", .key = "jx_refresh_token"},
-		{.should_set = false, .prepend_env_key = true, .env_key = "JX_SESSION_ID=", .key = "jx_session_id"},
-		{.should_set = false, .prepend_env_key = true, .env_key = "JX_CHARACTER_ID=", .key = "jx_character_id"},
-		{.should_set = false, .prepend_env_key = true, .env_key = "JX_DISPLAY_NAME=", .key = "jx_display_name"},
+		JX_ENV_PARAMS,
 		{.should_set = true, .prepend_env_key = false, .allow_override = false, .env_key = env_key_home, .value = env_home},
 	};
-	const size_t env_param_count = sizeof(env_params) / sizeof(env_params[0]);
 
 	// loop through and parse the query string from the HTTP request we intercepted
-	size_t cursor = 0;
-	while (true) {
-		const std::string::size_type next_eq = query.find_first_of('=', cursor);
-		const std::string::size_type next_amp = query.find_first_of('&', cursor);
-		if (next_eq == std::string::npos) break;
-		if (next_eq >= next_amp) {
-			// found an invalid query param with no '=' in it - skip this
-			cursor = next_amp + 1;
-			continue;
-		}
-
-		// parse the next "key" and "value" from the query, then check if it's relevant to us
-		const std::string_view key(query.begin() + cursor, query.begin() + next_eq);
-		const auto value_end = next_amp == std::string::npos ? query.end() : query.begin() + next_amp;
-		const CefString value = std::string(std::string_view(query.begin() + next_eq + 1,  value_end));
+	ITERATE_QUERY({
 		for (EnvQueryParam& param: env_params) {
 			param.CheckAndUpdate(key, value);
 		}
 		id_param.CheckAndUpdate(key, value);
 		scale_param.CheckAndUpdate(key, value);
 		rl_path_param.CheckAndUpdate(key, value);
-
-		// if there are no more instances of '&', we've read the last param, so stop here
-		// otherwise continue from the next '&'
-		if (next_amp == std::string::npos) break;
-		cursor = next_amp + 1;
-	}
+	}, query)
 
 	// path to runelite.jar will either be a user-provided one or one in our data folder,
 	// which we may need to overwrite with a new user-provided file
@@ -433,119 +409,31 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 		}
 	}
 
-	// count how many env vars we have - we need to do this every time as CEF or other modules
-	// may call setenv and unsetenv
-	char** e;
-	for (e = environ; *e; e += 1);
-	size_t env_count = e - environ;
-
-	// set up some structs needed by posix_spawn, and our modified env array
+	// set up argv for the new process
 	const char* java_home = getenv("JAVA_HOME");
 	std::string java_home_str;
-	sigset_t set;
-	sigfillset(&set);
-	posix_spawn_file_actions_t file_actions;
-	posix_spawnattr_t attributes;
-	pid_t pid;
-	posix_spawn_file_actions_init(&file_actions);
-	posix_spawnattr_init(&attributes);
-	posix_spawnattr_setsigdefault(&attributes, &set);
-	posix_spawnattr_setpgroup(&attributes, 0);
-	posix_spawnattr_setflags(&attributes, POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_SETSIGMASK);
+	if (java_home) java_home_str = std::string(java_home) + "/bin/java";
 	std::string arg_home = "-Duser.home=" + user_home;
 	std::string arg_jvm_argument_home = "-J" + arg_home;
 	std::string path_str = jar_path.string();
-
-	char* argv[9];
-	size_t argv_offset;
+	size_t argv_offset = java_home ? 1 : 0;
 	char arg_env[] = "/usr/bin/env";
 	char arg_java[] = "java";
 	char arg_jar[] = "-jar";
 	char arg_scale[] = "--scale";
-	if (java_home) {
-		java_home_str = std::string(java_home) + "/bin/java";
-		argv[1] = java_home_str.data();
-		argv_offset = 1;
-	} else {
-		argv[0] = arg_env;
-		argv[1] = arg_java;
-		argv_offset = 0;
-	}
-	argv[2] = arg_home.data();
-	argv[3] = arg_jar;
-	argv[4] = path_str.data();
-	argv[5] = arg_jvm_argument_home.data();
-	if (scale_param.should_set) {
-		argv[6] = arg_scale;
-		argv[7] = scale_param.value.data();
-		argv[8] = nullptr;
-	} else {
-		argv[6] = nullptr;
-	}
+	char* argv[] = {
+		arg_env,
+		java_home ? java_home_str.data() : arg_java,
+		arg_home.data(),
+		arg_jar,
+		path_str.data(),
+		arg_jvm_argument_home.data(),
+		scale_param.should_set ? arg_scale : nullptr,
+		scale_param.should_set ? scale_param.value.data() : nullptr,
+		nullptr,
+	};
 
-	char** env = new char*[env_count + env_param_count + 1];
-
-	// first, loop through the existing env vars
-	// if its key is one we want to set, overwrite it, otherwise copy the pointer as-is
-	size_t i;
-	for (i = 0; i < env_count; i += 1) {
-		bool use_default = true;
-		for (EnvQueryParam& param: env_params) {
-			if (param.should_set && strncmp(environ[i], param.env_key.data(), param.env_key.size()) == 0) {
-				param.should_set = false;
-				use_default = false;
-				if (param.allow_append) {
-					param.value = std::string(param.env_key) + std::string(environ[i] + param.env_key.size()) + ' ' + (param.value.data() + param.env_key.size());
-				}
-				env[i] = param.value.data();
-				break;
-			}
-		}
-		if (use_default) {
-			env[i] = environ[i];
-		}
-	}
-	// ... next, look for any env vars we want to set that we haven't already, and put them at the end...
-	for (EnvQueryParam& param: env_params) {
-		if (param.should_set) {
-			env[i] = param.value.data();
-			i += 1;
-		}
-	}
-	// ... and finally null-terminate the list as required by POSIX
-	env[i] = nullptr;
-
-	int r = posix_spawn(&pid, argv[argv_offset], &file_actions, &attributes, argv + argv_offset, env);
-	
-	posix_spawnattr_destroy(&attributes);
-	posix_spawn_file_actions_destroy(&file_actions);
-	delete[] env;
-
-	if (r == 0) {
-		fmt::print("[B] Successfully spawned game process with pid {}\n", pid);
-
-		if (id_param.should_set) {
-			size_t written = 0;
-			int file = open(this->runelite_id_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
-			if (file == -1) {
-				const char* data = "OK, but unable to save ID file\n";
-				return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
-			}
-			while (written < id_param.value.size()) {
-				written += write(file, id_param.value.c_str() + written, id_param.value.size() - written);
-			}
-			close(file);
-		}
-
-		const char* data = "OK\n";
-		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
-	} else {
-		// posix_spawn failed - this is extremely unlikely to happen in the field, since the only failure
-		// case is EINVAL, which would indicate a trivial mistake in writing this function
-		fmt::print("[B] Error from posix_spawn: {}\n", strerror(r));
-		const char* data = "Error spawning process\n";
-		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 500, "text/plain");
-	}
+	SPAWN_FROM_PARAMS_AND_RETURN(argv + argv_offset, env_params, id_param, this->runelite_id_path.c_str())
 }
 
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<CefRequest> request, std::string_view query) {
@@ -585,9 +473,9 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<
 	const std::string java_lib_str = std::string(java_home) + "/lib";
 	const std::string java_conf_str = std::string(java_home) + "/conf";
 	int err = 0;
-	err += !!symlink(java_lib_str.c_str(), java_proxy_lib_path.c_str());
-	err += !!symlink(java_conf_str.c_str(), java_proxy_conf_path.c_str());
-	err += !!symlink(java_proxy_bin_path.c_str(), java_proxy_java_path.c_str());
+	err |= symlink(java_lib_str.c_str(), java_proxy_lib_path.c_str());
+	err |= symlink(java_conf_str.c_str(), java_proxy_conf_path.c_str());
+	err |= symlink(java_proxy_bin_path.c_str(), java_proxy_java_path.c_str());
 	if (err) {
 		const char* data = "Unable to create symlinks\n";
 		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 500, "text/plain");
@@ -596,43 +484,19 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<
 	// array of structures for keeping track of which environment variables we want to set and have already set
 	EnvQueryParam version_param = {.should_set = false, .key = "version"};
 	EnvQueryParam env_params[] = {
-		{.should_set = false, .prepend_env_key = true, .env_key = "JX_ACCESS_TOKEN=", .key = "jx_access_token"},
-		{.should_set = false, .prepend_env_key = true, .env_key = "JX_REFRESH_TOKEN=", .key = "jx_refresh_token"},
-		{.should_set = false, .prepend_env_key = true, .env_key = "JX_SESSION_ID=", .key = "jx_session_id"},
-		{.should_set = false, .prepend_env_key = true, .env_key = "JX_CHARACTER_ID=", .key = "jx_character_id"},
-		{.should_set = false, .prepend_env_key = true, .env_key = "JX_DISPLAY_NAME=", .key = "jx_display_name"},
+		JX_ENV_PARAMS,
 		{.should_set = true, .prepend_env_key = false, .allow_override = false, .env_key = env_key_home, .value = env_home},
 		{.should_set = true, .prepend_env_key = false, .allow_override = false, .env_key = env_key_user_home, .value = env_key_user_home + arg_user_home},
 		{.should_set = true, .prepend_env_key = false, .allow_override = false, .env_key = env_key_java_path, .value = env_key_java_path + java_path_str},
 	};
-	const size_t env_param_count = sizeof(env_params) / sizeof(env_params[0]);
 
 	// loop through and parse the query string from the HTTP request we intercepted
-	size_t cursor = 0;
-	while (true) {
-		const std::string::size_type next_eq = query.find_first_of('=', cursor);
-		const std::string::size_type next_amp = query.find_first_of('&', cursor);
-		if (next_eq == std::string::npos) break;
-		if (next_eq >= next_amp) {
-			// found an invalid query param with no '=' in it - skip this
-			cursor = next_amp + 1;
-			continue;
-		}
-
-		// parse the next "key" and "value" from the query, then check if it's relevant to us
-		const std::string_view key(query.begin() + cursor, query.begin() + next_eq);
-		const auto value_end = next_amp == std::string::npos ? query.end() : query.begin() + next_amp;
-		const CefString value = std::string(std::string_view(query.begin() + next_eq + 1,  value_end));
+	ITERATE_QUERY({
 		for (EnvQueryParam& param: env_params) {
 			param.CheckAndUpdate(key, value);
 		}
 		version_param.CheckAndUpdate(key, value);
-
-		// if there are no more instances of '&', we've read the last param, so stop here
-		// otherwise continue from the next '&'
-		if (next_amp == std::string::npos) break;
-		cursor = next_amp + 1;
-	}
+	}, query)
 
 	// if there was a "version" in the query string, we need to save the new jar and hash
 	if (version_param.should_set) {
@@ -664,120 +528,28 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<
 		delete[] jar;
 	}
 
-	// count how many env vars we have - we need to do this every time as CEF or other modules
-	// may call setenv and unsetenv
-	char** e;
-	for (e = environ; *e; e += 1);
-	size_t env_count = e - environ;
-
-	// set up some structs needed by posix_spawn, and our modified env array
-	sigset_t set;
-	sigfillset(&set);
-	posix_spawn_file_actions_t file_actions;
-	posix_spawnattr_t attributes;
-	pid_t pid;
-	posix_spawn_file_actions_init(&file_actions);
-	posix_spawn_file_actions_addclose(&file_actions, STDIN_FILENO);
-	posix_spawnattr_init(&attributes);
-	posix_spawnattr_setsigdefault(&attributes, &set);
-	posix_spawnattr_setpgroup(&attributes, 0);
-	posix_spawnattr_setflags(&attributes, POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_SETSIGMASK);
+	// set up argv for the new process
 	std::string path_str = this->hdos_path.string();
-
-	char* argv[6];
 	char arg_jar[] = "-jar";
 	std::string arg_java_home = "-Djava.home=" + java_proxy_data_dir_path.string();
-	argv[0] = java_path_str.data();
-	argv[1] = arg_user_home.data();
-	argv[2] = arg_java_home.data();
-	argv[3] = arg_jar;
-	argv[4] = path_str.data();
-	argv[5] = nullptr;
+	char* argv[] = {
+		java_path_str.data(),
+		arg_user_home.data(),
+		arg_java_home.data(),
+		arg_jar,
+		path_str.data(),
+		nullptr,
+	};
 
-	char** env = new char*[env_count + env_param_count + 1];
-
-	// first, loop through the existing env vars
-	// if its key is one we want to set, overwrite it, otherwise copy the pointer as-is
-	size_t i;
-	for (i = 0; i < env_count; i += 1) {
-		bool use_default = true;
-		for (EnvQueryParam& param: env_params) {
-			if (param.should_set && strncmp(environ[i], param.env_key.data(), param.env_key.size()) == 0) {
-				param.should_set = false;
-				use_default = false;
-				if (param.allow_append) {
-					param.value = std::string(param.env_key) + std::string(environ[i] + param.env_key.size()) + ' ' + (param.value.data() + param.env_key.size());
-				}
-				env[i] = param.value.data();
-				break;
-			}
-		}
-		if (use_default) {
-			env[i] = environ[i];
-		}
-	}
-	// ... next, look for any env vars we want to set that we haven't already, and put them at the end...
-	for (EnvQueryParam& param: env_params) {
-		if (param.should_set) {
-			env[i] = param.value.data();
-			i += 1;
-		}
-	}
-	// ... and finally null-terminate the list as required by POSIX
-	env[i] = nullptr;
-
-	int r = posix_spawn(&pid, argv[0], &file_actions, &attributes, argv, env);
-	
-	posix_spawnattr_destroy(&attributes);
-	posix_spawn_file_actions_destroy(&file_actions);
-	delete[] env;
-
-	if (r == 0) {
-		fmt::print("[B] Successfully spawned game process with pid {}\n", pid);
-
-		if (version_param.should_set) {
-			size_t written = 0;
-			int file = open(this->hdos_version_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
-			if (file == -1) {
-				const char* data = "OK, but unable to save ID file\n";
-				return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
-			}
-			while (written < version_param.value.size()) {
-				written += write(file, version_param.value.c_str() + written, version_param.value.size() - written);
-			}
-			close(file);
-		}
-
-		const char* data = "OK\n";
-		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
-	} else {
-		// posix_spawn failed - this is extremely unlikely to happen in the field, since the only failure
-		// case is EINVAL, which would indicate a trivial mistake in writing this function
-		fmt::print("[B] Error from posix_spawn: {}\n", strerror(r));
-		const char* data = "Error spawning process\n";
-		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 500, "text/plain");
-	}
+	SPAWN_FROM_PARAMS_AND_RETURN(argv, env_params, version_param, this->hdos_version_path.c_str())
 }
 
 void Browser::Launcher::OpenExternalUrl(char* url) const {
-	sigset_t set;
-	sigfillset(&set);
-	posix_spawn_file_actions_t file_actions;
-	posix_spawnattr_t attributes;
-	pid_t pid;
-	posix_spawn_file_actions_init(&file_actions);
-	posix_spawnattr_init(&attributes);
-	posix_spawnattr_setsigdefault(&attributes, &set);
-	posix_spawnattr_setpgroup(&attributes, 0);
-	posix_spawnattr_setflags(&attributes, POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_SETSIGMASK);
 	char arg_env[] = "/usr/bin/env";
 	char arg_xdg_open[] = "xdg-open";
-	char* argv[4];
-	argv[0] = arg_env;
-	argv[1] = arg_xdg_open;
-	argv[2] = url;
-	argv[3] = nullptr;
-	int r = posix_spawn(&pid, argv[0], &file_actions, &attributes, argv, environ);
+	char* argv[] { arg_env, arg_xdg_open, url, nullptr };
+	pid_t pid;
+	int r = SpawnProcess(argv, environ, &pid);
 	if (r != 0) {
 		fmt::print("[B] Error in OpenExternalUrl from posix_spawn: {}\n", strerror(r));
 	}
