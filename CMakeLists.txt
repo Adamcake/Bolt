@@ -13,6 +13,8 @@ if(NOT WIN32)
     # how this program is described in human-readable strings in metadata
     # not in plaintext for a reason
     string(ASCII 74 97 103 101 120 32 108 97 117 110 99 104 101 114 BOLT_PROGRAM_NAME)
+    string(ASCII 82 117 110 101 83 99 97 112 101 BOLT_GAME_NAME)
+    string(TOLOWER "${BOLT_GAME_NAME}" BOLT_GAME_NAME_LOWER)
 
     # .desktop file contents
     string(JOIN "\n" BOLT_DESKTOP_INFO
@@ -29,6 +31,19 @@ if(NOT WIN32)
         ""
     )
     file(GENERATE OUTPUT bolt.desktop CONTENT "${BOLT_DESKTOP_INFO}")
+
+    string(JOIN "\n" BOLT_DESKTOP_GAME_INFO
+        "[Desktop Entry]"
+        "Version=1.0"
+        "Type=Application"
+        "Name=${BOLT_GAME_NAME}"
+        "GenericName=${BOLT_GAME_NAME}"
+        "Icon=${BOLT_GAME_NAME_LOWER}"
+        "Terminal=false"
+        "NoDisplay=true"
+        ""
+    )
+    file(GENERATE OUTPUT bolt.game.desktop CONTENT "${BOLT_DESKTOP_GAME_INFO}")
 
     # metainfo.xml file contents
     string(JOIN "\n" BOLT_METAINFO
@@ -104,13 +119,14 @@ if(NOT WIN32)
     # auto-generated helper for running from build dir; this file does not get installed
     # appends to LD_LIBRARY_PATH only if the overlay library is being built, otherwise the dir won't exist
     if(NOT BOLT_SKIP_LIBRARIES)
-        set(BOLT_OVERLAY_LIB_EXPORT "export LD_LIBRARY_PATH=\${LD_LIBRARY_PATH:+\${LD_LIBRARY_PATH}:}${CMAKE_CURRENT_BINARY_DIR}/${BOLT_LIBDIR}")
+        set(BOLT_OVERLAY_LIB_EXPORT "export LD_LIBRARY_PATH=${CMAKE_CURRENT_BINARY_DIR}/${BOLT_LIBDIR}\${LD_LIBRARY_PATH:+:\${LD_LIBRARY_PATH}}")
     endif()
     string(JOIN "\n" BOLT_STAGING_SCRIPT
         "#!/bin/sh -eu"
         "# This is a helper script for running a staging build, i.e. a build that has been installed in this directory."
         "# This script will not be installed anywhere by `cmake --install`, as it's for development/staging purposes only."
         "${BOLT_OVERLAY_LIB_EXPORT}"
+        "export XDG_DATA_DIRS=${CMAKE_CURRENT_BINARY_DIR}/${BOLT_SHAREDIR}\${XDG_DATA_DIRS:+:\${XDG_DATA_DIRS}}"
         "export XDG_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/config"
         "export XDG_DATA_HOME=${CMAKE_CURRENT_BINARY_DIR}/data"
         "cd ${CMAKE_CURRENT_BINARY_DIR}/opt/bolt-launcher"
@@ -255,6 +271,7 @@ endif()
 if(NOT WIN32)
     install(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/bolt-run.sh" RENAME bolt DESTINATION ${BOLT_BINDIR})
     install(FILES "${CMAKE_CURRENT_BINARY_DIR}/bolt.desktop" DESTINATION "${BOLT_SHAREDIR}/applications/" RENAME "${BOLT_META_NAME}.desktop")
+    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/bolt.game.desktop" DESTINATION "${BOLT_SHAREDIR}/applications/" RENAME "${BOLT_META_NAME}.${BOLT_GAME_NAME}.desktop")
     install(FILES "${CMAKE_CURRENT_BINARY_DIR}/metainfo.xml" DESTINATION "${BOLT_SHAREDIR}/metainfo/" RENAME "${BOLT_META_NAME}.metainfo.xml")
     install(FILES "${BOLT_ICON_DIR}/16.png" DESTINATION "${BOLT_SHAREDIR}/icons/hicolor/16x16/apps/" RENAME "${BOLT_META_NAME}.png")
     install(FILES "${BOLT_ICON_DIR}/32.png" DESTINATION "${BOLT_SHAREDIR}/icons/hicolor/32x32/apps/" RENAME "${BOLT_META_NAME}.png")
