@@ -6,6 +6,7 @@
 #include <archive.h>
 #include <archive_entry.h>
 #include <fcntl.h>
+#include <filesystem>
 #include <fmt/core.h>
 #include <signal.h>
 #include <spawn.h>
@@ -96,6 +97,29 @@ extern char **environ;
 		fmt::print("[B] Error from posix_spawn: {}\n", r); \
 		const char* data = "Error spawning process\n"; \
 		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 500, "text/plain"); \
+	} \
+}
+
+const std::string_view env_key_runtime_dir = "XDG_RUNTIME_DIR=";
+#define SETUP_TEMP_DIR(TEMP_DIR) { \
+	const char* tmpdir_prefix = "bolt-runelite-"; \
+	const char* runtime_dir = getenv("XDG_RUNTIME_DIR"); \
+	char path_buf[PATH_MAX]; \
+	if (runtime_dir) snprintf(path_buf, sizeof(path_buf), "%s/%sXXXXXX", runtime_dir, tmpdir_prefix); \
+	else snprintf(path_buf, sizeof(path_buf), "/tmp/%sXXXXXX", tmpdir_prefix); \
+	char* dtemp = mkdtemp(path_buf); \
+	if (!dtemp) { \
+		const char* data = "Couldn't create temp directory (is XDG_RUNTIME_DIR set?)\n"; \
+		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain"); \
+	} \
+	TEMP_DIR = std::filesystem::canonical(dtemp); \
+	fmt::print("[B] runelite temp_dir: {}\n", TEMP_DIR.c_str()); \
+	if (TEMP_DIR.has_parent_path()) { \
+		for (const auto& entry: std::filesystem::directory_iterator(TEMP_DIR.parent_path())) { \
+			const std::filesystem::path path = entry.path(); \
+			snprintf(path_buf, sizeof(path_buf), "%s/%s", TEMP_DIR.c_str(), path.filename().c_str()); \
+			int _ = symlink(path.c_str(), path_buf); \
+		} \
 	} \
 }
 
@@ -351,13 +375,19 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 	const std::string env_home = home_ + user_home;
 	const std::string_view env_key_home = std::string_view(env_home.begin(), env_home.begin() + strlen(home_));
 
+	// set up a temp directory just for this run
+	std::filesystem::path temp_dir;
+	SETUP_TEMP_DIR(temp_dir)
+
 	// array of structures for keeping track of which environment variables we want to set and have already set
 	EnvQueryParam rl_path_param = {.should_set = false, .key = "jar_path"};
 	EnvQueryParam id_param = {.should_set = false, .key = "id"};
 	EnvQueryParam scale_param = {.should_set = false, .key = "scale"};
+	EnvQueryParam rich_presence_param = {.should_set = false, .key = "flatpak_rich_presence"};
 	EnvQueryParam env_params[] = {
 		JX_ENV_PARAMS,
 		{.should_set = true, .prepend_env_key = false, .allow_override = false, .env_key = env_key_home, .value = env_home},
+		{.should_set = true, .prepend_env_key = false, .allow_override = false, .env_key = env_key_runtime_dir, .value = std::string(env_key_runtime_dir) + temp_dir.c_str()},
 	};
 
 	// loop through and parse the query string from the HTTP request we intercepted
@@ -368,6 +398,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 		id_param.CheckAndUpdate(key, value);
 		scale_param.CheckAndUpdate(key, value);
 		rl_path_param.CheckAndUpdate(key, value);
+		rich_presence_param.CheckAndUpdate(key, value);
 	}, query)
 
 	// path to runelite.jar will either be a user-provided one or one in our data folder,
@@ -409,6 +440,15 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 		}
 	}
 
+	// symlink discord-ipc for rich presence, if the user has opted into it
+	if (rich_presence_param.should_set) {
+		std::filesystem::path discord_ipc = temp_dir;
+		discord_ipc.append("discord-ipc-0");
+		if (symlink("../app/com.discordapp.Discord/discord-ipc-0", discord_ipc.c_str())) {
+			fmt::print("[B] note: unable to create symlink to discord-ipc-0 at {}\n", discord_ipc.c_str());
+		}
+	}
+
 	// set up argv for the new process
 	const char* java_home = getenv("JAVA_HOME");
 	std::string java_home_str;
@@ -444,6 +484,9 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<
 		const char* data = "JAVA_HOME environment variable is required to run HDOS\n";
 		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
 	}
+
+	std::filesystem::path temp_dir;
+	SETUP_TEMP_DIR(temp_dir)
 
 	const std::string user_home = this->data_dir.string();
 	const char* home_ = "HOME=";
@@ -483,6 +526,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<
 
 	// array of structures for keeping track of which environment variables we want to set and have already set
 	EnvQueryParam version_param = {.should_set = false, .key = "version"};
+	EnvQueryParam rich_presence_param = {.should_set = false, .key = "flatpak_rich_presence"};
 	EnvQueryParam env_params[] = {
 		JX_ENV_PARAMS,
 		{.should_set = true, .prepend_env_key = false, .allow_override = false, .env_key = env_key_home, .value = env_home},
@@ -496,6 +540,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<
 			param.CheckAndUpdate(key, value);
 		}
 		version_param.CheckAndUpdate(key, value);
+		rich_presence_param.CheckAndUpdate(key, value);
 	}, query)
 
 	// if there was a "version" in the query string, we need to save the new jar and hash
@@ -526,6 +571,15 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<
 		}
 		close(file);
 		delete[] jar;
+	}
+
+	// symlink discord-ipc for rich presence, if the user has opted into it
+	if (rich_presence_param.should_set) {
+		std::filesystem::path discord_ipc = temp_dir;
+		discord_ipc.append("discord-ipc-0");
+		if (symlink("../app/com.discordapp.Discord/discord-ipc-0", discord_ipc.c_str())) {
+			fmt::print("[B] note: unable to create symlink to discord-ipc-0 at {}\n", discord_ipc.c_str());
+		}
 	}
 
 	// set up argv for the new process
