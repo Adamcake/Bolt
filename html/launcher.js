@@ -299,7 +299,9 @@ function start(s) {
 
     var launchGameButtons = document.createElement("div");
     var settingsOsrs = document.createElement("div");
+    settingsOsrs.setAttribute("class", "div-settings");
     var settingsRs3 = document.createElement("div");
+    settingsRs3.setAttribute("class", "div-settings");
 
     var rsConfigUriLabel = document.createElement("label");
     rsConfigUriLabel.innerText = "Config URI: ";

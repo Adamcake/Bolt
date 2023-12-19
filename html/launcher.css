@@ -65,3 +65,7 @@ textarea {
     vertical-align: middle;
     background-color: #CCCCCC;
 }
+
+.div-settings {
+    border:2px solid grey;
+}
