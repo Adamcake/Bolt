@@ -23,6 +23,7 @@ var gameAccountSelection = document.createElement("div");
 var footer = document.createElement("div");
 
 // config setting elements
+var runeliteFlatpakRichPresence = document.createElement("input");
 var runeliteUseCustomJar = document.createElement("input");
 var runeliteCustomJar = document.createElement("textarea");
 var runeliteUseScale = document.createElement("input");
@@ -327,6 +328,17 @@ function start(s) {
     };
     settingsRs3.appendChild(rsConfigUriReset);
 
+    var runeliteFlatpakRichPresenceLabel = document.createElement("label");
+    runeliteFlatpakRichPresenceLabel.innerText = "Expose rich presence to Flatpak Discord: ";
+    runeliteFlatpakRichPresenceLabel.for = runeliteFlatpakRichPresence;
+
+    runeliteFlatpakRichPresence.type = "checkbox";
+    runeliteFlatpakRichPresence.checked = config.flatpak_rich_presence || false;
+    runeliteFlatpakRichPresence.onchange = () => {
+        config.flatpak_rich_presence = runeliteFlatpakRichPresence.checked;
+        configIsDirty = true;
+    };
+
     var runeliteCustomJarLabel = document.createElement("label");
     runeliteCustomJarLabel.innerText = "Use custom RuneLite JAR: ";
     runeliteCustomJarLabel.for = runeliteUseCustomJar;
@@ -408,6 +420,11 @@ function start(s) {
         }
     };
 
+    if (platform === "linux") {
+        settingsOsrs.appendChild(runeliteFlatpakRichPresenceLabel);
+        settingsOsrs.appendChild(runeliteFlatpakRichPresence);
+        settingsOsrs.appendChild(document.createElement("br"));
+    }
     settingsOsrs.appendChild(runeliteCustomJarLabel);
     settingsOsrs.appendChild(runeliteUseCustomJar);
     settingsOsrs.appendChild(runeliteCustomJar);
@@ -1016,6 +1033,7 @@ function launchRunelite(s, element, jx_access_token, jx_refresh_token, jx_sessio
         if (jx_character_id) params.jx_character_id = jx_character_id;
         if (jx_display_name) params.jx_display_name = jx_display_name;
         if (runeliteUseScale.checked) params.scale = runeliteScale.value.length > 0 ? runeliteScale.value : runeliteScale.placeholder;
+        if (runeliteFlatpakRichPresence.checked) params.flatpak_rich_presence = "";
         xml.open(jar ? 'POST': 'GET', "/launch-runelite-jar?".concat(new URLSearchParams(params)), true);
         xml.onreadystatechange = () => {
             if (xml.readyState == 4) {
