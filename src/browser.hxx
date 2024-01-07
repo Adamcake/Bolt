@@ -81,7 +81,7 @@ namespace Browser {
 		bool OnPopupBrowserViewCreated(CefRefPtr<CefBrowserView>, CefRefPtr<CefBrowserView>, bool) override;
 		void OnBrowserCreated(CefRefPtr<CefBrowserView>, CefRefPtr<CefBrowser>) override;
 		void OnBrowserDestroyed(CefRefPtr<CefBrowserView>, CefRefPtr<CefBrowser>) override;
-		cef_chrome_toolbar_type_t GetChromeToolbarType() override;
+		cef_chrome_toolbar_type_t GetChromeToolbarType();
 
 		/* CefRequestHandler functions */
 		CefRefPtr<CefResourceRequestHandler> GetResourceRequestHandler(
