@@ -21,9 +21,9 @@ namespace Browser {
 			ResourceHandler(file.contents, file.size, 200, file.mime_type) { this->file_manager = file_manager; }
 
 		bool Open(CefRefPtr<CefRequest>, bool&, CefRefPtr<CefCallback>) override;
-		void GetResponseHeaders(CefRefPtr<CefResponse>, int64&, CefString&) override;
+		void GetResponseHeaders(CefRefPtr<CefResponse>, int64_t&, CefString&) override;
 		bool Read(void*, int, int&, CefRefPtr<CefResourceReadCallback>) override;
-		bool Skip(int64, int64&, CefRefPtr<CefResourceSkipCallback>) override;
+		bool Skip(int64_t, int64_t&, CefRefPtr<CefResourceSkipCallback>) override;
 		void Cancel() override;
 		CefRefPtr<CefResourceHandler> GetResourceHandler(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, CefRefPtr<CefRequest>) override;
 

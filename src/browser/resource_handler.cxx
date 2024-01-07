@@ -5,7 +5,7 @@ bool Browser::ResourceHandler::Open(CefRefPtr<CefRequest>, bool& handle_request,
 	return true;
 }
 
-void Browser::ResourceHandler::GetResponseHeaders(CefRefPtr<CefResponse> response, int64& response_length, CefString& redirectUrl) {
+void Browser::ResourceHandler::GetResponseHeaders(CefRefPtr<CefResponse> response, int64_t& response_length, CefString& redirectUrl) {
 	response->SetStatus(this->status);
 	response->SetMimeType(this->mime);
 	if (this->has_location) {
@@ -35,7 +35,7 @@ bool Browser::ResourceHandler::Read(void* data_out, int bytes_to_read, int& byte
 	return true;
 }
 
-bool Browser::ResourceHandler::Skip(int64 bytes_to_skip, int64& bytes_skipped, CefRefPtr<CefResourceSkipCallback>) {
+bool Browser::ResourceHandler::Skip(int64_t bytes_to_skip, int64_t& bytes_skipped, CefRefPtr<CefResourceSkipCallback>) {
 	if (this->cursor + bytes_to_skip <= this->data_len) {
 		// skip in bounds
 		bytes_skipped = bytes_to_skip;
