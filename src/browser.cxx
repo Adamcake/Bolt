@@ -161,10 +161,6 @@ CefRefPtr<CefResourceRequestHandler> Browser::Window::GetResourceRequestHandler(
 	return nullptr;
 }
 
-cef_chrome_toolbar_type_t Browser::Window::GetChromeToolbarType() {
-	return CEF_CTT_NONE;
-}
-
 bool Browser::Window::HasBrowser(CefRefPtr<CefBrowser> browser) const {
 	if (this->browser->IsSame(browser)) {
 		return true;
