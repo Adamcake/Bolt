@@ -100,7 +100,6 @@ namespace Browser {
 			IMPLEMENT_REFCOUNTING(Client);
 
 			bool is_closing;
-			size_t closing_windows_remaining;
 			bool show_devtools;
 			std::filesystem::path config_dir;
 			std::filesystem::path data_dir;

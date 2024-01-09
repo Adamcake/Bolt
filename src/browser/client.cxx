@@ -53,21 +53,18 @@ void Browser::Client::OpenLauncher() {
 
 void Browser::Client::Exit() {
 	fmt::print("[B] Exit\n");
-	if (this->windows.size() == 0) {
-		this->StopFileManager();
-		CefQuitMessageLoop();
-#if defined(CEF_X11)
-		xcb_disconnect(this->xcb);
-#endif
-	} else {
-		this->is_closing = true;
-		this->closing_windows_remaining = 0;
+	is_closing = true;
+	if (!this->windows.empty()) {
 		for (CefRefPtr<Browser::Window>& window: this->windows) {
-			this->closing_windows_remaining += window->CountBrowsers();
 			window->Close();
 		}
 		this->windows.clear();
 	}
+	this->StopFileManager();
+	CefQuitMessageLoop();
+#if defined(CEF_X11)
+	xcb_disconnect(this->xcb);
+#endif
 }
 
 void Browser::Client::OnWindowCreated(CefRefPtr<CefWindow> window) {
@@ -162,12 +159,8 @@ bool Browser::Client::DoClose(CefRefPtr<CefBrowser> browser) {
 
 void Browser::Client::OnBeforeClose(CefRefPtr<CefBrowser> browser) {
 	fmt::print("[B] OnBeforeClose for browser {}, remaining windows {}\n", browser->GetIdentifier(), this->windows.size());
-	if (this->is_closing) {
-		this->closing_windows_remaining -= 1;
-		if (this->closing_windows_remaining == 0) {
-			// retry Exit(), hoping this time windows.size() will be 0
-			this->Exit();
-		}
+	if (this->windows.empty()) {
+		this->Exit();
 	}
 }
 
