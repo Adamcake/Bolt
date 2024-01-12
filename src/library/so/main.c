@@ -324,8 +324,9 @@ void _bolt_glBindAttribLocation(unsigned int program, unsigned int index, const 
     LOG("glBindAttribLocation end\n");
 }
 
-void _bolt_glGetUniformLocation(unsigned int program, const char* name) {
-    real_glGetUniformLocation(program, name);
+int _bolt_glGetUniformLocation(unsigned int program, const char* name) {
+    int ret = real_glGetUniformLocation(program, name);
+    return ret;
 }
 
 void _bolt_glGetUniformfv(unsigned int program, int location, float* params) {
