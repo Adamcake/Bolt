@@ -25,6 +25,7 @@
 #define GL_ELEMENT_ARRAY_BUFFER 34963
 #define GL_ARRAY_BUFFER_BINDING 34964
 #define GL_ELEMENT_ARRAY_BUFFER_BINDING 34965
+#define GL_TEXTURE0 33984
 
 struct GLArrayBuffer {
     void* data;
@@ -70,12 +71,13 @@ struct GLContext {
     struct GLProgram** programs;
     struct GLArrayBuffer** buffers;
     struct GLTexture2D** textures;
-    size_t bound_program_id;
-    size_t bound_texture_id;
+    unsigned int bound_program_id;
+    unsigned int* texture_units;
     uint8_t current_program_is_important;
     uint8_t is_attached;
     uint8_t deferred_destroy;
     uint8_t is_shared_owner;
+    unsigned int active_texture;
     unsigned int current_draw_framebuffer;
     unsigned int current_read_framebuffer;
     struct GLAttrBinding attributes[16];

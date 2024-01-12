@@ -82,6 +82,7 @@ void (*real_glBufferStorage)(unsigned int, uintptr_t, const void*, uintptr_t) = 
 void (*real_glFlushMappedBufferRange)(uint32_t, intptr_t, uintptr_t) = NULL;
 void (*real_glBufferSubData)(uint32_t, intptr_t, uintptr_t, const void*) = NULL;
 void (*real_glGetIntegerv)(uint32_t, int*) = NULL;
+void (*real_glActiveTexture)(uint32_t) = NULL;
 
 /* opengl functions that are usually loaded dynamically from libGL.so */
 void (*real_glDrawElements)(uint32_t, unsigned int, uint32_t, const void*) = NULL;
@@ -385,7 +386,7 @@ void _bolt_glTexStorage2D(uint32_t target, int levels, uint32_t internalformat, 
     LOG("glTexStorage2D\n");
     real_glTexStorage2D(target, levels, internalformat, width, height);
     struct GLContext* c = _bolt_context();
-    struct GLTexture2D* tex = c->textures[c->bound_texture_id];
+    struct GLTexture2D* tex = c->textures[c->texture_units[c->active_texture]];
     if (tex) {
         free(tex->data);
         tex->data = malloc(width * height * 4);
@@ -481,7 +482,7 @@ void _bolt_glCompressedTexSubImage2D(uint32_t target, int level, int xoffset, in
     if (target != GL_TEXTURE_2D || level != 0) return;
     struct GLContext* c = _bolt_context();
     if (format == GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT || format == GL_COMPRESSED_RGBA_S3TC_DXT5_EXT || format == GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT) {
-        struct GLTexture2D* tex = c->textures[c->bound_texture_id];
+        struct GLTexture2D* tex = c->textures[c->texture_units[c->active_texture]];
         if (tex) {
             int out_xoffset = xoffset;
             int out_yoffset = yoffset;
@@ -715,7 +716,8 @@ void glBindTexture(uint32_t target, unsigned int texture) {
     LOG("glBindTexture\n");
     real_glBindTexture(target, texture);
     if (target == GL_TEXTURE_2D) {
-        _bolt_context()->bound_texture_id = texture;
+        struct GLContext* c = _bolt_context();
+        c->texture_units[c->active_texture] = texture;
     }
     LOG("glBindTexture end\n");
 }
@@ -726,7 +728,7 @@ void glTexSubImage2D(uint32_t target, int level, int xoffset, int yoffset, unsig
     struct GLContext* c = _bolt_context();
     if (level == 0 && format == GL_RGBA) {
         if (target == GL_TEXTURE_2D && format == GL_RGBA) {
-            struct GLTexture2D* tex = c->textures[c->bound_texture_id];
+            struct GLTexture2D* tex = c->textures[c->texture_units[c->active_texture]];
             if (tex && !(xoffset < 0 || yoffset < 0 || xoffset + width > tex->width || yoffset + height > tex->height)) {
                 for (unsigned int y = 0; y < height; y += 1) {
                     unsigned char* dest_ptr = tex->data + ((tex->width * (y + yoffset)) + xoffset) * 4;
@@ -826,6 +828,7 @@ void* eglGetProcAddress(const char* name) {
     PROC_ADDRESS_MAP(glFlushMappedBufferRange)
     PROC_ADDRESS_MAP(glBufferSubData)
     PROC_ADDRESS_MAP(glGetIntegerv)
+    PROC_ADDRESS_MAP(glActiveTexture)
 #undef PROC_ADDRESS_MAP
     return real_eglGetProcAddress(name);
 }

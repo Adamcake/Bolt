@@ -6,6 +6,7 @@
 void _bolt_glcontext_init(struct GLContext*, void*, void*);
 void _bolt_glcontext_free(struct GLContext*);
 
+#define MAX_TEXTURE_UNITS 4096 // would be nice if there was a way to query this at runtime, but it would be awkward to set up
 #define PTR_LIST_CAPACITY 256 * 256
 #define CONTEXTS_CAPACITY 64 // not growable so we just have to hard-code a number and hope it's enough forever
 struct GLContext contexts[CONTEXTS_CAPACITY];
@@ -141,6 +142,7 @@ void _bolt_glcontext_init(struct GLContext* context, void* egl_context, void* eg
     }
     memset(context, 0, sizeof(*context));
     context->id = (uintptr_t)egl_context;
+    context->texture_units = calloc(MAX_TEXTURE_UNITS, sizeof(unsigned int));
     if (shared) {
         context->programs = shared->programs;
         context->buffers = shared->buffers;
@@ -157,6 +159,7 @@ void _bolt_glcontext_init(struct GLContext* context, void* egl_context, void* eg
 }
 
 void _bolt_glcontext_free(struct GLContext* context) {
+    free(context->texture_units);
     if (context->is_shared_owner) {
         free(context->programs);
         free(context->buffers);
