@@ -485,7 +485,7 @@ void _bolt_glCompressedTexSubImage2D(uint32_t target, int level, int xoffset, in
         if (tex) {
             int out_xoffset = xoffset;
             int out_yoffset = yoffset;
-            for (size_t ii = 0; ii < (xoffset * yoffset); ii += 16) {
+            for (size_t ii = 0; ii < (width * height); ii += 16) {
                 const uint8_t* ptr = data + ii;
                 uint8_t* out_ptr = tex->data + (out_yoffset * tex->width * 4) + (out_xoffset * 4);
                 uint16_t c0 = *(ptr + 8) + (*(ptr + 9) << 8);
