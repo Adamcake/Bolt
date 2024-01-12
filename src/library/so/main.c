@@ -366,7 +366,7 @@ void _bolt_glUseProgram(unsigned int program) {
     struct GLContext* c = _bolt_context();
     if (program != c->bound_program_id) {
         c->bound_program_id = program;
-        c->current_program_is_important = c->programs[program]->is_important;
+        c->current_program_is_important = program ? c->programs[program]->is_important : 0;
     }
     LOG("glUseProgram end\n");
 }
