@@ -260,13 +260,13 @@ else()
 endif()
 
 # Build helper libraries
-#if(NOT BOLT_SKIP_LIBRARIES)
-#    if(UNIX AND NOT APPLE)
-#        add_library(${BOLT_OVERLAY_NAME} SHARED src/library/so/main.c src/library/gl.c)
-#        install(TARGETS ${BOLT_OVERLAY_NAME} DESTINATION "${BOLT_LIBDIR}")
-#        target_compile_definitions(bolt PUBLIC BOLT_LIB_NAME="${BOLT_OVERLAY_NAME}")
-#    endif()
-#endif()
+if(NOT BOLT_SKIP_LIBRARIES)
+    if(UNIX AND NOT APPLE)
+        add_library(${BOLT_OVERLAY_NAME} SHARED src/library/so/main.c src/library/gl.c)
+        install(TARGETS ${BOLT_OVERLAY_NAME} DESTINATION "${BOLT_LIBDIR}")
+        target_compile_definitions(bolt PUBLIC BOLT_LIB_NAME="${BOLT_OVERLAY_NAME}")
+    endif()
+endif()
 
 # Finally, install shell script and metadata
 if(NOT WIN32)

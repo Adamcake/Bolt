@@ -26,36 +26,21 @@
 #define GL_ARRAY_BUFFER_BINDING 34964
 #define GL_ELEMENT_ARRAY_BUFFER_BINDING 34965
 
-// my haphazard implementation of an arena allocator
-struct GLList {
-    void* data;
-    void* pointers;
-    size_t capacity;
-    size_t first_empty;
-};
-
 struct GLArrayBuffer {
     void* data;
-    unsigned int id;
+    uint8_t* mapping;
     int32_t mapping_offset;
     uint32_t mapping_len;
     uint32_t mapping_access_type;
-    uint8_t mapped;
 };
-struct GLArrayBuffer* _bolt_find_buffer(struct GLList*, unsigned int);
-struct GLArrayBuffer* _bolt_get_buffer(struct GLList*, unsigned int);
 
 struct GLTexture2D {
     unsigned char* data;
-    unsigned int id;
     unsigned int width;
     unsigned int height;
 };
-struct GLTexture2D* _bolt_find_texture(struct GLList*, unsigned int);
-struct GLTexture2D* _bolt_get_texture(struct GLList*, unsigned int);
 
 struct GLProgram {
-    unsigned int id;
     unsigned int loc_aVertexPosition2D;
     unsigned int loc_aVertexColour;
     unsigned int loc_aTextureUV;
@@ -65,8 +50,6 @@ struct GLProgram {
     int loc_uDiffuseMap;
     uint8_t is_important;
 };
-struct GLProgram* _bolt_find_program(struct GLList*, unsigned int);
-struct GLProgram* _bolt_get_program(struct GLList*, unsigned int);
 
 struct GLAttrBinding {
     unsigned int buffer;
@@ -84,12 +67,9 @@ struct GLAttrBinding {
 // are actually safe assumptions in valid OpenGL usage.
 struct GLContext {
     uintptr_t id;
-    struct GLList programs;
-    struct GLList buffers;
-    struct GLList textures;
-    struct GLList* shared_programs;
-    struct GLList* shared_buffers;
-    struct GLList* shared_textures;
+    struct GLProgram** programs;
+    struct GLArrayBuffer** buffers;
+    struct GLTexture2D** textures;
     size_t bound_program_id;
     size_t bound_texture_id;
     uint8_t current_program_is_important;
@@ -101,22 +81,10 @@ struct GLContext {
     struct GLAttrBinding attributes[16];
 };
 
-struct GLFence {
-    uint8_t signal;
-    uintptr_t real_fence;
-    pthread_mutex_t mutex;
-    pthread_cond_t cond;
-};
-
 struct GLContext* _bolt_context();
 void _bolt_create_context(void*, void*);
 void _bolt_make_context_current(void*);
 void _bolt_destroy_context(void*);
-struct GLArrayBuffer* _bolt_context_get_buffer(struct GLContext*, uint32_t);
-struct GLArrayBuffer* _bolt_context_find_buffer(struct GLContext*, uint32_t);
-struct GLArrayBuffer* _bolt_context_find_named_buffer(struct GLContext*, unsigned int);
-void _bolt_context_destroy_buffers(struct GLContext*, unsigned int, const unsigned int*);
-void _bolt_context_destroy_textures(struct GLContext*, unsigned int, const unsigned int*);
 void _bolt_set_attr_binding(struct GLAttrBinding*, unsigned int, int, const void*, unsigned int, uint32_t, uint8_t);
 uint8_t _bolt_get_attr_binding(struct GLContext*, const struct GLAttrBinding*, size_t, size_t, float*);
 
