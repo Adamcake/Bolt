@@ -325,16 +325,22 @@ void _bolt_glBindAttribLocation(unsigned int program, unsigned int index, const 
 }
 
 int _bolt_glGetUniformLocation(unsigned int program, const char* name) {
+    LOG("glGetUniformLocation\n");
     int ret = real_glGetUniformLocation(program, name);
+    LOG("glGetUniformLocation end (returned %i)\n", ret);
     return ret;
 }
 
 void _bolt_glGetUniformfv(unsigned int program, int location, float* params) {
+    LOG("glGetUniformfv\n");
     real_glGetUniformfv(program, location, params);
+    LOG("glGetUniformfv end\n");
 }
 
 void _bolt_glGetUniformiv(unsigned int program, int location, int* params) {
+    LOG("glGetUniformiv\n");
     real_glGetUniformiv(program, location, params);
+    LOG("glGetUniformiv end\n");
 }
 
 void _bolt_glLinkProgram(unsigned int program) {
@@ -410,7 +416,9 @@ void _bolt_glGenBuffers(uint32_t n, unsigned int* buffers) {
 }
 
 void _bolt_glBindBuffer(uint32_t target, unsigned int buffer) {
+    LOG("glBindBuffer\n");
     real_glBindBuffer(target, buffer);
+    LOG("glBindBuffer end\n");
 }
 
 void _bolt_glBufferData(uint32_t target, uintptr_t size, const void* data, uint32_t usage) {
@@ -462,7 +470,9 @@ void _bolt_glBindFramebuffer(uint32_t target, unsigned int framebuffer) {
 }
 
 void _bolt_glFramebufferTextureLayer(uint32_t target, uint32_t attachment, unsigned int texture, int level, int layer) {
+    LOG("glFramebufferTextureLayer\n");
     real_glFramebufferTextureLayer(target, attachment, texture, level, layer);
+    LOG("glFramebufferTextureLayer end\n");
 }
 
 void _bolt_glCompressedTexSubImage2D(uint32_t target, int level, int xoffset, int yoffset, unsigned int width, unsigned int height, uint32_t format, unsigned int imageSize, const void* data) {
@@ -634,11 +644,15 @@ void _bolt_glFlushMappedBufferRange(uint32_t target, intptr_t offset, uintptr_t 
 }
 
 void _bolt_glBufferSubData(uint32_t target, intptr_t offset, uintptr_t size, const void* data) {
+    LOG("glBufferSubData\n");
     real_glBufferSubData(target, offset, size, data);
+    LOG("glBufferSubData end\n");
 }
 
 void _bolt_glGetIntegerv(uint32_t pname, int* data) {
+    LOG("glGetIntegerv\n");
     real_glGetIntegerv(pname, data);
+    LOG("glGetIntegerv end\n");
 }
 
 void glDrawElements(uint32_t mode, unsigned int count, uint32_t type, const void* indices) {
