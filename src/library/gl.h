@@ -49,7 +49,8 @@ struct GLProgram {
     unsigned int loc_aTextureUVAtlasExtents;
     int loc_uProjectionMatrix;
     int loc_uDiffuseMap;
-    uint8_t is_important;
+    uint8_t is_2d;
+    uint8_t is_3d;
 };
 
 struct GLAttrBinding {
@@ -73,7 +74,6 @@ struct GLContext {
     struct GLTexture2D** textures;
     unsigned int bound_program_id;
     unsigned int* texture_units;
-    uint8_t current_program_is_important;
     uint8_t is_attached;
     uint8_t deferred_destroy;
     uint8_t is_shared_owner;

@@ -3,17 +3,19 @@
 #include <unistd.h>
 #undef _GNU_SOURCE
 
+#include <math.h>
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <time.h>
 
 #include "../gl.h"
 
 // comment or uncomment this to enable verbose logging of hooks in this file
-#define VERBOSE
+//#define VERBOSE
 
 // don't change this part, change the line above this instead
 #if defined(VERBOSE)
@@ -83,9 +85,10 @@ void (*real_glFlushMappedBufferRange)(uint32_t, intptr_t, uintptr_t) = NULL;
 void (*real_glBufferSubData)(uint32_t, intptr_t, uintptr_t, const void*) = NULL;
 void (*real_glGetIntegerv)(uint32_t, int*) = NULL;
 void (*real_glActiveTexture)(uint32_t) = NULL;
+void (*real_glDrawElements)(uint32_t, unsigned int, uint32_t, const void*) = NULL;
+void (*real_glMultiDrawElements)(uint32_t, uint32_t*, uint32_t, const void**, uint32_t) = NULL;
 
 /* opengl functions that are usually loaded dynamically from libGL.so */
-void (*real_glDrawElements)(uint32_t, unsigned int, uint32_t, const void*) = NULL;
 void (*real_glDrawArrays)(uint32_t, int, unsigned int) = NULL;
 void (*real_glGenTextures)(uint32_t, unsigned int*) = NULL;
 void (*real_glBindTexture)(uint32_t, unsigned int) = NULL;
@@ -305,7 +308,8 @@ unsigned int _bolt_glCreateProgram() {
     program->loc_aTextureUVAtlasExtents = -1;
     program->loc_uProjectionMatrix = -1;
     program->loc_uDiffuseMap = -1;
-    program->is_important = 0;
+    program->is_2d = 0;
+    program->is_3d = 0;
     LOG("glCreateProgram end\n");
     return id;
 }
@@ -355,7 +359,7 @@ void _bolt_glLinkProgram(unsigned int program) {
         if (uDiffuseMap != -1 && uProjectionMatrix != -1) {
             p->loc_uDiffuseMap = uDiffuseMap;
             p->loc_uProjectionMatrix = uProjectionMatrix;
-            p->is_important = 1;
+            p->is_2d = 1;
         }
     }
     LOG("glLinkProgram end\n");
@@ -365,10 +369,7 @@ void _bolt_glUseProgram(unsigned int program) {
     LOG("glUseProgram\n");
     real_glUseProgram(program);
     struct GLContext* c = _bolt_context();
-    if (program != c->bound_program_id) {
-        c->bound_program_id = program;
-        c->current_program_is_important = program ? c->programs[program]->is_important : 0;
-    }
+    c->bound_program_id = program;
     LOG("glUseProgram end\n");
 }
 
@@ -656,54 +657,105 @@ void _bolt_glGetIntegerv(uint32_t pname, int* data) {
     LOG("glGetIntegerv end\n");
 }
 
+void _bolt_glActiveTexture(uint32_t texture) {
+    LOG("glActiveTexture\n");
+    real_glActiveTexture(texture);
+    struct GLContext* c = _bolt_context();
+    c->active_texture = texture - GL_TEXTURE0;
+    LOG("glActiveTexture end\n");
+}
+
+const uint8_t compass_pixel_row[] = {0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x11, 0x38, 0x34, 0x34, 0xA0, 0x2D, 0x2A, 0x29, 0xFF, 0x6F, 0x50, 0x1A, 0xFF, 0xAB, 0x82, 0x34, 0xFF, 0xFD, 0xD2, 0x81, 0xFF, 0x9B, 0x72, 0x25, 0xFF, 0x6C, 0x4F, 0x1A, 0xFF, 0x2D, 0x2A, 0x29, 0xFF, 0x36, 0x32, 0x32, 0x98, 0x00, 0x00, 0x01, 0x10, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00};
 void glDrawElements(uint32_t mode, unsigned int count, uint32_t type, const void* indices) {
     LOG("glDrawElements\n");
     real_glDrawElements(mode, count, type, indices);
-    //struct GLContext* c = _bolt_context();
-    //if (type == GL_UNSIGNED_SHORT && mode == GL_TRIANGLES) {
-    //    int element_binding;
-    //    real_glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &element_binding);
-    //    if (c->current_program_is_important && c->current_draw_framebuffer == 0 && count > 0) {
-    //        struct GLArrayBuffer* element_buffer = c->buffers[element_binding];
-    //        if (!element_buffer || !element_buffer->data) return;
-    //        const unsigned short* indices = element_buffer->data + (uintptr_t)indices;
-    //        struct GLProgram* current_program = c->programs[c->bound_program_id];
-    //        const struct GLAttrBinding* atlas_min = &c->attributes[current_program->loc_aTextureUVAtlasMin];
-    //        const struct GLAttrBinding* atlas_max = &c->attributes[current_program->loc_aTextureUVAtlasExtents];
-    //        const struct GLAttrBinding* tex_uv = &c->attributes[current_program->loc_aTextureUV];
-    //        int diffuse_map;
-    //        real_glGetUniformiv(c->bound_program_id, current_program->loc_uDiffuseMap, &diffuse_map);
-    //        if (atlas_min->enabled && atlas_max->enabled && tex_uv->enabled) {
-    //            for (size_t i = 0; i + 2 < count; i += 3) {
-    //                unsigned short index1 = indices[i];
-    //                unsigned short index2 = indices[i + 1];
-    //                unsigned short index3 = indices[i + 2];
-    //                float min1[2];
-    //                float min2[2];
-    //                float min3[2];
-    //                float max1[2];
-    //                float max2[2];
-    //                float max3[2];
-    //                float uv1[2];
-    //                float uv2[2];
-    //                float uv3[2];
-    //                _bolt_get_attr_binding(c, atlas_min, index1, 2, min1);
-    //                _bolt_get_attr_binding(c, atlas_min, index2, 2, min2);
-    //                _bolt_get_attr_binding(c, atlas_min, index3, 2, min3);
-    //                _bolt_get_attr_binding(c, atlas_max, index1, 2, max1);
-    //                _bolt_get_attr_binding(c, atlas_max, index2, 2, max2);
-    //                _bolt_get_attr_binding(c, atlas_max, index3, 2, max3);
-    //                _bolt_get_attr_binding(c, tex_uv, index1, 2, uv1);
-    //                _bolt_get_attr_binding(c, tex_uv, index2, 2, uv2);
-    //                _bolt_get_attr_binding(c, tex_uv, index3, 2, uv3);
-    //                //printf("drawing triangle, uDiffuseMap=%i, atlas extents %f,%f,%f,%f | %f,%f,%f,%f | %f,%f,%f,%f UV %f,%f %f,%f %f,%f\n",
-    //                //    diffuse_map, min1[0], min1[1], max1[0], max1[1], min2[0], min2[1], max2[0], max2[1], min3[0], min3[1], max3[0], max3[1],
-    //                //    uv1[0], uv1[1], uv2[0], uv2[1], uv3[0], uv3[1]);
-    //            }
-    //        }
-    //    }
-    //}
+    struct GLContext* c = _bolt_context();
+    struct GLProgram* current_program = c->programs[c->bound_program_id];
+    if (type == GL_UNSIGNED_SHORT && mode == GL_TRIANGLES && count > 0 && current_program->is_2d) {
+        int element_binding;
+        real_glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &element_binding);
+        struct GLArrayBuffer* element_buffer = c->buffers[element_binding];
+        const unsigned short* indices = element_buffer->data + (uintptr_t)indices;
+        const struct GLAttrBinding* atlas_min = &c->attributes[current_program->loc_aTextureUVAtlasMin];
+        const struct GLAttrBinding* atlas_size = &c->attributes[current_program->loc_aTextureUVAtlasExtents];
+        const struct GLAttrBinding* tex_uv = &c->attributes[current_program->loc_aTextureUV];
+        const struct GLAttrBinding* position_2d = &c->attributes[current_program->loc_aVertexPosition2D];
+        int diffuse_map;
+        real_glGetUniformiv(c->bound_program_id, current_program->loc_uDiffuseMap, &diffuse_map);
+        float projection_matrix[16];
+        real_glGetUniformfv(c->bound_program_id, current_program->loc_uProjectionMatrix, projection_matrix);
+        const struct GLTexture2D* tex = c->textures[c->texture_units[diffuse_map]];
+        if (atlas_min->enabled && atlas_size->enabled && tex_uv->enabled && position_2d->enabled) {
+            uint8_t icon_detected = 0;
+            uint8_t angle_calculated = 0;
+            int current_atlas_x = -1;
+            int current_atlas_y = -1;
+            int current_atlas_w = -1;
+            int current_atlas_h = -1;
+            float pos_x_min, pos_x_max, pos_y_min, pos_y_max, first_vertex_u, first_vertex_v, angle;
+            for (size_t i = 0; i < count; i += 1) {
+                unsigned short index = indices[i];
+                float min[2];
+                float size[2];
+                float pos[2];
+                float uv[2];
+                _bolt_get_attr_binding(c, atlas_min, index, 2, min);
+                _bolt_get_attr_binding(c, atlas_size, index, 2, size);
+                _bolt_get_attr_binding(c, position_2d, index, 2, pos);
+                _bolt_get_attr_binding(c, tex_uv, index, 2, uv);
+                const int image_x = fabs(roundf(min[0] * tex->width));
+                const int image_y = fabs(roundf(min[1] * tex->height));
+                const int image_width = fabs(roundf(size[0] * tex->width));
+                const int image_height = fabs(roundf(size[1] * tex->height));
+                if (image_x != current_atlas_x || image_y != current_atlas_y || image_width != current_atlas_w || image_height != current_atlas_h) {
+                    if (icon_detected) {
+                        printf("compass at %f,%f to %f,%f\n", pos_x_min, pos_y_min, pos_x_max, pos_y_max);
+                        if (angle_calculated) printf("angle is %f\n", angle * 180.0 / M_PI);
+                    }
+
+                    icon_detected = 0;
+                    current_atlas_x = image_x;
+                    current_atlas_y = image_y;
+                    current_atlas_w = image_width;
+                    current_atlas_h = image_height;
+                    if (image_width == 51 && image_height == 51) {
+                        for (size_t y = 0; y < image_height; y += 1) {
+                            const uint8_t* ptr = tex->data + ((((y + image_y) * tex->width) + image_x) * 4);
+                            if (!memcmp(ptr, compass_pixel_row, image_width * 4)) {
+                                icon_detected = 1;
+                                pos_x_min = pos[0];
+                                pos_x_max = pos[0];
+                                pos_y_min = pos[1];
+                                pos_y_max = pos[1];
+                                first_vertex_u = uv[0];
+                                first_vertex_v = uv[1];
+                            }
+                        }
+                    }
+                } else if(icon_detected) {
+                    if (!angle_calculated) {
+                        // angle is in radians from 0..360 where upright is 0 and angle increases CCW.
+                        float pos_angle_rads = atan2f(pos_y_min - pos[1], pos_x_min - pos[0]);
+                        float uv_angle_rads = atan2f(uv[1] - first_vertex_v, uv[0] - first_vertex_u);
+                        angle = fmod(pos_angle_rads - uv_angle_rads, M_PI * 2);
+                        if (angle < 0) angle += M_PI * 2;
+                        angle_calculated = 1;
+                    }
+                    if (pos_x_min > pos[0]) pos_x_min = pos[0];
+                    if (pos_x_max < pos[0]) pos_x_max = pos[0];
+                    if (pos_y_min > pos[1]) pos_y_min = pos[1];
+                    if (pos_y_max < pos[1]) pos_y_max = pos[1];
+                }
+            }
+        }
+    }
     LOG("glDrawElements end\n");
+}
+
+void _bolt_glMultiDrawElements(uint32_t mode, uint32_t* count, uint32_t type, const void** indices, size_t drawcount) {
+    for (size_t i = 0; i < drawcount; i += 1) {
+        glDrawElements(mode, count[i], type, indices[i]);
+    }
 }
 
 void glDrawArrays(uint32_t mode, int first, unsigned int count) {
@@ -829,6 +881,7 @@ void* eglGetProcAddress(const char* name) {
     PROC_ADDRESS_MAP(glBufferSubData)
     PROC_ADDRESS_MAP(glGetIntegerv)
     PROC_ADDRESS_MAP(glActiveTexture)
+    PROC_ADDRESS_MAP(glMultiDrawElements)
 #undef PROC_ADDRESS_MAP
     return real_eglGetProcAddress(name);
 }
