@@ -4,12 +4,12 @@ The launcher UI is a webpage served from the files in this directory, which are 
 ## Query Params
 The initial request to `launcher.html` may have any of the following query params:
 - `platform`: the platform this was built for. Currently, may only be "windows", "mac" or "linux". This param will always be present.
-- `credentials`: a JSON-encoded string containing an array of objects, one for each account the user is signed in on. Contains access_token, id_token, refresh_token, expiry, login_provider, and sub (unique account ID). If this is absent, the user has no credentials file, meaning it's probably the user's first time running Bolt.
-- `config`: a JSON-encoded string containing the `window.config` object containing the user config. Anything at all may be stored in the config object; when the object is sent in a `/save-config` request (described later in this readme), the same object will be present in this param next time Bolt opens.
+- `credentials`: a JSON-encoded string containing an array of objects, one for each account the user is signed in on. Contains access_token, id_token, refresh_token, expiry, login_provider, and sub (unique account ID). If this param is absent, the user has no credentials file.
+- `config`: a JSON-encoded string containing the user config. Anything at all may be stored in the config object; when the object is sent in a `/save-config` request (described later in this readme), the same object will be present in this param next time Bolt opens. If this param is absent, the user has no config file.
 - `flathub`: a boolean indicating whether this is a flathub build, useful for making error messages more helpful. Assume false if not present.
-- `rs3_linux_installed_hash`: if RS3 is installed, this param will be present indicating the hash of the .deb it was installed from. Used for update-checking.
+- `rs3_linux_installed_hash`: if RS3 is installed, this param will be present indicating the hash of the .deb from which it was installed. Used for update-checking by comparing the hash against the one found in the metafile of the official download repo.
 - `runelite_installed_id` - if Runelite is installed, this param will be present indicating the unique ID of the [Github asset](https://api.github.com/repos/runelite/launcher/releases) from which the JAR was downloaded. Used for update-checking.
-- `hdos_installed_version` - if HDOS is installed, this param will be present indicating the value `launcher.version` from the [getdown config](https://cdn.hdos.dev/client/getdown.txt) from which it was installed. Used for update-checking.
+- `hdos_installed_version` - if HDOS is installed, this param will be present indicating the value `launcher.version` from the [getdown config](https://cdn.hdos.dev/client/getdown.txt) at the time when it was installed. Used for update-checking.
 
 ## Request API
 The following tasks are achieved by making web requests to `https://bolt-internal/`. All queries will respond with 200 if the request is successful, or otherwise 4xx or 5xx with a plain text error message. The requests are as follows:
