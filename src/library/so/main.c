@@ -5,12 +5,9 @@
 
 #include <math.h>
 #include <pthread.h>
-#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/socket.h>
-#include <time.h>
 
 #include "../gl.h"
 
@@ -671,7 +668,7 @@ void glDrawElements(uint32_t mode, unsigned int count, uint32_t type, const void
     real_glDrawElements(mode, count, type, indices);
     struct GLContext* c = _bolt_context();
     struct GLProgram* current_program = c->programs[c->bound_program_id];
-    if (type == GL_UNSIGNED_SHORT && mode == GL_TRIANGLES && count > 0 && current_program->is_2d) {
+    if (type == GL_UNSIGNED_SHORT && mode == GL_TRIANGLES && count > 0 && current_program->is_2d && c->current_draw_framebuffer == 0) {
         int element_binding;
         real_glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &element_binding);
         struct GLArrayBuffer* element_buffer = c->buffers[element_binding];
@@ -734,7 +731,7 @@ void glDrawElements(uint32_t mode, unsigned int count, uint32_t type, const void
                     }
                 } else if(icon_detected) {
                     if (!angle_calculated) {
-                        // angle is in radians from 0..360 where upright is 0 and angle increases CCW.
+                        // angle is in radians from 0..2pi where upright is 0 and angle increases CCW.
                         float pos_angle_rads = atan2f(pos_y_min - pos[1], pos_x_min - pos[0]);
                         float uv_angle_rads = atan2f(uv[1] - first_vertex_v, uv[0] - first_vertex_u);
                         angle = fmod(pos_angle_rads - uv_angle_rads, M_PI * 2);
