@@ -48,7 +48,8 @@ int main(int argc, const char** argv) {
     size_t i;
     for (size_t arg = 3; arg < argc; arg += 1) {
         std::filesystem::path path = argv[arg];
-        if (strcmp(path.extension().c_str(), ".cxx") == 0) continue; // don't embed this file
+        const char* extension = path.extension().c_str();
+        if (strcmp(extension, ".cxx") == 0 || strcmp(extension, ".md") == 0) continue;
         if (!output_file_contents_var(path, filenames.size(), i)) {
             return 2;
         }
