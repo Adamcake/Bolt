@@ -7,7 +7,6 @@
 #include <algorithm>
 #include <fcntl.h>
 #include <fmt/core.h>
-#include <fstream>
 
 #if defined(CEF_X11)
 #include <xcb/xcb.h>

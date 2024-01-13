@@ -4,7 +4,7 @@
 #include "../file_manager.hxx"
 
 #include "include/cef_base.h"
-#include "include/cef_request_handler.h"
+#include "include/cef_resource_request_handler.h"
 
 namespace Browser {
 	/// Struct for sending some bytes from memory as an HTTP response. Store individual instances on the heap.

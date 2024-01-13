@@ -5,8 +5,6 @@
 
 #include "include/cef_parser.h"
 
-#include <algorithm>
-#include <condition_variable>
 #include <fcntl.h>
 #include <fmt/core.h>
 #include <fstream>

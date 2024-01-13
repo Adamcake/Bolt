@@ -7,9 +7,7 @@
 #include "../browser.hxx"
 
 #include <filesystem>
-#include <map>
 #include <mutex>
-#include <string>
 #include <vector>
 
 #if defined(CEF_X11)

@@ -1,7 +1,6 @@
 #ifndef _BOLT_FILE_MANAGER_HXX_
 #define _BOLT_FILE_MANAGER_HXX_
 #include "include/cef_base.h"
-#include "include/internal/cef_string.h"
 
 #include <string_view>
 

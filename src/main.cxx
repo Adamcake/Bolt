@@ -12,10 +12,8 @@
 
 #if defined(__linux__)
 #include <fcntl.h>
-#include <functional>
 #include <sys/file.h>
 #include <sys/stat.h>
-#include <thread>
 #endif
 
 #if defined(CEF_X11)

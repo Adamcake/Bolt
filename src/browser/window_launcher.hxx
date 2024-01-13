@@ -4,8 +4,6 @@
 #include "../browser.hxx"
 #include "../file_manager.hxx"
 
-#include "include/cef_resource_handler.h"
-
 #include <filesystem>
 
 namespace Browser {

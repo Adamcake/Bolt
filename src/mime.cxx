@@ -1,6 +1,5 @@
 #include "mime.hxx"
 
-#include <algorithm>
 #include <map>
 #include <string>
 

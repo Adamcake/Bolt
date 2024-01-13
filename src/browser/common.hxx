@@ -1,10 +1,9 @@
 #ifndef _BOLT_COMMON_HXX_
 #define _BOLT_COMMON_HXX_
 
-#include "include/cef_base.h"
+#include "include/internal/cef_string.h"
 
 #include <fstream>
-#include <string>
 #include <vector>
 
 namespace Browser {
