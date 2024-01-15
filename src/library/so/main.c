@@ -534,7 +534,7 @@ void _bolt_glCompressedTexSubImage2D(uint32_t target, int level, int xoffset, in
                 }
         
                 out_xoffset += 4;
-                if (out_xoffset >= xoffset + yoffset) {
+                if (out_xoffset >= xoffset + width) {
                     out_xoffset = xoffset;
                     out_yoffset += 4;
                 }
