@@ -14,6 +14,7 @@
 #define GL_SHORT 5122
 #define GL_INT 5124
 #define GL_FLOAT 5126
+#define GL_HALF_FLOAT 5131
 #define GL_TRIANGLES 4
 #define GL_MAP_READ_BIT 1
 #define GL_MAP_WRITE_BIT 2
@@ -23,8 +24,12 @@
 #define GL_COMPRESSED_RGBA_S3TC_DXT5_EXT 0x83F3
 #define GL_ARRAY_BUFFER 34962
 #define GL_ELEMENT_ARRAY_BUFFER 34963
+#define GL_UNIFORM_BUFFER 35345
 #define GL_ARRAY_BUFFER_BINDING 34964
 #define GL_ELEMENT_ARRAY_BUFFER_BINDING 34965
+#define GL_UNIFORM_BUFFER_BINDING 35368
+#define GL_UNIFORM_OFFSET 35387
+#define GL_UNIFORM_BLOCK_BINDING 35391
 #define GL_TEXTURE0 33984
 
 struct GLArrayBuffer {
@@ -47,8 +52,18 @@ struct GLProgram {
     unsigned int loc_aTextureUV;
     unsigned int loc_aTextureUVAtlasMin;
     unsigned int loc_aTextureUVAtlasExtents;
+    unsigned int loc_aMaterialSettingsSlotXY_TilePositionXZ;
+    unsigned int loc_aVertexPosition_BoneLabel;
     int loc_uProjectionMatrix;
     int loc_uDiffuseMap;
+    int loc_uTextureAtlas;
+    int loc_uTextureAtlasSettings;
+    int loc_uAtlasMeta;
+    int loc_uModelMatrix;
+    int loc_uVertexScale;
+    int block_index_ViewTransforms;
+    int offset_uCameraPosition;
+    int offset_uViewProjMatrix;
     uint8_t is_2d;
     uint8_t is_3d;
 };
@@ -63,6 +78,10 @@ struct GLAttrBinding {
     uint8_t enabled;
 };
 
+struct GLVertexArray {
+    struct GLAttrBinding attributes[16];
+};
+
 // Context-specific information - this is thread-specific on EGL, not sure about elsewhere
 // this method of context-sharing takes advantage of the fact that the game never chains shares together
 // with a depth greater than 1, and always deletes the non-owner before the owner. neither of those things
@@ -72,15 +91,16 @@ struct GLContext {
     struct GLProgram** programs;
     struct GLArrayBuffer** buffers;
     struct GLTexture2D** textures;
-    unsigned int bound_program_id;
+    struct GLVertexArray** vaos;
     unsigned int* texture_units;
-    uint8_t is_attached;
-    uint8_t deferred_destroy;
-    uint8_t is_shared_owner;
+    unsigned int bound_program_id;
+    unsigned int bound_vao_id;
     unsigned int active_texture;
     unsigned int current_draw_framebuffer;
     unsigned int current_read_framebuffer;
-    struct GLAttrBinding attributes[16];
+    uint8_t is_attached;
+    uint8_t deferred_destroy;
+    uint8_t is_shared_owner;
 };
 
 struct GLContext* _bolt_context();
@@ -89,5 +109,9 @@ void _bolt_make_context_current(void*);
 void _bolt_destroy_context(void*);
 void _bolt_set_attr_binding(struct GLAttrBinding*, unsigned int, int, const void*, unsigned int, uint32_t, uint8_t);
 uint8_t _bolt_get_attr_binding(struct GLContext*, const struct GLAttrBinding*, size_t, size_t, float*);
+uint8_t _bolt_get_attr_binding_int(struct GLContext*, const struct GLAttrBinding*, size_t, size_t, uint32_t*);
+
+uint32_t _bolt_binding_for_buffer(uint32_t);
+void _bolt_mul_vec4_mat4(const float x, const float y, const float z, const float w, const float* mat4, float* out_vec4);
 
 #endif
