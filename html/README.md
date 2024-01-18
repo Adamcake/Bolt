@@ -8,7 +8,7 @@ The initial request to `launcher.html` may have any of the following query param
 - `config`: a JSON-encoded string containing the user config. Anything at all may be stored in the config object; when the object is sent in a `/save-config` request (described later in this readme), the same object will be present in this param next time Bolt opens. If this param is absent, the user has no config file.
 - `flathub`: a boolean indicating whether this is a flathub build, useful for making error messages more helpful. Assume false if not present.
 - `rs3_linux_installed_hash`: if RS3 is installed, this param will be present indicating the hash of the .deb from which it was installed. Used for update-checking by comparing the hash against the one found in the metafile of the official download repo.
-- `runelite_installed_id` - if Runelite is installed, this param will be present indicating the unique ID of the [Github asset](https://api.github.com/repos/runelite/launcher/releases) from which the JAR was downloaded. Used for update-checking.
+- `runelite_installed_id` - if RuneLite is installed, this param will be present indicating the unique ID of the [Github asset](https://api.github.com/repos/runelite/launcher/releases) from which the JAR was downloaded. Used for update-checking.
 - `hdos_installed_version` - if HDOS is installed, this param will be present indicating the value `launcher.version` from the [getdown config](https://cdn.hdos.dev/client/getdown.txt) at the time when it was installed. Used for update-checking.
 
 ## Request API
@@ -23,7 +23,7 @@ The following tasks are achieved by making web requests to `https://bolt-interna
   - `jx_...`: see "JX Variables" section
   - `hash`: a hash of a newer version of the game client to install. If set, there must also be POST data containing the downloaded contents of the .deb file. The .deb will be extracted, saved and launched. If all of that is successful, `rs3_linux_installed_hash` will be updated with the new hash.
   - `config_uri`: a string to pass as the `--configURI` command-line argument. If absent, none will be passed.
-- `/launch-runelite-jar`: launches Runelite from a JAR file. May have the following query params:
+- `/launch-runelite-jar`: launches RuneLite from a JAR file. May have the following query params:
   - `jx_...`: see "JX Variables" section
   - `id`: an ID of a newer game version of the JAR to install (see `runelite_installed_id` above for where this ID is obtained.) If set, there must also be POST data containing the downloaded contents of the JAR file. The JAR will be saved and launched. If successful, `runelite_installed_id` will be updated with the new ID.
   - `jar_path`: an absolute path to a JAR file, which should be obtained from `/jar-file-picker`. If this is set, the given JAR file will be launched, bypassing any installed version. Should not be passed at the same time as `id`.

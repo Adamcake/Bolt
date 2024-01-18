@@ -934,7 +934,7 @@ function generateLaunchButtonsOsrs(f, opt, target) {
 
     var rl = document.createElement("button");
     rl.onclick = () => { rl.disabled = true; f(launchRunelite, rl, opt, basic_auth); };
-    rl.innerText = "Launch Runelite";
+    rl.innerText = "Launch RuneLite";
     target.appendChild(rl);
 
     var hdos = document.createElement("button");
