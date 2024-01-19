@@ -16,12 +16,16 @@
 #define GL_FLOAT 5126
 #define GL_HALF_FLOAT 5131
 #define GL_TRIANGLES 4
+#define GL_TRIANGLE_STRIP 5
 #define GL_MAP_READ_BIT 1
 #define GL_MAP_WRITE_BIT 2
 #define GL_MAP_FLUSH_EXPLICIT_BIT 16
 #define GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT 0x8C4F
 #define GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT 0x8C4D
 #define GL_COMPRESSED_RGBA_S3TC_DXT5_EXT 0x83F3
+#define GL_FRAMEBUFFER 36160
+#define GL_READ_FRAMEBUFFER 36008
+#define GL_DRAW_FRAMEBUFFER 36009
 #define GL_ARRAY_BUFFER 34962
 #define GL_ELEMENT_ARRAY_BUFFER 34963
 #define GL_UNIFORM_BUFFER 35345
@@ -31,6 +35,8 @@
 #define GL_UNIFORM_OFFSET 35387
 #define GL_UNIFORM_BLOCK_BINDING 35391
 #define GL_TEXTURE0 33984
+#define GL_COLOR_ATTACHMENT0 36064
+#define GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME 36049
 
 struct GLArrayBuffer {
     void* data;
@@ -61,6 +67,7 @@ struct GLProgram {
     int loc_uAtlasMeta;
     int loc_uModelMatrix;
     int loc_uVertexScale;
+    int loc_sSceneHDRTex;
     int block_index_ViewTransforms;
     int offset_uCameraPosition;
     int offset_uViewProjMatrix;
@@ -98,6 +105,13 @@ struct GLContext {
     unsigned int active_texture;
     unsigned int current_draw_framebuffer;
     unsigned int current_read_framebuffer;
+    unsigned int game_view_framebuffer;
+    unsigned int game_view_tex;
+    unsigned int target_3d_tex;
+    int game_view_x;
+    int game_view_y;
+    int game_view_w;
+    int game_view_h;
     uint8_t is_attached;
     uint8_t deferred_destroy;
     uint8_t is_shared_owner;

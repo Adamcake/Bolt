@@ -92,6 +92,8 @@ void (*real_glGetUniformIndices)(uint32_t, uint32_t, const char**, unsigned int*
 void (*real_glGetActiveUniformsiv)(unsigned int, uint32_t, const unsigned int*, uint32_t, int*) = NULL;
 void (*real_glGetActiveUniformBlockiv)(unsigned int, unsigned int, uint32_t, int*) = NULL;
 void (*real_glGetIntegeri_v)(uint32_t, unsigned int, int*) = NULL;
+void (*real_glBlitFramebuffer)(int, int, int, int, int, int, int, int, uint32_t, uint32_t) = NULL;
+void (*real_glGetFramebufferAttachmentParameteriv)(uint32_t, uint32_t, uint32_t, int*) = NULL;
 
 /* opengl functions that are usually loaded dynamically from libGL.so */
 void (*real_glDrawArrays)(uint32_t, int, unsigned int) = NULL;
@@ -318,6 +320,12 @@ unsigned int _bolt_glCreateProgram() {
     program->loc_uTextureAtlas = -1;
     program->loc_uTextureAtlasSettings = -1;
     program->loc_uAtlasMeta = -1;
+    program->loc_uModelMatrix = -1;
+    program->loc_uVertexScale = -1;
+    program->loc_sSceneHDRTex = -1;
+    program->block_index_ViewTransforms = -1;
+    program->offset_uCameraPosition = -1;
+    program->offset_uViewProjMatrix = -1;
     program->is_2d = 0;
     program->is_3d = 0;
     LOG("glCreateProgram end\n");
@@ -364,6 +372,7 @@ void _bolt_glLinkProgram(unsigned int program) {
     LOG("glLinkProgram\n");
     real_glLinkProgram(program);
     struct GLContext* c = _bolt_context();
+    struct GLProgram* p = c->programs[program];
     const int uDiffuseMap = real_glGetUniformLocation(program, "uDiffuseMap");
     const int uProjectionMatrix = real_glGetUniformLocation(program, "uProjectionMatrix");
     const int uTextureAtlas = real_glGetUniformLocation(program, "uTextureAtlas");
@@ -371,17 +380,18 @@ void _bolt_glLinkProgram(unsigned int program) {
     const int uAtlasMeta = real_glGetUniformLocation(program, "uAtlasMeta");
     const int loc_uModelMatrix = real_glGetUniformLocation(program, "uModelMatrix");
     const int loc_uVertexScale = real_glGetUniformLocation(program, "uVertexScale");
+    p->loc_sSceneHDRTex = real_glGetUniformLocation(program, "sSceneHDRTex");
 
-    const char* ubo_var_names[] = {"uCameraPosition", "uViewProjMatrix"};
+    const char* view_var_names[] = {"uCameraPosition", "uViewProjMatrix"};
     const int block_index_ViewTransforms = real_glGetUniformBlockIndex(program, "ViewTransforms");
     unsigned int ubo_indices[2];
-    int ubo_offsets[2];
+    int view_offsets[2];
+    int viewport_offset;
     if (block_index_ViewTransforms != -1) {
-        real_glGetUniformIndices(program, 2, ubo_var_names, ubo_indices);
-        real_glGetActiveUniformsiv(program, 2, ubo_indices, GL_UNIFORM_OFFSET, ubo_offsets);
+        real_glGetUniformIndices(program, 2, view_var_names, ubo_indices);
+        real_glGetActiveUniformsiv(program, 2, ubo_indices, GL_UNIFORM_OFFSET, view_offsets);
     }
 
-    struct GLProgram* p = c->programs[program];
     if (p && p->loc_aVertexPosition2D != -1 && p->loc_aVertexColour != -1 && p->loc_aTextureUV != -1 && p->loc_aTextureUVAtlasMin != -1 && p->loc_aTextureUVAtlasExtents != -1 && uDiffuseMap != -1 && uProjectionMatrix != -1) {
         p->loc_uDiffuseMap = uDiffuseMap;
         p->loc_uProjectionMatrix = uProjectionMatrix;
@@ -394,8 +404,8 @@ void _bolt_glLinkProgram(unsigned int program) {
         p->loc_uModelMatrix = loc_uModelMatrix;
         p->loc_uVertexScale = loc_uVertexScale;
         p->block_index_ViewTransforms = block_index_ViewTransforms;
-        p->offset_uCameraPosition = ubo_offsets[0];
-        p->offset_uViewProjMatrix = ubo_offsets[1];
+        p->offset_uCameraPosition = view_offsets[0];
+        p->offset_uViewProjMatrix = view_offsets[1];
         p->is_3d = 1;
     }
     LOG("glLinkProgram end\n");
@@ -494,13 +504,13 @@ void _bolt_glBindFramebuffer(uint32_t target, unsigned int framebuffer) {
     real_glBindFramebuffer(target, framebuffer);
     struct GLContext* c = _bolt_context();
     switch (target) {
-        case 36008:
+        case GL_READ_FRAMEBUFFER:
             c->current_read_framebuffer = framebuffer;
             break;
-        case 36009:
+        case GL_DRAW_FRAMEBUFFER:
             c->current_draw_framebuffer = framebuffer;
             break;
-        case 36160:
+        case GL_FRAMEBUFFER:
             c->current_read_framebuffer = framebuffer;
             c->current_draw_framebuffer = framebuffer;
             break;
@@ -799,6 +809,9 @@ void glDrawElements(uint32_t mode, unsigned int count, uint32_t type, const void
         }
     }
     if (type == GL_UNSIGNED_SHORT && mode == GL_TRIANGLES && count == 2370 && current_program->is_3d) {
+        int draw_tex;
+        real_glGetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER,  GL_COLOR_ATTACHMENT0,  GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
+        if (draw_tex != c->target_3d_tex) return;
         const struct GLAttrBinding* xyxz = &attributes[current_program->loc_aMaterialSettingsSlotXY_TilePositionXZ];
         const struct GLAttrBinding* vertex_xyz_bone = &attributes[current_program->loc_aVertexPosition_BoneLabel];
         if (xyxz->enabled && vertex_xyz_bone->enabled) {
@@ -830,14 +843,16 @@ void glDrawElements(uint32_t mode, unsigned int count, uint32_t type, const void
                     }
                 } else {
                     if (portal_found) {
-                        int ubo_binding, ubo_index;
+                        int ubo_binding, ubo_view_index, ubo_viewport_index;
                         float model_matrix[16];
                         float screen_points[8][4];
                         real_glGetActiveUniformBlockiv(c->bound_program_id, current_program->block_index_ViewTransforms, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
-                        real_glGetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_index);
+                        real_glGetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_view_index);
                         real_glGetUniformfv(c->bound_program_id, current_program->loc_uModelMatrix, model_matrix);
-                        const float* view_proj_matrix = (float*)(c->buffers[ubo_index]->data + current_program->offset_uViewProjMatrix);
-                        float screen_x_min, screen_x_max, screen_y_min, screen_y_max, screen_z_min, screen_z_max;
+                        const float* view_proj_matrix = (float*)(c->buffers[ubo_view_index]->data + current_program->offset_uViewProjMatrix);
+                        real_glGetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_viewport_index);
+                        const struct GLArrayBuffer* ubo_viewport = c->buffers[ubo_viewport_index];
+                        float screen_x_min, screen_x_max, screen_y_min, screen_y_max;
                         for (uint8_t i = 0; i < 8; i += 1) {
                             float world_points[4];
                             _bolt_mul_vec4_mat4(
@@ -856,11 +871,13 @@ void glDrawElements(uint32_t mode, unsigned int count, uint32_t type, const void
                             if (i == 0 || screen_points[i][0] > screen_x_max) screen_x_max = screen_points[i][0];
                             if (i == 0 || screen_points[i][1] < screen_y_min) screen_y_min = screen_points[i][1];
                             if (i == 0 || screen_points[i][1] > screen_y_max) screen_y_max = screen_points[i][1];
-                            if (i == 0 || screen_points[i][2] < screen_z_min) screen_z_min = screen_points[i][2];
-                            if (i == 0 || screen_points[i][2] > screen_z_max) screen_z_max = screen_points[i][2];
                         }
-                        printf("boss portal on screen at %f, %f, %f to %f, %f, %f\n", screen_x_min, screen_y_min, screen_z_min, screen_x_max, screen_y_max, screen_z_max);
-
+                        printf("portal on screen at %i,%i to %i,%i\n",
+                            (int)floorf(((1.0 + screen_x_min) * c->game_view_w / 2.0) + c->game_view_x),
+                            (int)floorf(((1.0 + screen_y_min) * c->game_view_h / 2.0) + c->game_view_y),
+                            (int)ceilf(((1.0 + screen_x_max) * c->game_view_w / 2.0) + c->game_view_x),
+                            (int)ceilf(((1.0 + screen_y_max) * c->game_view_h / 2.0) + c->game_view_y)
+                        );
                         portal_found = 0;
                     }
 
@@ -934,6 +951,29 @@ void _bolt_glGetIntegeri_v(uint32_t target, unsigned int index, int* data) {
     real_glGetIntegeri_v(target, index, data);
 }
 
+void _bolt_glBlitFramebuffer(int srcX0, int srcY0, int srcX1, int srcY1, int dstX0, int dstY0, int dstX1, int dstY1, uint32_t mask, uint32_t filter) {
+    LOG("glBlitFramebuffer\n");
+    real_glBlitFramebuffer(srcX0, srcY0, srcX1, srcY1, dstX0, dstY0, dstX1, dstY1, mask, filter);
+    struct GLContext* c = _bolt_context();
+    if (c->current_draw_framebuffer == 0) {
+        c->game_view_framebuffer = c->current_read_framebuffer;
+        c->game_view_x = dstX0;
+        c->game_view_y = dstY0;
+        c->game_view_w = dstX1 - dstX0;
+        c->game_view_h = dstY1 - dstY0;
+    }
+    if (c->current_draw_framebuffer == c->game_view_framebuffer) {
+        int target_3d_tex;
+        real_glGetFramebufferAttachmentParameteriv(GL_READ_FRAMEBUFFER,  GL_COLOR_ATTACHMENT0,  GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &target_3d_tex);
+        c->target_3d_tex = (unsigned int)target_3d_tex;
+    }
+    LOG("glBlitFramebuffer end\n");
+}
+
+void _bolt_glGetFramebufferAttachmentParameteriv(uint32_t target, uint32_t attachment, uint32_t pname, int* params) {
+    real_glGetFramebufferAttachmentParameteriv(target, attachment, pname, params);
+}
+
 void _bolt_glDeleteVertexArrays(uint32_t n, const unsigned int* arrays) {
     LOG("glDeleteVertexArrays\n");
     real_glDeleteVertexArrays(n, arrays);
@@ -947,6 +987,13 @@ void _bolt_glDeleteVertexArrays(uint32_t n, const unsigned int* arrays) {
 void glDrawArrays(uint32_t mode, int first, unsigned int count) {
     LOG("glDrawArrays\n");
     real_glDrawArrays(mode, first, count);
+    struct GLContext* c = _bolt_context();
+    const struct GLProgram* program = c->programs[c->bound_program_id];
+    if (c->current_draw_framebuffer == c->game_view_framebuffer && program->loc_sSceneHDRTex != -1 && mode == GL_TRIANGLE_STRIP && count == 4) {
+        int game_view_tex;
+        real_glGetUniformiv(c->bound_program_id, program->loc_sSceneHDRTex, &game_view_tex);
+        c->game_view_tex = c->texture_units[game_view_tex];
+    }
     LOG("glDrawArrays end\n");
 }
 
@@ -1076,6 +1123,8 @@ void* eglGetProcAddress(const char* name) {
     PROC_ADDRESS_MAP(glGetActiveUniformsiv)
     PROC_ADDRESS_MAP(glGetActiveUniformBlockiv)
     PROC_ADDRESS_MAP(glGetIntegeri_v)
+    PROC_ADDRESS_MAP(glBlitFramebuffer)
+    PROC_ADDRESS_MAP(glGetFramebufferAttachmentParameteriv)
 #undef PROC_ADDRESS_MAP
     return real_eglGetProcAddress(name);
 }
