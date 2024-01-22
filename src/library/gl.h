@@ -107,7 +107,7 @@ struct GLContext {
     unsigned int current_read_framebuffer;
     unsigned int game_view_framebuffer;
     unsigned int game_view_tex;
-    unsigned int target_3d_tex;
+    int target_3d_tex;
     int game_view_x;
     int game_view_y;
     int game_view_w;
@@ -115,6 +115,7 @@ struct GLContext {
     uint8_t is_attached;
     uint8_t deferred_destroy;
     uint8_t is_shared_owner;
+    uint8_t need_3d_tex;
 };
 
 struct GLContext* _bolt_context();

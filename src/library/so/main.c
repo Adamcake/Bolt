@@ -433,8 +433,8 @@ void _bolt_glTexStorage2D(uint32_t target, int levels, uint32_t internalformat, 
     LOG("glTexStorage2D\n");
     real_glTexStorage2D(target, levels, internalformat, width, height);
     struct GLContext* c = _bolt_context();
-    struct GLTexture2D* tex = c->textures[c->texture_units[c->active_texture]];
-    if (tex) {
+    if (target == GL_TEXTURE_2D) {
+        struct GLTexture2D* tex = c->textures[c->texture_units[c->active_texture]];
         free(tex->data);
         tex->data = malloc(width * height * 4);
         tex->width = width;
@@ -808,97 +808,98 @@ void glDrawElements(uint32_t mode, unsigned int count, uint32_t type, const void
             }
         }
     }
-    if (type == GL_UNSIGNED_SHORT && mode == GL_TRIANGLES && count == 2370 && current_program->is_3d) {
+    if (type == GL_UNSIGNED_SHORT && mode == GL_TRIANGLES && current_program->is_3d && count == 2370) {
         int draw_tex;
-        real_glGetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER,  GL_COLOR_ATTACHMENT0,  GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
-        if (draw_tex != c->target_3d_tex) return;
-        const struct GLAttrBinding* xyxz = &attributes[current_program->loc_aMaterialSettingsSlotXY_TilePositionXZ];
-        const struct GLAttrBinding* vertex_xyz_bone = &attributes[current_program->loc_aVertexPosition_BoneLabel];
-        if (xyxz->enabled && vertex_xyz_bone->enabled) {
-            int atlas;
-            int settings_atlas;
-            float atlas_meta[4];
-            uint32_t settingsxy_tilexz[4];
-            uint32_t vertexpos_bonelabel[4];
-            real_glGetUniformiv(c->bound_program_id, current_program->loc_uTextureAtlas, &atlas);
-            real_glGetUniformiv(c->bound_program_id, current_program->loc_uTextureAtlasSettings, &settings_atlas);
-            real_glGetUniformfv(c->bound_program_id, current_program->loc_uAtlasMeta, atlas_meta);
-            const struct GLTexture2D* tex = c->textures[c->texture_units[atlas]];
-            const struct GLTexture2D* tex_settings = c->textures[c->texture_units[settings_atlas]];
-            uint32_t current_slot_x, current_slot_y;
-            uint32_t atlas_scale = (uint32_t)roundf(atlas_meta[1]);
-            int32_t x_min, x_max, y_min, y_max, z_min, z_max;
-            uint32_t portal_found = 0;
-            for (size_t i = 0; i < count; i += 1) {
-                if (!_bolt_get_attr_binding_int(c, xyxz, indices[i], 4, settingsxy_tilexz)) break;
-                if (!_bolt_get_attr_binding_int(c, vertex_xyz_bone, indices[i], 4, vertexpos_bonelabel)) break;
-                if (i != 0 && current_slot_x == settingsxy_tilexz[0] && current_slot_y == settingsxy_tilexz[1]) {
-                    if (portal_found) {
-                        if (x_min > (int32_t)vertexpos_bonelabel[0]) x_min = (int32_t)vertexpos_bonelabel[0];
-                        if (x_max < (int32_t)vertexpos_bonelabel[0]) x_max = (int32_t)vertexpos_bonelabel[0];
-                        if (y_min > (int32_t)vertexpos_bonelabel[1]) y_min = (int32_t)vertexpos_bonelabel[1];
-                        if (y_max < (int32_t)vertexpos_bonelabel[1]) y_max = (int32_t)vertexpos_bonelabel[1];
-                        if (z_min > (int32_t)vertexpos_bonelabel[2]) z_min = (int32_t)vertexpos_bonelabel[2];
-                        if (z_max < (int32_t)vertexpos_bonelabel[2]) z_max = (int32_t)vertexpos_bonelabel[2];
-                    }
-                } else {
-                    if (portal_found) {
-                        int ubo_binding, ubo_view_index, ubo_viewport_index;
-                        float model_matrix[16];
-                        float screen_points[8][4];
-                        real_glGetActiveUniformBlockiv(c->bound_program_id, current_program->block_index_ViewTransforms, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
-                        real_glGetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_view_index);
-                        real_glGetUniformfv(c->bound_program_id, current_program->loc_uModelMatrix, model_matrix);
-                        const float* view_proj_matrix = (float*)(c->buffers[ubo_view_index]->data + current_program->offset_uViewProjMatrix);
-                        real_glGetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_viewport_index);
-                        const struct GLArrayBuffer* ubo_viewport = c->buffers[ubo_viewport_index];
-                        float screen_x_min, screen_x_max, screen_y_min, screen_y_max;
-                        for (uint8_t i = 0; i < 8; i += 1) {
-                            float world_points[4];
-                            _bolt_mul_vec4_mat4(
-                                i & 0b100 ? x_max : x_min,
-                                i & 0b010 ? y_max : y_min,
-                                i & 0b001 ? z_max : z_min,
-                                1.0,
-                                model_matrix,
-                                world_points
-                            );
-                            _bolt_mul_vec4_mat4(world_points[0], world_points[1], world_points[2], world_points[3], view_proj_matrix, screen_points[i]);
-                            screen_points[i][0] /= screen_points[i][3];
-                            screen_points[i][1] /= screen_points[i][3];
-                            screen_points[i][2] /= screen_points[i][3];
-                            if (i == 0 || screen_points[i][0] < screen_x_min) screen_x_min = screen_points[i][0];
-                            if (i == 0 || screen_points[i][0] > screen_x_max) screen_x_max = screen_points[i][0];
-                            if (i == 0 || screen_points[i][1] < screen_y_min) screen_y_min = screen_points[i][1];
-                            if (i == 0 || screen_points[i][1] > screen_y_max) screen_y_max = screen_points[i][1];
+        real_glGetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
+        if (draw_tex == c->target_3d_tex) {
+            const struct GLAttrBinding* xyxz = &attributes[current_program->loc_aMaterialSettingsSlotXY_TilePositionXZ];
+            const struct GLAttrBinding* vertex_xyz_bone = &attributes[current_program->loc_aVertexPosition_BoneLabel];
+            if (xyxz->enabled && vertex_xyz_bone->enabled) {
+                int atlas;
+                int settings_atlas;
+                float atlas_meta[4];
+                uint32_t settingsxy_tilexz[4];
+                uint32_t vertexpos_bonelabel[4];
+                real_glGetUniformiv(c->bound_program_id, current_program->loc_uTextureAtlas, &atlas);
+                real_glGetUniformiv(c->bound_program_id, current_program->loc_uTextureAtlasSettings, &settings_atlas);
+                real_glGetUniformfv(c->bound_program_id, current_program->loc_uAtlasMeta, atlas_meta);
+                const struct GLTexture2D* tex = c->textures[c->texture_units[atlas]];
+                const struct GLTexture2D* tex_settings = c->textures[c->texture_units[settings_atlas]];
+                uint32_t current_slot_x, current_slot_y;
+                uint32_t atlas_scale = (uint32_t)roundf(atlas_meta[1]);
+                int32_t x_min, x_max, y_min, y_max, z_min, z_max;
+                uint32_t portal_found = 0;
+                for (size_t i = 0; i < count; i += 1) {
+                    if (!_bolt_get_attr_binding_int(c, xyxz, indices[i], 4, settingsxy_tilexz)) break;
+                    if (!_bolt_get_attr_binding_int(c, vertex_xyz_bone, indices[i], 4, vertexpos_bonelabel)) break;
+                    if (i != 0 && current_slot_x == settingsxy_tilexz[0] && current_slot_y == settingsxy_tilexz[1]) {
+                        if (portal_found) {
+                            if (x_min > (int32_t)vertexpos_bonelabel[0]) x_min = (int32_t)vertexpos_bonelabel[0];
+                            if (x_max < (int32_t)vertexpos_bonelabel[0]) x_max = (int32_t)vertexpos_bonelabel[0];
+                            if (y_min > (int32_t)vertexpos_bonelabel[1]) y_min = (int32_t)vertexpos_bonelabel[1];
+                            if (y_max < (int32_t)vertexpos_bonelabel[1]) y_max = (int32_t)vertexpos_bonelabel[1];
+                            if (z_min > (int32_t)vertexpos_bonelabel[2]) z_min = (int32_t)vertexpos_bonelabel[2];
+                            if (z_max < (int32_t)vertexpos_bonelabel[2]) z_max = (int32_t)vertexpos_bonelabel[2];
                         }
-                        printf("portal on screen at %i,%i to %i,%i\n",
-                            (int)floorf(((1.0 + screen_x_min) * c->game_view_w / 2.0) + c->game_view_x),
-                            (int)floorf(((1.0 + screen_y_min) * c->game_view_h / 2.0) + c->game_view_y),
-                            (int)ceilf(((1.0 + screen_x_max) * c->game_view_w / 2.0) + c->game_view_x),
-                            (int)ceilf(((1.0 + screen_y_max) * c->game_view_h / 2.0) + c->game_view_y)
-                        );
-                        portal_found = 0;
-                    }
+                    } else {
+                        if (portal_found) {
+                            int ubo_binding, ubo_view_index, ubo_viewport_index;
+                            float model_matrix[16];
+                            float screen_points[8][4];
+                            real_glGetActiveUniformBlockiv(c->bound_program_id, current_program->block_index_ViewTransforms, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
+                            real_glGetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_view_index);
+                            real_glGetUniformfv(c->bound_program_id, current_program->loc_uModelMatrix, model_matrix);
+                            const float* view_proj_matrix = (float*)(c->buffers[ubo_view_index]->data + current_program->offset_uViewProjMatrix);
+                            real_glGetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_viewport_index);
+                            const struct GLArrayBuffer* ubo_viewport = c->buffers[ubo_viewport_index];
+                            float screen_x_min, screen_x_max, screen_y_min, screen_y_max;
+                            for (uint8_t i = 0; i < 8; i += 1) {
+                                float world_points[4];
+                                _bolt_mul_vec4_mat4(
+                                    i & 0b100 ? x_max : x_min,
+                                    i & 0b010 ? y_max : y_min,
+                                    i & 0b001 ? z_max : z_min,
+                                    1.0,
+                                    model_matrix,
+                                    world_points
+                                );
+                                _bolt_mul_vec4_mat4(world_points[0], world_points[1], world_points[2], world_points[3], view_proj_matrix, screen_points[i]);
+                                screen_points[i][0] /= screen_points[i][3];
+                                screen_points[i][1] /= screen_points[i][3];
+                                screen_points[i][2] /= screen_points[i][3];
+                                if (i == 0 || screen_points[i][0] < screen_x_min) screen_x_min = screen_points[i][0];
+                                if (i == 0 || screen_points[i][0] > screen_x_max) screen_x_max = screen_points[i][0];
+                                if (i == 0 || screen_points[i][1] < screen_y_min) screen_y_min = screen_points[i][1];
+                                if (i == 0 || screen_points[i][1] > screen_y_max) screen_y_max = screen_points[i][1];
+                            }
+                            printf("portal on screen at %i,%i to %i,%i\n",
+                                (int)floorf(((1.0 + screen_x_min) * c->game_view_w / 2.0) + c->game_view_x),
+                                (int)floorf(((1.0 + screen_y_min) * c->game_view_h / 2.0) + c->game_view_y),
+                                (int)ceilf(((1.0 + screen_x_max) * c->game_view_w / 2.0) + c->game_view_x),
+                                (int)ceilf(((1.0 + screen_y_max) * c->game_view_h / 2.0) + c->game_view_y)
+                            );
+                            portal_found = 0;
+                        }
 
-                    // this is pretty wild
-                    current_slot_x = settingsxy_tilexz[0];
-                    current_slot_y = settingsxy_tilexz[1];
-                    const uint8_t* settings_ptr = tex_settings->data + (current_slot_y * tex_settings->width * 4 * 4) + (current_slot_x * 3 * 4);
-                    const uint8_t bitmask = *(settings_ptr + (tex_settings->width * 2 * 4) + 7);
-                    const uint32_t tex_x = (uint32_t)(*settings_ptr + (bitmask & 1 ? 256 : 0)) * atlas_scale;
-                    const uint32_t tex_y = (uint32_t)(*(settings_ptr + 1) + (bitmask & 2 ? 256 : 0)) * atlas_scale;
-                    const uint32_t tex_wh = (uint32_t)*(settings_ptr + 8) * atlas_scale;
-                    if (tex_x + tex_wh >= tex->width || tex_y + tex_wh >= tex->height) continue;
+                        // this is pretty wild
+                        current_slot_x = settingsxy_tilexz[0];
+                        current_slot_y = settingsxy_tilexz[1];
+                        const uint8_t* settings_ptr = tex_settings->data + (current_slot_y * tex_settings->width * 4 * 4) + (current_slot_x * 3 * 4);
+                        const uint8_t bitmask = *(settings_ptr + (tex_settings->width * 2 * 4) + 7);
+                        const uint32_t tex_x = (uint32_t)(*settings_ptr + (bitmask & 1 ? 256 : 0)) * atlas_scale;
+                        const uint32_t tex_y = (uint32_t)(*(settings_ptr + 1) + (bitmask & 2 ? 256 : 0)) * atlas_scale;
+                        const uint32_t tex_wh = (uint32_t)*(settings_ptr + 8) * atlas_scale;
+                        if (tex_x + tex_wh >= tex->width || tex_y + tex_wh >= tex->height) continue;
 
-                    if (memcmp(tex->data + (((tex_y * tex->width) + tex_x) * 4), portal_pixel_row, 512 * 4) == 0) {
-                        portal_found = 1;
-                        x_min = vertexpos_bonelabel[0];
-                        x_max = vertexpos_bonelabel[0];
-                        y_min = vertexpos_bonelabel[1];
-                        y_max = vertexpos_bonelabel[1];
-                        z_min = vertexpos_bonelabel[2];
-                        z_max = vertexpos_bonelabel[2];
+                        if (memcmp(tex->data + (((tex_y * tex->width) + tex_x) * 4), portal_pixel_row, 512 * 4) == 0) {
+                            portal_found = 1;
+                            x_min = vertexpos_bonelabel[0];
+                            x_max = vertexpos_bonelabel[0];
+                            y_min = vertexpos_bonelabel[1];
+                            y_max = vertexpos_bonelabel[1];
+                            z_min = vertexpos_bonelabel[2];
+                            z_max = vertexpos_bonelabel[2];
+                        }
                     }
                 }
             }
@@ -955,17 +956,22 @@ void _bolt_glBlitFramebuffer(int srcX0, int srcY0, int srcX1, int srcY1, int dst
     LOG("glBlitFramebuffer\n");
     real_glBlitFramebuffer(srcX0, srcY0, srcX1, srcY1, dstX0, dstY0, dstX1, dstY1, mask, filter);
     struct GLContext* c = _bolt_context();
-    if (c->current_draw_framebuffer == 0) {
+    if (c->current_draw_framebuffer == 0 && c->game_view_framebuffer != c->current_read_framebuffer) {
         c->game_view_framebuffer = c->current_read_framebuffer;
         c->game_view_x = dstX0;
         c->game_view_y = dstY0;
-        c->game_view_w = dstX1 - dstX0;
-        c->game_view_h = dstY1 - dstY0;
-    }
-    if (c->current_draw_framebuffer == c->game_view_framebuffer) {
-        int target_3d_tex;
-        real_glGetFramebufferAttachmentParameteriv(GL_READ_FRAMEBUFFER,  GL_COLOR_ATTACHMENT0,  GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &target_3d_tex);
-        c->target_3d_tex = (unsigned int)target_3d_tex;
+        c->need_3d_tex = 1;
+        printf("new game_view_framebuffer %u...\n", c->current_read_framebuffer);
+    } else if (c->need_3d_tex) {
+        int draw_tex;
+        real_glGetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
+        if (draw_tex == c->game_view_tex) {
+            c->need_3d_tex = 0;
+            c->game_view_w = dstX1 - dstX0;
+            c->game_view_h = dstY1 - dstY0;
+            real_glGetFramebufferAttachmentParameteriv(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &c->target_3d_tex);
+            printf("new target_3d_tex %i\n", c->target_3d_tex);
+        }
     }
     LOG("glBlitFramebuffer end\n");
 }
@@ -989,10 +995,20 @@ void glDrawArrays(uint32_t mode, int first, unsigned int count) {
     real_glDrawArrays(mode, first, count);
     struct GLContext* c = _bolt_context();
     const struct GLProgram* program = c->programs[c->bound_program_id];
-    if (c->current_draw_framebuffer == c->game_view_framebuffer && program->loc_sSceneHDRTex != -1 && mode == GL_TRIANGLE_STRIP && count == 4) {
+    if (program->loc_sSceneHDRTex != -1 && mode == GL_TRIANGLE_STRIP && count == 4) {
         int game_view_tex;
         real_glGetUniformiv(c->bound_program_id, program->loc_sSceneHDRTex, &game_view_tex);
-        c->game_view_tex = c->texture_units[game_view_tex];
+        if (c->current_draw_framebuffer == 0 && c->game_view_tex != c->texture_units[game_view_tex]) {
+            c->game_view_tex = c->texture_units[game_view_tex];
+            c->current_draw_framebuffer = -1;
+            c->game_view_x = 0;
+            c->game_view_y = 0;
+            c->need_3d_tex = 1;
+            printf("new direct game_view_tex %u...\n", c->game_view_tex);
+        } else if (c->need_3d_tex && c->game_view_framebuffer == c->current_draw_framebuffer) {
+            c->game_view_tex = c->texture_units[game_view_tex];
+            printf("new game_view_tex %u...\n", c->game_view_tex);
+        }
     }
     LOG("glDrawArrays end\n");
 }

@@ -194,9 +194,10 @@ void _bolt_glcontext_init(struct GLContext* context, void* egl_context, void* eg
     memset(context, 0, sizeof(*context));
     context->id = (uintptr_t)egl_context;
     context->texture_units = calloc(MAX_TEXTURE_UNITS, sizeof(unsigned int));
-    context->game_view_framebuffer = -1;
     context->game_view_tex = -1;
     context->target_3d_tex = -1;
+    context->game_view_framebuffer = -1;
+    context->need_3d_tex = 0;
     if (shared) {
         context->programs = shared->programs;
         context->buffers = shared->buffers;
