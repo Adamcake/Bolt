@@ -4,6 +4,10 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#include "../../modules/hashmap/hashmap.h"
+#include "rwlock.h"
+struct hashmap;
+
 /* consts used from libgl */
 #define GL_TEXTURE_2D 3553
 #define GL_RGBA 6408
@@ -39,6 +43,7 @@
 #define GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME 36049
 
 struct GLArrayBuffer {
+    unsigned int id;
     void* data;
     uint8_t* mapping;
     int32_t mapping_offset;
@@ -47,12 +52,14 @@ struct GLArrayBuffer {
 };
 
 struct GLTexture2D {
+    unsigned int id;
     unsigned char* data;
     unsigned int width;
     unsigned int height;
 };
 
 struct GLProgram {
+    unsigned int id;
     unsigned int loc_aVertexPosition2D;
     unsigned int loc_aVertexColour;
     unsigned int loc_aTextureUV;
@@ -86,7 +93,13 @@ struct GLAttrBinding {
 };
 
 struct GLVertexArray {
+    unsigned int id;
     struct GLAttrBinding attributes[16];
+};
+
+struct HashMap {
+    struct hashmap* map;
+    RWLock rwlock;
 };
 
 // Context-specific information - this is thread-specific on EGL, not sure about elsewhere
@@ -95,13 +108,13 @@ struct GLVertexArray {
 // are actually safe assumptions in valid OpenGL usage.
 struct GLContext {
     uintptr_t id;
-    struct GLProgram** programs;
-    struct GLArrayBuffer** buffers;
-    struct GLTexture2D** textures;
-    struct GLVertexArray** vaos;
-    unsigned int* texture_units;
-    unsigned int bound_program_id;
-    unsigned int bound_vao_id;
+    struct HashMap* programs;
+    struct HashMap* buffers;
+    struct HashMap* textures;
+    struct HashMap* vaos;
+    struct GLTexture2D** texture_units;
+    struct GLProgram* bound_program;
+    struct GLVertexArray* bound_vao;
     unsigned int active_texture;
     unsigned int current_draw_framebuffer;
     unsigned int current_read_framebuffer;
@@ -117,6 +130,11 @@ struct GLContext {
     uint8_t is_shared_owner;
     uint8_t need_3d_tex;
 };
+
+struct GLProgram* _bolt_context_get_program(struct GLContext*, unsigned int);
+struct GLArrayBuffer* _bolt_context_get_buffer(struct GLContext*, unsigned int);
+struct GLTexture2D* _bolt_context_get_texture(struct GLContext*, unsigned int);
+struct GLVertexArray* _bolt_context_get_vao(struct GLContext*, unsigned int);
 
 struct GLContext* _bolt_context();
 void _bolt_create_context(void*, void*);

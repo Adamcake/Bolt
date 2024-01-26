@@ -306,8 +306,8 @@ unsigned int _bolt_glCreateProgram() {
     LOG("glCreateProgram\n");
     unsigned int id = real_glCreateProgram();
     struct GLContext* c = _bolt_context();
-    c->programs[id] = malloc(sizeof(struct GLProgram));
-    struct GLProgram* program = c->programs[id];
+    struct GLProgram* program = malloc(sizeof(struct GLProgram));
+    program->id = id;
     program->loc_aVertexPosition2D = -1;
     program->loc_aVertexColour = -1;
     program->loc_aTextureUV = -1;
@@ -328,6 +328,9 @@ unsigned int _bolt_glCreateProgram() {
     program->offset_uViewProjMatrix = -1;
     program->is_2d = 0;
     program->is_3d = 0;
+    _bolt_rwlock_lock_write(&c->programs->rwlock);
+    hashmap_set(c->programs->map, &program);
+    _bolt_rwlock_unlock_write(&c->programs->rwlock);
     LOG("glCreateProgram end\n");
     return id;
 }
@@ -336,7 +339,7 @@ void _bolt_glBindAttribLocation(unsigned int program, unsigned int index, const 
     LOG("glBindAttribLocation\n");
     real_glBindAttribLocation(program, index, name);
     struct GLContext* c = _bolt_context();
-    struct GLProgram* p = c->programs[program];
+    struct GLProgram* p = _bolt_context_get_program(c, program);
     if (p) {
         if (!strcmp(name, "aVertexPosition2D")) p->loc_aVertexPosition2D = index;
         if (!strcmp(name, "aVertexColour")) p->loc_aVertexColour = index;
@@ -372,7 +375,7 @@ void _bolt_glLinkProgram(unsigned int program) {
     LOG("glLinkProgram\n");
     real_glLinkProgram(program);
     struct GLContext* c = _bolt_context();
-    struct GLProgram* p = c->programs[program];
+    struct GLProgram* p = _bolt_context_get_program(c, program);
     const int uDiffuseMap = real_glGetUniformLocation(program, "uDiffuseMap");
     const int uProjectionMatrix = real_glGetUniformLocation(program, "uProjectionMatrix");
     const int uTextureAtlas = real_glGetUniformLocation(program, "uTextureAtlas");
@@ -415,7 +418,7 @@ void _bolt_glUseProgram(unsigned int program) {
     LOG("glUseProgram\n");
     real_glUseProgram(program);
     struct GLContext* c = _bolt_context();
-    c->bound_program_id = program;
+    c->bound_program = _bolt_context_get_program(c, program);
     LOG("glUseProgram end\n");
 }
 
@@ -423,9 +426,13 @@ void glGenTextures(uint32_t n, unsigned int* textures) {
     LOG("glGenTextures\n");
     real_glGenTextures(n, textures);
     struct GLContext* c = _bolt_context();
+    _bolt_rwlock_lock_write(&c->textures->rwlock);
     for (size_t i = 0; i < n; i += 1) {
-        c->textures[textures[i]] = calloc(1, sizeof(struct GLTexture2D));
+        struct GLTexture2D* tex = calloc(1, sizeof(struct GLTexture2D));
+        tex->id = textures[i];
+        hashmap_set(c->textures->map, &tex);
     }
+    _bolt_rwlock_unlock_write(&c->textures->rwlock);
     LOG("glGenTextures end\n");
 }
 
@@ -434,7 +441,7 @@ void _bolt_glTexStorage2D(uint32_t target, int levels, uint32_t internalformat, 
     real_glTexStorage2D(target, levels, internalformat, width, height);
     struct GLContext* c = _bolt_context();
     if (target == GL_TEXTURE_2D) {
-        struct GLTexture2D* tex = c->textures[c->texture_units[c->active_texture]];
+        struct GLTexture2D* tex = c->texture_units[c->active_texture];
         free(tex->data);
         tex->data = malloc(width * height * 4);
         tex->width = width;
@@ -449,7 +456,7 @@ void _bolt_glVertexAttribPointer(unsigned int index, int size, uint32_t type, ui
     struct GLContext* c = _bolt_context();
     int array_binding;
     real_glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &array_binding);
-    _bolt_set_attr_binding(&c->vaos[c->bound_vao_id]->attributes[index], array_binding, size, pointer, stride, type, normalised);
+    _bolt_set_attr_binding(&c->bound_vao->attributes[index], array_binding, size, pointer, stride, type, normalised);
     LOG("glVertexAttribPointer end\n");
 }
 
@@ -457,9 +464,13 @@ void _bolt_glGenBuffers(uint32_t n, unsigned int* buffers) {
     LOG("glGenBuffers\n");
     real_glGenBuffers(n, buffers);
     struct GLContext* c = _bolt_context();
+    _bolt_rwlock_lock_write(&c->textures->rwlock);
     for (size_t i = 0; i < n; i += 1) {
-        c->buffers[buffers[i]] = calloc(1, sizeof(struct GLArrayBuffer));
+        struct GLArrayBuffer* buffer = calloc(1, sizeof(struct GLArrayBuffer));
+        buffer->id = buffers[i];
+        hashmap_set(c->buffers->map, &buffer);
     }
+    _bolt_rwlock_unlock_write(&c->textures->rwlock);
     LOG("glGenBuffers end\n");
 }
 
@@ -479,7 +490,7 @@ void _bolt_glBufferData(uint32_t target, uintptr_t size, const void* data, uint3
         real_glGetIntegerv(binding_type, &buffer_id);
         void* buffer_content = malloc(size);
         if (data) memcpy(buffer_content, data, size);
-        struct GLArrayBuffer* buffer = c->buffers[buffer_id];
+        struct GLArrayBuffer* buffer = _bolt_context_get_buffer(c, buffer_id);
         free(buffer->data);
         buffer->data = buffer_content;
     }
@@ -491,10 +502,10 @@ void _bolt_glDeleteBuffers(unsigned int n, const unsigned int* buffers) {
     real_glDeleteBuffers(n, buffers);
     struct GLContext* c = _bolt_context();
     for (unsigned int i = 0; i < n; i += 1) {
-        struct GLArrayBuffer** buffer = &c->buffers[buffers[i]];
-        free((*buffer)->data);
-        free((*buffer)->mapping);
-        free(*buffer);
+        struct GLArrayBuffer* buffer = _bolt_context_get_buffer(c, buffers[i]);
+        free(buffer->data);
+        free(buffer->mapping);
+        free(buffer);
     }
     LOG("glDeleteBuffers end\n");
 }
@@ -530,7 +541,7 @@ void _bolt_glCompressedTexSubImage2D(uint32_t target, int level, int xoffset, in
     if (target != GL_TEXTURE_2D || level != 0) return;
     struct GLContext* c = _bolt_context();
     if (format == GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT || format == GL_COMPRESSED_RGBA_S3TC_DXT5_EXT || format == GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT) {
-        struct GLTexture2D* tex = c->textures[c->texture_units[c->active_texture]];
+        struct GLTexture2D* tex = c->texture_units[c->active_texture];
         if (tex) {
             int out_xoffset = xoffset;
             int out_yoffset = yoffset;
@@ -601,8 +612,8 @@ void _bolt_glCopyImageSubData(unsigned int srcName, uint32_t srcTarget, int srcL
     real_glCopyImageSubData(srcName, srcTarget, srcLevel, srcX, srcY, srcZ, dstName, dstTarget, dstLevel, dstX, dstY, dstZ, srcWidth, srcHeight, srcDepth);
     struct GLContext* c = _bolt_context();
     if (srcTarget == GL_TEXTURE_2D && dstTarget == GL_TEXTURE_2D && srcLevel == 0 && dstLevel == 0) {
-        struct GLTexture2D* src = c->textures[srcName];
-        struct GLTexture2D* dst = c->textures[dstName];
+        struct GLTexture2D* src = _bolt_context_get_texture(c, srcName);
+        struct GLTexture2D* dst = _bolt_context_get_texture(c, dstName);
         if (!src || !dst) return;
         for (size_t i = 0; i < srcHeight; i += 1) {
             memcpy(dst->data + (dstY * dst->width * 4) + (dstX * 4), src->data + (srcY * src->width * 4) + (srcX * 4), srcWidth * 4);
@@ -615,7 +626,7 @@ void _bolt_glEnableVertexAttribArray(unsigned int index) {
     LOG("glEnableVertexAttribArray\n");
     real_glEnableVertexAttribArray(index);
     struct GLContext* c = _bolt_context();
-    c->vaos[c->bound_vao_id]->attributes[index].enabled = 1;
+    c->bound_vao->attributes[index].enabled = 1;
     LOG("glEnableVertexAttribArray end\n");
 }
 
@@ -623,7 +634,7 @@ void _bolt_glDisableVertexAttribArray(unsigned int index) {
     LOG("glDisableVertexAttribArray\n");
     real_glEnableVertexAttribArray(index);
     struct GLContext* c = _bolt_context();
-    c->vaos[c->bound_vao_id]->attributes[index].enabled = 0;
+    c->bound_vao->attributes[index].enabled = 0;
     LOG("glDisableVertexAttribArray end\n");
 }
 
@@ -634,7 +645,7 @@ void* _bolt_glMapBufferRange(uint32_t target, intptr_t offset, uintptr_t length,
     if (binding_type != -1) {
         int buffer_id;
         real_glGetIntegerv(binding_type, &buffer_id);
-        struct GLArrayBuffer* buffer = c->buffers[buffer_id];
+        struct GLArrayBuffer* buffer = _bolt_context_get_buffer(c, buffer_id);
         buffer->mapping = malloc(length);
         buffer->mapping_offset = offset;
         buffer->mapping_len = length;
@@ -654,7 +665,7 @@ uint8_t _bolt_glUnmapBuffer(uint32_t target) {
     if (binding_type != -1) {
         int buffer_id;
         real_glGetIntegerv(binding_type, &buffer_id);
-        struct GLArrayBuffer* buffer = c->buffers[buffer_id];
+        struct GLArrayBuffer* buffer = _bolt_context_get_buffer(c, buffer_id);
         free(buffer->mapping);
         buffer->mapping = NULL;
         LOG("glUnmapBuffer good end\n");
@@ -675,7 +686,7 @@ void _bolt_glBufferStorage(uint32_t target, uintptr_t size, const void* data, ui
         real_glGetIntegerv(binding_type, &buffer_id);
         void* buffer_content = malloc(size);
         if (data) memcpy(buffer_content, data, size);
-        struct GLArrayBuffer* buffer = c->buffers[buffer_id];
+        struct GLArrayBuffer* buffer = _bolt_context_get_buffer(c, buffer_id);
         free(buffer->data);
         buffer->data = buffer_content;
     }
@@ -689,7 +700,7 @@ void _bolt_glFlushMappedBufferRange(uint32_t target, intptr_t offset, uintptr_t 
     if (binding_type != -1) {
         int buffer_id;
         real_glGetIntegerv(binding_type, &buffer_id);
-        struct GLArrayBuffer* buffer = c->buffers[buffer_id];
+        struct GLArrayBuffer* buffer = _bolt_context_get_buffer(c, buffer_id);
         real_glBufferSubData(target, buffer->mapping_offset + offset, length, buffer->mapping + offset);
         memcpy(buffer->data + buffer->mapping_offset + offset, buffer->mapping + offset, length);
     } else {
@@ -724,22 +735,21 @@ void glDrawElements(uint32_t mode, unsigned int count, uint32_t type, const void
     LOG("glDrawElements\n");
     real_glDrawElements(mode, count, type, indices_offset);
     struct GLContext* c = _bolt_context();
-    struct GLProgram* current_program = c->programs[c->bound_program_id];
-    const struct GLAttrBinding* attributes = c->vaos[c->bound_vao_id]->attributes;
+    const struct GLAttrBinding* attributes = c->bound_vao->attributes;
     int element_binding;
     real_glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &element_binding);
-    struct GLArrayBuffer* element_buffer = c->buffers[element_binding];
+    struct GLArrayBuffer* element_buffer = _bolt_context_get_buffer(c, element_binding);
     const unsigned short* indices = element_buffer->data + (uintptr_t)indices_offset;
-    if (type == GL_UNSIGNED_SHORT && mode == GL_TRIANGLES && count > 0 && current_program->is_2d && c->current_draw_framebuffer == 0) {
-        const struct GLAttrBinding* atlas_min = &attributes[current_program->loc_aTextureUVAtlasMin];
-        const struct GLAttrBinding* atlas_size = &attributes[current_program->loc_aTextureUVAtlasExtents];
-        const struct GLAttrBinding* tex_uv = &attributes[current_program->loc_aTextureUV];
-        const struct GLAttrBinding* position_2d = &attributes[current_program->loc_aVertexPosition2D];
+    if (type == GL_UNSIGNED_SHORT && mode == GL_TRIANGLES && count > 0 && c->bound_program->is_2d && c->current_draw_framebuffer == 0) {
+        const struct GLAttrBinding* atlas_min = &attributes[c->bound_program->loc_aTextureUVAtlasMin];
+        const struct GLAttrBinding* atlas_size = &attributes[c->bound_program->loc_aTextureUVAtlasExtents];
+        const struct GLAttrBinding* tex_uv = &attributes[c->bound_program->loc_aTextureUV];
+        const struct GLAttrBinding* position_2d = &attributes[c->bound_program->loc_aVertexPosition2D];
         int diffuse_map;
-        real_glGetUniformiv(c->bound_program_id, current_program->loc_uDiffuseMap, &diffuse_map);
+        real_glGetUniformiv(c->bound_program->id, c->bound_program->loc_uDiffuseMap, &diffuse_map);
         float projection_matrix[16];
-        real_glGetUniformfv(c->bound_program_id, current_program->loc_uProjectionMatrix, projection_matrix);
-        const struct GLTexture2D* tex = c->textures[c->texture_units[diffuse_map]];
+        real_glGetUniformfv(c->bound_program->id, c->bound_program->loc_uProjectionMatrix, projection_matrix);
+        const struct GLTexture2D* tex = c->texture_units[diffuse_map];
         if (atlas_min->enabled && atlas_size->enabled && tex_uv->enabled && position_2d->enabled) {
             uint8_t icon_detected = 0;
             uint8_t angle_calculated = 0;
@@ -808,23 +818,23 @@ void glDrawElements(uint32_t mode, unsigned int count, uint32_t type, const void
             }
         }
     }
-    if (type == GL_UNSIGNED_SHORT && mode == GL_TRIANGLES && current_program->is_3d && count == 2370) {
+    if (type == GL_UNSIGNED_SHORT && mode == GL_TRIANGLES && c->bound_program->is_3d && count == 2370) {
         int draw_tex;
         real_glGetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
         if (draw_tex == c->target_3d_tex) {
-            const struct GLAttrBinding* xyxz = &attributes[current_program->loc_aMaterialSettingsSlotXY_TilePositionXZ];
-            const struct GLAttrBinding* vertex_xyz_bone = &attributes[current_program->loc_aVertexPosition_BoneLabel];
+            const struct GLAttrBinding* xyxz = &attributes[c->bound_program->loc_aMaterialSettingsSlotXY_TilePositionXZ];
+            const struct GLAttrBinding* vertex_xyz_bone = &attributes[c->bound_program->loc_aVertexPosition_BoneLabel];
             if (xyxz->enabled && vertex_xyz_bone->enabled) {
                 int atlas;
                 int settings_atlas;
                 float atlas_meta[4];
                 uint32_t settingsxy_tilexz[4];
                 uint32_t vertexpos_bonelabel[4];
-                real_glGetUniformiv(c->bound_program_id, current_program->loc_uTextureAtlas, &atlas);
-                real_glGetUniformiv(c->bound_program_id, current_program->loc_uTextureAtlasSettings, &settings_atlas);
-                real_glGetUniformfv(c->bound_program_id, current_program->loc_uAtlasMeta, atlas_meta);
-                const struct GLTexture2D* tex = c->textures[c->texture_units[atlas]];
-                const struct GLTexture2D* tex_settings = c->textures[c->texture_units[settings_atlas]];
+                real_glGetUniformiv(c->bound_program->id, c->bound_program->loc_uTextureAtlas, &atlas);
+                real_glGetUniformiv(c->bound_program->id, c->bound_program->loc_uTextureAtlasSettings, &settings_atlas);
+                real_glGetUniformfv(c->bound_program->id, c->bound_program->loc_uAtlasMeta, atlas_meta);
+                const struct GLTexture2D* tex = c->texture_units[atlas];
+                const struct GLTexture2D* tex_settings = c->texture_units[settings_atlas];
                 uint32_t current_slot_x, current_slot_y;
                 uint32_t atlas_scale = (uint32_t)roundf(atlas_meta[1]);
                 int32_t x_min, x_max, y_min, y_max, z_min, z_max;
@@ -846,12 +856,12 @@ void glDrawElements(uint32_t mode, unsigned int count, uint32_t type, const void
                             int ubo_binding, ubo_view_index, ubo_viewport_index;
                             float model_matrix[16];
                             float screen_points[8][4];
-                            real_glGetActiveUniformBlockiv(c->bound_program_id, current_program->block_index_ViewTransforms, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
+                            real_glGetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ViewTransforms, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
                             real_glGetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_view_index);
-                            real_glGetUniformfv(c->bound_program_id, current_program->loc_uModelMatrix, model_matrix);
-                            const float* view_proj_matrix = (float*)(c->buffers[ubo_view_index]->data + current_program->offset_uViewProjMatrix);
+                            real_glGetUniformfv(c->bound_program->id, c->bound_program->loc_uModelMatrix, model_matrix);
+                            const float* view_proj_matrix = (float*)(_bolt_context_get_buffer(c, ubo_view_index)->data + c->bound_program->offset_uViewProjMatrix);
                             real_glGetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_viewport_index);
-                            const struct GLArrayBuffer* ubo_viewport = c->buffers[ubo_viewport_index];
+                            const struct GLArrayBuffer* ubo_viewport = _bolt_context_get_buffer(c, ubo_viewport_index);
                             float screen_x_min, screen_x_max, screen_y_min, screen_y_max;
                             for (uint8_t i = 0; i < 8; i += 1) {
                                 float world_points[4];
@@ -918,9 +928,13 @@ void _bolt_glGenVertexArrays(uint32_t n, unsigned int* arrays) {
     LOG("glGenVertexArrays\n");
     real_glGenVertexArrays(n, arrays);
     struct GLContext* c = _bolt_context();
+    _bolt_rwlock_lock_write(&c->vaos->rwlock);
     for (size_t i = 0; i < n; i += 1) {
-        c->vaos[arrays[i]] = calloc(1, sizeof(struct GLVertexArray));
+        struct GLVertexArray* array = calloc(1, sizeof(struct GLVertexArray));
+        array->id = arrays[i];
+        hashmap_set(c->vaos->map, &array);
     }
+    _bolt_rwlock_unlock_write(&c->vaos->rwlock);
     LOG("glGenVertexArrays end\n");
 }
 
@@ -928,7 +942,7 @@ void _bolt_glBindVertexArray(uint32_t array) {
     LOG("glBindVertexArray\n");
     real_glBindVertexArray(array);
     struct GLContext* c = _bolt_context();
-    c->bound_vao_id = array;
+    c->bound_vao = _bolt_context_get_vao(c, array);
     LOG("glBindVertexArray end\n");
 }
 
@@ -985,7 +999,8 @@ void _bolt_glDeleteVertexArrays(uint32_t n, const unsigned int* arrays) {
     real_glDeleteVertexArrays(n, arrays);
     struct GLContext* c = _bolt_context();
     for (size_t i = 0; i < n; i += 1) {
-        free(c->vaos[arrays[i]]);
+        struct GLVertexArray* vao = _bolt_context_get_vao(c, arrays[i]);
+        free(vao);
     }
     LOG("glDeleteVertexArrays end\n");
 }
@@ -994,19 +1009,18 @@ void glDrawArrays(uint32_t mode, int first, unsigned int count) {
     LOG("glDrawArrays\n");
     real_glDrawArrays(mode, first, count);
     struct GLContext* c = _bolt_context();
-    const struct GLProgram* program = c->programs[c->bound_program_id];
-    if (program->loc_sSceneHDRTex != -1 && mode == GL_TRIANGLE_STRIP && count == 4) {
+    if (c->bound_program->loc_sSceneHDRTex != -1 && mode == GL_TRIANGLE_STRIP && count == 4) {
         int game_view_tex;
-        real_glGetUniformiv(c->bound_program_id, program->loc_sSceneHDRTex, &game_view_tex);
-        if (c->current_draw_framebuffer == 0 && c->game_view_tex != c->texture_units[game_view_tex]) {
-            c->game_view_tex = c->texture_units[game_view_tex];
+        real_glGetUniformiv(c->bound_program->id, c->bound_program->loc_sSceneHDRTex, &game_view_tex);
+        if (c->current_draw_framebuffer == 0 && c->game_view_tex != c->texture_units[game_view_tex]->id) {
+            c->game_view_tex = c->texture_units[game_view_tex]->id;
             c->current_draw_framebuffer = -1;
             c->game_view_x = 0;
             c->game_view_y = 0;
             c->need_3d_tex = 1;
             printf("new direct game_view_tex %u...\n", c->game_view_tex);
         } else if (c->need_3d_tex && c->game_view_framebuffer == c->current_draw_framebuffer) {
-            c->game_view_tex = c->texture_units[game_view_tex];
+            c->game_view_tex = c->texture_units[game_view_tex]->id;
             printf("new game_view_tex %u...\n", c->game_view_tex);
         }
     }
@@ -1018,7 +1032,7 @@ void glBindTexture(uint32_t target, unsigned int texture) {
     real_glBindTexture(target, texture);
     if (target == GL_TEXTURE_2D) {
         struct GLContext* c = _bolt_context();
-        c->texture_units[c->active_texture] = texture;
+        c->texture_units[c->active_texture] = _bolt_context_get_texture(c, texture);
     }
     LOG("glBindTexture end\n");
 }
@@ -1029,7 +1043,7 @@ void glTexSubImage2D(uint32_t target, int level, int xoffset, int yoffset, unsig
     struct GLContext* c = _bolt_context();
     if (level == 0 && format == GL_RGBA) {
         if (target == GL_TEXTURE_2D && format == GL_RGBA) {
-            struct GLTexture2D* tex = c->textures[c->texture_units[c->active_texture]];
+            struct GLTexture2D* tex = c->texture_units[c->active_texture];
             if (tex && !(xoffset < 0 || yoffset < 0 || xoffset + width > tex->width || yoffset + height > tex->height)) {
                 for (unsigned int y = 0; y < height; y += 1) {
                     unsigned char* dest_ptr = tex->data + ((tex->width * (y + yoffset)) + xoffset) * 4;
@@ -1047,9 +1061,9 @@ void glDeleteTextures(unsigned int n, const unsigned int* textures) {
     real_glDeleteTextures(n, textures);
     struct GLContext* c = _bolt_context();
     for (unsigned int i = 0; i < n; i += 1) {
-        struct GLTexture2D** texture = &c->textures[textures[i]];
-        free((*texture)->data);
-        free(*texture);
+        struct GLTexture2D* texture = _bolt_context_get_texture(c, textures[i]);
+        free(texture->data);
+        free(texture);
     }
     LOG("glDeleteTextures end\n");
 }

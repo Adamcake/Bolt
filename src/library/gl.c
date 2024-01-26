@@ -1,4 +1,5 @@
 #include "gl.h"
+#include "rwlock.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -83,7 +84,7 @@ float _bolt_f16_to_f32(uint16_t bits) {
 }
 
 uint8_t _bolt_get_attr_binding(struct GLContext* c, const struct GLAttrBinding* binding, size_t index, size_t num_out, float* out) {
-    struct GLArrayBuffer* buffer = c->buffers[binding->buffer];
+    struct GLArrayBuffer* buffer = _bolt_context_get_buffer(c, binding->buffer);
     if (!buffer || !buffer->data) return 0;
     uintptr_t buf_offset = binding->offset + (binding->stride * index);
 
@@ -146,7 +147,7 @@ uint8_t _bolt_get_attr_binding(struct GLContext* c, const struct GLAttrBinding* 
 }
 
 uint8_t _bolt_get_attr_binding_int(struct GLContext* c, const struct GLAttrBinding* binding, size_t index, size_t num_out, uint32_t* out) {
-    struct GLArrayBuffer* buffer = c->buffers[binding->buffer];
+    struct GLArrayBuffer* buffer = _bolt_context_get_buffer(c, binding->buffer);
     if (!buffer || !buffer->data) return 0;
     uintptr_t buf_offset = binding->offset + (binding->stride * index);
 
@@ -180,6 +181,25 @@ uint8_t _bolt_get_attr_binding_int(struct GLContext* c, const struct GLAttrBindi
     return 1;
 }
 
+int _bolt_hashmap_compare(const void* a, const void* b, void* udata) {
+    return (**(unsigned int**)a) - (**(unsigned int**)b);
+}
+
+uint64_t _bolt_hashmap_hash(const void* item, uint64_t seed0, uint64_t seed1) {
+    const unsigned int* const* const id = item;
+    return hashmap_sip(*id, sizeof(unsigned int), seed0, seed1);
+}
+
+void _bolt_hashmap_init(struct HashMap* map, size_t cap) {
+    _bolt_rwlock_init(&map->rwlock);
+    map->map = hashmap_new(sizeof(void*), cap, 0, 0, _bolt_hashmap_hash, _bolt_hashmap_compare, NULL, NULL);
+}
+
+void _bolt_hashmap_destroy(struct HashMap* map) {
+    _bolt_rwlock_destroy(&map->rwlock);
+    hashmap_free(map->map);
+}
+
 void _bolt_glcontext_init(struct GLContext* context, void* egl_context, void* egl_shared) {
     struct GLContext* shared = NULL;
     if (egl_shared) {
@@ -205,19 +225,27 @@ void _bolt_glcontext_init(struct GLContext* context, void* egl_context, void* eg
         context->vaos = shared->vaos;
     } else {
         context->is_shared_owner = 1;
-        context->programs = calloc(PROGRAM_LIST_CAPACITY, sizeof(void*));
-        context->buffers = calloc(BUFFER_LIST_CAPACITY, sizeof(void*));
-        context->textures = calloc(TEXTURE_LIST_CAPACITY, sizeof(void*));
-        context->vaos = calloc(VAO_LIST_CAPACITY, sizeof(void*));
+        context->programs = malloc(sizeof(struct HashMap));
+        _bolt_hashmap_init(context->programs, PROGRAM_LIST_CAPACITY);
+        context->buffers = malloc(sizeof(struct HashMap));
+        _bolt_hashmap_init(context->buffers, BUFFER_LIST_CAPACITY);
+        context->textures = malloc(sizeof(struct HashMap));
+        _bolt_hashmap_init(context->textures, TEXTURE_LIST_CAPACITY);
+        context->vaos = malloc(sizeof(struct HashMap));
+        _bolt_hashmap_init(context->vaos, VAO_LIST_CAPACITY);
     }
 }
 
 void _bolt_glcontext_free(struct GLContext* context) {
     free(context->texture_units);
     if (context->is_shared_owner) {
+        _bolt_hashmap_destroy(context->programs);
         free(context->programs);
+        _bolt_hashmap_destroy(context->buffers);
         free(context->buffers);
+        _bolt_hashmap_destroy(context->textures);
         free(context->textures);
+        _bolt_hashmap_destroy(context->vaos);
         free(context->vaos);
     }
 }
@@ -235,6 +263,47 @@ uint32_t _bolt_binding_for_buffer(uint32_t target) {
             return -1;
     }
 }
+
+struct GLProgram* _bolt_context_get_program(struct GLContext* c, unsigned int index) {
+    struct HashMap* map = c->programs;
+    const unsigned int* index_ptr = &index;
+    _bolt_rwlock_lock_read(&map->rwlock);
+    struct GLProgram** program = (struct GLProgram**)hashmap_get(map->map, &index_ptr);
+    struct GLProgram* ret = program ? *program : NULL;
+    _bolt_rwlock_unlock_read(&map->rwlock);
+    return ret;
+}
+
+struct GLArrayBuffer* _bolt_context_get_buffer(struct GLContext* c, unsigned int index) {
+    struct HashMap* map = c->buffers;
+    const unsigned int* index_ptr = &index;
+    _bolt_rwlock_lock_read(&map->rwlock);
+    struct GLArrayBuffer** buffer = (struct GLArrayBuffer**)hashmap_get(map->map, &index_ptr);
+    struct GLArrayBuffer* ret = buffer ? *buffer : NULL;
+    _bolt_rwlock_unlock_read(&map->rwlock);
+    return ret;
+}
+
+struct GLTexture2D* _bolt_context_get_texture(struct GLContext* c, unsigned int index) {
+    struct HashMap* map = c->textures;
+    const unsigned int* index_ptr = &index;
+    _bolt_rwlock_lock_read(&map->rwlock);
+    struct GLTexture2D** tex = (struct GLTexture2D**)hashmap_get(map->map, &index_ptr);
+    struct GLTexture2D* ret = tex ? *tex : NULL;
+    _bolt_rwlock_unlock_read(&map->rwlock);
+    return ret;
+}
+
+struct GLVertexArray* _bolt_context_get_vao(struct GLContext* c, unsigned int index) {
+    struct HashMap* map = c->vaos;
+    const unsigned int* index_ptr = &index;
+    _bolt_rwlock_lock_read(&map->rwlock);
+    struct GLVertexArray** vao = (struct GLVertexArray**)hashmap_get(map->map, &index_ptr);
+    struct GLVertexArray* ret = vao ? *vao : NULL;
+    _bolt_rwlock_unlock_read(&map->rwlock);
+    return ret;
+}
+
 
 void _bolt_mul_vec4_mat4(const float x, const float y, const float z, const float w, const float* mat4, float* out_vec4) {
     out_vec4[0] = (mat4[0] * x) + (mat4[4] * y) + (mat4[8]  * z) + (mat4[12] * w);
