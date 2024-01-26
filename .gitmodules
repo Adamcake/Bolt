@@ -4,3 +4,6 @@
 [submodule "modules/lodepng"]
 	path = modules/lodepng
 	url = https://github.com/lvandeve/lodepng.git
+[submodule "modules/hashmap"]
+	path = modules/hashmap
+	url = https://github.com/tidwall/hashmap.c.git
