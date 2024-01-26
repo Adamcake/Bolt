@@ -262,7 +262,7 @@ endif()
 # Build helper libraries
 if(NOT BOLT_SKIP_LIBRARIES)
     if(UNIX AND NOT APPLE)
-        add_library(${BOLT_OVERLAY_NAME} SHARED src/library/so/main.c src/library/gl.c modules/hashmap/hashmap.c)
+        add_library(${BOLT_OVERLAY_NAME} SHARED src/library/so/main.c src/library/gl.c src/library/rwlock_posix.c modules/hashmap/hashmap.c)
         install(TARGETS ${BOLT_OVERLAY_NAME} DESTINATION "${BOLT_LIBDIR}")
         target_compile_definitions(bolt PUBLIC BOLT_LIB_NAME="${BOLT_OVERLAY_NAME}")
     endif()
