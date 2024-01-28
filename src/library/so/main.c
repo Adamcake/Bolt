@@ -542,63 +542,61 @@ void _bolt_glCompressedTexSubImage2D(uint32_t target, int level, int xoffset, in
     struct GLContext* c = _bolt_context();
     if (format == GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT || format == GL_COMPRESSED_RGBA_S3TC_DXT5_EXT || format == GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT) {
         struct GLTexture2D* tex = c->texture_units[c->active_texture];
-        if (tex) {
-            int out_xoffset = xoffset;
-            int out_yoffset = yoffset;
-            for (size_t ii = 0; ii < (width * height); ii += 16) {
-                const uint8_t* ptr = data + ii;
-                uint8_t* out_ptr = tex->data + (out_yoffset * tex->width * 4) + (out_xoffset * 4);
-                uint16_t c0 = *(ptr + 8) + (*(ptr + 9) << 8);
-                uint16_t c1 = *(ptr + 10) + (*(ptr + 11) << 8);
-                uint8_t c0_rgb[3];
-                uint8_t c1_rgb[3];
-                _bolt_unpack_rgb565(c0, c0_rgb);
-                _bolt_unpack_rgb565(c1, c1_rgb);
-                const uint8_t c0_greater = c0 > c1;
-                const uint32_t ctable = *(ptr + 12) + (*(ptr + 13) << 8) + (*(ptr + 14) << 16) + (*(ptr + 15) << 24);
-                
-                for (size_t j = 0; j < 4; j += 1) {
-                    for (size_t i = 0; i < 4; i += 1) {
-                        if (out_xoffset + i >= 0 && out_yoffset + j >= 0 && out_xoffset + i < tex->width && out_yoffset + j < tex->height) {
-                            uint8_t* pixel_ptr = out_ptr + (tex->width * i * 4) + (j * 4);
-                            const uint32_t code = (ctable >> (2 * (4 * i + j))) & 3;
-                            switch(code) {
-                                case 0:
-                                    memcpy(pixel_ptr, c0_rgb, 3);
-                                    break;
-                                case 1:
-                                    memcpy(pixel_ptr, c1_rgb, 3);
-                                    break;
-                                case 2:
-                                    if (c0_greater) {
-                                        pixel_ptr[0] = (2*c0_rgb[0]+c1_rgb[0])/3;
-                                        pixel_ptr[1] = (2*c0_rgb[1]+c1_rgb[1])/3;
-                                        pixel_ptr[2] = (2*c0_rgb[2]+c1_rgb[2])/3;
-                                    } else {
-                                        pixel_ptr[0] = (c0_rgb[0]+c1_rgb[0])/2;
-                                        pixel_ptr[1] = (c0_rgb[1]+c1_rgb[1])/2;
-                                        pixel_ptr[2] = (c0_rgb[2]+c1_rgb[2])/2;
-                                    }
-                                    break;
-                                case 3:
-                                    if (c0_greater) {
-                                        pixel_ptr[0] = (2*c1_rgb[0]+c0_rgb[0])/3;
-                                        pixel_ptr[1] = (2*c1_rgb[1]+c0_rgb[1])/3;
-                                        pixel_ptr[2] = (2*c1_rgb[2]+c0_rgb[2])/3;
-                                    } else {
-                                        memset(pixel_ptr, 0, 3);
-                                    }
-                                    break;
-                            }
+        int out_xoffset = xoffset;
+        int out_yoffset = yoffset;
+        for (size_t ii = 0; ii < (width * height); ii += 16) {
+            const uint8_t* ptr = data + ii;
+            uint8_t* out_ptr = tex->data + (out_yoffset * tex->width * 4) + (out_xoffset * 4);
+            uint16_t c0 = *(ptr + 8) + (*(ptr + 9) << 8);
+            uint16_t c1 = *(ptr + 10) + (*(ptr + 11) << 8);
+            uint8_t c0_rgb[3];
+            uint8_t c1_rgb[3];
+            _bolt_unpack_rgb565(c0, c0_rgb);
+            _bolt_unpack_rgb565(c1, c1_rgb);
+            const uint8_t c0_greater = c0 > c1;
+            const uint32_t ctable = *(ptr + 12) + (*(ptr + 13) << 8) + (*(ptr + 14) << 16) + (*(ptr + 15) << 24);
+            
+            for (size_t j = 0; j < 4; j += 1) {
+                for (size_t i = 0; i < 4; i += 1) {
+                    if (out_xoffset + i >= 0 && out_yoffset + j >= 0 && out_xoffset + i < tex->width && out_yoffset + j < tex->height) {
+                        uint8_t* pixel_ptr = out_ptr + (tex->width * i * 4) + (j * 4);
+                        const uint32_t code = (ctable >> (2 * (4 * i + j))) & 3;
+                        switch(code) {
+                            case 0:
+                                memcpy(pixel_ptr, c0_rgb, 3);
+                                break;
+                            case 1:
+                                memcpy(pixel_ptr, c1_rgb, 3);
+                                break;
+                            case 2:
+                                if (c0_greater) {
+                                    pixel_ptr[0] = (2*c0_rgb[0]+c1_rgb[0])/3;
+                                    pixel_ptr[1] = (2*c0_rgb[1]+c1_rgb[1])/3;
+                                    pixel_ptr[2] = (2*c0_rgb[2]+c1_rgb[2])/3;
+                                } else {
+                                    pixel_ptr[0] = (c0_rgb[0]+c1_rgb[0])/2;
+                                    pixel_ptr[1] = (c0_rgb[1]+c1_rgb[1])/2;
+                                    pixel_ptr[2] = (c0_rgb[2]+c1_rgb[2])/2;
+                                }
+                                break;
+                            case 3:
+                                if (c0_greater) {
+                                    pixel_ptr[0] = (2*c1_rgb[0]+c0_rgb[0])/3;
+                                    pixel_ptr[1] = (2*c1_rgb[1]+c0_rgb[1])/3;
+                                    pixel_ptr[2] = (2*c1_rgb[2]+c0_rgb[2])/3;
+                                } else {
+                                    memset(pixel_ptr, 0, 3);
+                                }
+                                break;
                         }
                     }
                 }
-        
-                out_xoffset += 4;
-                if (out_xoffset >= xoffset + width) {
-                    out_xoffset = xoffset;
-                    out_yoffset += 4;
-                }
+            }
+    
+            out_xoffset += 4;
+            if (out_xoffset >= xoffset + width) {
+                out_xoffset = xoffset;
+                out_yoffset += 4;
             }
         }
     }
