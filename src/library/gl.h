@@ -9,6 +9,7 @@
 struct hashmap;
 
 /* consts used from libgl */
+#define GL_TEXTURE 5890
 #define GL_TEXTURE_2D 3553
 #define GL_RGBA 6408
 #define GL_UNSIGNED_BYTE 5121
@@ -40,6 +41,7 @@ struct hashmap;
 #define GL_UNIFORM_BLOCK_BINDING 35391
 #define GL_TEXTURE0 33984
 #define GL_COLOR_ATTACHMENT0 36064
+#define GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE 36048
 #define GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME 36049
 
 struct GLArrayBuffer {
@@ -75,6 +77,7 @@ struct GLProgram {
     int loc_uModelMatrix;
     int loc_uVertexScale;
     int loc_sSceneHDRTex;
+    int loc_sSourceTex;
     int block_index_ViewTransforms;
     int offset_uCameraPosition;
     int offset_uViewProjMatrix;

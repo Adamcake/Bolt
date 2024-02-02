@@ -384,6 +384,7 @@ void _bolt_glLinkProgram(unsigned int program) {
     const int loc_uModelMatrix = real_glGetUniformLocation(program, "uModelMatrix");
     const int loc_uVertexScale = real_glGetUniformLocation(program, "uVertexScale");
     p->loc_sSceneHDRTex = real_glGetUniformLocation(program, "sSceneHDRTex");
+    p->loc_sSourceTex = real_glGetUniformLocation(program, "sSourceTex");
 
     const char* view_var_names[] = {"uCameraPosition", "uViewProjMatrix"};
     const int block_index_ViewTransforms = real_glGetUniformBlockIndex(program, "ViewTransforms");
@@ -1007,19 +1008,31 @@ void glDrawArrays(uint32_t mode, int first, unsigned int count) {
     LOG("glDrawArrays\n");
     real_glDrawArrays(mode, first, count);
     struct GLContext* c = _bolt_context();
-    if (c->bound_program->loc_sSceneHDRTex != -1 && mode == GL_TRIANGLE_STRIP && count == 4) {
-        int game_view_tex;
-        real_glGetUniformiv(c->bound_program->id, c->bound_program->loc_sSceneHDRTex, &game_view_tex);
-        if (c->current_draw_framebuffer == 0 && c->game_view_tex != c->texture_units[game_view_tex]->id) {
-            c->game_view_tex = c->texture_units[game_view_tex]->id;
-            c->current_draw_framebuffer = -1;
-            c->game_view_x = 0;
-            c->game_view_y = 0;
-            c->need_3d_tex = 1;
-            printf("new direct game_view_tex %u...\n", c->game_view_tex);
-        } else if (c->need_3d_tex && c->game_view_framebuffer == c->current_draw_framebuffer) {
-            c->game_view_tex = c->texture_units[game_view_tex]->id;
-            printf("new game_view_tex %u...\n", c->game_view_tex);
+    if (mode == GL_TRIANGLE_STRIP && count == 4) {
+        if (c->bound_program->loc_sSceneHDRTex != -1) {
+            int game_view_tex;
+            real_glGetUniformiv(c->bound_program->id, c->bound_program->loc_sSceneHDRTex, &game_view_tex);
+            if (c->current_draw_framebuffer == 0 && c->game_view_tex != c->texture_units[game_view_tex]->id) {
+                c->game_view_tex = c->texture_units[game_view_tex]->id;
+                c->current_draw_framebuffer = -1;
+                c->game_view_x = 0;
+                c->game_view_y = 0;
+                c->need_3d_tex = 1;
+                printf("new direct game_view_tex %u...\n", c->game_view_tex);
+            } else if (c->need_3d_tex == 1 && c->game_view_framebuffer == c->current_draw_framebuffer) {
+                c->game_view_tex = c->texture_units[game_view_tex]->id;
+                printf("new game_view_tex %u...\n", c->game_view_tex);
+            }
+        } else if (c->need_3d_tex && c->bound_program->loc_sSourceTex != -1) {
+            int draw_tex;
+            real_glGetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
+            if (draw_tex == c->game_view_tex) {
+                int game_view_tex;
+                real_glGetUniformiv(c->bound_program->id, c->bound_program->loc_sSourceTex, &game_view_tex);
+                c->game_view_tex = c->texture_units[game_view_tex]->id;
+                printf("updated direct game_view_tex to %u...\n", c->game_view_tex);
+                c->need_3d_tex += 1;
+            }
         }
     }
     LOG("glDrawArrays end\n");
