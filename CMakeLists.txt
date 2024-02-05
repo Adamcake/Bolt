@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21) # Minimum CEF requirement, but building with the latest cmake is strongly recommended
-project(Bolt VERSION 0.7 LANGUAGES C CXX)
+project(Bolt VERSION 0.8 LANGUAGES C CXX)
 
 # e.g. becomes "libbolt-plugin.so" on linux
 set(BOLT_PLUGIN_LIB_NAME "bolt-plugin")
@@ -58,6 +58,7 @@ if(NOT WIN32)
         "    <screenshot type=\"default\">https://raw.githubusercontent.com/flathub/net.runelite.RuneLite/master/screenshot.png</screenshot>"
         "</screenshots>"
         "<releases>"
+        "    <release version=\"0.8.0\" date=\"2023-12-19\"/>"
         "    <release version=\"0.7.0\" date=\"2023-12-19\"/>"
         "    <release version=\"0.6.0\" date=\"2023-12-15\"/>"
         "    <release version=\"0.5.0\" date=\"2023-12-11\"/>"
