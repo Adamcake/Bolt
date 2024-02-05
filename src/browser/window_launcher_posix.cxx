@@ -367,7 +367,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<C
 	SPAWN_FROM_PARAMS_AND_RETURN(argv, env_params, hash_param, this->rs3_hash_path.c_str())
 }
 
-CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRefPtr<CefRequest> request, std::string_view query) {
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRefPtr<CefRequest> request, std::string_view query, bool configure) {
 	const CefRefPtr<CefPostData> post_data = request->GetPostData();
 
 	const std::string user_home = this->data_dir.string();
@@ -382,7 +382,6 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 	// array of structures for keeping track of which environment variables we want to set and have already set
 	EnvQueryParam rl_path_param = {.should_set = false, .key = "jar_path"};
 	EnvQueryParam id_param = {.should_set = false, .key = "id"};
-	EnvQueryParam scale_param = {.should_set = false, .key = "scale"};
 	EnvQueryParam rich_presence_param = {.should_set = false, .key = "flatpak_rich_presence"};
 	EnvQueryParam env_params[] = {
 		JX_ENV_PARAMS,
@@ -396,7 +395,6 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 			param.CheckAndUpdate(key, value);
 		}
 		id_param.CheckAndUpdate(key, value);
-		scale_param.CheckAndUpdate(key, value);
 		rl_path_param.CheckAndUpdate(key, value);
 		rich_presence_param.CheckAndUpdate(key, value);
 	}, query)
@@ -460,7 +458,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 	char arg_env[] = "/usr/bin/env";
 	char arg_java[] = "java";
 	char arg_jar[] = "-jar";
-	char arg_scale[] = "--scale";
+	char arg_configure[] = "--configure";
 	char* argv[] = {
 		arg_env,
 		java_home ? java_home_str.data() : arg_java,
@@ -468,8 +466,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 		arg_jar,
 		path_str.data(),
 		arg_jvm_argument_home.data(),
-		scale_param.should_set ? arg_scale : nullptr,
-		scale_param.should_set ? scale_param.value.data() : nullptr,
+		configure ? arg_configure : nullptr,
 		nullptr,
 	};
 

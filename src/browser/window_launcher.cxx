@@ -262,7 +262,12 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 
 		// instruction to launch RuneLite.jar
 		if (path == "/launch-runelite-jar") {
-			return this->LaunchRuneliteJar(request, query);
+			return this->LaunchRuneliteJar(request, query, false);
+		}
+
+		// instruction to launch RuneLite.jar with --configure
+		if (path == "/launch-runelite-jar-configure") {
+			return this->LaunchRuneliteJar(request, query, true);
 		}
 
 		// instruction to launch RuneLite.jar
