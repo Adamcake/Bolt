@@ -601,3 +601,16 @@ void Browser::Launcher::OpenExternalUrl(char* url) const {
 		fmt::print("[B] Error in OpenExternalUrl from fork(): {}\n", strerror(r));
 	}
 }
+
+int Browser::Launcher::BrowseData() const {
+	char arg_env[] = "/usr/bin/env";
+	char arg_xdg_open[] = "xdg-open";
+	std::string dir = this->data_dir;
+	char* argv[] { arg_env, arg_xdg_open, dir.data(), nullptr };
+	pid_t pid;
+	int r = SpawnProcess(argv, environ, &pid, NULL);
+	if (r != 0) {
+		fmt::print("[B] Error in BrowseData from fork(): {}\n", strerror(r));
+	}
+	return r;
+}

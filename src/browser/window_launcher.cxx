@@ -304,6 +304,17 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
 		}
 
+		// instruction to try to open Bolt's data directory in the user's file explorer
+		if (path == "/browse-data") {
+			if (!this->BrowseData()) {
+				const char* data = "OK\n";
+				return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
+			} else {
+				const char* data = "Error in fork()\n";
+				return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 500, "text/plain");
+			}
+		}
+
 		// instruction to open a file picker for .jar files
 		if (path == "/jar-file-picker") {
 			return new JarFilePicker(browser);

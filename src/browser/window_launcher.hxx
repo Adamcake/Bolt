@@ -27,6 +27,10 @@ namespace Browser {
 		/// Attempts to open the given URL externally in the user's browser
 		void OpenExternalUrl(char* url) const;
 
+		/// Attempts to open Bolt's data directory externally in the user's file explorer.
+		/// Returns the value returned by `fork`, which is 0 on success or -1 on error.
+		int BrowseData() const;
+
 		/* 
 		Functions called by GetResourceRequestHandler. The result will be returned immediately and must not be null.
 		The request and URL query string are provided for parsing.
