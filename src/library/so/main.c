@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../plugin.h"
 #include "../gl.h"
 
 // comment or uncomment this to enable verbose logging of hooks in this file
@@ -26,6 +27,9 @@ uint8_t inited = 0;
 #define INIT() if (!inited) _bolt_init_functions();
 
 pthread_mutex_t egl_lock;
+size_t egl_init_count = 0;
+uintptr_t egl_main_context = 0;
+uint8_t egl_main_context_destroy_pending = 0;
 
 const char* libc_name = "libc.so.6";
 const char* libegl_name = "libEGL.so.1";
@@ -298,6 +302,7 @@ int _bolt_dl_iterate_callback(struct dl_phdr_info* info, size_t size, void* args
 }
 
 void _bolt_init_functions() {
+    pthread_mutex_init(&egl_lock, NULL);
     dl_iterate_phdr(_bolt_dl_iterate_callback, NULL);
     inited = 1;
 }
@@ -1190,12 +1195,25 @@ unsigned int eglMakeCurrent(void* display, void* draw, void* read, void* context
 }
 
 unsigned int eglDestroyContext(void* display, void* context) {
-    LOG("eglDestroyContext\n");
+    LOG("eglDestroyContext %lu\n", (uintptr_t)context);
     unsigned int ret = real_eglDestroyContext(display, context);
+    uint8_t do_destroy_main = 0;
     if (ret) {
         pthread_mutex_lock(&egl_lock);
-        _bolt_destroy_context(context);
+        if ((uintptr_t)context != egl_main_context) {
+            _bolt_destroy_context(context);
+        } else {
+            egl_main_context_destroy_pending = 1;
+        }
+        if (_bolt_context_count() == 1 && egl_main_context_destroy_pending) {
+            do_destroy_main = 1;
+            if (egl_init_count > 1) _bolt_plugin_close();
+        }
         pthread_mutex_unlock(&egl_lock);
+    }
+    if (do_destroy_main) {
+        _bolt_destroy_context((void*)egl_main_context);
+        real_eglTerminate(display);
     }
     LOG("eglDestroyContext end (returned %u)\n", ret);
     return ret;
@@ -1204,19 +1222,23 @@ unsigned int eglDestroyContext(void* display, void* context) {
 unsigned int eglInitialize(void* display, void* major, void* minor) {
     INIT();
     LOG("eglInitialize\n");
-    unsigned int ret = real_eglInitialize(display, major, minor);
-    if (ret) {
-        pthread_mutex_init(&egl_lock, NULL);
-    }
-    LOG("eglInitialize end (returned %u)\n", ret);
-    return ret;
+    return real_eglInitialize(display, major, minor);
 }
 
 void* eglCreateContext(void* display, void* config, void* share_context, const void* attrib_list) {
     LOG("eglCreateContext\n");
     void* ret = real_eglCreateContext(display, config, share_context, attrib_list);
     pthread_mutex_lock(&egl_lock);
+    if (ret && !share_context) {
+        if (egl_init_count > 0) {
+            _bolt_plugin_init();
+            _bolt_plugin_add("print(\"Hello World\")");
+        }
+        egl_init_count += 1;
+    }
+    
     _bolt_create_context(ret, share_context);
+    if (!share_context) egl_main_context = (uintptr_t)ret;
     pthread_mutex_unlock(&egl_lock);
     LOG("eglCreateContext end (returned %lu)\n", (uintptr_t)ret);
     return ret;
@@ -1224,10 +1246,10 @@ void* eglCreateContext(void* display, void* config, void* share_context, const v
 
 unsigned int eglTerminate(void* display) {
     LOG("eglTerminate\n");
-    unsigned int ret = real_eglTerminate(display);
-    pthread_mutex_destroy(&egl_lock);
-    LOG("eglTerminate end (returned %u)\n", ret);
-    return ret;
+    // the game calls this function once on startup and 27 times on shutdown, despite only needing
+    // to call it once... bolt defers it to eglDestroyContext so we can do cleanup more easily.
+    //return real_eglTerminate(display);
+    return 1;
 }
 
 void* xcb_poll_for_event(void* c) {
