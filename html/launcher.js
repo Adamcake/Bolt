@@ -933,9 +933,14 @@ function generateLaunchButtonsOsrs(f, opt, target) {
     const basic_auth = "Basic Y29tX2phZ2V4X2F1dGhfZGVza3RvcF9vc3JzOnB1YmxpYw==";
 
     var rl = document.createElement("button");
-    rl.onclick = () => { rl.disabled = true; f(launchRunelite, rl, opt, basic_auth); };
+    rl.onclick = () => { rl.disabled = true; f(launchRuneLite, rl, opt, basic_auth); };
     rl.innerText = "Launch RuneLite";
     target.appendChild(rl);
+
+    var rl_config = document.createElement("button");
+    rl_config.onclick = () => { rl_config.disabled = true; f(launchRuneLiteConfigure, rl_config, opt, basic_auth); };
+    rl_config.innerText = "Configure RuneLite";
+    target.appendChild(rl_config);
 
     var hdos = document.createElement("button");
     hdos.onclick = () => { hdos.disabled = true; f(launchHdos, hdos, opt, basic_auth); };
@@ -1021,8 +1026,10 @@ function launchRS3Linux(s, element, jx_access_token, jx_refresh_token, jx_sessio
 
 // locate runelite's .jar either from the user's config or by parsing github releases,
 // then attempt to launch it with the given env variables
-function launchRunelite(s, element, jx_access_token, jx_refresh_token, jx_session_id, jx_character_id, jx_display_name) {
+// last param indices whether --configure will be passed or not
+function launchRuneLiteInner(s, element, jx_access_token, jx_refresh_token, jx_session_id, jx_character_id, jx_display_name, configure) {
     saveConfig();
+    const launch_path = configure ? "/launch-runelite-jar-configure?" : "/launch-runelite-jar?";
 
     const launch = (id, jar, jar_path) => {
         var xml = new XMLHttpRequest();
@@ -1036,7 +1043,7 @@ function launchRunelite(s, element, jx_access_token, jx_refresh_token, jx_sessio
         if (jx_display_name) params.jx_display_name = jx_display_name;
         if (runeliteUseScale.checked) params.scale = runeliteScale.value.length > 0 ? runeliteScale.value : runeliteScale.placeholder;
         if (runeliteFlatpakRichPresence.checked) params.flatpak_rich_presence = "";
-        xml.open(jar ? 'POST': 'GET', "/launch-runelite-jar?".concat(new URLSearchParams(params)), true);
+        xml.open(jar ? 'POST': 'GET', launch_path.concat(new URLSearchParams(params)), true);
         xml.onreadystatechange = () => {
             if (xml.readyState == 4) {
                 msg(`Game launch status: '${xml.responseText.trim()}'`);
@@ -1093,6 +1100,14 @@ function launchRunelite(s, element, jx_access_token, jx_refresh_token, jx_sessio
         }
     }
     xml.send();
+}
+
+function launchRuneLite(s, element, jx_access_token, jx_refresh_token, jx_session_id, jx_character_id, jx_display_name) {
+    return launchRuneLiteInner(s, element, jx_access_token, jx_refresh_token, jx_session_id, jx_character_id, jx_display_name, false);
+}
+
+function launchRuneLiteConfigure(s, element, jx_access_token, jx_refresh_token, jx_session_id, jx_character_id, jx_display_name) {
+    return launchRuneLiteInner(s, element, jx_access_token, jx_refresh_token, jx_session_id, jx_character_id, jx_display_name, true);
 }
 
 // locate hdos's .jar from their CDN, then attempt to launch it with the given env variables
