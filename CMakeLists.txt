@@ -23,11 +23,11 @@ if(NOT WIN32)
         "Terminal=false"
         "Name=Bolt"
         "GenericName=Bolt Launcher"
-        "Comment=Open source third-party ${BOLT_PROGRAM_NAME}"
+        "Comment=Third-party ${BOLT_PROGRAM_NAME}"
         "Keywords=games;"
         "Exec=bolt"
         "Icon=${BOLT_META_NAME}"
-        "Categories=Game;Roleplaying;"
+        "Categories=Game;"
         ""
     )
     file(GENERATE OUTPUT bolt.desktop CONTENT "${BOLT_DESKTOP_INFO}")
@@ -52,7 +52,7 @@ if(NOT WIN32)
         "<id>${BOLT_META_NAME}</id>"
         "<name>Bolt Launcher</name>"
         "<developer_name>Adamcake</developer_name>"
-        "<summary>Open source third-party ${BOLT_PROGRAM_NAME}</summary>"
+        "<summary>Third-party ${BOLT_PROGRAM_NAME}</summary>"
         "<description><p>Bolt is a free, open-source, third-party implementation of the ${BOLT_PROGRAM_NAME}.</p></description>"
         "<screenshots>"
         "    <screenshot type=\"default\">https://raw.githubusercontent.com/flathub/net.runelite.RuneLite/master/screenshot.png</screenshot>"
