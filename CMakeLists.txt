@@ -58,7 +58,7 @@ if(NOT WIN32)
         "    <screenshot type=\"default\">https://raw.githubusercontent.com/flathub/net.runelite.RuneLite/master/screenshot.png</screenshot>"
         "</screenshots>"
         "<releases>"
-        "    <release version=\"0.8.0\" date=\"2023-12-19\"/>"
+        "    <release version=\"0.8.0\" date=\"2024-02-05\"/>"
         "    <release version=\"0.7.0\" date=\"2023-12-19\"/>"
         "    <release version=\"0.6.0\" date=\"2023-12-15\"/>"
         "    <release version=\"0.5.0\" date=\"2023-12-11\"/>"
