@@ -18,6 +18,7 @@ var messages = document.createElement("ul");
 var accountSelect = document.createElement("select");
 var loginButton = document.createElement("button");
 var logoutButton = document.createElement("button");
+var dataDirButton = document.createElement("button");
 var loggedInInfo = document.createElement("div");
 var loginButtons = document.createElement("div");
 var gameAccountSelection = document.createElement("div");
@@ -501,6 +502,19 @@ function start(s) {
         });
     };
 
+    dataDirButton.innerText = "Browse data...";
+    dataDirButton.setAttribute("class", "button-right-align");
+    dataDirButton.onclick = () => {
+        var xml = new XMLHttpRequest();
+        xml.open('GET', "/browse-data");
+        xml.onreadystatechange = () => {
+            if (xml.readyState == 4) {
+                msg(`Browse status: '${xml.responseText.trim()}'`);
+            }
+        };
+        xml.send();
+    };
+
     var text = document.createElement("text");
     text.innerText = " | ";
 
@@ -509,6 +523,7 @@ function start(s) {
     loginButtons.appendChild(loginButton);
     loginButtons.appendChild(text);
     loginButtons.appendChild(logoutButton);
+    loginButtons.appendChild(dataDirButton);
     document.body.appendChild(loginButtons);
     document.body.appendChild(loggedInInfo);
     document.body.appendChild(document.createElement("br"));

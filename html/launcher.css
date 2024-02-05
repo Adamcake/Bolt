@@ -33,6 +33,10 @@ textarea {
     background-color:#f49088;
 }
 
+.button-right-align {
+    float: right;
+}
+
 .p-disclaimer {
     user-select: none;
     font-size: 28px;
