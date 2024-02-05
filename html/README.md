@@ -27,7 +27,6 @@ The following tasks are achieved by making web requests to `https://bolt-interna
   - `jx_...`: see "JX Variables" section
   - `id`: an ID of a newer game version of the JAR to install (see `runelite_installed_id` above for where this ID is obtained.) If set, there must also be POST data containing the downloaded contents of the JAR file. The JAR will be saved and launched. If successful, `runelite_installed_id` will be updated with the new ID.
   - `jar_path`: an absolute path to a JAR file, which should be obtained from `/jar-file-picker`. If this is set, the given JAR file will be launched, bypassing any installed version. Should not be passed at the same time as `id`.
-  - `scale`: value to pass to the `--scale` command-line argument. If absent, none will be passed.
   - `flatpak_rich_presence`: boolean indicating whether to expose the game's rich presence to Flatpak Discord by symlinking discord-ipc-0. Will assume false if not present. Doesn't do anything on platforms other than linux.
 - `/launch-hdos-jar`: launches HDOS from a JAR file. May have the following query params:
   - `jx_...`: see "JX Variables" section
