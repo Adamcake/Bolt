@@ -8,7 +8,6 @@
 #include <fcntl.h>
 #include <filesystem>
 #include <fmt/core.h>
-#include <signal.h>
 #include <spawn.h>
 
 extern char **environ;
@@ -43,7 +42,7 @@ extern char **environ;
 
 // calls SpawnProcess using the given argv and an envp calculated from the given env_params,
 // then attempts to save the related hash file, and finally returns an appropriate HTTP response
-#define SPAWN_FROM_PARAMS_AND_RETURN(ARGV, ENV_PARAMS, HASH_PARAM, HASH_PATH) { \
+#define SPAWN_FROM_PARAMS_AND_RETURN(ARGV, ENV_PARAMS, HASH_PARAM, HASH_PATH, CWD_PATH) { \
 	char** e; \
 	for (e = environ; *e; e += 1); \
 	size_t env_count = e - environ; \
@@ -75,7 +74,7 @@ extern char **environ;
 	} \
 	env[i] = nullptr; \
 	pid_t pid; \
-	int r = SpawnProcess(ARGV, env, &pid); \
+	int r = SpawnProcess(ARGV, env, &pid, CWD_PATH); \
 	delete[] env; \
 	if (r == 0) { \
 		fmt::print("[B] Successfully spawned game process with pid {}\n", pid); \
@@ -94,7 +93,7 @@ extern char **environ;
 		const char* data = "OK\n"; \
 		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain"); \
 	} else { \
-		fmt::print("[B] Error from posix_spawn: {}\n", r); \
+		fmt::print("[B] Error from fork(): {}\n", r); \
 		const char* data = "Error spawning process\n"; \
 		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 500, "text/plain"); \
 	} \
@@ -123,22 +122,19 @@ const std::string_view env_key_runtime_dir = "XDG_RUNTIME_DIR=";
 	} \
 }
 
-// spawns a process using posix_spawn, the given argc and argv, and the target specified at argv[0]
-int SpawnProcess(char** argv, char** envp, pid_t* pid) {
-	sigset_t set;
-	sigfillset(&set);
-	posix_spawn_file_actions_t file_actions;
-	posix_spawnattr_t attributes;
-	posix_spawn_file_actions_init(&file_actions);
-	posix_spawn_file_actions_addclose(&file_actions, STDIN_FILENO);
-	posix_spawnattr_init(&attributes);
-	posix_spawnattr_setsigdefault(&attributes, &set);
-	posix_spawnattr_setpgroup(&attributes, 0);
-	posix_spawnattr_setflags(&attributes, POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_SETSIGMASK);
-	int r = posix_spawn(pid, argv[0], &file_actions, &attributes, argv, envp);
-	posix_spawnattr_destroy(&attributes);
-	posix_spawn_file_actions_destroy(&file_actions);
-	return r;
+// spawns a process using fork/exec, the given argc and argv, and the target specified at argv[0]
+int SpawnProcess(char** argv, char** envp, pid_t* pid, const char* cwd) {
+	*pid = fork();
+	if (*pid == 0) {
+		setpgrp();
+		if (cwd && chdir(cwd)) {
+			fmt::print("[B] new process was unable to chdir: {}\n", errno);
+			exit(1);
+		}
+		close(STDIN_FILENO);
+		execve(argv[0], argv, envp);
+	}
+	return *pid > 0 ? 0 : *pid;
 }
 
 struct EnvQueryParam {
@@ -364,7 +360,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<C
 		nullptr,
 	};
 
-	SPAWN_FROM_PARAMS_AND_RETURN(argv, env_params, hash_param, this->rs3_hash_path.c_str())
+	SPAWN_FROM_PARAMS_AND_RETURN(argv, env_params, hash_param, this->rs3_hash_path.c_str(), this->data_dir.c_str())
 }
 
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRefPtr<CefRequest> request, std::string_view query, bool configure) {
@@ -470,7 +466,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 		nullptr,
 	};
 
-	SPAWN_FROM_PARAMS_AND_RETURN(argv + argv_offset, env_params, id_param, this->runelite_id_path.c_str())
+	SPAWN_FROM_PARAMS_AND_RETURN(argv + argv_offset, env_params, id_param, this->runelite_id_path.c_str(), this->data_dir.c_str())
 }
 
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<CefRequest> request, std::string_view query) {
@@ -592,7 +588,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<
 		nullptr,
 	};
 
-	SPAWN_FROM_PARAMS_AND_RETURN(argv, env_params, version_param, this->hdos_version_path.c_str())
+	SPAWN_FROM_PARAMS_AND_RETURN(argv, env_params, version_param, this->hdos_version_path.c_str(), this->data_dir.c_str())
 }
 
 void Browser::Launcher::OpenExternalUrl(char* url) const {
@@ -600,8 +596,8 @@ void Browser::Launcher::OpenExternalUrl(char* url) const {
 	char arg_xdg_open[] = "xdg-open";
 	char* argv[] { arg_env, arg_xdg_open, url, nullptr };
 	pid_t pid;
-	int r = SpawnProcess(argv, environ, &pid);
+	int r = SpawnProcess(argv, environ, &pid, NULL);
 	if (r != 0) {
-		fmt::print("[B] Error in OpenExternalUrl from posix_spawn: {}\n", strerror(r));
+		fmt::print("[B] Error in OpenExternalUrl from fork(): {}\n", strerror(r));
 	}
 }
