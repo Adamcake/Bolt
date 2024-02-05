@@ -1,4 +1,5 @@
 const internal_url = "https://bolt-internal";
+const production_client_id = "1fddee4e-b100-4f4e-b2b0-097f9088f9d2";
 var platform = null;
 var credentials = [];
 var credentialsAreDirty = false;
@@ -663,7 +664,7 @@ async function handleStandardLogin(s, w, creds, refresh_url, client_id) {
         redirect_uri: "http://localhost",
         response_type: "id_token code",
         state: state,
-        client_id: "1fddee4e-b100-4f4e-b2b0-097f9088f9d2",
+        client_id: production_client_id,
         scope: "openid offline"
     }));
     var account_info_promise = getStandardAccountInfo(s, creds);
