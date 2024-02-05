@@ -26,8 +26,6 @@ var footer = document.createElement("div");
 var runeliteFlatpakRichPresence = document.createElement("input");
 var runeliteUseCustomJar = document.createElement("input");
 var runeliteCustomJar = document.createElement("textarea");
-var runeliteUseScale = document.createElement("input");
-var runeliteScale = document.createElement("input");
 var rsConfigUri = document.createElement("textarea");
 
 // Checks if `credentials` are about to expire or have already expired,
@@ -390,38 +388,6 @@ function start(s) {
     };
     runeliteCustomJarSelect.disabled = !runeliteUseCustomJar.checked;
 
-    var runeliteScaleLabel = document.createElement("label");
-    runeliteScaleLabel.innerText = "RuneLite scale setting: ";
-    runeliteScaleLabel.for = runeliteScale;
-
-    runeliteUseScale.type = "checkbox";
-    runeliteUseScale.checked = config.runelite_use_scale || false;
-
-    runeliteScale.placeholder = "1.0";
-    if (config.runelite_scale) runeliteScale.value = config.runelite_scale;
-
-    runeliteUseScale.onchange = () => {
-        runeliteScale.disabled = !runeliteUseScale.checked;
-        config.runelite_use_scale = runeliteUseScale.checked;
-        if (config.runelite_use_scale) {
-            if (runeliteUseScale.persisted_value) config.runelite_scale = runeliteUseScale.persisted_value;
-        } else {
-            runeliteUseScale.persisted_value = config.runelite_scale;
-            delete config.runelite_scale;
-        }
-        configIsDirty = true;
-    };
-    runeliteScale.disabled = !runeliteUseScale.checked;
-
-    runeliteScale.onchange = () => {
-        if (runeliteScale.value.match(/[0-9]+(\.[0-9]+|)$/)) {
-            config.runelite_scale = runeliteScale.value;
-            configIsDirty = true;
-        } else {
-            runeliteScale.value = config.runelite_scale || "";
-        }
-    };
-
     if (platform === "linux") {
         settingsOsrs.appendChild(runeliteFlatpakRichPresenceLabel);
         settingsOsrs.appendChild(runeliteFlatpakRichPresence);
@@ -432,9 +398,6 @@ function start(s) {
     settingsOsrs.appendChild(runeliteCustomJar);
     settingsOsrs.appendChild(runeliteCustomJarSelect);
     settingsOsrs.appendChild(document.createElement("br"));
-    settingsOsrs.appendChild(runeliteScaleLabel);
-    settingsOsrs.appendChild(runeliteUseScale);
-    settingsOsrs.appendChild(runeliteScale);
 
     var accounts_label = document.createElement("label");
     accounts_label.innerText = "Logged in as:";
@@ -1041,7 +1004,6 @@ function launchRuneLiteInner(s, element, jx_access_token, jx_refresh_token, jx_s
         if (jx_session_id) params.jx_session_id = jx_session_id;
         if (jx_character_id) params.jx_character_id = jx_character_id;
         if (jx_display_name) params.jx_display_name = jx_display_name;
-        if (runeliteUseScale.checked) params.scale = runeliteScale.value.length > 0 ? runeliteScale.value : runeliteScale.placeholder;
         if (runeliteFlatpakRichPresence.checked) params.flatpak_rich_presence = "";
         xml.open(jar ? 'POST': 'GET', launch_path.concat(new URLSearchParams(params)), true);
         xml.onreadystatechange = () => {
