@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.21) # Minimum CEF requirement, but building with the latest cmake is strongly recommended
 project(Bolt VERSION 0.7 LANGUAGES C CXX)
 
-# e.g. becomes "libbolt-overlay.so" on linux
-set(BOLT_OVERLAY_NAME "bolt-overlay")
+# e.g. becomes "libbolt-plugin.so" on linux
+set(BOLT_PLUGIN_LIB_NAME "bolt-plugin")
 
 if(NOT WIN32)
     # name of application in metadata, defaulting to "BoltLauncher", but usually overridden to "com.adamcake.Bolt" by flatpak for example
@@ -118,15 +118,15 @@ if(NOT WIN32)
     file(GENERATE OUTPUT bolt-run.sh CONTENT "#!/bin/sh -eu\ncd \"$(dirname \"$0\")/${BOLT_SCRIPT_CD_PATH}\"\nexec ./bolt \"$@\"\n")
 
     # auto-generated helper for running from build dir; this file does not get installed
-    # appends to LD_LIBRARY_PATH only if the overlay library is being built, otherwise the dir won't exist
+    # appends to LD_LIBRARY_PATH only if the plugin library is being built, otherwise the dir won't exist
     if(NOT BOLT_SKIP_LIBRARIES)
-        set(BOLT_OVERLAY_LIB_EXPORT "export LD_LIBRARY_PATH=${CMAKE_CURRENT_BINARY_DIR}/${BOLT_LIBDIR}\${LD_LIBRARY_PATH:+:\${LD_LIBRARY_PATH}}")
+        set(BOLT_PLUGIN_LIB_EXPORT "export LD_LIBRARY_PATH=${CMAKE_CURRENT_BINARY_DIR}/${BOLT_LIBDIR}\${LD_LIBRARY_PATH:+:\${LD_LIBRARY_PATH}}")
     endif()
     string(JOIN "\n" BOLT_STAGING_SCRIPT
         "#!/bin/sh -eu"
         "# This is a helper script for running a staging build, i.e. a build that has been installed in this directory."
         "# This script will not be installed anywhere by `cmake --install`, as it's for development/staging purposes only."
-        "${BOLT_OVERLAY_LIB_EXPORT}"
+        "${BOLT_PLUGIN_LIB_EXPORT}"
         "export XDG_DATA_DIRS=${CMAKE_CURRENT_BINARY_DIR}/${BOLT_SHAREDIR}\${XDG_DATA_DIRS:+:\${XDG_DATA_DIRS}}"
         "export XDG_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/config"
         "export XDG_DATA_HOME=${CMAKE_CURRENT_BINARY_DIR}/data"
@@ -261,11 +261,14 @@ endif()
 
 # Build helper libraries
 if(NOT BOLT_SKIP_LIBRARIES)
+    # todo: anything other than linux
     if(UNIX AND NOT APPLE)
-        add_library(${BOLT_OVERLAY_NAME} SHARED src/library/so/main.c src/library/gl.c src/library/rwlock_posix.c modules/hashmap/hashmap.c)
-        install(TARGETS ${BOLT_OVERLAY_NAME} DESTINATION "${BOLT_LIBDIR}")
-        target_compile_definitions(bolt PUBLIC BOLT_LIB_NAME="${BOLT_OVERLAY_NAME}")
+        add_library(${BOLT_PLUGIN_LIB_NAME} SHARED src/library/so/main.c src/library/plugin.c src/library/gl.c src/library/rwlock_posix.c modules/hashmap/hashmap.c)
+        install(TARGETS ${BOLT_PLUGIN_LIB_NAME} DESTINATION "${BOLT_LIBDIR}")
     endif()
+    target_include_directories(${BOLT_PLUGIN_LIB_NAME} PUBLIC "${CEF_ROOT}" "${BOLT_LUAJIT_INCLUDE_DIR}" modules/fmt/include)
+    target_link_libraries(${BOLT_PLUGIN_LIB_NAME} luajit-5.1)
+    target_compile_definitions(bolt PUBLIC BOLT_LIB_NAME="${BOLT_PLUGIN_LIB_NAME}")
 endif()
 
 # Finally, install shell script and metadata
