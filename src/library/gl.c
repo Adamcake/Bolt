@@ -20,6 +20,16 @@ struct GLContext* _bolt_context() {
     return current_context;
 }
 
+size_t _bolt_context_count() {
+    size_t ret = 0;
+    for (size_t i = 0; i < CONTEXTS_CAPACITY; i += 1) {
+        if (contexts[i].id != 0) {
+            ret += 1;
+        }
+    }
+    return ret;
+}
+
 void _bolt_create_context(void* egl_context, void* shared) {
     for (size_t i = 0; i < CONTEXTS_CAPACITY; i += 1) {
         struct GLContext* ptr = &contexts[i];

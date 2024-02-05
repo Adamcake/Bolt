@@ -140,6 +140,7 @@ struct GLTexture2D* _bolt_context_get_texture(struct GLContext*, unsigned int);
 struct GLVertexArray* _bolt_context_get_vao(struct GLContext*, unsigned int);
 
 struct GLContext* _bolt_context();
+size_t _bolt_context_count();
 void _bolt_create_context(void*, void*);
 void _bolt_make_context_current(void*);
 void _bolt_destroy_context(void*);
