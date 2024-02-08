@@ -1,6 +1,9 @@
 # Bolt
 A third-party launcher and helper for your favourite MMO
 
+## Contact
+Bolt, as well as the other Linux community projects, is being discussed at [7orm's Discord server](https://discord.gg/aX7GT2Mkdu). If you want to talk about development or need help getting set up, that's the place to go.
+
 ## Installing
 For Linux/Steamdeck users, Bolt is available on the following package managers:
 - flatpak: `com.adamcake.Bolt`
