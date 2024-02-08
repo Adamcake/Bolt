@@ -28,10 +28,12 @@ if(NOT WIN32)
         "Exec=bolt"
         "Icon=${BOLT_META_NAME}"
         "Categories=Game;"
+        "StartupWMClass=BoltLauncher"
         ""
     )
     file(GENERATE OUTPUT bolt.desktop CONTENT "${BOLT_DESKTOP_INFO}")
 
+    # extra NoDisplay .desktop entry, just for DEs to pick up on icons correctly
     string(JOIN "\n" BOLT_DESKTOP_GAME_INFO
         "[Desktop Entry]"
         "Version=1.0"
@@ -41,6 +43,7 @@ if(NOT WIN32)
         "Icon=${BOLT_GAME_NAME_LOWER}"
         "Terminal=false"
         "NoDisplay=true"
+        "StartupWMClass=${BOLT_GAME_NAME}"
         ""
     )
     file(GENERATE OUTPUT bolt.game.desktop CONTENT "${BOLT_DESKTOP_GAME_INFO}")
