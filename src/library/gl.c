@@ -74,8 +74,8 @@ void _bolt_destroy_context(void* egl_context) {
     }
 }
 
-void _bolt_set_attr_binding(struct GLAttrBinding* binding, unsigned int buffer, int size, const void* offset, unsigned int stride, uint32_t type, uint8_t normalise) {
-    binding->buffer = buffer;
+void _bolt_set_attr_binding(struct GLContext* c, struct GLAttrBinding* binding, unsigned int buffer, int size, const void* offset, unsigned int stride, uint32_t type, uint8_t normalise) {
+    binding->buffer = _bolt_context_get_buffer(c, buffer);
     binding->offset = (uintptr_t)offset;
     binding->size = size;
     binding->stride = stride;
@@ -94,7 +94,7 @@ float _bolt_f16_to_f32(uint16_t bits) {
 }
 
 uint8_t _bolt_get_attr_binding(struct GLContext* c, const struct GLAttrBinding* binding, size_t index, size_t num_out, float* out) {
-    struct GLArrayBuffer* buffer = _bolt_context_get_buffer(c, binding->buffer);
+    struct GLArrayBuffer* buffer = binding->buffer;
     if (!buffer || !buffer->data) return 0;
     uintptr_t buf_offset = binding->offset + (binding->stride * index);
 
@@ -157,7 +157,7 @@ uint8_t _bolt_get_attr_binding(struct GLContext* c, const struct GLAttrBinding* 
 }
 
 uint8_t _bolt_get_attr_binding_int(struct GLContext* c, const struct GLAttrBinding* binding, size_t index, size_t num_out, uint32_t* out) {
-    struct GLArrayBuffer* buffer = _bolt_context_get_buffer(c, binding->buffer);
+    struct GLArrayBuffer* buffer = binding->buffer;
     if (!buffer || !buffer->data) return 0;
     uintptr_t buf_offset = binding->offset + (binding->stride * index);
 

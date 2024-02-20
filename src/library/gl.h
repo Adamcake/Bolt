@@ -86,9 +86,9 @@ struct GLProgram {
 };
 
 struct GLAttrBinding {
-    unsigned int buffer;
-    unsigned int stride;
+    struct GLArrayBuffer* buffer;
     uintptr_t offset;
+    unsigned int stride;
     int size;
     uint32_t type;
     uint8_t normalise;
@@ -144,7 +144,7 @@ size_t _bolt_context_count();
 void _bolt_create_context(void*, void*);
 void _bolt_make_context_current(void*);
 void _bolt_destroy_context(void*);
-void _bolt_set_attr_binding(struct GLAttrBinding*, unsigned int, int, const void*, unsigned int, uint32_t, uint8_t);
+void _bolt_set_attr_binding(struct GLContext*, struct GLAttrBinding*, unsigned int, int, const void*, unsigned int, uint32_t, uint8_t);
 uint8_t _bolt_get_attr_binding(struct GLContext*, const struct GLAttrBinding*, size_t, size_t, float*);
 uint8_t _bolt_get_attr_binding_int(struct GLContext*, const struct GLAttrBinding*, size_t, size_t, uint32_t*);
 
