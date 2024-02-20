@@ -105,3 +105,31 @@ static int api_batch2d_vertexcount(lua_State*);
 /// to draw a solid rectangle, e.g. using GL_TRIANGLE_STRIP), then that will be indicated here, so
 /// it's recommended to use this function instead of hard-coding the number 6.
 static int api_batch2d_verticesperimage(lua_State*);
+
+/// [-2, +2, -]
+/// Given an index of a vertex in a batch, returns its X and Y in screen coordinates.
+static int api_batch2d_vertexxy(lua_State*);
+
+/// [-2, +2, -]
+/// Given an index of a vertex in a batch, returns the X and Y of its associated image in the
+/// batch's texture atlas, in pixel coordinates.
+static int api_batch2d_vertexatlasxy(lua_State*);
+
+/// [-2, +2, -]
+/// Given an index of a vertex in a batch, returns the width and height of its associated image in
+/// the batch's texture atlas, in pixel coordinates.
+static int api_batch2d_vertexatlaswh(lua_State*);
+
+/// [-2, +2, -]
+/// Given an index of a vertex in a batch, returns the vertex's associated "UV" coordinates.
+///
+/// The values will be floating-point numbers in the range 0.0 - 1.0. They are relative to the
+/// position of the overall image in the texture atlas, queried by vertexatlasxy and vertexatlaswh.
+static int api_batch2d_vertexuv(lua_State*);
+
+/// [-2, +4, -]
+/// Given an index of a vertex in a batch, returns the red, green, blue and alpha values for that
+/// vertex, in that order. All four values will be floating-point numbers in the range 0.0 - 1.0.
+///
+/// Also aliased as "vertexcolor" to keep the Americans happy.
+static int api_batch2d_vertexcolour(lua_State*);

@@ -45,9 +45,19 @@ void _bolt_plugin_init() {
     lua_pushstring(state, BATCH2D_META_REGISTRYNAME);
     lua_newtable(state);
     lua_pushstring(state, "__index");
-    lua_newtable(state);
+
+    lua_createtable(state, 0, 8);
     API_ADD_SUB(vertexcount, batch2d)
     API_ADD_SUB(verticesperimage, batch2d)
+    API_ADD_SUB(vertexxy, batch2d)
+    API_ADD_SUB(vertexatlasxy, batch2d)
+    API_ADD_SUB(vertexatlaswh, batch2d)
+    API_ADD_SUB(vertexuv, batch2d)
+    API_ADD_SUB(vertexcolour, batch2d)
+    lua_pushstring(state, "vertexcolor");
+    lua_pushcfunction(state, api_batch2d_vertexcolour);
+    lua_settable(state, -3);
+
     lua_settable(state, -3);
     lua_settable(state, LUA_REGISTRYINDEX);
 
@@ -86,7 +96,12 @@ void _bolt_plugin_close() {
 
 uint64_t _bolt_plugin_add(const char* lua) {
     // load the user-provided string as a lua function, putting that function on the stack
-    luaL_loadstring(state, lua);
+    if (luaL_loadstring(state, lua)) {
+        const char* e = lua_tolstring(state, -1, 0);
+        printf("plugin load error: %s\n", e);
+        lua_pop(state, 1);
+        return 0;
+    }
 
     // create a new env for this plugin, and store it as registry["bolt"][i] where `i` is a unique ID
     const uint64_t plugin_id = next_plugin_id;
@@ -275,4 +290,61 @@ static int api_batch2d_verticesperimage(lua_State* state) {
     struct RenderBatch2D* batch = lua_touserdata(state, 1);
     lua_pushinteger(state, batch->vertices_per_icon);
     return 1;
+}
+
+static int api_batch2d_vertexxy(lua_State* state) {
+    _bolt_check_argc(state, 2, "batch2d_vertexxy");
+    struct RenderBatch2D* batch = lua_touserdata(state, 1);
+    const lua_Integer index = lua_tointeger(state, 2);
+    int32_t xy[2];
+    batch->functions.xy(batch, index - 1, batch->functions.userdata, xy);
+    lua_pushinteger(state, xy[0]);
+    lua_pushinteger(state, xy[1]);
+    return 2;
+}
+
+static int api_batch2d_vertexatlasxy(lua_State* state) {
+    _bolt_check_argc(state, 2, "batch2d_vertexatlasxy");
+    struct RenderBatch2D* batch = lua_touserdata(state, 1);
+    const lua_Integer index = lua_tointeger(state, 2);
+    int32_t xy[2];
+    batch->functions.atlas_xy(batch, index - 1, batch->functions.userdata, xy);
+    lua_pushinteger(state, xy[0]);
+    lua_pushinteger(state, xy[1]);
+    return 2;
+}
+
+static int api_batch2d_vertexatlaswh(lua_State* state) {
+    _bolt_check_argc(state, 2, "batch2d_vertexatlaswh");
+    struct RenderBatch2D* batch = lua_touserdata(state, 1);
+    const lua_Integer index = lua_tointeger(state, 2);
+    int32_t wh[2];
+    batch->functions.atlas_wh(batch, index - 1, batch->functions.userdata, wh);
+    lua_pushinteger(state, wh[0]);
+    lua_pushinteger(state, wh[1]);
+    return 2;
+}
+
+static int api_batch2d_vertexuv(lua_State* state) {
+    _bolt_check_argc(state, 2, "batch2d_vertexuv");
+    struct RenderBatch2D* batch = lua_touserdata(state, 1);
+    const lua_Integer index = lua_tointeger(state, 2);
+    double uv[2];
+    batch->functions.uv(batch, index - 1, batch->functions.userdata, uv);
+    lua_pushnumber(state, uv[0]);
+    lua_pushnumber(state, uv[1]);
+    return 2;
+}
+
+static int api_batch2d_vertexcolour(lua_State* state) {
+    _bolt_check_argc(state, 4, "batch2d_vertexcolour");
+    struct RenderBatch2D* batch = lua_touserdata(state, 1);
+    const lua_Integer index = lua_tointeger(state, 2);
+    double colour[4];
+    batch->functions.colour(batch, index - 1, batch->functions.userdata, colour);
+    lua_pushnumber(state, colour[0]);
+    lua_pushnumber(state, colour[1]);
+    lua_pushnumber(state, colour[2]);
+    lua_pushnumber(state, colour[3]);
+    return 4;
 }

@@ -1,6 +1,8 @@
 #include "gl.h"
+#include "plugin.h"
 #include "rwlock.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -156,7 +158,7 @@ uint8_t _bolt_get_attr_binding(struct GLContext* c, const struct GLAttrBinding* 
     return 1;
 }
 
-uint8_t _bolt_get_attr_binding_int(struct GLContext* c, const struct GLAttrBinding* binding, size_t index, size_t num_out, uint32_t* out) {
+uint8_t _bolt_get_attr_binding_int(struct GLContext* c, const struct GLAttrBinding* binding, size_t index, size_t num_out, int32_t* out) {
     struct GLArrayBuffer* buffer = binding->buffer;
     if (!buffer || !buffer->data) return 0;
     uintptr_t buf_offset = binding->offset + (binding->stride * index);
@@ -165,22 +167,22 @@ uint8_t _bolt_get_attr_binding_int(struct GLContext* c, const struct GLAttrBindi
     if (!binding->normalise) {
         switch (binding->type) {
             case GL_UNSIGNED_BYTE:
-                for (size_t i = 0; i < num_out; i += 1) out[i] = (uint32_t)*(uint8_t*)(ptr + i);
+                for (size_t i = 0; i < num_out; i += 1) out[i] = (int32_t)*(uint8_t*)(ptr + i);
                 break;
             case GL_UNSIGNED_SHORT:
-                for (size_t i = 0; i < num_out; i += 1) out[i] = (uint32_t)*(uint16_t*)(ptr + (i * 2));
+                for (size_t i = 0; i < num_out; i += 1) out[i] = (int32_t)*(uint16_t*)(ptr + (i * 2));
                 break;
             case GL_UNSIGNED_INT:
-                for (size_t i = 0; i < num_out; i += 1) out[i] = (uint32_t)*(uint32_t*)(ptr + (i * 4));
+                for (size_t i = 0; i < num_out; i += 1) out[i] = (int32_t)*(uint32_t*)(ptr + (i * 4));
                 break;
             case GL_BYTE:
-                for (size_t i = 0; i < num_out; i += 1) out[i] = (uint32_t)*(int8_t*)(ptr + i);
+                for (size_t i = 0; i < num_out; i += 1) out[i] = (int32_t)*(int8_t*)(ptr + i);
                 break;
             case GL_SHORT:
-                for (size_t i = 0; i < num_out; i += 1) out[i] = (uint32_t)*(int16_t*)(ptr + (i * 2));
+                for (size_t i = 0; i < num_out; i += 1) out[i] = (int32_t)*(int16_t*)(ptr + (i * 2));
                 break;
             case GL_INT:
-                for (size_t i = 0; i < num_out; i += 1) out[i] = (uint32_t)*(int32_t*)(ptr + (i * 4));
+                for (size_t i = 0; i < num_out; i += 1) out[i] = (int32_t)*(int32_t*)(ptr + (i * 4));
                 break;
             default:
                 return 0;
@@ -314,10 +316,56 @@ struct GLVertexArray* _bolt_context_get_vao(struct GLContext* c, unsigned int in
     return ret;
 }
 
-
-void _bolt_mul_vec4_mat4(const float x, const float y, const float z, const float w, const float* mat4, float* out_vec4) {
-    out_vec4[0] = (mat4[0] * x) + (mat4[4] * y) + (mat4[8]  * z) + (mat4[12] * w);
-    out_vec4[1] = (mat4[1] * x) + (mat4[5] * y) + (mat4[9]  * z) + (mat4[13] * w);
-    out_vec4[2] = (mat4[2] * x) + (mat4[6] * y) + (mat4[10] * z) + (mat4[14] * w);
-    out_vec4[3] = (mat4[3] * x) + (mat4[7] * y) + (mat4[11] * z) + (mat4[15] * w);
+void _bolt_gl_plugin_drawelements_xy(const struct RenderBatch2D* batch, size_t index, void* userdata, int32_t* out) {
+    struct GLPluginDrawElementsUserData* data = userdata;
+    if (!_bolt_get_attr_binding_int(data->c, data->position, index, 2, out)) {
+        float pos[2];
+        _bolt_get_attr_binding(data->c, data->position, index, 2, pos);
+        out[0] = (int32_t)roundf(pos[0]);
+        out[1] = (int32_t)roundf(pos[1]);
+    }
 }
+
+void _bolt_gl_plugin_drawelements_atlas_xy(const struct RenderBatch2D* batch, size_t index, void* userdata, int32_t* out) {
+    struct GLPluginDrawElementsUserData* data = userdata;
+    float xy[2];
+    _bolt_get_attr_binding(data->c, data->atlas_min, index, 2, xy);
+    // these are negative for some reason
+    out[0] = -(int32_t)roundf(xy[0] * data->atlas->width);
+    out[1] = -(int32_t)roundf(xy[1] * data->atlas->height);
+}
+
+void _bolt_gl_plugin_drawelements_atlas_wh(const struct RenderBatch2D* batch, size_t index, void* userdata, int32_t* out) {
+    struct GLPluginDrawElementsUserData* data = userdata;
+    float wh[2];
+    _bolt_get_attr_binding(data->c, data->atlas_size, index, 2, wh);
+    // these are negative for some reason
+    out[0] = -(int32_t)roundf(wh[0] * data->atlas->width);
+    out[1] = -(int32_t)roundf(wh[1] * data->atlas->height);
+}
+
+void _bolt_gl_plugin_drawelements_uv(const struct RenderBatch2D* batch, size_t index, void* userdata, double* out) {
+    struct GLPluginDrawElementsUserData* data = userdata;
+    float uv[2];
+    _bolt_get_attr_binding(data->c, data->tex_uv, index, 2, uv);
+    out[0] = (double)uv[0];
+    out[1] = (double)uv[1];
+}
+
+void _bolt_gl_plugin_drawelements_colour(const struct RenderBatch2D* batch, size_t index, void* userdata, double* out) {
+    struct GLPluginDrawElementsUserData* data = userdata;
+    float colour[4];
+    _bolt_get_attr_binding(data->c, data->colour, index, 4, colour);
+    // these are ABGR for some reason
+    out[0] = (double)colour[3];
+    out[1] = (double)colour[2];
+    out[2] = (double)colour[1];
+    out[3] = (double)colour[0];
+}
+
+//void _bolt_mul_vec4_mat4(const float x, const float y, const float z, const float w, const float* mat4, float* out_vec4) {
+//    out_vec4[0] = (mat4[0] * x) + (mat4[4] * y) + (mat4[8]  * z) + (mat4[12] * w);
+//    out_vec4[1] = (mat4[1] * x) + (mat4[5] * y) + (mat4[9]  * z) + (mat4[13] * w);
+//    out_vec4[2] = (mat4[2] * x) + (mat4[6] * y) + (mat4[10] * z) + (mat4[14] * w);
+//    out_vec4[3] = (mat4[3] * x) + (mat4[7] * y) + (mat4[11] * z) + (mat4[15] * w);
+//}

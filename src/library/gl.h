@@ -7,6 +7,7 @@
 #include "../../modules/hashmap/hashmap.h"
 #include "rwlock.h"
 struct hashmap;
+struct RenderBatch2D;
 
 /* consts used from libgl */
 #define GL_TEXTURE 5890
@@ -146,9 +147,26 @@ void _bolt_make_context_current(void*);
 void _bolt_destroy_context(void*);
 void _bolt_set_attr_binding(struct GLContext*, struct GLAttrBinding*, unsigned int, int, const void*, unsigned int, uint32_t, uint8_t);
 uint8_t _bolt_get_attr_binding(struct GLContext*, const struct GLAttrBinding*, size_t, size_t, float*);
-uint8_t _bolt_get_attr_binding_int(struct GLContext*, const struct GLAttrBinding*, size_t, size_t, uint32_t*);
+uint8_t _bolt_get_attr_binding_int(struct GLContext*, const struct GLAttrBinding*, size_t, size_t, int32_t*);
 
 uint32_t _bolt_binding_for_buffer(uint32_t);
-void _bolt_mul_vec4_mat4(const float x, const float y, const float z, const float w, const float* mat4, float* out_vec4);
+
+/* plugin library interop stuff */
+
+struct GLPluginDrawElementsUserData {
+    struct GLContext* c;
+    unsigned short* indices;
+    struct GLTexture2D* atlas;
+    struct GLAttrBinding* position;
+    struct GLAttrBinding* atlas_min;
+    struct GLAttrBinding* atlas_size;
+    struct GLAttrBinding* tex_uv;
+    struct GLAttrBinding* colour;
+};
+void _bolt_gl_plugin_drawelements_xy(const struct RenderBatch2D*, size_t index, void* userdata, int32_t* out);
+void _bolt_gl_plugin_drawelements_atlas_xy(const struct RenderBatch2D*, size_t index, void* userdata, int32_t* out);
+void _bolt_gl_plugin_drawelements_atlas_wh(const struct RenderBatch2D*, size_t index, void* userdata, int32_t* out);
+void _bolt_gl_plugin_drawelements_uv(const struct RenderBatch2D*, size_t index, void* userdata, double* out);
+void _bolt_gl_plugin_drawelements_colour(const struct RenderBatch2D*, size_t index, void* userdata, double* out);
 
 #endif

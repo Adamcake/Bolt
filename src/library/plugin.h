@@ -1,15 +1,41 @@
 #ifndef _BOLT_LIBRARY_PLUGIN_H_
 #define _BOLT_LIBRARY_PLUGIN_H_
 
+#include <stddef.h>
 #include <stdint.h>
 
+struct RenderBatch2D;
+
+/// Struct containing callbacks for general-purpose accessing of vertex info from any backend.
+/// Functions will be called with four params: batch pointer, index, the specified userdata,
+/// and an output pointer, which must be able to index the returned number of items.
+struct Vertex2DFunctions {
+    /// Userdata which will be passed to the functions contained in this struct.
+    void* userdata;
+
+    /// Returns the vertex X and Y, in screen coordinates.
+    void (*xy)(const struct RenderBatch2D*, size_t index, void* userdata, int32_t* out);
+    
+    /// Returns the X and Y of the texture image associated with this vertex, in pixel coordinates.
+    void (*atlas_xy)(const struct RenderBatch2D*, size_t index, void* userdata, int32_t* out);
+
+    /// Returns the W and H of the texture image associated with this vertex, in pixel coordinates.
+    void (*atlas_wh)(const struct RenderBatch2D*, size_t index, void* userdata, int32_t* out);
+
+    /// Returns the U and V of this vertex in pixel coordinates, normalised from 0.0 to 1.0 within
+    /// the sub-image specified by atlas xy and wh.
+    void (*uv)(const struct RenderBatch2D*, size_t index, void* userdata, double* out);
+
+    /// Returns the RGBA colour of this vertex, each one normalised from 0.0 to 1.0.
+    void (*colour)(const struct RenderBatch2D*, size_t index, void* userdata, double* out);
+};
+
 struct RenderBatch2D {
-    uint16_t* indices;
-    uint8_t* texture;
-    uint32_t tex_width;
-    uint32_t tex_height;
+    uint32_t atlas_width;
+    uint32_t atlas_height;
     uint32_t index_count;
     uint32_t vertices_per_icon;
+    struct Vertex2DFunctions functions;
 };
 
 /// Init the plugin library. Call _bolt_plugin_close at the end of execution, and don't double-init.
