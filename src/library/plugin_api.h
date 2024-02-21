@@ -106,6 +106,13 @@ static int api_batch2d_vertexcount(lua_State*);
 /// it's recommended to use this function instead of hard-coding the number 6.
 static int api_batch2d_verticesperimage(lua_State*);
 
+/// [-1, +2, -]
+/// Returns the width and height of the target area of this render, in pixels.
+///
+/// At 100% interface scaling, this will be the size of the inner area of the game window. At other
+/// scaling settings it will be proportionally smaller or larger than that area.
+static int api_batch2d_screensize(lua_State*);
+
 /// [-2, +2, -]
 /// Given an index of a vertex in a batch, returns its X and Y in screen coordinates.
 static int api_batch2d_vertexxy(lua_State*);

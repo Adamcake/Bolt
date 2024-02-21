@@ -31,6 +31,8 @@ struct Vertex2DFunctions {
 };
 
 struct RenderBatch2D {
+    uint32_t screen_width;
+    uint32_t screen_height;
     uint32_t atlas_width;
     uint32_t atlas_height;
     uint32_t index_count;
