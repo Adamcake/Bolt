@@ -449,8 +449,8 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 	if (java_home) {
 		java_home_str = std::string(java_home) + "/bin/java";
 		if (!std::filesystem::exists(java_home_str)) {
-			char data [100];
-			sprintf(data, "JAVA_HOME environment variable is malformed or incorrect. Expected to find file at %s/bin/java\n", java_home);
+			char data [PATH_MAX];
+			snprintf(data, PATH_MAX, "JAVA_HOME environment variable is malformed or incorrect. Expected to find file at %s/bin/java\n", java_home);
 			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
 		}
 	}
@@ -500,8 +500,8 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<
 	std::string java_path_str = std::string(java_home) + "/bin/java";
 	
 	if (!std::filesystem::exists(java_path_str)) {
-		char data [100];
-		sprintf(data, "JAVA_HOME environment variable is malformed or incorrect. Expected to find file at %s/bin/java\n", java_home);
+		char data [PATH_MAX];
+		snprintf(data, PATH_MAX, "JAVA_HOME environment variable is malformed or incorrect. Expected to find file at %s/bin/java\n", java_home);
 		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
 	}
 
