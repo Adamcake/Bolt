@@ -446,7 +446,13 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 	// set up argv for the new process
 	const char* java_home = getenv("JAVA_HOME");
 	std::string java_home_str;
-	if (java_home) java_home_str = std::string(java_home) + "/bin/java";
+	if (java_home) {
+		java_home_str = std::string(java_home) + "/bin/java";
+		if (!std::filesystem::exists(java_home_str)) {
+			const char* data = "JAVA_HOME environment variable is malformed or incorrect\n";
+			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+		}
+	}
 	std::string arg_home = "-Duser.home=" + user_home;
 	std::string arg_jvm_argument_home = "-J" + arg_home;
 	std::string path_str = jar_path.string();
@@ -492,6 +498,11 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<
 	const char* env_key_java_path = "BOLT_JAVA_PATH=";
 	std::string java_path_str = std::string(java_home) + "/bin/java";
 	
+	if (!std::filesystem::exists(java_path_str)) {
+		const char* data = "JAVA_HOME environment variable is malformed or incorrect\n";
+		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+	}
+
 	std::filesystem::path java_proxy_bin_path = std::filesystem::current_path();
 	java_proxy_bin_path.append("java-proxy");
 	std::filesystem::path java_proxy_data_dir_path = this->data_dir;
