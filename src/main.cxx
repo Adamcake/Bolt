@@ -122,20 +122,28 @@ int main(int argc, char* argv[]) {
 	// Provide CEF with command-line arguments
 	// Add a flag to disable web security, because a certain company's API endpoints don't have correct
 	// access control settings; remove this setting if they ever get their stuff together
-	const char* arg = "--disable-web-security";
-	const size_t arg_len = strlen(arg);
-	char* arg_ = new char[arg_len + 1];
-	memcpy(arg_, arg, arg_len);
-	arg_[arg_len] = '\0';
-	char** argv_ = new char*[argc + 1];
+	// Also add a flag to disable GPUCache being saved on disk because it just breaks sometimes?
+	const char* arg1 = "--disable-web-security";
+	const char* arg2 = "--disable-gpu-shader-disk-cache";
+	const size_t arg1_len = strlen(arg1);
+	const size_t arg2_len = strlen(arg2);
+	char* arg1_ = new char[arg1_len + 1];
+	char* arg2_ = new char[arg2_len + 1];
+	memcpy(arg1_, arg1, arg1_len);
+	memcpy(arg2_, arg2, arg2_len);
+	arg1_[arg1_len] = '\0';
+	arg2_[arg2_len] = '\0';
+	char** argv_ = new char*[argc + 2];
 	memcpy(argv_, argv, argc * sizeof(char*));
-	argv_[argc] = arg_;
+	argv_[argc] = arg1_;
+	argv_[argc + 1] = arg2_;
 
-	CefMainArgs main_args(argc + 1, argv_);
+	CefMainArgs main_args(argc + 2, argv_);
 	int ret = BoltRunAnyProcess(main_args);
 
 	delete[] argv_;
-	delete[] arg_;
+	delete[] arg2_;
+	delete[] arg1_;
 	return ret;
 }
 
