@@ -140,29 +140,48 @@ int main(int argc, char* argv[]) {
 }
 
 bool LockXdgDirectories(std::filesystem::path& config_dir, std::filesystem::path& data_dir) {
+	// As well as trying to obtain a lockfile, this function will also explicitly set the XDG_*_HOME
+	// env vars to their defaults if they're not set. This avoids issues later down the line with
+	// needing to spoof $HOME for certain games.
 	const char* xdg_config_home = getenv("XDG_CONFIG_HOME");
 	const char* xdg_data_home = getenv("XDG_DATA_HOME");
+	const char* xdg_cache_home = getenv("XDG_CACHE_HOME");
+	const char* xdg_state_home = getenv("XDG_STATE_HOME");
 	const char* home = getenv("HOME");
+
+	if (!home || !*home) {
+		fmt::print("No $HOME set, please set one\n");
+		return false;
+	}
 
 	if (xdg_data_home && *xdg_data_home) {
 		data_dir.assign(xdg_data_home);
-	} else if (home) {
+	} else {
 		data_dir.assign(home);
 		data_dir.append(".local");
 		data_dir.append("share");
-	} else {
-		fmt::print("No $XDG_DATA_HOME or $HOME\n");
-		return false;
+		setenv("XDG_DATA_HOME", data_dir.c_str(), true);
 	}
 
 	if (xdg_config_home && *xdg_config_home) {
 		config_dir.assign(xdg_config_home);
-	} else if (home) {
+	} else {
 		config_dir.assign(home);
 		config_dir.append(".config");
-	} else {
-		fmt::print("No $XDG_CONFIG_HOME or $HOME\n");
-		return false;
+		setenv("XDG_CONFIG_HOME", config_dir.c_str(), true);
+	}
+
+	if (!xdg_cache_home || !*xdg_cache_home) {
+		std::filesystem::path dir = home;
+		dir.append(".cache");
+		setenv("XDG_CACHE_HOME", dir.c_str(), true);
+	}
+
+	if (!xdg_state_home || !*xdg_state_home) {
+		std::filesystem::path dir = home;
+		dir.append(".local");
+		dir.append("state");
+		setenv("XDG_STATE_HOME", dir.c_str(), true);
 	}
 
 	config_dir.append(PROGRAM_DIRNAME);
