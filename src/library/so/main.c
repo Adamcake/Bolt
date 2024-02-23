@@ -1062,8 +1062,9 @@ void glDrawArrays(uint32_t mode, int first, unsigned int count) {
         if (c->bound_program->loc_sSceneHDRTex != -1) {
             int game_view_tex;
             real_glGetUniformiv(c->bound_program->id, c->bound_program->loc_sSceneHDRTex, &game_view_tex);
-            if (c->current_draw_framebuffer == 0 && c->game_view_tex != c->texture_units[game_view_tex]->id) {
+            if (c->current_draw_framebuffer == 0 && c->need_3d_tex != 2 && c->game_view_tex_front != c->texture_units[game_view_tex]->id) {
                 c->game_view_tex = c->texture_units[game_view_tex]->id;
+                c->game_view_tex_front = c->game_view_tex;
                 c->current_draw_framebuffer = -1;
                 c->game_view_x = 0;
                 c->game_view_y = 0;
@@ -1071,6 +1072,7 @@ void glDrawArrays(uint32_t mode, int first, unsigned int count) {
                 printf("new direct game_view_tex %u...\n", c->game_view_tex);
             } else if (c->need_3d_tex == 1 && c->game_view_framebuffer == c->current_draw_framebuffer) {
                 c->game_view_tex = c->texture_units[game_view_tex]->id;
+                c->game_view_tex_front = c->game_view_tex;
                 printf("new game_view_tex %u...\n", c->game_view_tex);
             }
         } else if (c->bound_program->loc_sSourceTex != -1) {
@@ -1277,13 +1279,13 @@ unsigned int eglInitialize(void* display, void* major, void* minor) {
 const char* lua =
 "local bolt = require(\"bolt\")"                                "\n"
 "local function callback2d (batch)"                             "\n"
-"  if batch:isminimap() then print(\"minimap render 2d\") end"  "\n"
+"  --if batch:isminimap() then print(\"minimap render 2d\") end"  "\n"
 "end"                                                           "\n"
 "local function callbackminimap (render)"                       "\n"
-"  print(\"minimap \", render:angle(), render:scale(), render:position())\n"
+"  --print(\"minimap \", render:angle(), render:scale(), render:position())\n"
 "end"                                                           "\n"
 "local function callbackswapbuffers (s)"                        "\n"
-"  print(\"swap\")"                                             "\n"
+"  --print(\"swap\")"                                             "\n"
 "end"                                                           "\n"
 "bolt.setcallback2d(callback2d)"                                "\n"
 "bolt.setcallbackswapbuffers(callbackswapbuffers)"              "\n"

@@ -130,6 +130,7 @@ struct GLContext {
     unsigned int current_read_framebuffer;
     unsigned int game_view_framebuffer;
     unsigned int game_view_tex;
+    unsigned int game_view_tex_front;
     int target_3d_tex;
     int target_minimap_tex;
     int game_view_x;
