@@ -821,7 +821,7 @@ void glDrawElements(uint32_t mode, unsigned int count, uint32_t type, const void
                 const double cx = (scaled_xoffset + (small_tex_cx * angle_cos) - (small_tex_cy * angle_sin)) / dist_ratio;
                 const double cy = (scaled_yoffset + (small_tex_cx * angle_sin) + (small_tex_cy * angle_cos)) / dist_ratio;
 
-                struct RenderMinimap render;
+                struct RenderMinimapEvent render;
                 render.angle = map_angle_rads;
                 render.scale = dist_ratio;
                 render.x = tex->minimap_center_x + (64.0 * (cx - (double)(tex->width >> 1)));
@@ -1156,34 +1156,15 @@ unsigned int eglTerminate(void*);
 
 void* eglGetProcAddress(const char* name) {
     LOG("eglGetProcAddress(%s)\n", name);
-    if (!strcmp(name, "eglGetProcAddress")) {
-        return eglGetProcAddress;
-    }
-    if (!strcmp(name, "eglSwapBuffers")) {
-        real_eglSwapBuffers = real_eglGetProcAddress("eglSwapBuffers");
-        return eglSwapBuffers;
-    }
-    if (!strcmp(name, "eglMakeCurrent")) {
-        real_eglMakeCurrent = real_eglGetProcAddress("eglMakeCurrent");
-        return eglMakeCurrent;
-    }
-    if (!strcmp(name, "eglInitialize")) {
-        real_eglInitialize = real_eglGetProcAddress("eglInitialize");
-        return eglInitialize;
-    }
-    if (!strcmp(name, "eglDestroyContext")) {
-        real_eglDestroyContext = real_eglGetProcAddress("eglDestroyContext");
-        return eglDestroyContext;
-    }
-    if (!strcmp(name, "eglCreateContext")) {
-        real_eglCreateContext = real_eglGetProcAddress("eglCreateContext");
-        return eglCreateContext;
-    }
-    if (!strcmp(name, "eglTerminate")) {
-        real_eglTerminate = real_eglGetProcAddress("eglTerminate");
-        return eglTerminate;
-    }
 #define PROC_ADDRESS_MAP(FUNC) if (!strcmp(name, #FUNC)) { real_##FUNC = real_eglGetProcAddress(#FUNC); return real_##FUNC ? _bolt_##FUNC : NULL; }
+#define PROC_ADDRESS_MAP_EGL(FUNC) if (!strcmp(name, #FUNC)) { real_##FUNC = real_eglGetProcAddress(#FUNC); return FUNC; }
+    if (!strcmp(name, "eglGetProcAddress")) return eglGetProcAddress;
+    PROC_ADDRESS_MAP_EGL(eglSwapBuffers)
+    PROC_ADDRESS_MAP_EGL(eglMakeCurrent)
+    PROC_ADDRESS_MAP_EGL(eglInitialize)
+    PROC_ADDRESS_MAP_EGL(eglDestroyContext)
+    PROC_ADDRESS_MAP_EGL(eglCreateContext)
+    PROC_ADDRESS_MAP_EGL(eglTerminate)
     PROC_ADDRESS_MAP(glCreateProgram)
     PROC_ADDRESS_MAP(glBindAttribLocation)
     PROC_ADDRESS_MAP(glGetUniformLocation)
@@ -1221,6 +1202,7 @@ void* eglGetProcAddress(const char* name) {
     PROC_ADDRESS_MAP(glGetIntegeri_v)
     PROC_ADDRESS_MAP(glBlitFramebuffer)
     PROC_ADDRESS_MAP(glGetFramebufferAttachmentParameteriv)
+#undef PROC_ADDRESS_MAP_EGL
 #undef PROC_ADDRESS_MAP
     return real_eglGetProcAddress(name);
 }

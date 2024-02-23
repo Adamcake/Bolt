@@ -41,12 +41,14 @@ struct RenderBatch2D {
     struct Vertex2DFunctions functions;
 };
 
-struct RenderMinimap {
+struct RenderMinimapEvent {
     double angle;
     double scale;
     double x;
     double y;
 };
+
+struct SwapBuffersEvent {};
 
 /// Init the plugin library. Call _bolt_plugin_close at the end of execution, and don't double-init.
 void _bolt_plugin_init();
@@ -69,12 +71,12 @@ uint64_t _bolt_plugin_add(const char* lua);
 void _bolt_plugin_stop(uint64_t);
 
 /// Sends a SwapBuffers event to all plugins.
-void _bolt_plugin_handle_swapbuffers(void*);
+void _bolt_plugin_handle_swapbuffers(struct SwapBuffersEvent*);
 
 /// Sends a RenderBatch2D to all plugins.
 void _bolt_plugin_handle_2d(struct RenderBatch2D*);
 
 /// Sends a RenderMinimap to all plugins.
-void _bolt_plugin_handle_minimap(struct RenderMinimap*);
+void _bolt_plugin_handle_minimap(struct RenderMinimapEvent*);
 
 #endif
