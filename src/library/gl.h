@@ -59,6 +59,10 @@ struct GLTexture2D {
     unsigned char* data;
     unsigned int width;
     unsigned int height;
+    double minimap_center_x;
+    double minimap_center_y;
+    uint8_t is_minimap_tex_big;
+    uint8_t is_minimap_tex_small;
 };
 
 struct GLProgram {
@@ -76,12 +80,14 @@ struct GLProgram {
     int loc_uTextureAtlasSettings;
     int loc_uAtlasMeta;
     int loc_uModelMatrix;
+    int loc_uGridSize;
     int loc_uVertexScale;
     int loc_sSceneHDRTex;
     int loc_sSourceTex;
     int block_index_ViewTransforms;
     int offset_uCameraPosition;
     int offset_uViewProjMatrix;
+    uint8_t is_minimap;
     uint8_t is_2d;
     uint8_t is_3d;
 };
@@ -125,6 +131,7 @@ struct GLContext {
     unsigned int game_view_framebuffer;
     unsigned int game_view_tex;
     int target_3d_tex;
+    int target_minimap_tex;
     int game_view_x;
     int game_view_y;
     int game_view_w;

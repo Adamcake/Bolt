@@ -326,6 +326,7 @@ unsigned int _bolt_glCreateProgram() {
     program->loc_uTextureAtlasSettings = -1;
     program->loc_uAtlasMeta = -1;
     program->loc_uModelMatrix = -1;
+    program->loc_uGridSize = -1;
     program->loc_uVertexScale = -1;
     program->loc_sSceneHDRTex = -1;
     program->block_index_ViewTransforms = -1;
@@ -333,6 +334,7 @@ unsigned int _bolt_glCreateProgram() {
     program->offset_uViewProjMatrix = -1;
     program->is_2d = 0;
     program->is_3d = 0;
+    program->is_minimap = 0;
     _bolt_rwlock_lock_write(&c->programs->rwlock);
     hashmap_set(c->programs->map, &program);
     _bolt_rwlock_unlock_write(&c->programs->rwlock);
@@ -387,6 +389,7 @@ void _bolt_glLinkProgram(unsigned int program) {
     const int uTextureAtlasSettings = real_glGetUniformLocation(program, "uTextureAtlasSettings");
     const int uAtlasMeta = real_glGetUniformLocation(program, "uAtlasMeta");
     const int loc_uModelMatrix = real_glGetUniformLocation(program, "uModelMatrix");
+    const int loc_uGridSize = real_glGetUniformLocation(program, "uGridSize");
     const int loc_uVertexScale = real_glGetUniformLocation(program, "uVertexScale");
     p->loc_sSceneHDRTex = real_glGetUniformLocation(program, "sSceneHDRTex");
     p->loc_sSourceTex = real_glGetUniformLocation(program, "sSourceTex");
@@ -401,6 +404,14 @@ void _bolt_glLinkProgram(unsigned int program) {
         real_glGetActiveUniformsiv(program, 2, ubo_indices, GL_UNIFORM_OFFSET, view_offsets);
     }
 
+    if (loc_uModelMatrix != -1 && loc_uGridSize != -1 && block_index_ViewTransforms != -1) {
+        p->loc_uModelMatrix = loc_uModelMatrix;
+        p->loc_uGridSize = loc_uGridSize;
+        p->block_index_ViewTransforms = block_index_ViewTransforms;
+        p->offset_uCameraPosition = view_offsets[0];
+        p->offset_uViewProjMatrix = view_offsets[1];
+        p->is_minimap = 1;
+    }
     if (p && p->loc_aVertexPosition2D != -1 && p->loc_aVertexColour != -1 && p->loc_aTextureUV != -1 && p->loc_aTextureUVAtlasMin != -1 && p->loc_aTextureUVAtlasExtents != -1 && uDiffuseMap != -1 && uProjectionMatrix != -1) {
         p->loc_uDiffuseMap = uDiffuseMap;
         p->loc_uProjectionMatrix = uProjectionMatrix;
@@ -436,6 +447,8 @@ void glGenTextures(uint32_t n, unsigned int* textures) {
     for (size_t i = 0; i < n; i += 1) {
         struct GLTexture2D* tex = calloc(1, sizeof(struct GLTexture2D));
         tex->id = textures[i];
+        tex->is_minimap_tex_big = 0;
+        tex->is_minimap_tex_small = 0;
         hashmap_set(c->textures->map, &tex);
     }
     _bolt_rwlock_unlock_write(&c->textures->rwlock);
@@ -743,37 +756,106 @@ void glDrawElements(uint32_t mode, unsigned int count, uint32_t type, const void
     int element_binding;
     real_glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &element_binding);
     struct GLArrayBuffer* element_buffer = _bolt_context_get_buffer(c, element_binding);
-    if (type == GL_UNSIGNED_SHORT && mode == GL_TRIANGLES && count > 0 && c->bound_program->is_2d) {
+    if (type == GL_UNSIGNED_SHORT && mode == GL_TRIANGLES && count > 0 && c->bound_program->is_2d && !c->bound_program->is_minimap) {
         int diffuse_map;
         real_glGetUniformiv(c->bound_program->id, c->bound_program->loc_uDiffuseMap, &diffuse_map);
         float projection_matrix[16];
         real_glGetUniformfv(c->bound_program->id, c->bound_program->loc_uProjectionMatrix, projection_matrix);
+        int draw_tex;
+        real_glGetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
+        const struct GLTexture2D* tex = c->texture_units[diffuse_map];
+        struct GLTexture2D* tex_target = _bolt_context_get_texture(c, draw_tex);
 
-        struct GLPluginDrawElementsUserData userdata;
-        userdata.c = c;
-        userdata.indices = (unsigned short*)(element_buffer->data + (uintptr_t)indices_offset);
-        userdata.atlas = c->texture_units[diffuse_map];
-        userdata.position = &attributes[c->bound_program->loc_aVertexPosition2D];
-        userdata.atlas_min = &attributes[c->bound_program->loc_aTextureUVAtlasMin];
-        userdata.atlas_size = &attributes[c->bound_program->loc_aTextureUVAtlasExtents];
-        userdata.tex_uv = &attributes[c->bound_program->loc_aTextureUV];
-        userdata.colour = &attributes[c->bound_program->loc_aVertexColour];
+        if (tex->is_minimap_tex_big) {
+            tex_target->is_minimap_tex_small = 1;
+            if (count == 6) {
+                // get XY and UV of first two vertices
+                const unsigned short* indices = (unsigned short*)(element_buffer->data + (uintptr_t)indices_offset);
+                const struct GLAttrBinding* tex_uv = &attributes[c->bound_program->loc_aTextureUV];
+                const struct GLAttrBinding* position_2d = &attributes[c->bound_program->loc_aVertexPosition2D];
+                int pos0[2];
+                int pos1[2];
+                float uv0[2];
+                float uv1[2];
+                _bolt_get_attr_binding_int(c, position_2d, indices[0], 2, pos0);
+                _bolt_get_attr_binding_int(c, position_2d, indices[1], 2, pos1);
+                _bolt_get_attr_binding(c, tex_uv, indices[0], 2, uv0);
+                _bolt_get_attr_binding(c, tex_uv, indices[1], 2, uv1);
+                const double x0 = (double)pos0[0];
+                const double y0 = (double)pos0[1];
+                const double x1 = (double)pos1[0];
+                const double y1 = (double)pos1[1];
+                const double u0 = (double)uv0[0];
+                const double v0 = (double)uv0[1];
+                const double u1 = (double)uv1[0];
+                const double v1 = (double)uv1[1];
 
-        struct RenderBatch2D batch;
-        batch.screen_width = roundf(2.0 / projection_matrix[0]);
-        batch.screen_height = roundf(2.0 / projection_matrix[5]);
-        batch.atlas_width = userdata.atlas->width;
-        batch.atlas_height = userdata.atlas->height;
-        batch.index_count = count;
-        batch.vertices_per_icon = 6;
-        batch.functions.userdata = &userdata;
-        batch.functions.xy = _bolt_gl_plugin_drawelements_xy;
-        batch.functions.atlas_xy = _bolt_gl_plugin_drawelements_atlas_xy;
-        batch.functions.atlas_wh = _bolt_gl_plugin_drawelements_atlas_wh;
-        batch.functions.uv = _bolt_gl_plugin_drawelements_uv;
-        batch.functions.colour = _bolt_gl_plugin_drawelements_colour;
+                // find out angle of the map, by comparing atan2 of XYs to atan2 of UVs
+                double pos_angle_rads = atan2(y1 - y0, x1 - x0);
+                double uv_angle_rads = atan2(v1 - v0, u1 - u0);
+                if (pos_angle_rads < uv_angle_rads) pos_angle_rads += M_PI * 2.0;
+                const double map_angle_rads = pos_angle_rads - uv_angle_rads;
 
-        _bolt_plugin_handle_2d(&batch);
+                // find out scaling of the map, by comparing distance between XYs to distance between UVs
+                const double pos_a = x0 - x1;
+                const double pos_b = y0 - y1;
+                const double uv_a = u0 - u1;
+                const double uv_b = v0 - v1;
+                const double pos_dist = sqrt(fabs((pos_a * pos_a) + (pos_b * pos_b)));
+                const double uv_dist = sqrt(fabs((uv_a * uv_a) + (uv_b * uv_b))) * tex->width;
+                const double dist_ratio = pos_dist / uv_dist;
+
+                // by unrotating the big tex's vertices around any point, and rotating small-tex-relative
+                // points by the same method, we can estimate what section of the big tex will be drawn.
+                // note: `>> 1` is the same as `/ 2` except that it doesn't cause an erroneous gcc warning
+                const double scaled_x = tex->width * dist_ratio;
+                const double scaled_y = tex->height * dist_ratio;
+                const double angle_sin = sin(-map_angle_rads);
+                const double angle_cos = cos(-map_angle_rads);
+                const double unrotated_x0 = (x0 * angle_cos) - (y0 * angle_sin);
+                const double unrotated_y0 = (x0 * angle_sin) + (y0 * angle_cos);
+                const double scaled_xoffset = (u0 * scaled_x) - unrotated_x0;
+                const double scaled_yoffset = (v0 * scaled_y) - unrotated_y0;
+                const double small_tex_cx = 1.0 / projection_matrix[0];
+                const double small_tex_cy = 1.0 / projection_matrix[5];
+                const double cx = (scaled_xoffset + (small_tex_cx * angle_cos) - (small_tex_cy * angle_sin)) / dist_ratio;
+                const double cy = (scaled_yoffset + (small_tex_cx * angle_sin) + (small_tex_cy * angle_cos)) / dist_ratio;
+
+                struct RenderMinimap render;
+                render.angle = map_angle_rads;
+                render.scale = dist_ratio;
+                render.x = tex->minimap_center_x + (64.0 * (cx - (double)(tex->width >> 1)));
+                render.y = tex->minimap_center_y + (64.0 * (cy - (double)(tex->height >> 1)));
+                _bolt_plugin_handle_minimap(&render);
+            }
+        } else {
+            struct GLPluginDrawElementsUserData userdata;
+            userdata.c = c;
+            userdata.indices = (unsigned short*)(element_buffer->data + (uintptr_t)indices_offset);
+            userdata.atlas = c->texture_units[diffuse_map];
+            userdata.position = &attributes[c->bound_program->loc_aVertexPosition2D];
+            userdata.atlas_min = &attributes[c->bound_program->loc_aTextureUVAtlasMin];
+            userdata.atlas_size = &attributes[c->bound_program->loc_aTextureUVAtlasExtents];
+            userdata.tex_uv = &attributes[c->bound_program->loc_aTextureUV];
+            userdata.colour = &attributes[c->bound_program->loc_aVertexColour];
+
+            struct RenderBatch2D batch;
+            batch.screen_width = roundf(2.0 / projection_matrix[0]);
+            batch.screen_height = roundf(2.0 / projection_matrix[5]);
+            batch.atlas_width = userdata.atlas->width;
+            batch.atlas_height = userdata.atlas->height;
+            batch.index_count = count;
+            batch.vertices_per_icon = 6;
+            batch.is_minimap = tex_target && tex_target->is_minimap_tex_small;
+            batch.functions.userdata = &userdata;
+            batch.functions.xy = _bolt_gl_plugin_drawelements_xy;
+            batch.functions.atlas_xy = _bolt_gl_plugin_drawelements_atlas_xy;
+            batch.functions.atlas_wh = _bolt_gl_plugin_drawelements_atlas_wh;
+            batch.functions.uv = _bolt_gl_plugin_drawelements_uv;
+            batch.functions.colour = _bolt_gl_plugin_drawelements_colour;
+
+            _bolt_plugin_handle_2d(&batch);
+        }
     }
     if (type == GL_UNSIGNED_SHORT && mode == GL_TRIANGLES && c->bound_program->is_3d && count == 2370) {
         int draw_tex;
@@ -966,7 +1048,17 @@ void glDrawArrays(uint32_t mode, int first, unsigned int count) {
     LOG("glDrawArrays\n");
     real_glDrawArrays(mode, first, count);
     struct GLContext* c = _bolt_context();
-    if (mode == GL_TRIANGLE_STRIP && count == 4) {
+    if (c->bound_program->is_minimap) {
+        int ubo_binding, ubo_view_index, draw_tex;
+        real_glGetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
+        real_glGetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ViewTransforms, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
+        real_glGetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_view_index);
+        const float* view_proj_matrix = (float*)(_bolt_context_get_buffer(c, ubo_view_index)->data + c->bound_program->offset_uCameraPosition);
+        struct GLTexture2D* tex = _bolt_context_get_texture(c, draw_tex);
+        tex->is_minimap_tex_big = 1;
+        tex->minimap_center_x = view_proj_matrix[0];
+        tex->minimap_center_y = view_proj_matrix[2];
+    } else if (mode == GL_TRIANGLE_STRIP && count == 4) {
         if (c->bound_program->loc_sSceneHDRTex != -1) {
             int game_view_tex;
             real_glGetUniformiv(c->bound_program->id, c->bound_program->loc_sSceneHDRTex, &game_view_tex);
@@ -1184,27 +1276,18 @@ unsigned int eglInitialize(void* display, void* major, void* minor) {
 
 const char* lua =
 "local bolt = require(\"bolt\")"                                "\n"
-"local function callback (batch)"                               "\n"
-"  local count = batch:vertexcount()"                           "\n"
-"  local step = batch:verticesperimage()"                       "\n"
-"  for i=1,count,step do"                                       "\n"
-"    local w, h = batch:vertexatlaswh(i)"                       "\n"
-"    if w == 51 and h == 51 then"                               "\n"
-"      local x1, y1 = batch:vertexxy(i)"                        "\n"
-"      local x2, y2 = batch:vertexxy(i + 1)"                    "\n"
-"      local u1, v1 = batch:vertexuv(i)"                        "\n"
-"      local u2, v2 = batch:vertexuv(i + 1)"                    "\n"
-"      local pos_angle_rads = math.atan2(y2 - y1, x2 - x1)"     "\n"
-"      local uv_angle_rads = math.atan2(v2 - v1, u2 - u1)"      "\n"
-"      if pos_angle_rads < uv_angle_rads then"                  "\n"
-"          pos_angle_rads = pos_angle_rads + (math.pi * 2)"     "\n"
-"      end"                                                     "\n"
-"      local angle = pos_angle_rads - uv_angle_rads"            "\n"
-"      print(\"compass angle is \", angle * 180.0 / math.pi)"   "\n"
-"    end"                                                       "\n"
-"  end"                                                         "\n"
+"local function callback2d (batch)"                             "\n"
+"  if batch:isminimap() then print(\"minimap render 2d\") end"  "\n"
 "end"                                                           "\n"
-"bolt.setcallback2d(callback)"                                  "\n"
+"local function callbackminimap (render)"                       "\n"
+"  print(\"minimap \", render:angle(), render:scale(), render:position())\n"
+"end"                                                           "\n"
+"local function callbackswapbuffers (s)"                        "\n"
+"  print(\"swap\")"                                             "\n"
+"end"                                                           "\n"
+"bolt.setcallback2d(callback2d)"                                "\n"
+"bolt.setcallbackswapbuffers(callbackswapbuffers)"              "\n"
+"bolt.setcallbackminimap(callbackminimap)"                      "\n"
 ;
 
 void* eglCreateContext(void* display, void* config, void* share_context, const void* attrib_list) {
