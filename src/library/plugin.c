@@ -14,12 +14,14 @@
 
 const char* BOLT_REGISTRYNAME = "bolt";
 const char* BATCH2D_META_REGISTRYNAME = "batch2dindex";
+const char* MINIMAP_META_REGISTRYNAME = "minimapindex";
 uint64_t next_plugin_id = 1;
 
 enum {
     ENV_CALLBACK_SWAPBUFFERS,
     ENV_CALLBACK_2D,
     ENV_CALLBACK_3D,
+    ENV_CALLBACK_MINIMAP,
 };
 
 static int _bolt_api_init(lua_State* state);
@@ -46,7 +48,7 @@ void _bolt_plugin_init() {
     lua_newtable(state);
     lua_pushstring(state, "__index");
 
-    lua_createtable(state, 0, 8);
+    lua_createtable(state, 0, 10);
     API_ADD_SUB(vertexcount, batch2d)
     API_ADD_SUB(verticesperimage, batch2d)
     API_ADD_SUB(isminimap, batch2d)
@@ -60,6 +62,18 @@ void _bolt_plugin_init() {
     lua_pushcfunction(state, api_batch2d_vertexcolour);
     lua_settable(state, -3);
 
+    lua_settable(state, -3);
+    lua_settable(state, LUA_REGISTRYINDEX);
+
+    // create the metatable for all RenderMinimap objects
+    lua_pushstring(state, MINIMAP_META_REGISTRYNAME);
+    lua_newtable(state);
+    lua_pushstring(state, "__index");
+
+    lua_createtable(state, 0, 3);
+    API_ADD_SUB(angle, minimap)
+    API_ADD_SUB(scale, minimap)
+    API_ADD_SUB(position, minimap)
     lua_settable(state, -3);
     lua_settable(state, LUA_REGISTRYINDEX);
 
@@ -83,6 +97,7 @@ static int _bolt_api_init(lua_State* state) {
     API_ADD(checkversion)
     API_ADD(time)
     API_ADD(setcallback2d)
+    API_ADD(setcallbackminimap)
     API_ADD(setcallbackswapbuffers)
     return 1;
 }
@@ -211,6 +226,39 @@ void _bolt_plugin_handle_2d(struct RenderBatch2D* batch) {
     lua_pop(state, 2);
 }
 
+void _bolt_plugin_handle_minimap(struct RenderMinimap* batch) {
+    lua_pushlightuserdata(state, batch);
+    lua_getfield(state, LUA_REGISTRYINDEX, MINIMAP_META_REGISTRYNAME);
+    lua_setmetatable(state, -2);
+    int userdata_index = lua_gettop(state);
+    lua_getfield(state, LUA_REGISTRYINDEX, BOLT_REGISTRYNAME);
+    int key_index = lua_gettop(state);
+    lua_pushnil(state);
+    while (lua_next(state, key_index) != 0) {
+        if (!lua_isnumber(state, -2)) {
+            lua_pop(state, 1);
+            continue;
+        }
+        lua_pushnumber(state, ENV_CALLBACK_MINIMAP);
+        lua_gettable(state, -2);
+        if (!lua_isfunction(state, -1)) {
+            lua_pop(state, 2);
+            continue;
+        }
+        lua_pushvalue(state, userdata_index);
+        if (lua_pcall(state, 1, 0, 0)) {
+            const lua_Integer plugin_id = lua_tonumber(state, -3);
+            const char* e = lua_tolstring(state, -1, 0);
+            printf("plugin minimap error: %s\n", e);
+            lua_pop(state, 2);
+            _bolt_plugin_stop(plugin_id);
+        } else {
+            lua_pop(state, 1);
+        }
+    }
+    lua_pop(state, 2);
+}
+
 // Calls `error()` if arg count is incorrect
 static void _bolt_check_argc(lua_State* state, int expected_argc, const char* function_name) {
     char error_buffer[256];
@@ -271,6 +319,18 @@ static int api_setcallbackswapbuffers(lua_State* state) {
 static int api_setcallback2d(lua_State *state) {
     _bolt_check_argc(state, 1, "setcallback2d");
     lua_pushinteger(state, ENV_CALLBACK_2D);
+    if (lua_isfunction(state, 1)) {
+        lua_pushvalue(state, 1);
+    } else {
+        lua_pushnil(state);
+    }
+    lua_settable(state, LUA_GLOBALSINDEX);
+    return 0;
+}
+
+static int api_setcallbackminimap(lua_State* state) {
+    _bolt_check_argc(state, 1, "setcallbackminimap");
+    lua_pushinteger(state, ENV_CALLBACK_MINIMAP);
     if (lua_isfunction(state, 1)) {
         lua_pushvalue(state, 1);
     } else {
@@ -364,4 +424,26 @@ static int api_batch2d_vertexcolour(lua_State* state) {
     lua_pushnumber(state, colour[2]);
     lua_pushnumber(state, colour[3]);
     return 4;
+}
+
+static int api_minimap_angle(lua_State* state) {
+    _bolt_check_argc(state, 1, "minimap_angle");
+    struct RenderMinimap* render = lua_touserdata(state, 1);
+    lua_pushnumber(state, render->angle);
+    return 1;
+}
+
+static int api_minimap_scale(lua_State* state) {
+    _bolt_check_argc(state, 1, "minimap_scale");
+    struct RenderMinimap* render = lua_touserdata(state, 1);
+    lua_pushnumber(state, render->scale);
+    return 1;
+}
+
+static int api_minimap_position(lua_State* state) {
+    _bolt_check_argc(state, 1, "minimap_position");
+    struct RenderMinimap* render = lua_touserdata(state, 1);
+    lua_pushnumber(state, render->x);
+    lua_pushnumber(state, render->y);
+    return 2;
 }

@@ -30,6 +30,9 @@
  * will contain all the vertices for one whole model. However, each vertex still has its own
  * texture, and many models do have multiple textures. Plugins usually do not need to check every
  * single vertex - a single vertex with a known texture image on it would usually be sufficient.
+ *
+ * Most coordinates below are specifically "world coordinates", which work on a scale of 512 per
+ * tile. So if you move one tile to the east, your X in world coordinates increases by 512.
  */
 
 /// [-0, +2, -]
@@ -83,7 +86,7 @@ static int api_setcallbackswapbuffers(lua_State*);
 /// Passing a non-function (ideally `nil`) will restore the default setting, which is to have no
 /// handler for 2D rendering.
 ///
-/// Each time a batch of 2D images is rendered, the callback will be called with one param,  that
+/// Each time a batch of 2D images is rendered, the callback will be called with one param, that
 /// being a 2D batch object. All of the member functions of 2D batch objects can be found in this
 /// file, prefixed with with "api_batch2d_". The batch object and everything contained by it will
 /// become invalid as soon as the callback ends, so do not retain them.
@@ -92,6 +95,23 @@ static int api_setcallbackswapbuffers(lua_State*);
 /// be taken to determine as quickly as possible whether any image is of interest or not, such as
 /// by checking each image's width and height.
 static int api_setcallback2d(lua_State*);
+
+/// [-1, +0, -]
+/// Sets a callback function for rendering of a minimap background image, overwriting the previous
+/// callback, if any. Passing a non-function (ideally `nil`) will restore the default setting,
+/// which is to have no handler for minimap rendering.
+///
+/// The game renders chunks of 3D land to a large 2048x2048 texture and caches it until the player
+/// moves far enough away that it needs to be remade. A scaled and rotated section of this image is
+/// drawn to a smaller texture once per frame while the minimap is on screen. As such, plugins can
+/// expect to get a maximum of one minimap event per frame (i.e. between each SwapBuffers event.)
+///
+/// The callback will be called with one param, that being a minimap render object. All of the
+/// member functions of that object can be found in this file, prefixed with "api_minimap_".
+///
+/// The pixel contents cannot be examined directly, however it's possible to query the image angle,
+/// image scale (zoom level), and a rough estimate of the tile position it's centered on.
+static int api_setcallbackminimap(lua_State*);
 
 /// [-1, +1, -]
 /// Returns the number of vertices in a 2D batch object.
@@ -148,3 +168,24 @@ static int api_batch2d_vertexuv(lua_State*);
 ///
 /// Also aliased as "vertexcolor" to keep the Americans happy.
 static int api_batch2d_vertexcolour(lua_State*);
+
+/// [-1, +1, -]
+/// Returns the angle at which the minimap background image is being rendered, in radians.
+/// 
+/// The angle is 0 when upright (facing directly north), and increases counter-clockwise (note that
+/// turning the camera clockwise rotates the minimap counter-clockwise and vice versa.)
+static int api_minimap_angle(lua_State*);
+
+/// [-1, +1, -]
+/// Returns the scale at which the minimap background image is being rendered.
+///
+/// This indicates how far in or out the player has zoomed their minimap. It appears to be capped
+/// between roughly 0.5 and 3.5.
+static int api_minimap_scale(lua_State*);
+
+/// [-1, +2, -]
+/// Returns an estimate of the X and Y position the minimap is centered on, in world coordinates.
+/// 
+/// This is only a rough estimate and can move around a lot even while standing still. It usually
+/// doesn't vary by more than half a tile.
+static int api_minimap_position(lua_State*);
