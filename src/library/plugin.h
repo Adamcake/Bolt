@@ -37,6 +37,7 @@ struct RenderBatch2D {
     uint32_t atlas_height;
     uint32_t index_count;
     uint32_t vertices_per_icon;
+    uint8_t is_minimap;
     struct Vertex2DFunctions functions;
 };
 

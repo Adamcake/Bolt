@@ -49,7 +49,8 @@ void _bolt_plugin_init() {
     lua_createtable(state, 0, 8);
     API_ADD_SUB(vertexcount, batch2d)
     API_ADD_SUB(verticesperimage, batch2d)
-    API_ADD_SUB(screensize, batch2d)
+    API_ADD_SUB(isminimap, batch2d)
+    API_ADD_SUB(targetsize, batch2d)
     API_ADD_SUB(vertexxy, batch2d)
     API_ADD_SUB(vertexatlasxy, batch2d)
     API_ADD_SUB(vertexatlaswh, batch2d)
@@ -293,8 +294,15 @@ static int api_batch2d_verticesperimage(lua_State* state) {
     return 1;
 }
 
-static int api_batch2d_screensize(lua_State* state) {
-    _bolt_check_argc(state, 1, "batch2d_screensize");
+static int api_batch2d_isminimap(lua_State* state) {
+    _bolt_check_argc(state, 1, "batch2d_verticesperimage");
+    struct RenderBatch2D* batch = lua_touserdata(state, 1);
+    lua_pushboolean(state, batch->is_minimap);
+    return 1;
+}
+
+static int api_batch2d_targetsize(lua_State* state) {
+    _bolt_check_argc(state, 1, "batch2d_targetsize");
     struct RenderBatch2D* batch = lua_touserdata(state, 1);
     lua_pushinteger(state, batch->screen_width);
     lua_pushinteger(state, batch->screen_height);

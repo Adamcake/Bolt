@@ -106,12 +106,20 @@ static int api_batch2d_vertexcount(lua_State*);
 /// it's recommended to use this function instead of hard-coding the number 6.
 static int api_batch2d_verticesperimage(lua_State*);
 
+/// [-1, +1, -]
+/// Returns true if this render targets the minimap texture. There will usually be a maximum of one
+/// batch per frame targeting the minimap texture.
+static int api_batch2d_isminimap(lua_State*);
+
 /// [-1, +2, -]
 /// Returns the width and height of the target area of this render, in pixels.
 ///
-/// At 100% interface scaling, this will be the size of the inner area of the game window. At other
-/// scaling settings it will be proportionally smaller or larger than that area.
-static int api_batch2d_screensize(lua_State*);
+/// If `isminimap()` is true, this will be the size of the minimap texture - usually 256x256.
+///
+/// If `isminimap()` is false, this will be proprortional to the size of the inner area of the game
+/// window - that is, if the user has an interface scaling other than 100%, it will be larger or
+/// smaller than that area, proportionally.
+static int api_batch2d_targetsize(lua_State*);
 
 /// [-2, +2, -]
 /// Given an index of a vertex in a batch, returns its X and Y in screen coordinates.
