@@ -1,5 +1,4 @@
 #include "gl.h"
-#include "plugin.h"
 #include "rwlock.h"
 
 #include <math.h>
@@ -316,8 +315,8 @@ struct GLVertexArray* _bolt_context_get_vao(struct GLContext* c, unsigned int in
     return ret;
 }
 
-void _bolt_gl_plugin_drawelements_xy(const struct RenderBatch2D* batch, size_t index, void* userdata, int32_t* out) {
-    struct GLPluginDrawElementsUserData* data = userdata;
+void _bolt_gl_plugin_drawelements_vertex_xy(size_t index, void* userdata, int32_t* out) {
+    struct GLPluginDrawElementsVertex2DUserData* data = userdata;
     if (!_bolt_get_attr_binding_int(data->c, data->position, data->indices[index], 2, out)) {
         float pos[2];
         _bolt_get_attr_binding(data->c, data->position, data->indices[index], 2, pos);
@@ -326,8 +325,8 @@ void _bolt_gl_plugin_drawelements_xy(const struct RenderBatch2D* batch, size_t i
     }
 }
 
-void _bolt_gl_plugin_drawelements_atlas_xy(const struct RenderBatch2D* batch, size_t index, void* userdata, int32_t* out) {
-    struct GLPluginDrawElementsUserData* data = userdata;
+void _bolt_gl_plugin_drawelements_vertex_atlas_xy(size_t index, void* userdata, int32_t* out) {
+    struct GLPluginDrawElementsVertex2DUserData* data = userdata;
     float xy[2];
     _bolt_get_attr_binding(data->c, data->atlas_min, data->indices[index], 2, xy);
     // these are negative for some reason
@@ -335,8 +334,8 @@ void _bolt_gl_plugin_drawelements_atlas_xy(const struct RenderBatch2D* batch, si
     out[1] = -(int32_t)roundf(xy[1] * data->atlas->height);
 }
 
-void _bolt_gl_plugin_drawelements_atlas_wh(const struct RenderBatch2D* batch, size_t index, void* userdata, int32_t* out) {
-    struct GLPluginDrawElementsUserData* data = userdata;
+void _bolt_gl_plugin_drawelements_vertex_atlas_wh(size_t index, void* userdata, int32_t* out) {
+    struct GLPluginDrawElementsVertex2DUserData* data = userdata;
     float wh[2];
     _bolt_get_attr_binding(data->c, data->atlas_size, data->indices[index], 2, wh);
     // these are negative for some reason
@@ -344,16 +343,16 @@ void _bolt_gl_plugin_drawelements_atlas_wh(const struct RenderBatch2D* batch, si
     out[1] = -(int32_t)roundf(wh[1] * data->atlas->height);
 }
 
-void _bolt_gl_plugin_drawelements_uv(const struct RenderBatch2D* batch, size_t index, void* userdata, double* out) {
-    struct GLPluginDrawElementsUserData* data = userdata;
+void _bolt_gl_plugin_drawelements_vertex_uv(size_t index, void* userdata, double* out) {
+    struct GLPluginDrawElementsVertex2DUserData* data = userdata;
     float uv[2];
     _bolt_get_attr_binding(data->c, data->tex_uv, data->indices[index], 2, uv);
     out[0] = (double)uv[0];
     out[1] = (double)uv[1];
 }
 
-void _bolt_gl_plugin_drawelements_colour(const struct RenderBatch2D* batch, size_t index, void* userdata, double* out) {
-    struct GLPluginDrawElementsUserData* data = userdata;
+void _bolt_gl_plugin_drawelements_vertex_colour(size_t index, void* userdata, double* out) {
+    struct GLPluginDrawElementsVertex2DUserData* data = userdata;
     float colour[4];
     _bolt_get_attr_binding(data->c, data->colour, data->indices[index], 4, colour);
     // these are ABGR for some reason

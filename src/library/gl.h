@@ -7,7 +7,6 @@
 #include "../../modules/hashmap/hashmap.h"
 #include "rwlock.h"
 struct hashmap;
-struct RenderBatch2D;
 
 /* consts used from libgl */
 #define GL_TEXTURE 5890
@@ -161,7 +160,7 @@ uint32_t _bolt_binding_for_buffer(uint32_t);
 
 /* plugin library interop stuff */
 
-struct GLPluginDrawElementsUserData {
+struct GLPluginDrawElementsVertex2DUserData {
     struct GLContext* c;
     unsigned short* indices;
     struct GLTexture2D* atlas;
@@ -171,10 +170,10 @@ struct GLPluginDrawElementsUserData {
     struct GLAttrBinding* tex_uv;
     struct GLAttrBinding* colour;
 };
-void _bolt_gl_plugin_drawelements_xy(const struct RenderBatch2D*, size_t index, void* userdata, int32_t* out);
-void _bolt_gl_plugin_drawelements_atlas_xy(const struct RenderBatch2D*, size_t index, void* userdata, int32_t* out);
-void _bolt_gl_plugin_drawelements_atlas_wh(const struct RenderBatch2D*, size_t index, void* userdata, int32_t* out);
-void _bolt_gl_plugin_drawelements_uv(const struct RenderBatch2D*, size_t index, void* userdata, double* out);
-void _bolt_gl_plugin_drawelements_colour(const struct RenderBatch2D*, size_t index, void* userdata, double* out);
+void _bolt_gl_plugin_drawelements_vertex2d_xy(size_t index, void* userdata, int32_t* out);
+void _bolt_gl_plugin_drawelements_vertex2d_atlas_xy(size_t index, void* userdata, int32_t* out);
+void _bolt_gl_plugin_drawelements_vertex2d_atlas_wh(size_t index, void* userdata, int32_t* out);
+void _bolt_gl_plugin_drawelements_vertex2d_uv(size_t index, void* userdata, double* out);
+void _bolt_gl_plugin_drawelements_vertex2d_colour(size_t index, void* userdata, double* out);
 
 #endif

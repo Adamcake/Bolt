@@ -298,7 +298,7 @@ static int api_batch2d_vertexxy(lua_State* state) {
     struct RenderBatch2D* batch = lua_touserdata(state, 1);
     const lua_Integer index = lua_tointeger(state, 2);
     int32_t xy[2];
-    batch->functions.xy(batch, index - 1, batch->functions.userdata, xy);
+    batch->vertex_functions.xy(index - 1, batch->vertex_functions.userdata, xy);
     lua_pushinteger(state, xy[0]);
     lua_pushinteger(state, xy[1]);
     return 2;
@@ -309,7 +309,7 @@ static int api_batch2d_vertexatlasxy(lua_State* state) {
     struct RenderBatch2D* batch = lua_touserdata(state, 1);
     const lua_Integer index = lua_tointeger(state, 2);
     int32_t xy[2];
-    batch->functions.atlas_xy(batch, index - 1, batch->functions.userdata, xy);
+    batch->vertex_functions.atlas_xy(index - 1, batch->vertex_functions.userdata, xy);
     lua_pushinteger(state, xy[0]);
     lua_pushinteger(state, xy[1]);
     return 2;
@@ -320,7 +320,7 @@ static int api_batch2d_vertexatlaswh(lua_State* state) {
     struct RenderBatch2D* batch = lua_touserdata(state, 1);
     const lua_Integer index = lua_tointeger(state, 2);
     int32_t wh[2];
-    batch->functions.atlas_wh(batch, index - 1, batch->functions.userdata, wh);
+    batch->vertex_functions.atlas_wh(index - 1, batch->vertex_functions.userdata, wh);
     lua_pushinteger(state, wh[0]);
     lua_pushinteger(state, wh[1]);
     return 2;
@@ -331,7 +331,7 @@ static int api_batch2d_vertexuv(lua_State* state) {
     struct RenderBatch2D* batch = lua_touserdata(state, 1);
     const lua_Integer index = lua_tointeger(state, 2);
     double uv[2];
-    batch->functions.uv(batch, index - 1, batch->functions.userdata, uv);
+    batch->vertex_functions.uv(index - 1, batch->vertex_functions.userdata, uv);
     lua_pushnumber(state, uv[0]);
     lua_pushnumber(state, uv[1]);
     return 2;
@@ -342,7 +342,7 @@ static int api_batch2d_vertexcolour(lua_State* state) {
     struct RenderBatch2D* batch = lua_touserdata(state, 1);
     const lua_Integer index = lua_tointeger(state, 2);
     double colour[4];
-    batch->functions.colour(batch, index - 1, batch->functions.userdata, colour);
+    batch->vertex_functions.colour(index - 1, batch->vertex_functions.userdata, colour);
     lua_pushnumber(state, colour[0]);
     lua_pushnumber(state, colour[1]);
     lua_pushnumber(state, colour[2]);

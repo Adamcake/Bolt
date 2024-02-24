@@ -829,7 +829,7 @@ void glDrawElements(uint32_t mode, unsigned int count, uint32_t type, const void
                 _bolt_plugin_handle_minimap(&render);
             }
         } else {
-            struct GLPluginDrawElementsUserData userdata;
+            struct GLPluginDrawElementsVertex2DUserData userdata;
             userdata.c = c;
             userdata.indices = (unsigned short*)(element_buffer->data + (uintptr_t)indices_offset);
             userdata.atlas = c->texture_units[diffuse_map];
@@ -847,12 +847,12 @@ void glDrawElements(uint32_t mode, unsigned int count, uint32_t type, const void
             batch.index_count = count;
             batch.vertices_per_icon = 6;
             batch.is_minimap = tex_target && tex_target->is_minimap_tex_small;
-            batch.functions.userdata = &userdata;
-            batch.functions.xy = _bolt_gl_plugin_drawelements_xy;
-            batch.functions.atlas_xy = _bolt_gl_plugin_drawelements_atlas_xy;
-            batch.functions.atlas_wh = _bolt_gl_plugin_drawelements_atlas_wh;
-            batch.functions.uv = _bolt_gl_plugin_drawelements_uv;
-            batch.functions.colour = _bolt_gl_plugin_drawelements_colour;
+            batch.vertex_functions.userdata = &userdata;
+            batch.vertex_functions.xy = _bolt_gl_plugin_drawelements_vertex2d_xy;
+            batch.vertex_functions.atlas_xy = _bolt_gl_plugin_drawelements_vertex2d_atlas_xy;
+            batch.vertex_functions.atlas_wh = _bolt_gl_plugin_drawelements_vertex2d_atlas_wh;
+            batch.vertex_functions.uv = _bolt_gl_plugin_drawelements_vertex2d_uv;
+            batch.vertex_functions.colour = _bolt_gl_plugin_drawelements_vertex2d_colour;
 
             _bolt_plugin_handle_2d(&batch);
         }
