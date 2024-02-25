@@ -96,7 +96,7 @@ void _bolt_plugin_init() {
     lua_newtable(state);
     lua_pushstring(state, "__index");
 
-    lua_createtable(state, 0, 10);
+    lua_createtable(state, 0, 12);
     API_ADD_SUB(vertexcount, batch2d)
     API_ADD_SUB(verticesperimage, batch2d)
     API_ADD_SUB(isminimap, batch2d)
@@ -106,6 +106,8 @@ void _bolt_plugin_init() {
     API_ADD_SUB(vertexatlaswh, batch2d)
     API_ADD_SUB(vertexuv, batch2d)
     API_ADD_SUB(vertexcolour, batch2d)
+    API_ADD_SUB(textureid, batch2d)
+    API_ADD_SUB(texturecompare, batch2d)
     lua_pushstring(state, "vertexcolor");
     lua_pushcfunction(state, api_batch2d_vertexcolour);
     lua_settable(state, -3);
@@ -348,6 +350,36 @@ static int api_batch2d_vertexcolour(lua_State* state) {
     lua_pushnumber(state, colour[2]);
     lua_pushnumber(state, colour[3]);
     return 4;
+}
+
+static int api_batch2d_textureid(lua_State* state) {
+    _bolt_check_argc(state, 1, "batch2d_textureid");
+    struct RenderBatch2D* render = lua_touserdata(state, 1);
+    const size_t id = render->texture_functions.id(render->texture_functions.userdata);
+    lua_pushinteger(state, id);
+    return 1;
+}
+
+static int api_batch2d_texturesize(lua_State* state) {
+    _bolt_check_argc(state, 1, "batch2d_texturesize");
+    struct RenderBatch2D* render = lua_touserdata(state, 1);
+    size_t size[2];
+    render->texture_functions.size(render->texture_functions.userdata, size);
+    lua_pushinteger(state, size[0]);
+    lua_pushinteger(state, size[1]);
+    return 2;
+}
+
+static int api_batch2d_texturecompare(lua_State* state) {
+    _bolt_check_argc(state, 4, "batch2d_texturecompare");
+    struct RenderBatch2D* render = lua_touserdata(state, 1);
+    const size_t x = lua_tointeger(state, 2);
+    const size_t y = lua_tointeger(state, 3);
+    size_t data_len;
+    const unsigned char* data = (const unsigned char*)lua_tolstring(state, 4, &data_len);
+    const uint8_t match = render->texture_functions.compare(render->texture_functions.userdata, x, y, data_len, data);
+    lua_pushboolean(state, match);
+    return 1;
 }
 
 static int api_minimap_angle(lua_State* state) {

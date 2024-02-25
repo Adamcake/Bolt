@@ -315,7 +315,7 @@ struct GLVertexArray* _bolt_context_get_vao(struct GLContext* c, unsigned int in
     return ret;
 }
 
-void _bolt_gl_plugin_drawelements_vertex_xy(size_t index, void* userdata, int32_t* out) {
+void _bolt_gl_plugin_drawelements_vertex2d_xy(size_t index, void* userdata, int32_t* out) {
     struct GLPluginDrawElementsVertex2DUserData* data = userdata;
     if (!_bolt_get_attr_binding_int(data->c, data->position, data->indices[index], 2, out)) {
         float pos[2];
@@ -325,16 +325,15 @@ void _bolt_gl_plugin_drawelements_vertex_xy(size_t index, void* userdata, int32_
     }
 }
 
-void _bolt_gl_plugin_drawelements_vertex_atlas_xy(size_t index, void* userdata, int32_t* out) {
+void _bolt_gl_plugin_drawelements_vertex2d_atlas_xy(size_t index, void* userdata, int32_t* out) {
     struct GLPluginDrawElementsVertex2DUserData* data = userdata;
     float xy[2];
     _bolt_get_attr_binding(data->c, data->atlas_min, data->indices[index], 2, xy);
-    // these are negative for some reason
-    out[0] = -(int32_t)roundf(xy[0] * data->atlas->width);
-    out[1] = -(int32_t)roundf(xy[1] * data->atlas->height);
+    out[0] = (int32_t)roundf(xy[0] * data->atlas->width);
+    out[1] = (int32_t)roundf(xy[1] * data->atlas->height);
 }
 
-void _bolt_gl_plugin_drawelements_vertex_atlas_wh(size_t index, void* userdata, int32_t* out) {
+void _bolt_gl_plugin_drawelements_vertex2d_atlas_wh(size_t index, void* userdata, int32_t* out) {
     struct GLPluginDrawElementsVertex2DUserData* data = userdata;
     float wh[2];
     _bolt_get_attr_binding(data->c, data->atlas_size, data->indices[index], 2, wh);
@@ -343,7 +342,7 @@ void _bolt_gl_plugin_drawelements_vertex_atlas_wh(size_t index, void* userdata, 
     out[1] = -(int32_t)roundf(wh[1] * data->atlas->height);
 }
 
-void _bolt_gl_plugin_drawelements_vertex_uv(size_t index, void* userdata, double* out) {
+void _bolt_gl_plugin_drawelements_vertex2d_uv(size_t index, void* userdata, double* out) {
     struct GLPluginDrawElementsVertex2DUserData* data = userdata;
     float uv[2];
     _bolt_get_attr_binding(data->c, data->tex_uv, data->indices[index], 2, uv);
@@ -351,7 +350,7 @@ void _bolt_gl_plugin_drawelements_vertex_uv(size_t index, void* userdata, double
     out[1] = (double)uv[1];
 }
 
-void _bolt_gl_plugin_drawelements_vertex_colour(size_t index, void* userdata, double* out) {
+void _bolt_gl_plugin_drawelements_vertex2d_colour(size_t index, void* userdata, double* out) {
     struct GLPluginDrawElementsVertex2DUserData* data = userdata;
     float colour[4];
     _bolt_get_attr_binding(data->c, data->colour, data->indices[index], 4, colour);
@@ -360,6 +359,31 @@ void _bolt_gl_plugin_drawelements_vertex_colour(size_t index, void* userdata, do
     out[1] = (double)colour[2];
     out[2] = (double)colour[1];
     out[3] = (double)colour[0];
+}
+
+size_t _bolt_gl_plugin_texture_id(void* userdata) {
+    const struct GLPluginTextureUserData* data = userdata;
+    return data->tex->id;
+}
+
+void _bolt_gl_plugin_texture_size(void* userdata, size_t* out) {
+    const struct GLPluginTextureUserData* data = userdata;
+    out[0] = data->tex->width;
+    out[1] = data->tex->height;
+}
+
+uint8_t _bolt_gl_plugin_texture_compare(void* userdata, size_t x, size_t y, size_t len, const unsigned char* data) {
+    const struct GLPluginTextureUserData* data_ = userdata;
+    const struct GLTexture2D* tex = data_->tex;
+    const size_t start_offset = (tex->width * y * 4) + (x * 4);
+    if (start_offset + len > tex->width * tex->height * 4) {
+        printf(
+            "warning: out-of-bounds texture compare attempt: tried to read %lu bytes at %lu,%lu of texture id=%u w,h=%u,%u\n",
+            len, x, y, tex->id, tex->width, tex->height
+        );
+        return 0;
+    }
+    return !memcmp(tex->data + start_offset, data, len);
 }
 
 //void _bolt_mul_vec4_mat4(const float x, const float y, const float z, const float w, const float* mat4, float* out_vec4) {

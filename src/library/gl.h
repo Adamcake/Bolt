@@ -176,4 +176,11 @@ void _bolt_gl_plugin_drawelements_vertex2d_atlas_wh(size_t index, void* userdata
 void _bolt_gl_plugin_drawelements_vertex2d_uv(size_t index, void* userdata, double* out);
 void _bolt_gl_plugin_drawelements_vertex2d_colour(size_t index, void* userdata, double* out);
 
+struct GLPluginTextureUserData {
+    struct GLTexture2D* tex;
+};
+size_t _bolt_gl_plugin_texture_id(void* userdata);
+void _bolt_gl_plugin_texture_size(void* userdata, size_t* out);
+uint8_t _bolt_gl_plugin_texture_compare(void* userdata, size_t x, size_t y, size_t len, const unsigned char* data);
+
 #endif

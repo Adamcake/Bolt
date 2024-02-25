@@ -6,9 +6,9 @@
 
 struct RenderBatch2D;
 
-/// Struct containing "vtable" callback information for 2D vertices.
-/// Functions will be called with three params: the index, the specified userdata, and an output
-/// pointer, which must be able to index the returned number of items.
+/// Struct containing "vtable" callback information for RenderBatch2D's list of vertices.
+/// Unless stated otherwise, functions will be called with three params: the index, the specified
+/// userdata, and an output pointer, which must be able to index the returned number of items.
 struct Vertex2DFunctions {
     /// Userdata which will be passed to the functions contained in this struct.
     void* userdata;
@@ -30,15 +30,34 @@ struct Vertex2DFunctions {
     void (*colour)(size_t index, void* userdata, double* out);
 };
 
+/// Struct containing "vtable" callback information for textures.
+/// Note that in the context of Bolt plugins, textures are always two-dimensional.
+struct TextureFunctions {
+    /// Userdata which will be passed to the functions contained in this struct.
+    void* userdata;
+
+    /// Returns the ID for the associated texture object.
+    size_t (*id)(void* userdata);
+
+    /// Returns the size of this texture atlas in pixels.
+    void (*size)(void* userdata, size_t* out);
+
+    /// Compares a section of this texture to some RGBA bytes using `memcmp`. Returns true if the
+    /// section matches exactly, otherwise false.
+    ///
+    /// Note that changing the in-game "texture compression" setting will change the contents of
+    /// the texture for some images and therefore change the result of this comparison.
+    uint8_t (*compare)(void* userdata, size_t x, size_t y, size_t len, const unsigned char* data);
+};
+
 struct RenderBatch2D {
     uint32_t screen_width;
     uint32_t screen_height;
-    uint32_t atlas_width;
-    uint32_t atlas_height;
     uint32_t index_count;
     uint32_t vertices_per_icon;
     uint8_t is_minimap;
     struct Vertex2DFunctions vertex_functions;
+    struct TextureFunctions texture_functions;
 };
 
 struct RenderMinimapEvent {

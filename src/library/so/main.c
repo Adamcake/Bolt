@@ -763,7 +763,7 @@ void glDrawElements(uint32_t mode, unsigned int count, uint32_t type, const void
         real_glGetUniformfv(c->bound_program->id, c->bound_program->loc_uProjectionMatrix, projection_matrix);
         int draw_tex;
         real_glGetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
-        const struct GLTexture2D* tex = c->texture_units[diffuse_map];
+        struct GLTexture2D* tex = c->texture_units[diffuse_map];
         struct GLTexture2D* tex_target = _bolt_context_get_texture(c, draw_tex);
 
         if (tex->is_minimap_tex_big) {
@@ -829,30 +829,35 @@ void glDrawElements(uint32_t mode, unsigned int count, uint32_t type, const void
                 _bolt_plugin_handle_minimap(&render);
             }
         } else {
-            struct GLPluginDrawElementsVertex2DUserData userdata;
-            userdata.c = c;
-            userdata.indices = (unsigned short*)(element_buffer->data + (uintptr_t)indices_offset);
-            userdata.atlas = c->texture_units[diffuse_map];
-            userdata.position = &attributes[c->bound_program->loc_aVertexPosition2D];
-            userdata.atlas_min = &attributes[c->bound_program->loc_aTextureUVAtlasMin];
-            userdata.atlas_size = &attributes[c->bound_program->loc_aTextureUVAtlasExtents];
-            userdata.tex_uv = &attributes[c->bound_program->loc_aTextureUV];
-            userdata.colour = &attributes[c->bound_program->loc_aVertexColour];
+            struct GLPluginDrawElementsVertex2DUserData vertex_userdata;
+            vertex_userdata.c = c;
+            vertex_userdata.indices = (unsigned short*)(element_buffer->data + (uintptr_t)indices_offset);
+            vertex_userdata.atlas = c->texture_units[diffuse_map];
+            vertex_userdata.position = &attributes[c->bound_program->loc_aVertexPosition2D];
+            vertex_userdata.atlas_min = &attributes[c->bound_program->loc_aTextureUVAtlasMin];
+            vertex_userdata.atlas_size = &attributes[c->bound_program->loc_aTextureUVAtlasExtents];
+            vertex_userdata.tex_uv = &attributes[c->bound_program->loc_aTextureUV];
+            vertex_userdata.colour = &attributes[c->bound_program->loc_aVertexColour];
+
+            struct GLPluginTextureUserData tex_userdata;
+            tex_userdata.tex = tex;
 
             struct RenderBatch2D batch;
             batch.screen_width = roundf(2.0 / projection_matrix[0]);
             batch.screen_height = roundf(2.0 / projection_matrix[5]);
-            batch.atlas_width = userdata.atlas->width;
-            batch.atlas_height = userdata.atlas->height;
             batch.index_count = count;
             batch.vertices_per_icon = 6;
             batch.is_minimap = tex_target && tex_target->is_minimap_tex_small;
-            batch.vertex_functions.userdata = &userdata;
+            batch.vertex_functions.userdata = &vertex_userdata;
             batch.vertex_functions.xy = _bolt_gl_plugin_drawelements_vertex2d_xy;
             batch.vertex_functions.atlas_xy = _bolt_gl_plugin_drawelements_vertex2d_atlas_xy;
             batch.vertex_functions.atlas_wh = _bolt_gl_plugin_drawelements_vertex2d_atlas_wh;
             batch.vertex_functions.uv = _bolt_gl_plugin_drawelements_vertex2d_uv;
             batch.vertex_functions.colour = _bolt_gl_plugin_drawelements_vertex2d_colour;
+            batch.texture_functions.userdata = &tex_userdata;
+            batch.texture_functions.id = _bolt_gl_plugin_texture_id;
+            batch.texture_functions.size = _bolt_gl_plugin_texture_size;
+            batch.texture_functions.compare = _bolt_gl_plugin_texture_compare;
 
             _bolt_plugin_handle_2d(&batch);
         }
