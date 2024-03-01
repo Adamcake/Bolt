@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "x.h"
 #include "../plugin.h"
 #include "../gl.h"
 
@@ -30,6 +31,29 @@ pthread_mutex_t egl_lock;
 size_t egl_init_count = 0;
 uintptr_t egl_main_context = 0;
 uint8_t egl_main_context_destroy_pending = 0;
+
+xcb_window_t main_window_xcb = 0;
+uint32_t main_window_width = 0;
+uint32_t main_window_height = 0;
+unsigned int framebuffer2d;
+unsigned int renderbuffer2d;
+uint32_t framebuffer2d_width = 0;
+uint32_t framebuffer2d_height = 0;
+uint8_t framebuffer2d_inited = 0;
+unsigned int program_direct;
+unsigned int program_direct_sampler;
+unsigned int buffer_vertices_square;
+
+// "direct" program is basically a blit but with transparency
+const char* program_direct_vs = "#version 330 core\n"
+"layout (location = 0) in vec2 aPos;\n"
+"out vec2 vPos;\n"
+"void main(){gl_Position=vec4(aPos.x,aPos.y,0.0,1.0); vPos=aPos;}\n";
+const char* program_direct_fs = "#version 330 core\n"
+"in vec2 vPos;\n"
+"out vec4 col;\n"
+"uniform sampler2D tex;"
+"void main(){col=texture(tex,vPos);}\n";
 
 const char* libc_name = "libc.so.6";
 const char* libegl_name = "libEGL.so.1";
@@ -54,8 +78,10 @@ unsigned int (*real_eglInitialize)(void*, void*, void*) = NULL;
 void* (*real_eglCreateContext)(void*, void*, void*, const void*) = NULL;
 unsigned int (*real_eglTerminate)(void*) = NULL;
 
-void* (*real_xcb_poll_for_event)(void*) = NULL;
-void* (*real_xcb_wait_for_event)(void*) = NULL;
+xcb_generic_event_t* (*real_xcb_poll_for_event)(xcb_connection_t*) = NULL;
+xcb_generic_event_t* (*real_xcb_poll_for_queued_event)(xcb_connection_t*) = NULL;
+xcb_generic_event_t* (*real_xcb_wait_for_event)(xcb_connection_t*) = NULL;
+xcb_get_geometry_reply_t* (*real_xcb_get_geometry_reply)(xcb_connection_t*, xcb_get_geometry_cookie_t, xcb_generic_error_t**) = NULL;
 
 /* opengl functions that are usually queried by eglGetProcAddress */
 unsigned int (*real_glCreateProgram)() = NULL;
@@ -66,7 +92,7 @@ void (*real_glGetUniformiv)(unsigned int, int, int*) = NULL;
 void (*real_glLinkProgram)(unsigned int) = NULL;
 void (*real_glUseProgram)(unsigned int) = NULL;
 void (*real_glTexStorage2D)(uint32_t, int, uint32_t, unsigned int, unsigned int) = NULL;
-void (*real_glUniform1i)(int, int);
+void (*real_glUniform1i)(int, int) = NULL;
 void (*real_glUniformMatrix4fv)(int, unsigned int, uint8_t, const float*) = NULL;
 void (*real_glVertexAttribPointer)(unsigned int, int, uint32_t, uint8_t, unsigned int, const void*) = NULL;
 void (*real_glGenBuffers)(uint32_t, unsigned int*) = NULL;
@@ -75,6 +101,7 @@ void (*real_glBufferData)(uint32_t, uintptr_t, const void*, uint32_t) = NULL;
 void (*real_glDeleteBuffers)(unsigned int, const unsigned int*) = NULL;
 void (*real_glBindFramebuffer)(uint32_t, unsigned int) = NULL;
 void (*real_glFramebufferTextureLayer)(uint32_t, uint32_t, unsigned int, int, int) = NULL;
+void (*real_glFramebufferTexture)(uint32_t, uint32_t, unsigned int, int) = NULL;
 void (*real_glCompressedTexSubImage2D)(uint32_t, int, int, int, unsigned int, unsigned int, uint32_t, unsigned int, const void*) = NULL;
 void (*real_glCopyImageSubData)(unsigned int, uint32_t, int, int, int, int, unsigned int, uint32_t, int, int, int, int, unsigned int, unsigned int, unsigned int) = NULL;
 void (*real_glEnableVertexAttribArray)(unsigned int) = NULL;
@@ -98,6 +125,8 @@ void (*real_glGetActiveUniformBlockiv)(unsigned int, unsigned int, uint32_t, int
 void (*real_glGetIntegeri_v)(uint32_t, unsigned int, int*) = NULL;
 void (*real_glBlitFramebuffer)(int, int, int, int, int, int, int, int, uint32_t, uint32_t) = NULL;
 void (*real_glGetFramebufferAttachmentParameteriv)(uint32_t, uint32_t, uint32_t, int*) = NULL;
+void (*real_glGenFramebuffers)(uint32_t, unsigned int*) = NULL;
+void (*real_glDeleteFramebuffers)(uint32_t, unsigned int*) = NULL;
 
 /* opengl functions that are usually loaded dynamically from libGL.so */
 void (*real_glDrawArrays)(uint32_t, int, unsigned int) = NULL;
@@ -105,6 +134,8 @@ void (*real_glGenTextures)(uint32_t, unsigned int*) = NULL;
 void (*real_glBindTexture)(uint32_t, unsigned int) = NULL;
 void (*real_glTexSubImage2D)(uint32_t, int, int, int, unsigned int, unsigned int, uint32_t, uint32_t, const void*) = NULL;
 void (*real_glDeleteTextures)(unsigned int, const unsigned int*) = NULL;
+void (*real_glClear)(uint32_t) = NULL;
+void (*real_glClearColor)(float, float, float, float) = NULL;
 uint32_t (*real_glGetError)() = NULL;
 void (*real_glFlush)() = NULL;
 
@@ -242,6 +273,10 @@ void _bolt_init_libgl(unsigned long addr, const Elf32_Word* gnu_hash_table, cons
     if (sym) real_glTexSubImage2D = sym->st_value + libgl_addr;
     sym = _bolt_lookup_symbol("glDeleteTextures", gnu_hash_table, hash_table, string_table, symbol_table);
     if (sym) real_glDeleteTextures = sym->st_value + libgl_addr;
+    sym = _bolt_lookup_symbol("glClear", gnu_hash_table, hash_table, string_table, symbol_table);
+    if (sym) real_glClear = sym->st_value + libgl_addr;
+    sym = _bolt_lookup_symbol("glClearColor", gnu_hash_table, hash_table, string_table, symbol_table);
+    if (sym) real_glClearColor = sym->st_value + libgl_addr;
     sym = _bolt_lookup_symbol("glGetError", gnu_hash_table, hash_table, string_table, symbol_table);
     if (sym) real_glGetError = sym->st_value + libgl_addr;
     sym = _bolt_lookup_symbol("glFlush", gnu_hash_table, hash_table, string_table, symbol_table);
@@ -252,8 +287,12 @@ void _bolt_init_libxcb(unsigned long addr, const Elf32_Word* gnu_hash_table, con
     libxcb_addr = (void*)addr;
     const ElfW(Sym)* sym = _bolt_lookup_symbol("xcb_poll_for_event", gnu_hash_table, hash_table, string_table, symbol_table);
     if (sym) real_xcb_poll_for_event = sym->st_value + libxcb_addr;
+    sym = _bolt_lookup_symbol("xcb_poll_for_queued_event", gnu_hash_table, hash_table, string_table, symbol_table);
+    if (sym) real_xcb_poll_for_queued_event = sym->st_value + libxcb_addr;
     sym = _bolt_lookup_symbol("xcb_wait_for_event", gnu_hash_table, hash_table, string_table, symbol_table);
     if (sym) real_xcb_wait_for_event = sym->st_value + libxcb_addr;
+    sym = _bolt_lookup_symbol("xcb_get_geometry_reply", gnu_hash_table, hash_table, string_table, symbol_table);
+    if (sym) real_xcb_get_geometry_reply = sym->st_value + libxcb_addr;
 }
 
 int _bolt_dl_iterate_callback(struct dl_phdr_info* info, size_t size, void* args) {
@@ -305,6 +344,38 @@ void _bolt_init_functions() {
     pthread_mutex_init(&egl_lock, NULL);
     dl_iterate_phdr(_bolt_dl_iterate_callback, NULL);
     inited = 1;
+}
+
+void _bolt_init_opengl() {
+    unsigned int (*glCreateShader)(uint32_t) = real_eglGetProcAddress("glCreateShader");
+    void (*glShaderSource)(unsigned int, uint32_t, const char**, const int*) = real_eglGetProcAddress("glShaderSource");
+    void (*glCompileShader)(unsigned int) = real_eglGetProcAddress("glCompileShader");
+    void (*glAttachShader)(unsigned int, unsigned int) = real_eglGetProcAddress("glAttachShader");
+    void (*glDeleteShader)(unsigned int) = real_eglGetProcAddress("glDeleteShader");
+    unsigned int (*glCreateProgram)() = real_eglGetProcAddress("glCreateProgram");
+    void (*glLinkProgram)(unsigned int) = real_eglGetProcAddress("glLinkProgram");
+    void (*glGenBuffers)(uint32_t, unsigned int*) = real_eglGetProcAddress("glGenBuffers");
+    void (*glBindBuffer)(uint32_t, unsigned int) = real_eglGetProcAddress("glBindBuffer");
+    void (*glBufferData)(uint32_t, uintptr_t, const void*, uint32_t) = real_eglGetProcAddress("glBufferData");
+    int (*glGetUniformLocation)(unsigned int, const char*) = real_eglGetProcAddress("glGetUniformLocation");
+
+    unsigned int direct_vs = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(direct_vs, 1, &program_direct_vs, NULL);
+    glCompileShader(direct_vs);
+    unsigned int direct_fs = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(direct_fs, 1, &program_direct_fs, NULL);
+    glCompileShader(direct_fs);
+    program_direct = glCreateProgram();
+    glAttachShader(program_direct, direct_vs);
+    glAttachShader(program_direct, direct_fs);
+    glLinkProgram(program_direct);
+    program_direct_sampler = glGetUniformLocation(program_direct, "tex");
+    glGenBuffers(1, &buffer_vertices_square);
+    glBindBuffer(GL_ARRAY_BUFFER, buffer_vertices_square);
+    const float square[] = {-1.0f, -1.0f, 1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 1.0f};
+    glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 8, square, GL_STATIC_DRAW);
+    glDeleteShader(direct_vs);
+    glDeleteShader(direct_fs);
 }
 
 unsigned int _bolt_glCreateProgram() {
@@ -469,6 +540,10 @@ void _bolt_glTexStorage2D(uint32_t target, int levels, uint32_t internalformat, 
     LOG("glTexStorage2D end\n");
 }
 
+void _bolt_glUniform1i(int location, int v0) {
+    real_glUniform1i(location, v0);
+}
+
 void _bolt_glVertexAttribPointer(unsigned int index, int size, uint32_t type, uint8_t normalised, unsigned int stride, const void* pointer) {
     LOG("glVertexAttribPointer\n");
     real_glVertexAttribPointer(index, size, type, normalised, stride, pointer);
@@ -552,6 +627,12 @@ void _bolt_glFramebufferTextureLayer(uint32_t target, uint32_t attachment, unsig
     LOG("glFramebufferTextureLayer\n");
     real_glFramebufferTextureLayer(target, attachment, texture, level, layer);
     LOG("glFramebufferTextureLayer end\n");
+}
+
+void _bolt_glFramebufferTexture(uint32_t target, uint32_t attachment, unsigned int texture, int level) {
+    LOG("glFramebufferTexture\n");
+    real_glFramebufferTexture(target, attachment, texture, level);
+    LOG("glFramebufferTexture end\n");
 }
 
 void _bolt_glCompressedTexSubImage2D(uint32_t target, int level, int xoffset, int yoffset, unsigned int width, unsigned int height, uint32_t format, unsigned int imageSize, const void* data) {
@@ -1038,6 +1119,14 @@ void _bolt_glGetFramebufferAttachmentParameteriv(uint32_t target, uint32_t attac
     real_glGetFramebufferAttachmentParameteriv(target, attachment, pname, params);
 }
 
+void _bolt_glGenFramebuffers(uint32_t n, unsigned int* ids) {
+    real_glGenFramebuffers(n, ids);
+}
+
+void _bolt_glDeleteFramebuffers(uint32_t n, unsigned int* ids) {
+    real_glDeleteFramebuffers(n, ids);
+}
+
 void _bolt_glDeleteVertexArrays(uint32_t n, const unsigned int* arrays) {
     LOG("glDeleteVertexArrays\n");
     real_glDeleteVertexArrays(n, arrays);
@@ -1139,6 +1228,14 @@ void glDeleteTextures(unsigned int n, const unsigned int* textures) {
     LOG("glDeleteTextures end\n");
 }
 
+void glClear(uint32_t mask) {
+    real_glClear(mask);
+}
+
+void glClearColor(float red, float green, float blue, float alpha) {
+    real_glClearColor(red, green, blue, alpha);
+}
+
 uint32_t glGetError() {
     LOG("glGetError\n");
     uint32_t ret = real_glGetError();
@@ -1178,6 +1275,7 @@ void* eglGetProcAddress(const char* name) {
     PROC_ADDRESS_MAP(glLinkProgram)
     PROC_ADDRESS_MAP(glUseProgram)
     PROC_ADDRESS_MAP(glTexStorage2D)
+    PROC_ADDRESS_MAP(glUniform1i)
     PROC_ADDRESS_MAP(glVertexAttribPointer)
     PROC_ADDRESS_MAP(glGenBuffers)
     PROC_ADDRESS_MAP(glBindBuffer)
@@ -1185,6 +1283,7 @@ void* eglGetProcAddress(const char* name) {
     PROC_ADDRESS_MAP(glDeleteBuffers)
     PROC_ADDRESS_MAP(glBindFramebuffer)
     PROC_ADDRESS_MAP(glFramebufferTextureLayer)
+    PROC_ADDRESS_MAP(glFramebufferTexture)
     PROC_ADDRESS_MAP(glCompressedTexSubImage2D)
     PROC_ADDRESS_MAP(glCopyImageSubData)
     PROC_ADDRESS_MAP(glEnableVertexAttribArray)
@@ -1207,6 +1306,8 @@ void* eglGetProcAddress(const char* name) {
     PROC_ADDRESS_MAP(glGetIntegeri_v)
     PROC_ADDRESS_MAP(glBlitFramebuffer)
     PROC_ADDRESS_MAP(glGetFramebufferAttachmentParameteriv)
+    PROC_ADDRESS_MAP(glGenFramebuffers)
+    PROC_ADDRESS_MAP(glDeleteFramebuffers)
 #undef PROC_ADDRESS_MAP_EGL
 #undef PROC_ADDRESS_MAP
     return real_eglGetProcAddress(name);
@@ -1214,8 +1315,57 @@ void* eglGetProcAddress(const char* name) {
 
 unsigned int eglSwapBuffers(void* display, void* surface) {
     LOG("eglSwapBuffers\n");
+    struct GLContext* c = _bolt_context();
+    if (_bolt_plugin_is_inited()) {
+        _bolt_plugin_handle_swapbuffers(NULL);
+        int texture_unit;
+        real_glGetIntegerv(GL_ACTIVE_TEXTURE, &texture_unit);
+        texture_unit -= GL_TEXTURE0;
+        real_glClearColor(0.0, 0.0, 0.0, 0.0);
+        if (framebuffer2d_width != main_window_width || framebuffer2d_height != main_window_height) {
+            unsigned int new_fbid, new_rbid;
+            real_glGenFramebuffers(1, &new_fbid);
+            real_glGenTextures(1, &new_rbid);
+            real_glBindFramebuffer(GL_DRAW_FRAMEBUFFER, new_fbid);
+            real_glBindTexture(GL_TEXTURE_2D, new_rbid);
+            real_glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, main_window_width, main_window_height);
+            real_glFramebufferTexture(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, new_rbid, 0);
+            real_glClear(GL_COLOR_BUFFER_BIT);
+            if (framebuffer2d_inited) {
+                real_glBindFramebuffer(GL_READ_FRAMEBUFFER, framebuffer2d);
+                real_glBlitFramebuffer(0, 0, framebuffer2d_width, framebuffer2d_height, 0, 0, framebuffer2d_width, framebuffer2d_height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+                real_glDeleteFramebuffers(1, &framebuffer2d);
+                real_glDeleteTextures(1, &renderbuffer2d);
+            } else {
+                framebuffer2d_inited = 1;
+            }
+            framebuffer2d = new_fbid;
+            renderbuffer2d = new_rbid;
+            framebuffer2d_width = main_window_width;
+            framebuffer2d_height = main_window_height;
+        }
+        if (framebuffer2d_inited && c->bound_program) {
+            int array_binding;
+            real_glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &array_binding);
+            real_glUseProgram(program_direct);
+            real_glBindTexture(GL_TEXTURE_2D, renderbuffer2d);
+            real_glBindBuffer(GL_ARRAY_BUFFER, buffer_vertices_square);
+            real_glEnableVertexAttribArray(0);
+            real_glVertexAttribPointer(0, 2, GL_FLOAT, 0, 2 * sizeof(float), NULL);
+            real_glUniform1i(program_direct_sampler, texture_unit);
+            real_glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+            real_glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+            real_glBindFramebuffer(GL_DRAW_FRAMEBUFFER, framebuffer2d);
+            real_glClear(GL_COLOR_BUFFER_BIT);
+            real_glUseProgram(c->bound_program->id);
+            real_glBindBuffer(GL_ARRAY_BUFFER, array_binding);
+        }
+        const struct GLTexture2D* original_tex = c->texture_units[texture_unit];
+        real_glBindTexture(GL_TEXTURE_2D, original_tex ? original_tex->id : 0);
+        real_glBindFramebuffer(GL_READ_FRAMEBUFFER, c->current_read_framebuffer);
+        real_glBindFramebuffer(GL_DRAW_FRAMEBUFFER, c->current_draw_framebuffer);
+    }
     unsigned int ret = real_eglSwapBuffers(display, surface);
-    if (_bolt_plugin_is_inited()) _bolt_plugin_handle_swapbuffers(NULL);
     LOG("eglSwapBuffers end (returned %u)\n", ret);
     return ret;
 }
@@ -1242,6 +1392,11 @@ unsigned int eglDestroyContext(void* display, void* context) {
             _bolt_destroy_context(context);
         } else {
             egl_main_context_destroy_pending = 1;
+            if (framebuffer2d_inited) {
+                real_glDeleteFramebuffers(1, &framebuffer2d);
+                real_glDeleteTextures(1, &renderbuffer2d);
+                framebuffer2d_inited = 0;
+            }
         }
         if (_bolt_context_count() == 1 && egl_main_context_destroy_pending) {
             do_destroy_main = 1;
@@ -1285,6 +1440,9 @@ void* eglCreateContext(void* display, void* config, void* share_context, const v
     pthread_mutex_lock(&egl_lock);
     if (ret && !share_context) {
         if (egl_init_count > 0) {
+            real_eglMakeCurrent(display, NULL, NULL, ret);
+            _bolt_init_opengl();
+            real_eglMakeCurrent(display, NULL, NULL, 0);
             _bolt_plugin_init();
             _bolt_plugin_add(lua);
         }
@@ -1306,12 +1464,55 @@ unsigned int eglTerminate(void* display) {
     return 1;
 }
 
-void* xcb_poll_for_event(void* c) {
-    return real_xcb_poll_for_event(c);
+// returns true if the event should be passed on to the window, false if not
+uint8_t _bolt_handle_xcb_event(xcb_connection_t* c, const xcb_generic_event_t* const e) {
+    if (!e) return true;
+    if (!main_window_xcb) {
+        if (e->response_type == XCB_MAP_NOTIFY) {
+            const xcb_map_notify_event_t* const event = (const xcb_map_notify_event_t* const)e;
+            main_window_xcb = event->window;
+            printf("new main window %u\n", event->window);
+        }
+        return true;
+    }
+
+    switch (e->response_type) {
+        // todo: handle mouse and keyboard events for main window
+    }
+    return true;
 }
 
-void* xcb_wait_for_event(void* c) {
-    return real_xcb_wait_for_event(c);
+xcb_generic_event_t* xcb_poll_for_event(xcb_connection_t* c) {
+    xcb_generic_event_t* ret = real_xcb_poll_for_event(c);
+    while (true) {
+        if (_bolt_handle_xcb_event(c, ret)) return ret;
+        ret = real_xcb_poll_for_queued_event(c);
+    }
+}
+
+xcb_generic_event_t* xcb_poll_for_queued_event(xcb_connection_t* c) {
+    xcb_generic_event_t* ret;
+    while (true) {
+        ret = real_xcb_poll_for_queued_event(c);
+        if (_bolt_handle_xcb_event(c, ret)) return ret;
+    }
+}
+
+xcb_generic_event_t* xcb_wait_for_event(xcb_connection_t* c) {
+    xcb_generic_event_t* ret;
+    while (true) {
+        ret = real_xcb_wait_for_event(c);
+        if (_bolt_handle_xcb_event(c, ret)) return ret;
+    }
+}
+
+xcb_get_geometry_reply_t* xcb_get_geometry_reply(xcb_connection_t* c, xcb_get_geometry_cookie_t cookie, xcb_generic_error_t** e) {
+    // currently the game appears to call this twice per frame for the main window and never for
+    // any other window, so we can assume the result here applies to the main window.
+    xcb_get_geometry_reply_t* ret = real_xcb_get_geometry_reply(c, cookie, e);
+    main_window_width = ret->width;
+    main_window_height = ret->height;
+    return ret;
 }
 
 void* dlopen(const char*, int);
@@ -1341,11 +1542,15 @@ void* _bolt_dl_lookup(void* handle, const char* symbol) {
         if (strcmp(symbol, "glBindTexture") == 0) return glBindTexture;
         if (strcmp(symbol, "glTexSubImage2D") == 0) return glTexSubImage2D;
         if (strcmp(symbol, "glDeleteTextures") == 0) return glDeleteTextures;
+        if (strcmp(symbol, "glClearColor") == 0) return glClearColor;
+        if (strcmp(symbol, "glClear") == 0) return glClear;
         if (strcmp(symbol, "glGetError") == 0) return glGetError;
         if (strcmp(symbol, "glFlush") == 0) return glFlush;
     } else if (handle == libxcb_addr) {
         if (strcmp(symbol, "xcb_poll_for_event") == 0) return xcb_poll_for_event;
+        if (strcmp(symbol, "xcb_poll_for_queued_event") == 0) return xcb_poll_for_queued_event;
         if (strcmp(symbol, "xcb_wait_for_event") == 0) return xcb_wait_for_event;
+        if (strcmp(symbol, "xcb_get_geometry_reply") == 0) return xcb_get_geometry_reply;
     }
     return NULL;
 }
@@ -1375,6 +1580,8 @@ void* dlopen(const char* filename, int flags) {
             real_glBindTexture = real_dlsym(ret, "glBindTexture");
             real_glTexSubImage2D = real_dlsym(ret, "glTexSubImage2D");
             real_glDeleteTextures = real_dlsym(ret, "glDeleteTextures");
+            real_glClearColor = real_dlsym(ret, "glClearColor");
+            real_glClear = real_dlsym(ret, "glClear");
             real_glGetError = real_dlsym(ret, "glGetError");
             real_glFlush = real_dlsym(ret, "glFlush");
         }
@@ -1382,7 +1589,9 @@ void* dlopen(const char* filename, int flags) {
             libxcb_addr = ret;
             if (!libxcb_addr) return NULL;
             real_xcb_poll_for_event = real_dlsym(ret, "xcb_poll_for_event");
+            real_xcb_poll_for_queued_event = real_dlsym(ret, "xcb_poll_for_queued_event");
             real_xcb_wait_for_event = real_dlsym(ret, "xcb_wait_for_event");
+            real_xcb_get_geometry_reply = real_dlsym(ret, "xcb_get_geometry_reply");
         }
     }
     return ret;
@@ -1404,5 +1613,7 @@ void* dlvsym(void* handle, const char* symbol, const char* version) {
 int dlclose(void* handle) {
     if (handle == libc_addr) libc_addr = NULL;
     if (handle == libegl_addr) libegl_addr = NULL;
+    if (handle == libgl_addr) libgl_addr = NULL;
+    if (handle == libxcb_addr) libxcb_addr = NULL;
     return real_dlclose(handle);
 }
