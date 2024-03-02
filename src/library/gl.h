@@ -8,6 +8,72 @@
 #include "rwlock.h"
 struct hashmap;
 
+/// Struct representing all the OpenGL functions of interest to us that the game gets from GetProcAddress
+struct GLProcFunctions {
+    void (*ActiveTexture)(uint32_t);
+    void (*AttachShader)(unsigned int, unsigned int);
+    void (*BindAttribLocation)(unsigned int, unsigned int, const char*);
+    void (*BindBuffer)(uint32_t, unsigned int);
+    void (*BindFramebuffer)(uint32_t, unsigned int);
+    void (*BindVertexArray)(uint32_t);
+    void (*BlitFramebuffer)(int, int, int, int, int, int, int, int, uint32_t, uint32_t);
+    void (*BufferData)(uint32_t, uintptr_t, const void*, uint32_t);
+    void (*BufferStorage)(unsigned int, uintptr_t, const void*, uintptr_t);
+    void (*BufferSubData)(uint32_t, intptr_t, uintptr_t, const void*);
+    void (*CompileShader)(unsigned int);
+    void (*CompressedTexSubImage2D)(uint32_t, int, int, int, unsigned int, unsigned int, uint32_t, unsigned int, const void*);
+    void (*CopyImageSubData)(unsigned int, uint32_t, int, int, int, int, unsigned int, uint32_t, int, int, int, int, unsigned int, unsigned int, unsigned int);
+    unsigned int (*CreateProgram)();
+    unsigned int (*CreateShader)(uint32_t);
+    void (*DeleteBuffers)(unsigned int, const unsigned int*);
+    void (*DeleteFramebuffers)(uint32_t, unsigned int*);
+    void (*DeleteShader)(unsigned int);
+    void (*DeleteVertexArrays)(uint32_t, const unsigned int*);
+    void (*DisableVertexAttribArray)(unsigned int);
+    void (*DrawElements)(uint32_t, unsigned int, uint32_t, const void*);
+    void (*EnableVertexAttribArray)(unsigned int);
+    void (*FlushMappedBufferRange)(uint32_t, intptr_t, uintptr_t);
+    void (*FramebufferTexture)(uint32_t, uint32_t, unsigned int, int);
+    void (*FramebufferTextureLayer)(uint32_t, uint32_t, unsigned int, int, int);
+    void (*GenBuffers)(uint32_t, unsigned int*);
+    void (*GenFramebuffers)(uint32_t, unsigned int*);
+    void (*GenVertexArrays)(uint32_t, unsigned int*);
+    void (*GetActiveUniformBlockiv)(unsigned int, unsigned int, uint32_t, int*);
+    void (*GetActiveUniformsiv)(unsigned int, uint32_t, const unsigned int*, uint32_t, int*);
+    void (*GetFramebufferAttachmentParameteriv)(uint32_t, uint32_t, uint32_t, int*);
+    void (*GetIntegeri_v)(uint32_t, unsigned int, int*);
+    void (*GetIntegerv)(uint32_t, int*);
+    unsigned int (*GetUniformBlockIndex)(uint32_t, const char*);
+    void (*GetUniformfv)(unsigned int, int, float*);
+    void (*GetUniformIndices)(uint32_t, uint32_t, const char**, unsigned int*);
+    void (*GetUniformiv)(unsigned int, int, int*);
+    int (*GetUniformLocation)(unsigned int, const char*);
+    void (*LinkProgram)(unsigned int);
+    void* (*MapBufferRange)(uint32_t, intptr_t, uintptr_t, uint32_t);
+    void (*MultiDrawElements)(uint32_t, uint32_t*, uint32_t, const void**, uint32_t);
+    void (*ShaderSource)(unsigned int, uint32_t, const char**, const int*);
+    void (*TexStorage2D)(uint32_t, int, uint32_t, unsigned int, unsigned int);
+    void (*Uniform1i)(int, int);
+    void (*UniformMatrix4fv)(int, unsigned int, uint8_t, const float*);
+    uint8_t (*UnmapBuffer)(uint32_t);
+    void (*UseProgram)(unsigned int);
+    void (*VertexAttribPointer)(unsigned int, int, uint32_t, uint8_t, unsigned int, const void*);
+};
+
+/// Struct representing all the OpenGL functions of interest to us that the game gets from static or dynamic linkage
+struct GLLibFunctions {
+    void (*BindTexture)(uint32_t, unsigned int);
+    void (*Clear)(uint32_t);
+    void (*ClearColor)(float, float, float, float);
+    void (*DeleteTextures)(unsigned int, const unsigned int*);
+    void (*DrawArrays)(uint32_t, int, unsigned int);
+    void (*DrawElements)(uint32_t, unsigned int, uint32_t, const void*);
+    void (*Flush)();
+    void (*GenTextures)(uint32_t, unsigned int*);
+    uint32_t (*GetError)();
+    void (*TexSubImage2D)(uint32_t, int, int, int, unsigned int, unsigned int, uint32_t, uint32_t, const void*);
+};
+
 /* consts used from libgl */
 #define GL_TEXTURE 5890
 #define GL_TEXTURE_2D 3553
@@ -50,6 +116,8 @@ struct hashmap;
 #define GL_RGBA8 32856
 #define GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE 36048
 #define GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME 36049
+
+/* bolt re-implementation of some gl objects, storing only the things we need */
 
 struct GLArrayBuffer {
     unsigned int id;
@@ -118,10 +186,10 @@ struct HashMap {
     RWLock rwlock;
 };
 
-// Context-specific information - this is thread-specific on EGL, not sure about elsewhere
-// this method of context-sharing takes advantage of the fact that the game never chains shares together
-// with a depth greater than 1, and always deletes the non-owner before the owner. neither of those things
-// are actually safe assumptions in valid OpenGL usage.
+/// Context-specific information - this is thread-specific on EGL, not sure about elsewhere
+/// this method of context-sharing takes advantage of the fact that the game never chains shares together
+/// with a depth greater than 1, and always deletes the non-owner before the owner. neither of those things
+/// are actually safe assumptions in valid OpenGL usage.
 struct GLContext {
     uintptr_t id;
     struct HashMap* programs;
@@ -149,21 +217,51 @@ struct GLContext {
     uint8_t need_3d_tex;
 };
 
-struct GLProgram* _bolt_context_get_program(struct GLContext*, unsigned int);
-struct GLArrayBuffer* _bolt_context_get_buffer(struct GLContext*, unsigned int);
-struct GLTexture2D* _bolt_context_get_texture(struct GLContext*, unsigned int);
-struct GLVertexArray* _bolt_context_get_vao(struct GLContext*, unsigned int);
+/* os-level interop */
+/// Call this in response to eglGetProcAddress or equivalent. If this function returns a non-NULL
+/// value, return it instead of allowing GetProcAddress to run as normal.
+void* _bolt_gl_GetProcAddress(const char*);
 
-struct GLContext* _bolt_context();
-size_t _bolt_context_count();
-void _bolt_create_context(void*, void*);
-void _bolt_make_context_current(void*);
-void _bolt_destroy_context(void*);
-void _bolt_set_attr_binding(struct GLContext*, struct GLAttrBinding*, unsigned int, int, const void*, unsigned int, uint32_t, uint8_t);
-uint8_t _bolt_get_attr_binding(struct GLContext*, const struct GLAttrBinding*, size_t, size_t, float*);
-uint8_t _bolt_get_attr_binding_int(struct GLContext*, const struct GLAttrBinding*, size_t, size_t, int32_t*);
+/// Call this in response to eglSwapBuffers or equivalent, before allowing the real function to run.
+/// Provide the current size of the drawable area of the window.
+void _bolt_gl_onSwapBuffers(const struct GLLibFunctions* libgl, uint32_t window_width, uint32_t window_height);
 
-uint32_t _bolt_binding_for_buffer(uint32_t);
+/// Call this in response to eglCreateContext or equivalent, if the call is successful (returns nonzero).
+/// Provide a pointer returned by the OS, which will be used to identify this context, the shared context,
+/// if any. Protect onCreateContext, onMakeCurrent and onDestroyContext with a mutex.
+/// Also provide the generic GetProcAddress function.
+void _bolt_gl_onCreateContext(void*, void*, void* (*)(const char*));
+
+/// Call this in response to eglMakeCurrent or equivalent, if the call is successful (returns nonzero).
+/// Protect onCreateContext, onMakeCurrent and onDestroyContext with a mutex.
+void _bolt_gl_onMakeCurrent(void*);
+
+/// Call this in response to eglDestroyContext or equivalent, if the call is successful (returns nonzero).
+/// Protect onCreateContext, onMakeCurrent and onDestroyContext with a mutex.
+/// If this function returns true, call eglTerminate or equivalent. Don't allow the same function to
+/// be used normally.
+uint8_t _bolt_gl_onDestroyContext(void*, const struct GLLibFunctions*);
+
+/// Call this in response to glGenTextures, which needs to be hooked from libgl.
+void _bolt_gl_onGenTextures(uint32_t, unsigned int*);
+
+/// Call this in response to glDrawElements, which needs to be hooked from libgl.
+void _bolt_gl_onDrawElements(uint32_t, unsigned int, uint32_t, const void*);
+
+/// Call this in response to glDrawArrays, which needs to be hooked from libgl.
+void _bolt_gl_onDrawArrays(uint32_t, int, unsigned int);
+
+/// Call this in response to glBindTexture, which needs to be hooked from libgl.
+void _bolt_gl_onBindTexture(uint32_t, unsigned int);
+
+/// Call this in response to glTexSubImage2D, which needs to be hooked from libgl.
+void _bolt_gl_onTexSubImage2D(uint32_t, int, int, int, unsigned int, unsigned int, uint32_t, uint32_t, const void*);
+
+// Call this in response to glDeleteTextures, which needs to be hooked from libgl.
+void _bolt_gl_onDeleteTextures(unsigned int, const unsigned int*);
+
+/// Call this in response to glClear, which needs to be hooked from libgl.
+void _bolt_gl_onClear(uint32_t);
 
 /* plugin library interop stuff */
 
