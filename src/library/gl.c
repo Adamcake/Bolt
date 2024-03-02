@@ -45,6 +45,7 @@ uint32_t framebuffer2d_height = 0;
 uint8_t framebuffer2d_inited = 0;
 unsigned int program_direct;
 unsigned int program_direct_sampler;
+unsigned int program_direct_vao;
 unsigned int buffer_vertices_square;
 
 // "direct" program is basically a blit but with transparency
@@ -417,6 +418,8 @@ void _bolt_gl_load(void* (*GetProcAddress)(const char*)) {
 }
 
 void _bolt_gl_init() {
+    gl.GenVertexArrays(1, &program_direct_vao);
+    gl.BindVertexArray(program_direct_vao);
     unsigned int direct_vs = gl.CreateShader(GL_VERTEX_SHADER);
     gl.ShaderSource(direct_vs, 1, &program_direct_vs, NULL);
     gl.CompileShader(direct_vs);
@@ -434,6 +437,10 @@ void _bolt_gl_init() {
     gl.BufferData(GL_ARRAY_BUFFER, sizeof(float) * 8, square, GL_STATIC_DRAW);
     gl.DeleteShader(direct_vs);
     gl.DeleteShader(direct_fs);
+    gl.EnableVertexAttribArray(0);
+    gl.VertexAttribPointer(0, 2, GL_FLOAT, 0, 2 * sizeof(float), NULL);
+    gl.BindBuffer(GL_ARRAY_BUFFER, 0);
+    gl.BindVertexArray(0);
 }
 
 unsigned int _bolt_glCreateProgram() {
@@ -944,20 +951,18 @@ void _bolt_gl_onSwapBuffers(const struct GLLibFunctions* libgl, uint32_t window_
             framebuffer2d_height = window_height;
         }
         if (framebuffer2d_inited && c->bound_program) {
-            int array_binding;
-            gl.GetIntegerv(GL_ARRAY_BUFFER_BINDING, &array_binding);
+            int vao_binding;
+            gl.GetIntegerv(GL_VERTEX_ARRAY_BINDING, &vao_binding);
             gl.UseProgram(program_direct);
             libgl->BindTexture(GL_TEXTURE_2D, renderbuffer2d);
-            gl.BindBuffer(GL_ARRAY_BUFFER, buffer_vertices_square);
-            gl.EnableVertexAttribArray(0);
-            gl.VertexAttribPointer(0, 2, GL_FLOAT, 0, 2 * sizeof(float), NULL);
+            gl.BindVertexArray(program_direct_vao);
             gl.Uniform1i(program_direct_sampler, texture_unit);
             gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
             libgl->DrawArrays(GL_TRIANGLE_STRIP, 0, 4);
             gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, framebuffer2d);
             libgl->Clear(GL_COLOR_BUFFER_BIT);
             gl.UseProgram(c->bound_program->id);
-            gl.BindBuffer(GL_ARRAY_BUFFER, array_binding);
+            gl.BindVertexArray(vao_binding);
         }
         const struct GLTexture2D* original_tex = c->texture_units[texture_unit];
         libgl->BindTexture(GL_TEXTURE_2D, original_tex ? original_tex->id : 0);
