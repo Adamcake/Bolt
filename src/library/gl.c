@@ -891,7 +891,7 @@ void _bolt_glBlitFramebuffer(int srcX0, int srcY0, int srcX1, int srcY1, int dst
 }
 
 void* _bolt_gl_GetProcAddress(const char* name) {
-#define PROC_ADDRESS_MAP(FUNC) if (!strcmp(name, "gl"#FUNC)) { return _bolt_gl##FUNC; }
+#define PROC_ADDRESS_MAP(FUNC) if (!strcmp(name, "gl"#FUNC)) { return gl.FUNC ? _bolt_gl##FUNC : NULL; }
     PROC_ADDRESS_MAP(CreateProgram)
     PROC_ADDRESS_MAP(BindAttribLocation)
     PROC_ADDRESS_MAP(LinkProgram)
