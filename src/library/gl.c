@@ -72,6 +72,7 @@ void _bolt_glcontext_free(struct GLContext*);
 #define PROGRAM_LIST_CAPACITY 256 * 8
 #define VAO_LIST_CAPACITY 256 * 256
 #define CONTEXTS_CAPACITY 64 // not growable so we just have to hard-code a number and hope it's enough forever
+#define GAME_MINIMAP_BIG_SIZE 2048
 struct GLContext contexts[CONTEXTS_CAPACITY];
 _Thread_local struct GLContext* current_context = NULL;
 
@@ -1096,30 +1097,34 @@ void _bolt_gl_onDrawElements(uint32_t mode, unsigned int count, uint32_t type, c
                 const double uv_b = v0 - v1;
                 const double pos_dist = sqrt(fabs((pos_a * pos_a) + (pos_b * pos_b)));
                 const double uv_dist = sqrt(fabs((uv_a * uv_a) + (uv_b * uv_b))) * tex->width;
-                const double dist_ratio = pos_dist / uv_dist;
+                // sometimes it renders the same UV coordinate for the first two vertices, we can't
+                // work with that. seems to happen only once immediately after logging into a world.
+                if (uv_dist >= 1.0) {
+                    const double dist_ratio = pos_dist / uv_dist;
 
-                // by unrotating the big tex's vertices around any point, and rotating small-tex-relative
-                // points by the same method, we can estimate what section of the big tex will be drawn.
-                // note: `>> 1` is the same as `/ 2` except that it doesn't cause an erroneous gcc warning
-                const double scaled_x = tex->width * dist_ratio;
-                const double scaled_y = tex->height * dist_ratio;
-                const double angle_sin = sin(-map_angle_rads);
-                const double angle_cos = cos(-map_angle_rads);
-                const double unrotated_x0 = (x0 * angle_cos) - (y0 * angle_sin);
-                const double unrotated_y0 = (x0 * angle_sin) + (y0 * angle_cos);
-                const double scaled_xoffset = (u0 * scaled_x) - unrotated_x0;
-                const double scaled_yoffset = (v0 * scaled_y) - unrotated_y0;
-                const double small_tex_cx = 1.0 / projection_matrix[0];
-                const double small_tex_cy = 1.0 / projection_matrix[5];
-                const double cx = (scaled_xoffset + (small_tex_cx * angle_cos) - (small_tex_cy * angle_sin)) / dist_ratio;
-                const double cy = (scaled_yoffset + (small_tex_cx * angle_sin) + (small_tex_cy * angle_cos)) / dist_ratio;
+                    // by unrotating the big tex's vertices around any point, and rotating small-tex-relative
+                    // points by the same method, we can estimate what section of the big tex will be drawn.
+                    // note: `>> 1` is the same as `/ 2` except that it doesn't cause an erroneous gcc warning
+                    const double scaled_x = tex->width * dist_ratio;
+                    const double scaled_y = tex->height * dist_ratio;
+                    const double angle_sin = sin(-map_angle_rads);
+                    const double angle_cos = cos(-map_angle_rads);
+                    const double unrotated_x0 = (x0 * angle_cos) - (y0 * angle_sin);
+                    const double unrotated_y0 = (x0 * angle_sin) + (y0 * angle_cos);
+                    const double scaled_xoffset = (u0 * scaled_x) - unrotated_x0;
+                    const double scaled_yoffset = (v0 * scaled_y) - unrotated_y0;
+                    const double small_tex_cx = 1.0 / projection_matrix[0];
+                    const double small_tex_cy = 1.0 / projection_matrix[5];
+                    const double cx = (scaled_xoffset + (small_tex_cx * angle_cos) - (small_tex_cy * angle_sin)) / dist_ratio;
+                    const double cy = (scaled_yoffset + (small_tex_cx * angle_sin) + (small_tex_cy * angle_cos)) / dist_ratio;
 
-                struct RenderMinimapEvent render;
-                render.angle = map_angle_rads;
-                render.scale = dist_ratio;
-                render.x = tex->minimap_center_x + (64.0 * (cx - (double)(tex->width >> 1)));
-                render.y = tex->minimap_center_y + (64.0 * (cy - (double)(tex->height >> 1)));
-                _bolt_plugin_handle_minimap(&render);
+                    struct RenderMinimapEvent render;
+                    render.angle = map_angle_rads;
+                    render.scale = dist_ratio;
+                    render.x = tex->minimap_center_x + (64.0 * (cx - (double)(tex->width >> 1)));
+                    render.y = tex->minimap_center_y + (64.0 * (cy - (double)(tex->height >> 1)));
+                    _bolt_plugin_handle_minimap(&render);
+                }
             }
         } else {
             struct GLPluginDrawElementsVertex2DUserData vertex_userdata;
@@ -1222,16 +1227,17 @@ void _bolt_gl_onDrawElements(uint32_t mode, unsigned int count, uint32_t type, c
 
 void _bolt_gl_onDrawArrays(uint32_t mode, int first, unsigned int count) {
     struct GLContext* c = _bolt_context();
-    if (c->bound_program->is_minimap) {
-        int ubo_binding, ubo_view_index, draw_tex;
-        gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
+    int draw_tex;
+    gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
+    struct GLTexture2D* tex = _bolt_context_get_texture(c, draw_tex);
+    if (c->bound_program->is_minimap && tex->width == GAME_MINIMAP_BIG_SIZE && tex->height == GAME_MINIMAP_BIG_SIZE) {
+        int ubo_binding, ubo_view_index;
         gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ViewTransforms, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
         gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_view_index);
-        const float* view_proj_matrix = (float*)(_bolt_context_get_buffer(c, ubo_view_index)->data + c->bound_program->offset_uCameraPosition);
-        struct GLTexture2D* tex = _bolt_context_get_texture(c, draw_tex);
+        const float* camera_position = (float*)(_bolt_context_get_buffer(c, ubo_view_index)->data + c->bound_program->offset_uCameraPosition);
         tex->is_minimap_tex_big = 1;
-        tex->minimap_center_x = view_proj_matrix[0];
-        tex->minimap_center_y = view_proj_matrix[2];
+        tex->minimap_center_x = camera_position[0];
+        tex->minimap_center_y = camera_position[2];
     } else if (mode == GL_TRIANGLE_STRIP && count == 4) {
         if (c->bound_program->loc_sSceneHDRTex != -1) {
             int game_view_tex;
@@ -1250,16 +1256,12 @@ void _bolt_gl_onDrawArrays(uint32_t mode, int first, unsigned int count) {
                 printf("new game_view_tex %u...\n", c->game_view_tex);
             }
         } else if (c->bound_program->loc_sSourceTex != -1) {
-            if (c->need_3d_tex == 1) {
-                int draw_tex;
-                gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
-                if (draw_tex == c->game_view_tex) {
-                    int game_view_tex;
-                    gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_sSourceTex, &game_view_tex);
-                    c->game_view_tex = c->texture_units[game_view_tex]->id;
-                    printf("updated direct game_view_tex to %u...\n", c->game_view_tex);
-                    c->need_3d_tex += 1;
-                }
+            if (c->need_3d_tex == 1 && draw_tex == c->game_view_tex) {
+                int game_view_tex;
+                gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_sSourceTex, &game_view_tex);
+                c->game_view_tex = c->texture_units[game_view_tex]->id;
+                printf("updated direct game_view_tex to %u...\n", c->game_view_tex);
+                c->need_3d_tex += 1;
             }
 
         }
@@ -1299,7 +1301,15 @@ void _bolt_gl_onDeleteTextures(unsigned int n, const unsigned int* textures) {
 }
 
 void _bolt_gl_onClear(uint32_t mask) {
-    // TODO: check for clearing the big minimap texture
+    struct GLContext* c = _bolt_context();
+    if (mask & GL_COLOR_BUFFER_BIT) {
+        int draw_tex;
+        gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
+        struct GLTexture2D* tex = _bolt_context_get_texture(c, draw_tex);
+        if (tex) {
+            tex->is_minimap_tex_big = 0;
+        }
+    }
 }
 
 void _bolt_gl_plugin_drawelements_vertex2d_xy(size_t index, void* userdata, int32_t* out) {
