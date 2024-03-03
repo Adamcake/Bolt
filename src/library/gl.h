@@ -27,6 +27,7 @@ struct GLProcFunctions {
     unsigned int (*CreateShader)(uint32_t);
     void (*DeleteBuffers)(unsigned int, const unsigned int*);
     void (*DeleteFramebuffers)(uint32_t, unsigned int*);
+    void (*DeleteProgram)(unsigned int);
     void (*DeleteShader)(unsigned int);
     void (*DeleteVertexArrays)(uint32_t, const unsigned int*);
     void (*DisableVertexAttribArray)(unsigned int);
@@ -218,6 +219,8 @@ struct GLContext {
     uint8_t need_3d_tex;
 };
 
+void _bolt_gl_close();
+
 /* os-level interop */
 /// Call this in response to eglGetProcAddress or equivalent. If this function returns a non-NULL
 /// value, return it instead of allowing GetProcAddress to run as normal.
@@ -237,11 +240,11 @@ void _bolt_gl_onCreateContext(void*, void*, void* (*)(const char*));
 /// Protect onCreateContext, onMakeCurrent and onDestroyContext with a mutex.
 void _bolt_gl_onMakeCurrent(void*);
 
-/// Call this in response to eglDestroyContext or equivalent, if the call is successful (returns nonzero).
-/// Protect onCreateContext, onMakeCurrent and onDestroyContext with a mutex.
-/// If this function returns true, call eglTerminate or equivalent. Don't allow the same function to
-/// be used normally.
-uint8_t _bolt_gl_onDestroyContext(void*, const struct GLLibFunctions*);
+/// Call this in response to eglDestroyContext or equivalent, if the call is successful (returns non-zero).
+/// If this function itself returns non-zero, the returned value is a context, which you should call
+/// MakeCurrent on, then call _bolt_gl_close(), then unbind the context and call eglTerminate or equivalent.
+/// Don't allow the same Terminate function to be used normally by the game.
+void* _bolt_gl_onDestroyContext(void*, const struct GLLibFunctions*);
 
 /// Call this in response to glGenTextures, which needs to be hooked from libgl.
 void _bolt_gl_onGenTextures(uint32_t, unsigned int*);

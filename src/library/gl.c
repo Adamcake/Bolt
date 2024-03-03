@@ -384,6 +384,7 @@ void _bolt_gl_load(void* (*GetProcAddress)(const char*)) {
     INIT_GL_FUNC(CreateShader)
     INIT_GL_FUNC(DeleteBuffers)
     INIT_GL_FUNC(DeleteFramebuffers)
+    INIT_GL_FUNC(DeleteProgram)
     INIT_GL_FUNC(DeleteShader)
     INIT_GL_FUNC(DeleteVertexArrays)
     INIT_GL_FUNC(DisableVertexAttribArray)
@@ -444,6 +445,13 @@ void _bolt_gl_init() {
     gl.BindVertexArray(0);
 }
 
+void _bolt_gl_close() {
+    gl.DeleteBuffers(1, &buffer_vertices_square);
+    gl.DeleteProgram(program_direct);
+    gl.DeleteVertexArrays(1, &program_direct_vao);
+    _bolt_destroy_context((void*)egl_main_context);
+}
+
 unsigned int _bolt_glCreateProgram() {
     LOG("glCreateProgram\n");
     unsigned int id = gl.CreateProgram();
@@ -477,6 +485,18 @@ unsigned int _bolt_glCreateProgram() {
     _bolt_rwlock_unlock_write(&c->programs->rwlock);
     LOG("glCreateProgram end\n");
     return id;
+}
+
+void _bolt_glDeleteProgram(unsigned int program) {
+    LOG("glDeleteProgram\n");
+    gl.DeleteProgram(program);
+    struct GLContext* c = _bolt_context();
+    unsigned int* ptr = &program;
+    _bolt_rwlock_lock_write(&c->programs->rwlock);
+    struct GLProgram* const* p = hashmap_delete(c->programs->map, &ptr);
+    free(*p);
+    _bolt_rwlock_unlock_write(&c->programs->rwlock);
+    LOG("glDeleteProgram end\n");
 }
 
 void _bolt_glBindAttribLocation(unsigned int program, unsigned int index, const char* name) {
@@ -616,12 +636,15 @@ void _bolt_glDeleteBuffers(unsigned int n, const unsigned int* buffers) {
     LOG("glDeleteBuffers\n");
     gl.DeleteBuffers(n, buffers);
     struct GLContext* c = _bolt_context();
+    _bolt_rwlock_lock_write(&c->buffers->rwlock);
     for (unsigned int i = 0; i < n; i += 1) {
-        struct GLArrayBuffer* buffer = _bolt_context_get_buffer(c, buffers[i]);
-        free(buffer->data);
-        free(buffer->mapping);
-        free(buffer);
+        const unsigned int* ptr = &buffers[i];
+        struct GLArrayBuffer* const* buffer = hashmap_delete(c->buffers->map, &ptr);
+        free((*buffer)->data);
+        free((*buffer)->mapping);
+        free(*buffer);
     }
+    _bolt_rwlock_unlock_write(&c->buffers->rwlock);
     LOG("glDeleteBuffers end\n");
 }
 
@@ -852,10 +875,13 @@ void _bolt_glDeleteVertexArrays(uint32_t n, const unsigned int* arrays) {
     LOG("glDeleteVertexArrays\n");
     gl.DeleteVertexArrays(n, arrays);
     struct GLContext* c = _bolt_context();
+    _bolt_rwlock_lock_write(&c->vaos->rwlock);
     for (size_t i = 0; i < n; i += 1) {
-        struct GLVertexArray* vao = _bolt_context_get_vao(c, arrays[i]);
-        free(vao);
+        const unsigned int* ptr = &arrays[i];
+        struct GLVertexArray* const* vao = hashmap_delete(c->vaos->map, &ptr);
+        free(*vao);
     }
+    _bolt_rwlock_unlock_write(&c->vaos->rwlock);
     LOG("glDeleteVertexArrays end\n");
 }
 
@@ -894,6 +920,7 @@ void _bolt_glBlitFramebuffer(int srcX0, int srcY0, int srcX1, int srcY1, int dst
 void* _bolt_gl_GetProcAddress(const char* name) {
 #define PROC_ADDRESS_MAP(FUNC) if (!strcmp(name, "gl"#FUNC)) { return gl.FUNC ? _bolt_gl##FUNC : NULL; }
     PROC_ADDRESS_MAP(CreateProgram)
+    PROC_ADDRESS_MAP(DeleteProgram)
     PROC_ADDRESS_MAP(BindAttribLocation)
     PROC_ADDRESS_MAP(LinkProgram)
     PROC_ADDRESS_MAP(UseProgram)
@@ -1009,7 +1036,7 @@ void _bolt_gl_onMakeCurrent(void* context) {
     }
 }
 
-uint8_t _bolt_gl_onDestroyContext(void* context, const struct GLLibFunctions* libgl) {
+void* _bolt_gl_onDestroyContext(void* context, const struct GLLibFunctions* libgl) {
     uint8_t do_destroy_main = 0;
     if ((uintptr_t)context != egl_main_context) {
         _bolt_destroy_context(context);
@@ -1025,10 +1052,7 @@ uint8_t _bolt_gl_onDestroyContext(void* context, const struct GLLibFunctions* li
         do_destroy_main = 1;
         if (egl_init_count > 1) _bolt_plugin_close();
     }
-    if (do_destroy_main) {
-        _bolt_destroy_context((void*)egl_main_context);
-    }
-    return do_destroy_main;
+    return do_destroy_main ? (void*)egl_main_context : NULL;
 }
 
 void _bolt_gl_onGenTextures(uint32_t n, unsigned int* textures) {
@@ -1293,11 +1317,14 @@ void _bolt_gl_onTexSubImage2D(uint32_t target, int level, int xoffset, int yoffs
 
 void _bolt_gl_onDeleteTextures(unsigned int n, const unsigned int* textures) {
     struct GLContext* c = _bolt_context();
+    _bolt_rwlock_lock_write(&c->textures->rwlock);
     for (unsigned int i = 0; i < n; i += 1) {
-        struct GLTexture2D* texture = _bolt_context_get_texture(c, textures[i]);
-        free(texture->data);
-        free(texture);
+        const unsigned int* ptr = &textures[i];
+        struct GLTexture2D* const* texture = hashmap_delete(c->textures->map, &ptr);
+        free((*texture)->data);
+        free(*texture);
     }
+    _bolt_rwlock_unlock_write(&c->textures->rwlock);
 }
 
 void _bolt_gl_onClear(uint32_t mask) {
