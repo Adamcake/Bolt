@@ -50,6 +50,19 @@ struct TextureFunctions {
     uint8_t (*compare)(void* userdata, size_t x, size_t y, size_t len, const unsigned char* data);
 };
 
+/// Struct containing "vtable" callback information for surfaces.
+struct SurfaceFunctions {
+    /// Userdata which will be passed to the functions contained in this struct.
+    void* userdata;
+
+    /// Equivalent to glClearColor(r, g, b, a) & glClear().
+    void (*clear)(void* userdata, double r, double g, double b, double a);
+
+    /// Draws a rectangle from the surface, indicated by sx,sy,sw,sh, to a rectangle on the backbuffer,
+    /// indicated by dx,dy,dw,dh. All values are in pixels.
+    void (*draw_to_screen)(void* userdata, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh);
+};
+
 struct RenderBatch2D {
     uint32_t screen_width;
     uint32_t screen_height;
@@ -70,7 +83,8 @@ struct RenderMinimapEvent {
 struct SwapBuffersEvent {};
 
 /// Init the plugin library. Call _bolt_plugin_close at the end of execution, and don't double-init.
-void _bolt_plugin_init();
+/// Must be provided an init function and destroy function for surfaces.
+void _bolt_plugin_init(void (*)(struct SurfaceFunctions*, unsigned int, unsigned int), void (*)(void*));
 
 /// Returns true if the plugin library is initialised (i.e. init has been called more recently than
 /// close), otherwise false.

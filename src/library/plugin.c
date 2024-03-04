@@ -16,7 +16,11 @@ const char* BOLT_REGISTRYNAME = "bolt";
 const char* BATCH2D_META_REGISTRYNAME = "batch2dindex";
 const char* MINIMAP_META_REGISTRYNAME = "minimapindex";
 const char* SWAPBUFFERS_META_REGISTRYNAME = "swapbuffersindex";
+const char* SURFACE_META_REGISTRYNAME = "surface";
 uint64_t next_plugin_id = 1;
+
+void (*surface_init)(struct SurfaceFunctions*, unsigned int, unsigned int);
+void (*surface_destroy)(void*);
 
 enum {
     ENV_CALLBACK_SWAPBUFFERS,
@@ -76,7 +80,15 @@ static int api_setcallback##APINAME(lua_State *state) { \
     return 0; \
 }
 
-void _bolt_plugin_init() {
+static int surface_gc(lua_State* state) {
+    const struct SurfaceFunctions* functions = lua_touserdata(state, 1);
+    surface_destroy(functions->userdata);
+    return 0;
+}
+
+void _bolt_plugin_init(void (*_surface_init)(struct SurfaceFunctions*, unsigned int, unsigned int), void (*_surface_destroy)(void*)) {
+    surface_init = _surface_init;
+    surface_destroy = _surface_destroy;
     state = luaL_newstate();
 
     // Open just the specific libraries plugins are allowed to have
@@ -130,7 +142,20 @@ void _bolt_plugin_init() {
     lua_pushstring(state, SWAPBUFFERS_META_REGISTRYNAME);
     lua_newtable(state);
     lua_pushstring(state, "__index");
-    lua_createtable(state, 0, 3);
+    lua_createtable(state, 0, 0);
+    lua_settable(state, -3);
+    lua_settable(state, LUA_REGISTRYINDEX);
+
+    // create the metatable for all Surface objects
+    lua_pushstring(state, SURFACE_META_REGISTRYNAME);
+    lua_newtable(state);
+    lua_pushstring(state, "__index");
+    lua_createtable(state, 0, 2);
+    API_ADD_SUB(clear, surface)
+    API_ADD_SUB(drawtoscreen, surface)
+    lua_settable(state, -3);
+    lua_pushstring(state, "__gc");
+    lua_pushcfunction(state, surface_gc);
     lua_settable(state, -3);
     lua_settable(state, LUA_REGISTRYINDEX);
 
@@ -156,6 +181,7 @@ static int _bolt_api_init(lua_State* state) {
     API_ADD(setcallback2d)
     API_ADD(setcallbackminimap)
     API_ADD(setcallbackswapbuffers)
+    API_ADD(createsurface)
     return 1;
 }
 
@@ -263,6 +289,17 @@ static int api_time(lua_State* state) {
     clock_gettime(CLOCK_MONOTONIC, &s);
     const uint64_t microseconds = (s.tv_sec * 1000000) + (s.tv_nsec / 1000);
     lua_pushinteger(state, microseconds);
+    return 1;
+}
+
+static int api_createsurface(lua_State* state) {
+    _bolt_check_argc(state, 2, "createsurface");
+    const lua_Integer w = lua_tointeger(state, 1);
+    const lua_Integer h = lua_tointeger(state, 2);
+    struct SurfaceFunctions* functions = lua_newuserdata(state, sizeof(struct SurfaceFunctions));
+    surface_init(functions, w, h);
+    lua_getfield(state, LUA_REGISTRYINDEX, SURFACE_META_REGISTRYNAME);
+    lua_setmetatable(state, -2);
     return 1;
 }
 
@@ -402,4 +439,54 @@ static int api_minimap_position(lua_State* state) {
     lua_pushnumber(state, render->x);
     lua_pushnumber(state, render->y);
     return 2;
+}
+
+static int api_surface_clear(lua_State* state) {
+    char error_buffer[256];
+    const int argc = lua_gettop(state);
+    switch (argc) {
+        case 1: {
+            const struct SurfaceFunctions* functions = lua_touserdata(state, 1);
+            functions->clear(functions->userdata, 0.0, 0.0, 0.0, 0.0);
+            break;
+        }
+        case 4: {
+            const struct SurfaceFunctions* functions = lua_touserdata(state, 1);
+            const double r = lua_tonumber(state, 2);
+            const double g = lua_tonumber(state, 3);
+            const double b = lua_tonumber(state, 4);
+            functions->clear(functions->userdata, r, g, b, 1.0);
+            break;
+        }
+        case 5: {
+            const struct SurfaceFunctions* functions = lua_touserdata(state, 1);
+            const double r = lua_tonumber(state, 2);
+            const double g = lua_tonumber(state, 3);
+            const double b = lua_tonumber(state, 4);
+            const double a = lua_tonumber(state, 5);
+            functions->clear(functions->userdata, r, g, b, a);
+            break;
+        }
+        default: {
+            sprintf(error_buffer, "incorrect argument count to 'surface_clear': expected 1, 4, or 5, but got %i", argc);
+            lua_pushstring(state, error_buffer);
+            lua_error(state);
+        }
+    }
+    return 0;
+}
+
+static int api_surface_drawtoscreen(lua_State* state) {
+    _bolt_check_argc(state, 9, "surface_drawtoscreen");
+    const struct SurfaceFunctions* functions = lua_touserdata(state, 1);
+    const int sx = lua_tointeger(state, 2);
+    const int sy = lua_tointeger(state, 3);
+    const int sw = lua_tointeger(state, 4);
+    const int sh = lua_tointeger(state, 5);
+    const int dx = lua_tointeger(state, 6);
+    const int dy = lua_tointeger(state, 7);
+    const int dw = lua_tointeger(state, 8);
+    const int dh = lua_tointeger(state, 9);
+    functions->draw_to_screen(functions->userdata, sx, sy, sw, sh, dx, dy, dw, dh);
+    return 0;
 }

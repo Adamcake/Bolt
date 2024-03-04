@@ -7,6 +7,7 @@
 #include "../../modules/hashmap/hashmap.h"
 #include "rwlock.h"
 struct hashmap;
+struct SurfaceFunctions;
 
 /// Struct representing all the OpenGL functions of interest to us that the game gets from GetProcAddress
 struct GLProcFunctions {
@@ -55,6 +56,7 @@ struct GLProcFunctions {
     void (*ShaderSource)(unsigned int, uint32_t, const char**, const int*);
     void (*TexStorage2D)(uint32_t, int, uint32_t, unsigned int, unsigned int);
     void (*Uniform1i)(int, int);
+    void (*Uniform4i)(int, int, int, int, int);
     void (*UniformMatrix4fv)(int, unsigned int, uint8_t, const float*);
     uint8_t (*UnmapBuffer)(uint32_t);
     void (*UseProgram)(unsigned int);
@@ -228,13 +230,14 @@ void* _bolt_gl_GetProcAddress(const char*);
 
 /// Call this in response to eglSwapBuffers or equivalent, before allowing the real function to run.
 /// Provide the current size of the drawable area of the window.
-void _bolt_gl_onSwapBuffers(const struct GLLibFunctions* libgl, uint32_t window_width, uint32_t window_height);
+void _bolt_gl_onSwapBuffers(uint32_t window_width, uint32_t window_height);
 
 /// Call this in response to eglCreateContext or equivalent, if the call is successful (returns nonzero).
 /// Provide a pointer returned by the OS, which will be used to identify this context, the shared context,
 /// if any. Protect onCreateContext, onMakeCurrent and onDestroyContext with a mutex.
-/// Also provide the generic GetProcAddress function.
-void _bolt_gl_onCreateContext(void*, void*, void* (*)(const char*));
+/// Also provide your libgl functions struct, which you should have already populated by now.
+/// Finally, provide the generic GetProcAddress function.
+void _bolt_gl_onCreateContext(void*, void*, const struct GLLibFunctions*, void* (*)(const char*));
 
 /// Call this in response to eglMakeCurrent or equivalent, if the call is successful (returns nonzero).
 /// Protect onCreateContext, onMakeCurrent and onDestroyContext with a mutex.
@@ -244,7 +247,7 @@ void _bolt_gl_onMakeCurrent(void*);
 /// If this function itself returns non-zero, the returned value is a context, which you should call
 /// MakeCurrent on, then call _bolt_gl_close(), then unbind the context and call eglTerminate or equivalent.
 /// Don't allow the same Terminate function to be used normally by the game.
-void* _bolt_gl_onDestroyContext(void*, const struct GLLibFunctions*);
+void* _bolt_gl_onDestroyContext(void*);
 
 /// Call this in response to glGenTextures, which needs to be hooked from libgl.
 void _bolt_gl_onGenTextures(uint32_t, unsigned int*);
@@ -291,5 +294,10 @@ struct GLPluginTextureUserData {
 size_t _bolt_gl_plugin_texture_id(void* userdata);
 void _bolt_gl_plugin_texture_size(void* userdata, size_t* out);
 uint8_t _bolt_gl_plugin_texture_compare(void* userdata, size_t x, size_t y, size_t len, const unsigned char* data);
+
+void _bolt_gl_plugin_surface_init(struct SurfaceFunctions* out, unsigned int width, unsigned int height);
+void _bolt_gl_plugin_surface_destroy(void* userdata);
+void _bolt_gl_plugin_surface_clear(void* userdata, double r, double g, double b, double a);
+void _bolt_gl_plugin_surface_drawtoscreen(void* userdata, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh);
 
 #endif

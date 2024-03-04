@@ -68,6 +68,17 @@ static int api_checkversion(lua_State*);
 /// must be taken if a plugin wishes to support 32-bit CPUs while using this function.
 static int api_time(lua_State*);
 
+/// [-2, +1, -]
+/// Creates a surface with the given width and height, and returns it as a userdata object. The
+/// surface will initially be fully transparent.
+///
+/// A surface can be drawn onto with the rendering functions and can be overlaid onto the screen
+/// by calling `surface:drawtoscreen()` during a swapbuffers callback.
+///
+/// All of the member functions of surface objects can be found in this file, prefixed with
+/// "api_surface_".
+static int api_createsurface(lua_State*);
+
 /// [-1, +0, -]
 /// Sets a callback function for SwapBuffers events, overwriting the previous callback, if any.
 /// Passing a non-function (ideally `nil`) will restore the default setting, which is to have no
@@ -217,3 +228,22 @@ static int api_minimap_scale(lua_State*);
 /// This is only a rough estimate and can move around a lot even while standing still. It usually
 /// doesn't vary by more than half a tile.
 static int api_minimap_position(lua_State*);
+
+/// [-(1|4|5), +0, -]
+/// Deletes any previous contents of the surface and sets it to contain a single colour and alpha.
+///
+/// If four params are provided, they must be RGBA values, in that order, in the range 0.0-1.0.
+///
+/// If three params are provided, they must be RGB values, in that order, in the range 0.0-1.0. The
+/// alpha value will be inferred to be 1.0.
+///
+/// If no params are provided, the alpha values will be inferred to be 0.0 (fully transparent),
+/// with the red, green and blue values undefined.
+static int api_surface_clear(lua_State*);
+
+/// [-9, +0, -]
+/// Draws a section of the surface directly onto a section of the screen's backbuffer. If used
+/// outside a swapbuffers event, this is unlikely to have any visible effect.
+///
+/// Paramaters are source X,Y,W,H followed by destination X,Y,W,H, all in pixels.
+static int api_surface_drawtoscreen(lua_State*);

@@ -18,19 +18,31 @@
 
 const char* lua_test_plugin =
 "local bolt = require(\"bolt\")"                                "\n"
+"local surface = bolt.createsurface(64, 64)"                    "\n"
+"local t = bolt.time()"                                         "\n"
 "local function callback2d (batch)"                             "\n"
-"  if batch:isminimap() then print(\"minimap render 2d\") end"  "\n"
+"  --if batch:isminimap() then print(\"minimap render 2d\") end""\n"
 "end"                                                           "\n"
 "local function callbackminimap (render)"                       "\n"
-"  print(\"minimap \", render:angle(), render:scale(), render:position())\n"
+"  --print(\"minimap \", render:angle(), render:scale(), render:position())\n"
 "end"                                                           "\n"
 "local function callbackswapbuffers (s)"                        "\n"
-"  print(\"swap\")"                                             "\n"
+"  local t2 = bolt.time() - t"                                  "\n"
+"  local x = math.cos(t2 / 250000) * 120"                       "\n"
+"  local y = math.sin(t2 / 250000) * 120"                       "\n"
+"  local r = math.sin(t2 / 300000)"                             "\n"
+"  local g = math.sin(t2 / 310000)"                             "\n"
+"  local b = math.sin(t2 / 320000)"                             "\n"
+"  surface:clear(r, g, b, 0.8)"                                 "\n"
+"  surface:drawtoscreen(0,0,64,64,910+x,454+y,100,100)"         "\n"
 "end"                                                           "\n"
 "bolt.setcallback2d(callback2d)"                                "\n"
 "bolt.setcallbackswapbuffers(callbackswapbuffers)"              "\n"
 "bolt.setcallbackminimap(callbackminimap)"                      "\n"
 ;
+
+unsigned int gl_width;
+unsigned int gl_height;
 
 size_t egl_init_count = 0;
 uintptr_t egl_main_context = 0;
@@ -38,26 +50,34 @@ uint8_t egl_main_context_destroy_pending = 0;
 uint8_t egl_main_context_makecurrent_pending = 0;
 
 struct GLProcFunctions gl = {0};
-unsigned int framebuffer2d;
-unsigned int renderbuffer2d;
-uint32_t framebuffer2d_width = 0;
-uint32_t framebuffer2d_height = 0;
-uint8_t framebuffer2d_inited = 0;
+const struct GLLibFunctions* lgl = NULL;
 unsigned int program_direct;
-unsigned int program_direct_sampler;
+int program_direct_sampler;
+int program_direct_d_xywh;
+int program_direct_s_xywh;
+int program_direct_src_wh_dest_wh;
 unsigned int program_direct_vao;
 unsigned int buffer_vertices_square;
 
 // "direct" program is basically a blit but with transparency
 const char* program_direct_vs = "#version 330 core\n"
-"layout (location = 0) in vec2 aPos;\n"
-"out vec2 vPos;\n"
-"void main(){gl_Position=vec4(aPos.x,aPos.y,0.0,1.0); vPos=aPos;}\n";
+"layout (location = 0) in vec2 aPos;"
+"out vec2 vPos;"
+"uniform ivec4 d_xywh;"
+"uniform ivec4 src_wh_dest_wh;"
+"void main() {"
+  "vPos = aPos;"
+  "gl_Position = vec4(((((aPos * d_xywh.pq) + d_xywh.st) * vec2(2.0, 2.0) / src_wh_dest_wh.pq) - vec2(1.0, 1.0)) * vec2(1.0, -1.0), 0.0, 1.0);"
+"}";
 const char* program_direct_fs = "#version 330 core\n"
-"in vec2 vPos;\n"
-"out vec4 col;\n"
+"in vec2 vPos;"
+"out vec4 col;"
 "uniform sampler2D tex;"
-"void main(){col=texture(tex,vPos);}\n";
+"uniform ivec4 s_xywh;"
+"uniform ivec4 src_wh_dest_wh;"
+"void main() {"
+  "col = texture(tex, ((vPos * s_xywh.pq) + s_xywh.st) / src_wh_dest_wh.st);"
+"}";
 
 struct GLProgram* _bolt_context_get_program(struct GLContext*, unsigned int);
 struct GLArrayBuffer* _bolt_context_get_buffer(struct GLContext*, unsigned int);
@@ -75,6 +95,13 @@ void _bolt_glcontext_free(struct GLContext*);
 #define GAME_MINIMAP_BIG_SIZE 2048
 struct GLContext contexts[CONTEXTS_CAPACITY];
 _Thread_local struct GLContext* current_context = NULL;
+
+struct PluginSurfaceUserdata {
+    unsigned int width;
+    unsigned int height;
+    unsigned int framebuffer;
+    unsigned int renderbuffer;
+};
 
 struct GLContext* _bolt_context() {
     return current_context;
@@ -412,6 +439,7 @@ void _bolt_gl_load(void* (*GetProcAddress)(const char*)) {
     INIT_GL_FUNC(ShaderSource)
     INIT_GL_FUNC(TexStorage2D)
     INIT_GL_FUNC(Uniform1i)
+    INIT_GL_FUNC(Uniform4i)
     INIT_GL_FUNC(UniformMatrix4fv)
     INIT_GL_FUNC(UnmapBuffer)
     INIT_GL_FUNC(UseProgram)
@@ -433,9 +461,12 @@ void _bolt_gl_init() {
     gl.AttachShader(program_direct, direct_fs);
     gl.LinkProgram(program_direct);
     program_direct_sampler = gl.GetUniformLocation(program_direct, "tex");
+    program_direct_d_xywh = gl.GetUniformLocation(program_direct, "d_xywh");
+    program_direct_s_xywh = gl.GetUniformLocation(program_direct, "s_xywh");
+    program_direct_src_wh_dest_wh = gl.GetUniformLocation(program_direct, "src_wh_dest_wh");
     gl.GenBuffers(1, &buffer_vertices_square);
     gl.BindBuffer(GL_ARRAY_BUFFER, buffer_vertices_square);
-    const float square[] = {-1.0f, -1.0f, 1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 1.0f};
+    const float square[] = {0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f};
     gl.BufferData(GL_ARRAY_BUFFER, sizeof(float) * 8, square, GL_STATIC_DRAW);
     gl.DeleteShader(direct_vs);
     gl.DeleteShader(direct_fs);
@@ -948,59 +979,19 @@ void* _bolt_gl_GetProcAddress(const char* name) {
     return NULL;
 }
 
-void _bolt_gl_onSwapBuffers(const struct GLLibFunctions* libgl, uint32_t window_width, uint32_t window_height) {
+void _bolt_gl_onSwapBuffers(uint32_t window_width, uint32_t window_height) {
+    gl_width = window_width;
+    gl_height = window_height;
     struct GLContext* c = _bolt_context();
     if (_bolt_plugin_is_inited()) {
-        _bolt_plugin_handle_swapbuffers(NULL);
-        int texture_unit;
-        gl.GetIntegerv(GL_ACTIVE_TEXTURE, &texture_unit);
-        texture_unit -= GL_TEXTURE0;
-        libgl->ClearColor(0.0, 0.0, 0.0, 0.0);
-        if (framebuffer2d_width != window_width || framebuffer2d_height != window_height) {
-            unsigned int new_fbid, new_rbid;
-            gl.GenFramebuffers(1, &new_fbid);
-            libgl->GenTextures(1, &new_rbid);
-            gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, new_fbid);
-            libgl->BindTexture(GL_TEXTURE_2D, new_rbid);
-            gl.TexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, window_width, window_height);
-            gl.FramebufferTexture(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, new_rbid, 0);
-            libgl->Clear(GL_COLOR_BUFFER_BIT);
-            if (framebuffer2d_inited) {
-                gl.BindFramebuffer(GL_READ_FRAMEBUFFER, framebuffer2d);
-                gl.BlitFramebuffer(0, 0, framebuffer2d_width, framebuffer2d_height, 0, 0, framebuffer2d_width, framebuffer2d_height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
-                gl.DeleteFramebuffers(1, &framebuffer2d);
-                libgl->DeleteTextures(1, &renderbuffer2d);
-            } else {
-                framebuffer2d_inited = 1;
-            }
-            framebuffer2d = new_fbid;
-            renderbuffer2d = new_rbid;
-            framebuffer2d_width = window_width;
-            framebuffer2d_height = window_height;
-        }
-        if (framebuffer2d_inited && c->bound_program) {
-            int vao_binding;
-            gl.GetIntegerv(GL_VERTEX_ARRAY_BINDING, &vao_binding);
-            gl.UseProgram(program_direct);
-            libgl->BindTexture(GL_TEXTURE_2D, renderbuffer2d);
-            gl.BindVertexArray(program_direct_vao);
-            gl.Uniform1i(program_direct_sampler, texture_unit);
-            gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-            libgl->DrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-            gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, framebuffer2d);
-            libgl->Clear(GL_COLOR_BUFFER_BIT);
-            gl.UseProgram(c->bound_program->id);
-            gl.BindVertexArray(vao_binding);
-        }
-        const struct GLTexture2D* original_tex = c->texture_units[texture_unit];
-        libgl->BindTexture(GL_TEXTURE_2D, original_tex ? original_tex->id : 0);
-        gl.BindFramebuffer(GL_READ_FRAMEBUFFER, c->current_read_framebuffer);
-        gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, c->current_draw_framebuffer);
+        struct SwapBuffersEvent event;
+        _bolt_plugin_handle_swapbuffers(&event);
     }
 }
 
-void _bolt_gl_onCreateContext(void* context, void* shared_context, void* (*GetProcAddress)(const char*)) {
+void _bolt_gl_onCreateContext(void* context, void* shared_context, const struct GLLibFunctions* libgl, void* (*GetProcAddress)(const char*)) {
     if (!shared_context) {
+        lgl = libgl;
         if (egl_init_count == 0) {
             _bolt_gl_load(GetProcAddress);
         } else {
@@ -1031,22 +1022,17 @@ void _bolt_gl_onMakeCurrent(void* context) {
     if (egl_main_context_makecurrent_pending && (uintptr_t)context == egl_main_context) {
         egl_main_context_makecurrent_pending = 0;
         _bolt_gl_init();
-        _bolt_plugin_init();
+        _bolt_plugin_init(_bolt_gl_plugin_surface_init, _bolt_gl_plugin_surface_destroy);
         _bolt_plugin_add(lua_test_plugin);
     }
 }
 
-void* _bolt_gl_onDestroyContext(void* context, const struct GLLibFunctions* libgl) {
+void* _bolt_gl_onDestroyContext(void* context) {
     uint8_t do_destroy_main = 0;
     if ((uintptr_t)context != egl_main_context) {
         _bolt_destroy_context(context);
     } else {
         egl_main_context_destroy_pending = 1;
-        if (framebuffer2d_inited) {
-            gl.DeleteFramebuffers(1, &framebuffer2d);
-            libgl->DeleteTextures(1, &renderbuffer2d);
-            framebuffer2d_inited = 0;
-        }
     }
     if (_bolt_context_count() == 1 && egl_main_context_destroy_pending) {
         do_destroy_main = 1;
@@ -1408,4 +1394,73 @@ uint8_t _bolt_gl_plugin_texture_compare(void* userdata, size_t x, size_t y, size
         return 0;
     }
     return !memcmp(tex->data + start_offset, data, len);
+}
+
+void _bolt_gl_plugin_surface_init(struct SurfaceFunctions* functions, unsigned int width, unsigned int height) {
+    struct PluginSurfaceUserdata* userdata = malloc(sizeof(struct PluginSurfaceUserdata));
+    struct GLContext* c = _bolt_context();
+    int texture_unit;
+    gl.GetIntegerv(GL_ACTIVE_TEXTURE, &texture_unit);
+    texture_unit -= GL_TEXTURE0;
+
+    gl.GenFramebuffers(1, &userdata->framebuffer);
+    lgl->GenTextures(1, &userdata->renderbuffer);
+    gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, userdata->framebuffer);
+    lgl->BindTexture(GL_TEXTURE_2D, userdata->renderbuffer);
+    gl.TexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, width, height);
+    gl.FramebufferTexture(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, userdata->renderbuffer, 0);
+    lgl->ClearColor(0.0, 0.0, 0.0, 0.0);
+    lgl->Clear(GL_COLOR_BUFFER_BIT);
+    userdata->width = width;
+    userdata->height = height;
+    functions->userdata = userdata;
+    functions->clear = _bolt_gl_plugin_surface_clear;
+    functions->draw_to_screen = _bolt_gl_plugin_surface_drawtoscreen;
+
+    const struct GLTexture2D* original_tex = c->texture_units[texture_unit];
+    lgl->BindTexture(GL_TEXTURE_2D, original_tex ? original_tex->id : 0);
+    gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, c->current_draw_framebuffer);
+}
+
+void _bolt_gl_plugin_surface_destroy(void* _userdata) {
+    struct PluginSurfaceUserdata* userdata = _userdata;
+    gl.DeleteFramebuffers(1, &userdata->framebuffer);
+    lgl->DeleteTextures(1, &userdata->renderbuffer);
+    free(userdata);
+}
+
+void _bolt_gl_plugin_surface_clear(void* _userdata, double r, double g, double b, double a) {
+    lgl->GetError();
+    struct PluginSurfaceUserdata* userdata = _userdata;
+    struct GLContext* c = _bolt_context();
+    gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, userdata->framebuffer);
+    lgl->ClearColor(r, g, b, a);
+    lgl->Clear(GL_COLOR_BUFFER_BIT);
+    gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, c->current_draw_framebuffer);
+}
+
+void _bolt_gl_plugin_surface_drawtoscreen(void* _userdata, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh) {
+    struct PluginSurfaceUserdata* userdata = _userdata;
+    struct GLContext* c = _bolt_context();
+    int texture_unit;
+    gl.GetIntegerv(GL_ACTIVE_TEXTURE, &texture_unit);
+    texture_unit -= GL_TEXTURE0;
+    int vao_binding;
+    gl.GetIntegerv(GL_VERTEX_ARRAY_BINDING, &vao_binding);
+
+    gl.UseProgram(program_direct);
+    lgl->BindTexture(GL_TEXTURE_2D, userdata->renderbuffer);
+    gl.BindVertexArray(program_direct_vao);
+    gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+    gl.Uniform1i(program_direct_sampler, texture_unit);
+    gl.Uniform4i(program_direct_d_xywh, dx, dy, dw, dh);
+    gl.Uniform4i(program_direct_s_xywh, sx, sy, sw, sh);
+    gl.Uniform4i(program_direct_src_wh_dest_wh, userdata->width, userdata->height, gl_width, gl_height);
+    lgl->DrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+    const struct GLTexture2D* original_tex = c->texture_units[texture_unit];
+    lgl->BindTexture(GL_TEXTURE_2D, original_tex ? original_tex->id : 0);
+    gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, c->current_draw_framebuffer);
+    gl.BindVertexArray(vao_binding);
+    gl.UseProgram(c->bound_program ? c->bound_program->id : 0);
 }

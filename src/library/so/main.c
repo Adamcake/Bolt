@@ -59,7 +59,7 @@ xcb_generic_event_t* (*real_xcb_poll_for_queued_event)(xcb_connection_t*) = NULL
 xcb_generic_event_t* (*real_xcb_wait_for_event)(xcb_connection_t*) = NULL;
 xcb_get_geometry_reply_t* (*real_xcb_get_geometry_reply)(xcb_connection_t*, xcb_get_geometry_cookie_t, xcb_generic_error_t**) = NULL;
 
-struct GLLibFunctions lgl = {0};
+struct GLLibFunctions libgl = {0};
 
 ElfW(Word) _bolt_hash_elf(const char* name) {
 	ElfW(Word) tmp, hash = 0;
@@ -175,25 +175,25 @@ void _bolt_init_libegl(unsigned long addr, const Elf32_Word* gnu_hash_table, con
 void _bolt_init_libgl(unsigned long addr, const Elf32_Word* gnu_hash_table, const ElfW(Word)* hash_table, const char* string_table, const ElfW(Sym)* symbol_table) {
     libgl_addr = (void*)addr;
     const ElfW(Sym)* sym = _bolt_lookup_symbol("glBindTexture", gnu_hash_table, hash_table, string_table, symbol_table);
-    if (sym) lgl.BindTexture = sym->st_value + libgl_addr;
+    if (sym) libgl.BindTexture = sym->st_value + libgl_addr;
     sym = _bolt_lookup_symbol("glClear", gnu_hash_table, hash_table, string_table, symbol_table);
-    if (sym) lgl.Clear = sym->st_value + libgl_addr;
+    if (sym) libgl.Clear = sym->st_value + libgl_addr;
     sym = _bolt_lookup_symbol("glClearColor", gnu_hash_table, hash_table, string_table, symbol_table);
-    if (sym) lgl.ClearColor = sym->st_value + libgl_addr;
+    if (sym) libgl.ClearColor = sym->st_value + libgl_addr;
     sym = _bolt_lookup_symbol("glDeleteTextures", gnu_hash_table, hash_table, string_table, symbol_table);
-    if (sym) lgl.DeleteTextures = sym->st_value + libgl_addr;
+    if (sym) libgl.DeleteTextures = sym->st_value + libgl_addr;
     sym = _bolt_lookup_symbol("glDrawArrays", gnu_hash_table, hash_table, string_table, symbol_table);
-    if (sym) lgl.DrawArrays = sym->st_value + libgl_addr;
+    if (sym) libgl.DrawArrays = sym->st_value + libgl_addr;
     sym = _bolt_lookup_symbol("glDrawElements", gnu_hash_table, hash_table, string_table, symbol_table);
-    if (sym) lgl.DrawElements = sym->st_value + libgl_addr;
+    if (sym) libgl.DrawElements = sym->st_value + libgl_addr;
     sym = _bolt_lookup_symbol("glFlush", gnu_hash_table, hash_table, string_table, symbol_table);
-    if (sym) lgl.Flush = sym->st_value + libgl_addr;
+    if (sym) libgl.Flush = sym->st_value + libgl_addr;
     sym = _bolt_lookup_symbol("glGenTextures", gnu_hash_table, hash_table, string_table, symbol_table);
-    if (sym) lgl.GenTextures = sym->st_value + libgl_addr;
+    if (sym) libgl.GenTextures = sym->st_value + libgl_addr;
     sym = _bolt_lookup_symbol("glGetError", gnu_hash_table, hash_table, string_table, symbol_table);
-    if (sym) lgl.GetError = sym->st_value + libgl_addr;
+    if (sym) libgl.GetError = sym->st_value + libgl_addr;
     sym = _bolt_lookup_symbol("glTexSubImage2D", gnu_hash_table, hash_table, string_table, symbol_table);
-    if (sym) lgl.TexSubImage2D = sym->st_value + libgl_addr;
+    if (sym) libgl.TexSubImage2D = sym->st_value + libgl_addr;
 }
 
 void _bolt_init_libxcb(unsigned long addr, const Elf32_Word* gnu_hash_table, const ElfW(Word)* hash_table, const char* string_table, const ElfW(Sym)* symbol_table) {
@@ -261,49 +261,49 @@ void _bolt_init_functions() {
 
 void glGenTextures(uint32_t n, unsigned int* textures) {
     LOG("glGenTextures\n");
-    lgl.GenTextures(n, textures);
+    libgl.GenTextures(n, textures);
     _bolt_gl_onGenTextures(n, textures);
     LOG("glGenTextures end\n");
 }
 
 void glDrawElements(uint32_t mode, unsigned int count, uint32_t type, const void* indices_offset) {
     LOG("glDrawElements\n");
-    lgl.DrawElements(mode, count, type, indices_offset);
+    libgl.DrawElements(mode, count, type, indices_offset);
     _bolt_gl_onDrawElements(mode, count, type, indices_offset);
     LOG("glDrawElements end\n");
 }
 
 void glDrawArrays(uint32_t mode, int first, unsigned int count) {
     LOG("glDrawArrays\n");
-    lgl.DrawArrays(mode, first, count);
+    libgl.DrawArrays(mode, first, count);
     _bolt_gl_onDrawArrays(mode, first, count);
     LOG("glDrawArrays end\n");
 }
 
 void glBindTexture(uint32_t target, unsigned int texture) {
     LOG("glBindTexture\n");
-    lgl.BindTexture(target, texture);
+    libgl.BindTexture(target, texture);
     _bolt_gl_onBindTexture(target, texture);
     LOG("glBindTexture end\n");
 }
 
 void glTexSubImage2D(uint32_t target, int level, int xoffset, int yoffset, unsigned int width, unsigned int height, uint32_t format, uint32_t type, const void* pixels) {
     LOG("glTexSubImage2D\n");
-    lgl.TexSubImage2D(target, level, xoffset, yoffset, width, height, format, type, pixels);
+    libgl.TexSubImage2D(target, level, xoffset, yoffset, width, height, format, type, pixels);
     _bolt_gl_onTexSubImage2D(target, level, xoffset, yoffset, width, height, format, type, pixels);
     LOG("glTexSubImage2D end\n");
 }
 
 void glDeleteTextures(unsigned int n, const unsigned int* textures) {
     LOG("glDeleteTextures\n");
-    lgl.DeleteTextures(n, textures);
+    libgl.DeleteTextures(n, textures);
     _bolt_gl_onDeleteTextures(n, textures);
     LOG("glDeleteTextures end\n");
 }
 
 void glClear(uint32_t mask) {
     LOG("glClear\n");
-    lgl.Clear(mask);
+    libgl.Clear(mask);
     _bolt_gl_onClear(mask);
     LOG("glClear end\n");
 }
@@ -316,7 +316,7 @@ void* eglGetProcAddress(const char* name) {
 
 unsigned int eglSwapBuffers(void* display, void* surface) {
     LOG("eglSwapBuffers\n");
-    _bolt_gl_onSwapBuffers(&lgl, main_window_width, main_window_height);
+    _bolt_gl_onSwapBuffers(main_window_width, main_window_height);
     unsigned int ret = real_eglSwapBuffers(display, surface);
     LOG("eglSwapBuffers end (returned %u)\n", ret);
     return ret;
@@ -327,7 +327,7 @@ void* eglCreateContext(void* display, void* config, void* share_context, const v
     void* ret = real_eglCreateContext(display, config, share_context, attrib_list);
     if (ret) {
         pthread_mutex_lock(&egl_lock);
-        _bolt_gl_onCreateContext(ret, share_context, real_eglGetProcAddress);
+        _bolt_gl_onCreateContext(ret, share_context, &libgl, real_eglGetProcAddress);
         pthread_mutex_unlock(&egl_lock);
     }
     LOG("eglCreateContext end (returned %lu)\n", (uintptr_t)ret);
@@ -351,7 +351,7 @@ unsigned int eglDestroyContext(void* display, void* context) {
     unsigned int ret = real_eglDestroyContext(display, context);
     if (ret) {
         pthread_mutex_lock(&egl_lock);
-        void* c = _bolt_gl_onDestroyContext(context, &lgl);
+        void* c = _bolt_gl_onDestroyContext(context);
         if (c) {
             real_eglMakeCurrent(display, NULL, NULL, c);
             _bolt_gl_close();
@@ -499,16 +499,16 @@ void* dlopen(const char* filename, int flags) {
         if (!libgl_addr && !strcmp(filename, libgl_name)) {
             libgl_addr = ret;
             if (!libgl_addr) return NULL;
-            lgl.BindTexture = real_dlsym(ret, "glBindTexture");
-            lgl.Clear = real_dlsym(ret, "glClear");
-            lgl.ClearColor = real_dlsym(ret, "glClearColor");
-            lgl.DeleteTextures = real_dlsym(ret, "glDeleteTextures");
-            lgl.DrawArrays = real_dlsym(ret, "glDrawArrays");
-            lgl.DrawElements = real_dlsym(ret, "glDrawElements");
-            lgl.Flush = real_dlsym(ret, "glFlush");
-            lgl.GenTextures = real_dlsym(ret, "glGenTextures");
-            lgl.GetError = real_dlsym(ret, "glGetError");
-            lgl.TexSubImage2D = real_dlsym(ret, "glTexSubImage2D");
+            libgl.BindTexture = real_dlsym(ret, "glBindTexture");
+            libgl.Clear = real_dlsym(ret, "glClear");
+            libgl.ClearColor = real_dlsym(ret, "glClearColor");
+            libgl.DeleteTextures = real_dlsym(ret, "glDeleteTextures");
+            libgl.DrawArrays = real_dlsym(ret, "glDrawArrays");
+            libgl.DrawElements = real_dlsym(ret, "glDrawElements");
+            libgl.Flush = real_dlsym(ret, "glFlush");
+            libgl.GenTextures = real_dlsym(ret, "glGenTextures");
+            libgl.GetError = real_dlsym(ret, "glGetError");
+            libgl.TexSubImage2D = real_dlsym(ret, "glTexSubImage2D");
         }
         if (!libxcb_addr && !strcmp(filename, libxcb_name)) {
             libxcb_addr = ret;
