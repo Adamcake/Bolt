@@ -16,7 +16,7 @@ const char* BOLT_REGISTRYNAME = "bolt";
 const char* BATCH2D_META_REGISTRYNAME = "batch2dindex";
 const char* MINIMAP_META_REGISTRYNAME = "minimapindex";
 const char* SWAPBUFFERS_META_REGISTRYNAME = "swapbuffersindex";
-const char* SURFACE_META_REGISTRYNAME = "surface";
+const char* SURFACE_META_REGISTRYNAME = "surfaceindex";
 uint64_t next_plugin_id = 1;
 
 void (*surface_init)(struct SurfaceFunctions*, unsigned int, unsigned int);
