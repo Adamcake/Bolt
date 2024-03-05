@@ -1428,9 +1428,6 @@ uint8_t _bolt_gl_plugin_texture_compare(void* userdata, size_t x, size_t y, size
 void _bolt_gl_plugin_surface_init(struct SurfaceFunctions* functions, unsigned int width, unsigned int height) {
     struct PluginSurfaceUserdata* userdata = malloc(sizeof(struct PluginSurfaceUserdata));
     struct GLContext* c = _bolt_context();
-    int texture_unit;
-    gl.GetIntegerv(GL_ACTIVE_TEXTURE, &texture_unit);
-    texture_unit -= GL_TEXTURE0;
 
     gl.GenFramebuffers(1, &userdata->framebuffer);
     lgl->GenTextures(1, &userdata->renderbuffer);
@@ -1446,7 +1443,7 @@ void _bolt_gl_plugin_surface_init(struct SurfaceFunctions* functions, unsigned i
     functions->clear = _bolt_gl_plugin_surface_clear;
     functions->draw_to_screen = _bolt_gl_plugin_surface_drawtoscreen;
 
-    const struct GLTexture2D* original_tex = c->texture_units[texture_unit];
+    const struct GLTexture2D* original_tex = c->texture_units[c->active_texture];
     lgl->BindTexture(GL_TEXTURE_2D, original_tex ? original_tex->id : 0);
     gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, c->current_draw_framebuffer);
 }
@@ -1471,25 +1468,20 @@ void _bolt_gl_plugin_surface_clear(void* _userdata, double r, double g, double b
 void _bolt_gl_plugin_surface_drawtoscreen(void* _userdata, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh) {
     struct PluginSurfaceUserdata* userdata = _userdata;
     struct GLContext* c = _bolt_context();
-    int texture_unit;
-    gl.GetIntegerv(GL_ACTIVE_TEXTURE, &texture_unit);
-    texture_unit -= GL_TEXTURE0;
-    int vao_binding;
-    gl.GetIntegerv(GL_VERTEX_ARRAY_BINDING, &vao_binding);
 
     gl.UseProgram(program_direct);
     lgl->BindTexture(GL_TEXTURE_2D, userdata->renderbuffer);
     gl.BindVertexArray(program_direct_vao);
     gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-    gl.Uniform1i(program_direct_sampler, texture_unit);
+    gl.Uniform1i(program_direct_sampler, c->active_texture);
     gl.Uniform4i(program_direct_d_xywh, dx, dy, dw, dh);
     gl.Uniform4i(program_direct_s_xywh, sx, sy, sw, sh);
     gl.Uniform4i(program_direct_src_wh_dest_wh, userdata->width, userdata->height, gl_width, gl_height);
     lgl->DrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
-    const struct GLTexture2D* original_tex = c->texture_units[texture_unit];
+    const struct GLTexture2D* original_tex = c->texture_units[c->active_texture];
     lgl->BindTexture(GL_TEXTURE_2D, original_tex ? original_tex->id : 0);
     gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, c->current_draw_framebuffer);
-    gl.BindVertexArray(vao_binding);
+    gl.BindVertexArray(c->bound_vao->id);
     gl.UseProgram(c->bound_program ? c->bound_program->id : 0);
 }
