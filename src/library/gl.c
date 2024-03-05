@@ -1170,69 +1170,48 @@ void _bolt_gl_onDrawElements(uint32_t mode, unsigned int count, uint32_t type, c
             _bolt_plugin_handle_2d(&batch);
         }
     }
-    //if (type == GL_UNSIGNED_SHORT && mode == GL_TRIANGLES && c->bound_program->is_3d && count == 2370) {
-    //    int draw_tex;
-    //    gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
-    //    if (draw_tex == c->target_3d_tex) {
-    //        const struct GLAttrBinding* xyxz = &attributes[c->bound_program->loc_aMaterialSettingsSlotXY_TilePositionXZ];
-    //        const struct GLAttrBinding* vertex_xyz_bone = &attributes[c->bound_program->loc_aVertexPosition_BoneLabel];
-    //        if (xyxz->enabled && vertex_xyz_bone->enabled) {
-    //            int atlas;
-    //            int settings_atlas;
-    //            float atlas_meta[4];
-    //            int32_t settingsxy_tilexz[4];
-    //            int32_t vertexpos_bonelabel[4];
-    //            gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uTextureAtlas, &atlas);
-    //            gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uTextureAtlasSettings, &settings_atlas);
-    //            gl.GetUniformfv(c->bound_program->id, c->bound_program->loc_uAtlasMeta, atlas_meta);
-    //            const struct GLTexture2D* tex = c->texture_units[atlas];
-    //            const struct GLTexture2D* tex_settings = c->texture_units[settings_atlas];
-    //            int32_t current_slot_x, current_slot_y;
-    //            uint32_t atlas_scale = (uint32_t)roundf(atlas_meta[1]);
-    //            int32_t x_min, x_max, y_min, y_max, z_min, z_max;
-    //            uint32_t portal_found = 0;
-    //            for (size_t i = 0; i < count; i += 1) {
-    //                if (!_bolt_get_attr_binding_int(c, xyxz, indices[i], 4, settingsxy_tilexz)) break;
-    //                if (!_bolt_get_attr_binding_int(c, vertex_xyz_bone, indices[i], 4, vertexpos_bonelabel)) break;
-    //                if (i != 0 && current_slot_x == settingsxy_tilexz[0] && current_slot_y == settingsxy_tilexz[1]) {
-    //                    if (portal_found) {
-    //                        if (x_min > vertexpos_bonelabel[0]) x_min = vertexpos_bonelabel[0];
-    //                        if (x_max < vertexpos_bonelabel[0]) x_max = vertexpos_bonelabel[0];
-    //                        if (y_min > vertexpos_bonelabel[1]) y_min = vertexpos_bonelabel[1];
-    //                        if (y_max < vertexpos_bonelabel[1]) y_max = vertexpos_bonelabel[1];
-    //                        if (z_min > vertexpos_bonelabel[2]) z_min = vertexpos_bonelabel[2];
-    //                        if (z_max < vertexpos_bonelabel[2]) z_max = vertexpos_bonelabel[2];
-    //                    }
-    //                } else {
-    //                    if (portal_found) {
-    //                        printf("portal on screen");
-    //                        portal_found = 0;
-    //                    }
-    //        
-    //                    // this is pretty wild
-    //                    current_slot_x = settingsxy_tilexz[0];
-    //                    current_slot_y = settingsxy_tilexz[1];
-    //                    const uint8_t* settings_ptr = tex_settings->data + (current_slot_y * tex_settings->width * 4 * 4) + (current_slot_x * 3 * 4);
-    //                    const uint8_t bitmask = *(settings_ptr + (tex_settings->width * 2 * 4) + 7);
-    //                    const uint32_t tex_x = (uint32_t)(*settings_ptr + (bitmask & 1 ? 256 : 0)) * atlas_scale;
-    //                    const uint32_t tex_y = (uint32_t)(*(settings_ptr + 1) + (bitmask & 2 ? 256 : 0)) * atlas_scale;
-    //                    const uint32_t tex_wh = (uint32_t)*(settings_ptr + 8) * atlas_scale;
-    //                    if (tex_x + tex_wh >= tex->width || tex_y + tex_wh >= tex->height) continue;
-    //        
-    //                    if (memcmp(tex->data + (((tex_y * tex->width) + tex_x) * 4), portal_pixel_row, 512 * 4) == 0) {
-    //                        portal_found = 1;
-    //                        x_min = vertexpos_bonelabel[0];
-    //                        x_max = vertexpos_bonelabel[0];
-    //                        y_min = vertexpos_bonelabel[1];
-    //                        y_max = vertexpos_bonelabel[1];
-    //                        z_min = vertexpos_bonelabel[2];
-    //                        z_max = vertexpos_bonelabel[2];
-    //                    }
-    //                }
-    //            }
-    //        }
-    //    }
-    //}
+    if (type == GL_UNSIGNED_SHORT && mode == GL_TRIANGLES && c->bound_program->is_3d) {
+        int draw_tex;
+        gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
+        if (draw_tex == c->target_3d_tex) {
+            int atlas, settings_atlas;
+            float atlas_meta[4];
+            gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uTextureAtlas, &atlas);
+            gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uTextureAtlasSettings, &settings_atlas);
+            gl.GetUniformfv(c->bound_program->id, c->bound_program->loc_uAtlasMeta, atlas_meta);
+            struct GLTexture2D* tex = c->texture_units[atlas];
+            struct GLTexture2D* tex_settings = c->texture_units[settings_atlas];
+
+            struct GLPluginDrawElementsVertex3DUserData vertex_userdata;
+            vertex_userdata.c = c;
+            vertex_userdata.indices = (unsigned short*)(element_buffer->data + (uintptr_t)indices_offset);
+            vertex_userdata.atlas_scale = roundf(atlas_meta[1]);
+            vertex_userdata.atlas = tex;
+            vertex_userdata.settings_atlas = tex_settings;
+            vertex_userdata.xy_xz = &attributes[c->bound_program->loc_aMaterialSettingsSlotXY_TilePositionXZ];
+            vertex_userdata.xyz_bone = &attributes[c->bound_program->loc_aVertexPosition_BoneLabel];
+            vertex_userdata.tex_uv = &attributes[c->bound_program->loc_aTextureUV];
+            vertex_userdata.colour = &attributes[c->bound_program->loc_aVertexColour];
+
+            struct GLPluginTextureUserData tex_userdata;
+            tex_userdata.tex = tex;
+
+            struct Render3D render;
+            render.vertex_count = count;
+            render.vertex_functions.userdata = &vertex_userdata;
+            render.vertex_functions.xyz = _bolt_gl_plugin_drawelements_vertex3d_xyz;
+            render.vertex_functions.atlas_meta = _bolt_gl_plugin_drawelements_vertex3d_atlas_meta;
+            render.vertex_functions.atlas_xywh = _bolt_gl_plugin_drawelements_vertex3d_meta_xywh;
+            render.vertex_functions.uv = _bolt_gl_plugin_drawelements_vertex3d_uv;
+            render.vertex_functions.colour = _bolt_gl_plugin_drawelements_vertex3d_colour;
+            render.texture_functions.userdata = &tex_userdata;
+            render.texture_functions.id = _bolt_gl_plugin_texture_id;
+            render.texture_functions.size = _bolt_gl_plugin_texture_size;
+            render.texture_functions.compare = _bolt_gl_plugin_texture_compare;
+
+            _bolt_plugin_handle_3d(&render);
+        }
+    }
 }
 
 void _bolt_gl_onDrawArrays(uint32_t mode, int first, unsigned int count) {
@@ -1362,6 +1341,56 @@ void _bolt_gl_plugin_drawelements_vertex2d_uv(size_t index, void* userdata, doub
 
 void _bolt_gl_plugin_drawelements_vertex2d_colour(size_t index, void* userdata, double* out) {
     struct GLPluginDrawElementsVertex2DUserData* data = userdata;
+    float colour[4];
+    _bolt_get_attr_binding(data->c, data->colour, data->indices[index], 4, colour);
+    // these are ABGR for some reason
+    out[0] = (double)colour[3];
+    out[1] = (double)colour[2];
+    out[2] = (double)colour[1];
+    out[3] = (double)colour[0];
+}
+
+void _bolt_gl_plugin_drawelements_vertex3d_xyz(size_t index, void* userdata, int32_t* out) {
+    struct GLPluginDrawElementsVertex3DUserData* data = userdata;
+    if (!_bolt_get_attr_binding_int(data->c, data->xyz_bone, data->indices[index], 3, out)) {
+        float pos[3];
+        _bolt_get_attr_binding(data->c, data->xyz_bone, data->indices[index], 3, pos);
+        out[0] = (int32_t)roundf(pos[0]);
+        out[1] = (int32_t)roundf(pos[1]);
+        out[2] = (int32_t)roundf(pos[2]);
+    }
+}
+
+size_t _bolt_gl_plugin_drawelements_vertex3d_atlas_meta(size_t index, void* userdata) {
+    struct GLPluginDrawElementsVertex3DUserData* data = userdata;
+    int material_xy[2];
+    _bolt_get_attr_binding_int(data->c, data->xy_xz, data->indices[index], 2, material_xy);
+    return ((size_t)material_xy[1] << 16) | (size_t)material_xy[0];
+}
+
+void _bolt_gl_plugin_drawelements_vertex3d_meta_xywh(size_t meta, void* userdata, int32_t* out) {
+    struct GLPluginDrawElementsVertex3DUserData* data = userdata;
+    size_t slot_x = meta & 0xFF;
+    size_t slot_y = meta >> 16;
+    // this is pretty wild
+    const uint8_t* settings_ptr = data->settings_atlas->data + (slot_y * data->settings_atlas->width * 4 * 4) + (slot_x * 3 * 4);
+    const uint8_t bitmask = *(settings_ptr + (data->settings_atlas->width * 2 * 4) + 7);
+    out[0] = ((int32_t)(*settings_ptr) + (bitmask & 1 ? 256 : 0)) * data->atlas_scale;
+    out[1] = ((int32_t)*(settings_ptr + 1) + (bitmask & 2 ? 256 : 0)) * data->atlas_scale;
+    out[2] = (int32_t)*(settings_ptr + 8) * data->atlas_scale;
+    out[3] = out[2];
+}
+
+void _bolt_gl_plugin_drawelements_vertex3d_uv(size_t index, void* userdata, double* out) {
+    struct GLPluginDrawElementsVertex3DUserData* data = userdata;
+    float uv[2];
+    _bolt_get_attr_binding(data->c, data->tex_uv, data->indices[index], 2, uv);
+    out[0] = (double)uv[0];
+    out[1] = (double)uv[1];
+}
+
+void _bolt_gl_plugin_drawelements_vertex3d_colour(size_t index, void* userdata, double* out) {
+    struct GLPluginDrawElementsVertex3DUserData* data = userdata;
     float colour[4];
     _bolt_get_attr_binding(data->c, data->colour, data->indices[index], 4, colour);
     // these are ABGR for some reason

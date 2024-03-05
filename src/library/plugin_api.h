@@ -108,6 +108,21 @@ static int api_setcallbackswapbuffers(lua_State*);
 static int api_setcallback2d(lua_State*);
 
 /// [-1, +0, -]
+/// Sets a callback function for rendering of 3D models, overwriting the previous callback, if any.
+/// Passing a non-function (ideally `nil`) will restore the default setting, which is to have no
+/// handler for 2D rendering.
+///
+/// Each time a 3D model is rendered, the callback will be called with one param, that being a 3D
+/// render object. All of the member functions of 3D render objects can be found in this file,
+/// prefixed with "api_render3d". The object and everything contained by it will become invalid as
+/// soon as the callback ends, so do not retain them.
+///
+/// The callback will be called an extremely high amount of times per second, so great care should
+/// be taken to determine as quickly as possible whether any image is of interest or not, such as
+/// by checking the model's vertex count.
+static int api_setcallback3d(lua_State*);
+
+/// [-1, +0, -]
 /// Sets a callback function for rendering of a minimap background image, overwriting the previous
 /// callback, if any. Passing a non-function (ideally `nil`) will restore the default setting,
 /// which is to have no handler for minimap rendering.
@@ -247,3 +262,68 @@ static int api_surface_clear(lua_State*);
 ///
 /// Paramaters are source X,Y,W,H followed by destination X,Y,W,H, all in pixels.
 static int api_surface_drawtoscreen(lua_State*);
+
+/// [-1, +1, -]
+/// Returns the number of vertices in a 3D render object (i.e. a model).
+static int api_render3d_vertexcount(lua_State*);
+
+/// [-2, +3, -]
+/// Given an index of a vertex in a model, returns its X Y and Z in model coordinates.
+static int api_render3d_vertexxyz(lua_State*);
+
+/// [-2, +1, -]
+/// Given an index of a vertex in a model, returns a meta-ID relating to its associated image.
+///
+/// Much like 2D batches, 3D renders always have exactly one texture atlas associated with them,
+/// but each vertex can still be associated with a different image from the atlas. To allow for
+/// finding if two vertices share the same image without having to fetch and compare the whole
+/// image data for each one, an extra step was added to the API: plugins must query the vertex's
+/// image meta-ID, then use that ID to fetch texture details (if desired). Meta-IDs should not be
+/// retained and used outside the current callback, as the game may invalidate them.
+static int api_render3d_vertexmeta(lua_State*);
+
+/// Given an image meta-ID from this render, fetches the X Y W and H of its associated image in the
+/// texture atlas, in pixel coordinates.
+static int api_render3d_atlasxywh(lua_State*);
+
+/// [-2, +2, -]
+/// Given an index of a vertex in a model, returns the vertex's associated "UV" coordinates.
+///
+/// The values will be floating-point numbers in the range 0.0 - 1.0. They are relative to the
+/// position of the overall image in the texture atlas, queried by atlasxywh.
+static int api_render3d_vertexuv(lua_State*);
+
+/// [-2, +4, -]
+/// Given an index of a vertex in a model, returns the red, green, blue and alpha values for that
+/// vertex, in that order. All four values will be floating-point numbers in the range 0.0 - 1.0.
+///
+/// Also aliased as "vertexcolor" to keep the Americans happy.
+static int api_render3d_vertexcolour(lua_State*);
+
+/// [-1, +1, -]
+/// Returns the unique ID of the texture associated with this render. There will always be one (and
+/// only one) texture associated with a 3D model render. These textures are "atlased", meaning they
+/// will contain a large amount of small images, and each vertex in the model may relate to
+/// different images in the same texture.
+///
+/// The plugin API does not have a way to get a texture by its ID; this is intentional. The purpose
+/// of this function is to be able to compare texture IDs together to check if the current texture
+/// atlas is the same one that was used in a previous render.
+static int api_render3d_textureid(lua_State*);
+
+/// [-1, +2, -]
+/// Returns the size of the overall texture atlas associated with this render, in pixels.
+static int api_render3d_texturesize(lua_State*);
+
+/// [-4, +1, -]
+/// Compares a section of the texture atlas for this render to some RGBA data. For example:
+/// 
+/// `render:comparetexture(64, 128, {0xFF, 0x0, 0x0, 0xFF, 0xFF, 0x0, 0x0, 0xFF})`
+///
+/// This would check if the pixels at 64,128 and 65,128 are red. The bytes must match exactly
+/// for the function to return true, otherwise it will return false.
+///
+/// Normally the X and Y coordinates should be calculated from `atlasxywh()`. Comparing a whole
+/// block of pixels at once by this method is relatively fast, but can only be done one row at a
+/// time.
+static int api_render3d_texturecompare(lua_State*);

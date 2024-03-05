@@ -30,6 +30,32 @@ struct Vertex2DFunctions {
     void (*colour)(size_t index, void* userdata, double* out);
 };
 
+/// Struct containing "vtable" callback information for Render3D's list of vertices.
+/// NOTE: there's an important difference here from the 2D pipeline, in the atlas_meta function.
+/// The atlas_xywh does not take a vertex index, but rather a meta-ID returned from atlas_meta. The
+/// purpose of this is to be able to compare meta-IDs together to check if two vertices have the
+/// same texture without having to actually fetch the texture info for each one.
+struct Vertex3DFunctions {
+    /// Userdata which will be passed to the functions contained in this struct.
+    void* userdata;
+
+    /// Returns the vertex X Y and Z, in model coordinates.
+    void (*xyz)(size_t index, void* userdata, int32_t* out);
+
+    /// Returns a meta-ID for the texture associated with this vertex.
+    size_t (*atlas_meta)(size_t index, void* userdata);
+
+    /// Returns the XYWH of the texture image referred to by this meta-ID, in pixel coordinates.
+    void (*atlas_xywh)(size_t meta, void* userdata, int32_t* out);
+
+    /// Returns the U and V of this vertex in pixel coordinates, normalised from 0.0 to 1.0 within
+    /// the sub-image specified by atlas xy and wh.
+    void (*uv)(size_t index, void* userdata, double* out);
+
+    /// Returns the RGBA colour of this vertex, each one normalised from 0.0 to 1.0.
+    void (*colour)(size_t index, void* userdata, double* out);
+};
+
 /// Struct containing "vtable" callback information for textures.
 /// Note that in the context of Bolt plugins, textures are always two-dimensional.
 struct TextureFunctions {
@@ -73,6 +99,12 @@ struct RenderBatch2D {
     struct TextureFunctions texture_functions;
 };
 
+struct Render3D {
+    uint32_t vertex_count;
+    struct Vertex3DFunctions vertex_functions;
+    struct TextureFunctions texture_functions;
+};
+
 struct RenderMinimapEvent {
     double angle;
     double scale;
@@ -108,6 +140,9 @@ void _bolt_plugin_handle_swapbuffers(struct SwapBuffersEvent*);
 
 /// Sends a RenderBatch2D to all plugins.
 void _bolt_plugin_handle_2d(struct RenderBatch2D*);
+
+/// Sends a Render3D to all plugins.
+void _bolt_plugin_handle_3d(struct Render3D*);
 
 /// Sends a RenderMinimap to all plugins.
 void _bolt_plugin_handle_minimap(struct RenderMinimapEvent*);

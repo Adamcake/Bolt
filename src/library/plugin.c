@@ -11,9 +11,11 @@
 
 #define API_ADD(FUNC) lua_pushstring(state, #FUNC);lua_pushcfunction(state, api_##FUNC);lua_settable(state, -3);
 #define API_ADD_SUB(FUNC, SUB) lua_pushstring(state, #FUNC);lua_pushcfunction(state, api_##SUB##_##FUNC);lua_settable(state, -3);
+#define API_ADD_SUB_ALIAS(FUNC, ALIAS, SUB) lua_pushstring(state, #ALIAS);lua_pushcfunction(state, api_##SUB##_##FUNC);lua_settable(state, -3);
 
 const char* BOLT_REGISTRYNAME = "bolt";
 const char* BATCH2D_META_REGISTRYNAME = "batch2dindex";
+const char* RENDER3D_META_REGISTRYNAME = "batch3dindex";
 const char* MINIMAP_META_REGISTRYNAME = "minimapindex";
 const char* SWAPBUFFERS_META_REGISTRYNAME = "swapbuffersindex";
 const char* SURFACE_META_REGISTRYNAME = "surfaceindex";
@@ -107,7 +109,6 @@ void _bolt_plugin_init(void (*_surface_init)(struct SurfaceFunctions*, unsigned 
     lua_pushstring(state, BATCH2D_META_REGISTRYNAME);
     lua_newtable(state);
     lua_pushstring(state, "__index");
-
     lua_createtable(state, 0, 12);
     API_ADD_SUB(vertexcount, batch2d)
     API_ADD_SUB(verticesperimage, batch2d)
@@ -119,11 +120,27 @@ void _bolt_plugin_init(void (*_surface_init)(struct SurfaceFunctions*, unsigned 
     API_ADD_SUB(vertexuv, batch2d)
     API_ADD_SUB(vertexcolour, batch2d)
     API_ADD_SUB(textureid, batch2d)
+    API_ADD_SUB(texturesize, batch2d)
     API_ADD_SUB(texturecompare, batch2d)
-    lua_pushstring(state, "vertexcolor");
-    lua_pushcfunction(state, api_batch2d_vertexcolour);
+    API_ADD_SUB_ALIAS(vertexcolour, vertexcolor, batch2d)
     lua_settable(state, -3);
+    lua_settable(state, LUA_REGISTRYINDEX);
 
+    // create the metatable for all Render3D objects
+    lua_pushstring(state, RENDER3D_META_REGISTRYNAME);
+    lua_newtable(state);
+    lua_pushstring(state, "__index");
+    lua_createtable(state, 0, 10);
+    API_ADD_SUB(vertexcount, render3d)
+    API_ADD_SUB(vertexxyz, render3d)
+    API_ADD_SUB(vertexmeta, render3d)
+    API_ADD_SUB(atlasxywh, render3d)
+    API_ADD_SUB(vertexuv, render3d)
+    API_ADD_SUB(vertexcolour, render3d)
+    API_ADD_SUB(textureid, render3d)
+    API_ADD_SUB(texturesize, render3d)
+    API_ADD_SUB(texturecompare, render3d)
+    API_ADD_SUB_ALIAS(vertexcolour, vertexcolor, render3d)
     lua_settable(state, -3);
     lua_settable(state, LUA_REGISTRYINDEX);
 
@@ -179,6 +196,7 @@ static int _bolt_api_init(lua_State* state) {
     API_ADD(checkversion)
     API_ADD(time)
     API_ADD(setcallback2d)
+    API_ADD(setcallback3d)
     API_ADD(setcallbackminimap)
     API_ADD(setcallbackswapbuffers)
     API_ADD(createsurface)
@@ -256,6 +274,7 @@ static void _bolt_check_argc(lua_State* state, int expected_argc, const char* fu
 
 DEFINE_CALLBACK(swapbuffers, SWAPBUFFERS_META_REGISTRYNAME, SwapBuffersEvent, ENV_CALLBACK_SWAPBUFFERS)
 DEFINE_CALLBACK(2d, BATCH2D_META_REGISTRYNAME, RenderBatch2D, ENV_CALLBACK_2D)
+DEFINE_CALLBACK(3d, RENDER3D_META_REGISTRYNAME, Render3D, ENV_CALLBACK_3D)
 DEFINE_CALLBACK(minimap, MINIMAP_META_REGISTRYNAME, RenderMinimapEvent, ENV_CALLBACK_MINIMAP)
 
 static int api_apiversion(lua_State* state) {
@@ -489,4 +508,99 @@ static int api_surface_drawtoscreen(lua_State* state) {
     const int dh = lua_tointeger(state, 9);
     functions->draw_to_screen(functions->userdata, sx, sy, sw, sh, dx, dy, dw, dh);
     return 0;
+}
+
+static int api_render3d_vertexcount(lua_State* state) {
+    _bolt_check_argc(state, 1, "render3d_vertexcount");
+    const struct Render3D* render = lua_touserdata(state, 1);
+    lua_pushinteger(state, render->vertex_count);
+    return 1;
+}
+
+static int api_render3d_vertexxyz(lua_State* state) {
+    _bolt_check_argc(state, 2, "render3d_vertexxyz");
+    const struct Render3D* render = lua_touserdata(state, 1);
+    const lua_Integer index = lua_tointeger(state, 2);
+    int32_t xyz[3];
+    render->vertex_functions.xyz(index - 1, render->vertex_functions.userdata, xyz);
+    lua_pushinteger(state, xyz[0]);
+    lua_pushinteger(state, xyz[1]);
+    lua_pushinteger(state, xyz[2]);
+    return 3;
+}
+
+static int api_render3d_vertexmeta(lua_State* state) {
+    _bolt_check_argc(state, 2, "render3d_vertexmeta");
+    const struct Render3D* render = lua_touserdata(state, 1);
+    const lua_Integer index = lua_tointeger(state, 2);
+    size_t meta = render->vertex_functions.atlas_meta(index - 1, render->vertex_functions.userdata);
+    lua_pushinteger(state, meta);
+    return 1;
+}
+
+static int api_render3d_atlasxywh(lua_State* state) {
+    _bolt_check_argc(state, 2, "render3d_atlasxywh");
+    const struct Render3D* render = lua_touserdata(state, 1);
+    const lua_Integer meta = lua_tointeger(state, 2);
+    int32_t xywh[4];
+    render->vertex_functions.atlas_xywh(meta, render->vertex_functions.userdata, xywh);
+    lua_pushinteger(state, xywh[0]);
+    lua_pushinteger(state, xywh[1]);
+    lua_pushinteger(state, xywh[2]);
+    lua_pushinteger(state, xywh[3]);
+    return 4;
+}
+
+static int api_render3d_vertexuv(lua_State* state) {
+    _bolt_check_argc(state, 2, "render3d_vertexuv");
+    const struct Render3D* render = lua_touserdata(state, 1);
+    const lua_Integer index = lua_tointeger(state, 2);
+    double uv[4];
+    render->vertex_functions.uv(index, render->vertex_functions.userdata, uv);
+    lua_pushnumber(state, uv[0]);
+    lua_pushnumber(state, uv[1]);
+    return 2;
+}
+
+static int api_render3d_vertexcolour(lua_State* state) {
+    _bolt_check_argc(state, 2, "render3d_vertexcolour");
+    const struct Render3D* render = lua_touserdata(state, 1);
+    const lua_Integer index = lua_tointeger(state, 2);
+    double col[4];
+    render->vertex_functions.colour(index, render->vertex_functions.userdata, col);
+    lua_pushnumber(state, col[0]);
+    lua_pushnumber(state, col[1]);
+    lua_pushnumber(state, col[2]);
+    lua_pushnumber(state, col[3]);
+    return 2;
+}
+
+static int api_render3d_textureid(lua_State* state) {
+    _bolt_check_argc(state, 1, "render3d_textureid");
+    struct Render3D* render = lua_touserdata(state, 1);
+    const size_t id = render->texture_functions.id(render->texture_functions.userdata);
+    lua_pushinteger(state, id);
+    return 1;
+}
+
+static int api_render3d_texturesize(lua_State* state) {
+    _bolt_check_argc(state, 1, "render3d_texturesize");
+    struct Render3D* render = lua_touserdata(state, 1);
+    size_t size[2];
+    render->texture_functions.size(render->texture_functions.userdata, size);
+    lua_pushinteger(state, size[0]);
+    lua_pushinteger(state, size[1]);
+    return 2;
+}
+
+static int api_render3d_texturecompare(lua_State* state) {
+    _bolt_check_argc(state, 4, "render3d_texturecompare");
+    struct Render3D* render = lua_touserdata(state, 1);
+    const size_t x = lua_tointeger(state, 2);
+    const size_t y = lua_tointeger(state, 3);
+    size_t data_len;
+    const unsigned char* data = (const unsigned char*)lua_tolstring(state, 4, &data_len);
+    const uint8_t match = render->texture_functions.compare(render->texture_functions.userdata, x, y, data_len, data);
+    lua_pushboolean(state, match);
+    return 1;
 }

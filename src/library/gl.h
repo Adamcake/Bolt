@@ -288,6 +288,23 @@ void _bolt_gl_plugin_drawelements_vertex2d_atlas_wh(size_t index, void* userdata
 void _bolt_gl_plugin_drawelements_vertex2d_uv(size_t index, void* userdata, double* out);
 void _bolt_gl_plugin_drawelements_vertex2d_colour(size_t index, void* userdata, double* out);
 
+struct GLPluginDrawElementsVertex3DUserData {
+    struct GLContext* c;
+    unsigned short* indices;
+    int atlas_scale;
+    struct GLTexture2D* atlas;
+    struct GLTexture2D* settings_atlas;
+    struct GLAttrBinding* xy_xz;
+    struct GLAttrBinding* xyz_bone;
+    struct GLAttrBinding* tex_uv;
+    struct GLAttrBinding* colour;
+};
+void _bolt_gl_plugin_drawelements_vertex3d_xyz(size_t index, void* userdata, int32_t* out);
+size_t _bolt_gl_plugin_drawelements_vertex3d_atlas_meta(size_t index, void* userdata);
+void _bolt_gl_plugin_drawelements_vertex3d_meta_xywh(size_t meta, void* userdata, int32_t* out);
+void _bolt_gl_plugin_drawelements_vertex3d_uv(size_t index, void* userdata, double* out);
+void _bolt_gl_plugin_drawelements_vertex3d_colour(size_t index, void* userdata, double* out);
+
 struct GLPluginTextureUserData {
     struct GLTexture2D* tex;
 };
