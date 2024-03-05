@@ -392,6 +392,17 @@ void _bolt_unpack_rgb565(uint16_t packed, uint8_t out[3]) {
     out[2] = (out[2] << 3) | (out[2] >> 2);
 }
 
+// use a lookup table for each of the possible 5-bit and 6-bit values for consistency across platforms
+// `lut5 = [round(pow(((x << 3) | (x >> 2)) / 255.0, 2.2) * 255.0) for x in range(32)]`
+// `lut6 = [round(pow(((x << 2) | (x >> 4)) / 255.0, 2.2) * 255.0) for x in range(64)]`
+const uint8_t lut5[] = {0, 0, 1, 1, 3, 5, 7, 9, 13, 17, 21, 26, 32, 38, 44, 51, 60, 68, 77, 87, 98, 109, 120, 132, 146, 159, 173, 188, 205, 221, 238, 255};
+const uint8_t lut6[] = {0, 0, 0, 0, 1, 1, 1, 2, 3, 3, 4, 5, 6, 8, 9, 11, 13, 14, 16, 18, 20, 23, 25, 28, 30, 33, 36, 39, 43, 46, 49, 53, 58, 62, 66, 70, 75, 79, 84, 89, 94, 99, 105, 110, 116, 121, 127, 133, 141, 148, 154, 161, 168, 175, 182, 190, 197, 205, 213, 221, 229, 238, 246, 255};
+void _bolt_unpack_srgb565(uint16_t packed, uint8_t out[3]) {
+    out[0] = lut5[(packed >> 11) & 0b00011111];
+    out[1] = lut6[(packed >> 5) & 0b00111111];
+    out[2] = lut5[packed & 0b00011111];
+}
+
 void _bolt_gl_load(void* (*GetProcAddress)(const char*)) {
 #define INIT_GL_FUNC(NAME) gl.NAME = GetProcAddress("gl"#NAME);
     INIT_GL_FUNC(ActiveTexture)
@@ -698,69 +709,123 @@ void _bolt_glBindFramebuffer(uint32_t target, unsigned int framebuffer) {
     LOG("glBindFramebuffer end\n");
 }
 
+// https://www.khronos.org/opengl/wiki/S3_Texture_Compression
 void _bolt_glCompressedTexSubImage2D(uint32_t target, int level, int xoffset, int yoffset, unsigned int width, unsigned int height, uint32_t format, unsigned int imageSize, const void* data) {
     LOG("glCompressedTexSubImage2D\n");
     gl.CompressedTexSubImage2D(target, level, xoffset, yoffset, width, height, format, imageSize, data);
     if (target != GL_TEXTURE_2D || level != 0) return;
+    const uint8_t is_dxt1 = (format == GL_COMPRESSED_RGB_S3TC_DXT1_EXT || format == GL_COMPRESSED_RGBA_S3TC_DXT1_EXT || format == GL_COMPRESSED_SRGB_S3TC_DXT1_EXT || format == GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT);
+    const uint8_t is_srgb = (format == GL_COMPRESSED_SRGB_S3TC_DXT1_EXT || format == GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT || format == GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT || format == GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT);
+    const size_t input_stride = is_dxt1 ? 8 : 16;
+    void (*const unpack565)(uint16_t, uint8_t*) = is_srgb ? _bolt_unpack_srgb565 : _bolt_unpack_rgb565;
     struct GLContext* c = _bolt_context();
-    if (format == GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT || format == GL_COMPRESSED_RGBA_S3TC_DXT5_EXT || format == GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT) {
-        struct GLTexture2D* tex = c->texture_units[c->active_texture];
-        int out_xoffset = xoffset;
-        int out_yoffset = yoffset;
-        for (size_t ii = 0; ii < (width * height); ii += 16) {
-            const uint8_t* ptr = data + ii;
-            uint8_t* out_ptr = tex->data + (out_yoffset * tex->width * 4) + (out_xoffset * 4);
-            uint16_t c0 = *(ptr + 8) + (*(ptr + 9) << 8);
-            uint16_t c1 = *(ptr + 10) + (*(ptr + 11) << 8);
-            uint8_t c0_rgb[3];
-            uint8_t c1_rgb[3];
-            _bolt_unpack_rgb565(c0, c0_rgb);
-            _bolt_unpack_rgb565(c1, c1_rgb);
-            const uint8_t c0_greater = c0 > c1;
-            const uint32_t ctable = *(ptr + 12) + (*(ptr + 13) << 8) + (*(ptr + 14) << 16) + (*(ptr + 15) << 24);
-            
-            for (size_t j = 0; j < 4; j += 1) {
-                for (size_t i = 0; i < 4; i += 1) {
-                    if (out_xoffset + i >= 0 && out_yoffset + j >= 0 && out_xoffset + i < tex->width && out_yoffset + j < tex->height) {
-                        uint8_t* pixel_ptr = out_ptr + (tex->width * i * 4) + (j * 4);
-                        const uint32_t code = (ctable >> (2 * (4 * i + j))) & 3;
-                        switch(code) {
-                            case 0:
-                                memcpy(pixel_ptr, c0_rgb, 3);
-                                break;
-                            case 1:
-                                memcpy(pixel_ptr, c1_rgb, 3);
-                                break;
-                            case 2:
-                                if (c0_greater) {
-                                    pixel_ptr[0] = (2*c0_rgb[0]+c1_rgb[0])/3;
-                                    pixel_ptr[1] = (2*c0_rgb[1]+c1_rgb[1])/3;
-                                    pixel_ptr[2] = (2*c0_rgb[2]+c1_rgb[2])/3;
-                                } else {
-                                    pixel_ptr[0] = (c0_rgb[0]+c1_rgb[0])/2;
-                                    pixel_ptr[1] = (c0_rgb[1]+c1_rgb[1])/2;
-                                    pixel_ptr[2] = (c0_rgb[2]+c1_rgb[2])/2;
-                                }
-                                break;
-                            case 3:
-                                if (c0_greater) {
-                                    pixel_ptr[0] = (2*c1_rgb[0]+c0_rgb[0])/3;
-                                    pixel_ptr[1] = (2*c1_rgb[1]+c0_rgb[1])/3;
-                                    pixel_ptr[2] = (2*c1_rgb[2]+c0_rgb[2])/3;
-                                } else {
-                                    memset(pixel_ptr, 0, 3);
-                                }
-                                break;
+    struct GLTexture2D* tex = c->texture_units[c->active_texture];
+    int out_xoffset = xoffset;
+    int out_yoffset = yoffset;
+    for (size_t ii = 0; ii < (width * height); ii += input_stride) {
+        const uint8_t* ptr = data + ii;
+        const uint8_t* cptr = is_dxt1 ? ptr : (ptr + 8);
+        uint8_t* out_ptr = tex->data + (out_yoffset * tex->width * 4) + (out_xoffset * 4);
+        uint16_t c0 = cptr[0] + (cptr[1] << 8);
+        uint16_t c1 = cptr[2] + (cptr[3] << 8);
+        uint8_t c0_rgb[3];
+        uint8_t c1_rgb[3];
+        unpack565(c0, c0_rgb);
+        unpack565(c1, c1_rgb);
+        const uint8_t c0_greater = c0 > c1;
+        const uint32_t ctable = cptr[4] + (cptr[5] << 8) + (cptr[6] << 16) + (cptr[7] << 24);
+        const uint8_t alpha0 = ptr[0];
+        const uint8_t alpha1 = ptr[1];
+        const uint8_t a0_greater = alpha0 > alpha1;
+        const uint64_t atable = ptr[2] + ((uint64_t)ptr[3] << 8) + ((uint64_t)ptr[4] << 16) + ((uint64_t)ptr[5] << 24) + ((uint64_t)ptr[6] << 32) + ((uint64_t)ptr[7] << 40);
+
+        for (size_t j = 0; j < 4; j += 1) {
+            for (size_t i = 0; i < 4; i += 1) {
+                if (out_xoffset + i >= 0 && out_yoffset + j >= 0 && out_xoffset + i < tex->width && out_yoffset + j < tex->height) {
+                    uint8_t* pixel_ptr = out_ptr + (tex->width * i * 4) + (j * 4);
+                    const uint8_t code = (ctable >> (2 * (4 * i + j))) & 0b11;
+                    switch(code) {
+                        case 0:
+                            memcpy(pixel_ptr, c0_rgb, 3);
+                            break;
+                        case 1:
+                            memcpy(pixel_ptr, c1_rgb, 3);
+                            break;
+                        case 2:
+                            if (c0_greater) {
+                                pixel_ptr[0] = (2*c0_rgb[0]+c1_rgb[0])/3;
+                                pixel_ptr[1] = (2*c0_rgb[1]+c1_rgb[1])/3;
+                                pixel_ptr[2] = (2*c0_rgb[2]+c1_rgb[2])/3;
+                            } else {
+                                pixel_ptr[0] = (c0_rgb[0]+c1_rgb[0])/2;
+                                pixel_ptr[1] = (c0_rgb[1]+c1_rgb[1])/2;
+                                pixel_ptr[2] = (c0_rgb[2]+c1_rgb[2])/2;
+                            }
+                            break;
+                        case 3:
+                            if (c0_greater) {
+                                pixel_ptr[0] = (2*c1_rgb[0]+c0_rgb[0])/3;
+                                pixel_ptr[1] = (2*c1_rgb[1]+c0_rgb[1])/3;
+                                pixel_ptr[2] = (2*c1_rgb[2]+c0_rgb[2])/3;
+                            } else {
+                                memset(pixel_ptr, 0, 3);
+                            }
+                            break;
+                    }
+
+                    switch (format) {
+                        case GL_COMPRESSED_RGB_S3TC_DXT1_EXT:
+                        case GL_COMPRESSED_SRGB_S3TC_DXT1_EXT: {
+                            // no alpha channel at all
+                            pixel_ptr[3] = 0xFF;
+                            break;
+                        }
+                        case GL_COMPRESSED_RGBA_S3TC_DXT1_EXT:
+                        case GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT: {
+                            // black means zero alpha
+                            pixel_ptr[3] = (code == 3 && !c0_greater) ? 0 : 0xFF;
+                            break;
+                        }
+                        case GL_COMPRESSED_RGBA_S3TC_DXT3_EXT:
+                        case GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT: {
+                            // 4-bit alpha value from the alpha chunk
+                            pixel_ptr[3] = ((ptr[(j * 4 + i) / 2] >> ((i & 1) ? 4 : 0)) & 0b1111) * 17;
+                            break;
+                        }
+                        case GL_COMPRESSED_RGBA_S3TC_DXT5_EXT:
+                        case GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT: {
+                            // 3-bit instruction value from atable
+                            const uint8_t code = (atable >> (3 * (4 * i + j))) & 0b111;
+                            switch (code) {
+                                case 0:
+                                    pixel_ptr[3] = alpha0;
+                                    break;
+                                case 1:
+                                    pixel_ptr[3] = alpha1;
+                                    break;
+                                case 6:
+                                case 7:
+                                    if (!a0_greater) {
+                                        pixel_ptr[3] = code == 6 ? 0 : 0xFF;
+                                        break;
+                                    }
+                                    // fall through is intentional
+                                default:
+                                    if (a0_greater) pixel_ptr[3] = (((8 - code) * (uint16_t)alpha0) + ((code - 1) * (uint16_t)alpha1)) / 7;
+                                    else pixel_ptr[3] = (((6 - code) * (uint16_t)alpha0) + ((code - 1) * (uint16_t)alpha1)) / 5;
+                                    break;
+                            }
+                            break;
                         }
                     }
                 }
             }
-    
-            out_xoffset += 4;
-            if (out_xoffset >= xoffset + width) {
-                out_xoffset = xoffset;
-                out_yoffset += 4;
-            }
+        }
+
+        out_xoffset += 4;
+        if (out_xoffset >= xoffset + width) {
+            out_xoffset = xoffset;
+            out_yoffset += 4;
         }
     }
     LOG("glCompressedTexSubImage2D end\n");
