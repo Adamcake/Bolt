@@ -316,6 +316,7 @@ struct GLPluginTextureUserData {
 size_t _bolt_gl_plugin_texture_id(void* userdata);
 void _bolt_gl_plugin_texture_size(void* userdata, size_t* out);
 uint8_t _bolt_gl_plugin_texture_compare(void* userdata, size_t x, size_t y, size_t len, const unsigned char* data);
+uint8_t* _bolt_gl_plugin_texture_data(void* userdata, size_t x, size_t y);
 
 void _bolt_gl_plugin_surface_init(struct SurfaceFunctions* out, unsigned int width, unsigned int height);
 void _bolt_gl_plugin_surface_destroy(void* userdata);

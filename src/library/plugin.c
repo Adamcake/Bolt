@@ -122,6 +122,7 @@ void _bolt_plugin_init(void (*_surface_init)(struct SurfaceFunctions*, unsigned 
     API_ADD_SUB(textureid, batch2d)
     API_ADD_SUB(texturesize, batch2d)
     API_ADD_SUB(texturecompare, batch2d)
+    API_ADD_SUB(texturedata, batch2d)
     API_ADD_SUB_ALIAS(vertexcolour, vertexcolor, batch2d)
     lua_settable(state, -3);
     lua_settable(state, LUA_REGISTRYINDEX);
@@ -140,6 +141,7 @@ void _bolt_plugin_init(void (*_surface_init)(struct SurfaceFunctions*, unsigned 
     API_ADD_SUB(textureid, render3d)
     API_ADD_SUB(texturesize, render3d)
     API_ADD_SUB(texturecompare, render3d)
+    API_ADD_SUB(texturedata, render3d)
     API_ADD_SUB_ALIAS(vertexcolour, vertexcolor, render3d)
     lua_settable(state, -3);
     lua_settable(state, LUA_REGISTRYINDEX);
@@ -438,6 +440,17 @@ static int api_batch2d_texturecompare(lua_State* state) {
     return 1;
 }
 
+static int api_batch2d_texturedata(lua_State* state) {
+    _bolt_check_argc(state, 4, "batch2d_texturedata");
+    struct RenderBatch2D* render = lua_touserdata(state, 1);
+    const size_t x = lua_tointeger(state, 2);
+    const size_t y = lua_tointeger(state, 3);
+    const size_t len = lua_tointeger(state, 4);
+    const uint8_t* ret = render->texture_functions.data(render->texture_functions.userdata, x, y);
+    lua_pushlstring(state, (const char*)ret, len);
+    return 1;
+}
+
 static int api_minimap_angle(lua_State* state) {
     _bolt_check_argc(state, 1, "minimap_angle");
     struct RenderMinimapEvent* render = lua_touserdata(state, 1);
@@ -602,5 +615,16 @@ static int api_render3d_texturecompare(lua_State* state) {
     const unsigned char* data = (const unsigned char*)lua_tolstring(state, 4, &data_len);
     const uint8_t match = render->texture_functions.compare(render->texture_functions.userdata, x, y, data_len, data);
     lua_pushboolean(state, match);
+    return 1;
+}
+
+static int api_render3d_texturedata(lua_State* state) {
+    _bolt_check_argc(state, 4, "render3d_texturedata");
+    struct Render3D* render = lua_touserdata(state, 1);
+    const size_t x = lua_tointeger(state, 2);
+    const size_t y = lua_tointeger(state, 3);
+    const size_t len = lua_tointeger(state, 4);
+    const uint8_t* ret = render->texture_functions.data(render->texture_functions.userdata, x, y);
+    lua_pushlstring(state, (const char*)ret, len);
     return 1;
 }

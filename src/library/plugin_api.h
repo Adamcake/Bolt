@@ -213,7 +213,7 @@ static int api_batch2d_texturesize(lua_State*);
 /// [-4, +1, -]
 /// Compares a section of the texture atlas for this batch to some RGBA data. For example:
 /// 
-/// `batch:comparetexture(64, 128, {0xFF, 0x0, 0x0, 0xFF, 0xFF, 0x0, 0x0, 0xFF})`
+/// `batch:texturecompare(64, 128, {0xFF, 0x0, 0x0, 0xFF, 0xFF, 0x0, 0x0, 0xFF})`
 ///
 /// This would check if the pixels at 64,128 and 65,128 are red. The bytes must match exactly
 /// for the function to return true, otherwise it will return false.
@@ -222,6 +222,18 @@ static int api_batch2d_texturesize(lua_State*);
 /// `vertexatlaswh()`. Comparing a whole block of pixels at once by this method is relatively fast,
 /// but can only be done one row at a time.
 static int api_batch2d_texturecompare(lua_State*);
+
+/// [-4, +1, -]
+/// Gets the RGBA data starting at a given coordinate of the texture atlas, for example:
+///
+/// `batch:texturedata(64, 128, 8)`
+///
+/// This would return RGBA data for eight bytes, i.e. the two pixels at (64,128) and (65,128),
+/// encoded as a Lua string.
+///
+/// Encoding Lua strings is computationally expensive, and indexing the data one byte at a time is
+/// even more so. Unless you really need to do that, use `texturecompare()` instead.
+static int api_batch2d_texturedata(lua_State*);
 
 /// [-1, +1, -]
 /// Returns the angle at which the minimap background image is being rendered, in radians.
@@ -318,7 +330,7 @@ static int api_render3d_texturesize(lua_State*);
 /// [-4, +1, -]
 /// Compares a section of the texture atlas for this render to some RGBA data. For example:
 /// 
-/// `render:comparetexture(64, 128, {0xFF, 0x0, 0x0, 0xFF, 0xFF, 0x0, 0x0, 0xFF})`
+/// `render:texturecompare(64, 128, {0xFF, 0x0, 0x0, 0xFF, 0xFF, 0x0, 0x0, 0xFF})`
 ///
 /// This would check if the pixels at 64,128 and 65,128 are red. The bytes must match exactly
 /// for the function to return true, otherwise it will return false.
@@ -327,3 +339,15 @@ static int api_render3d_texturesize(lua_State*);
 /// block of pixels at once by this method is relatively fast, but can only be done one row at a
 /// time.
 static int api_render3d_texturecompare(lua_State*);
+
+/// [-4, +1, -]
+/// Gets the RGBA data starting at a given coordinate of the texture atlas, for example:
+///
+/// `render:texturedata(64, 128, 8)`
+///
+/// This would return RGBA data for eight bytes, i.e. the two pixels at (64,128) and (65,128),
+/// encoded as a Lua string.
+///
+/// Encoding Lua strings is computationally expensive, and indexing the data one byte at a time is
+/// even more so. Unless you really need to do that, use `texturecompare()` instead.
+static int api_render3d_texturedata(lua_State*);

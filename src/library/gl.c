@@ -1237,6 +1237,7 @@ void _bolt_gl_onDrawElements(uint32_t mode, unsigned int count, uint32_t type, c
             batch.texture_functions.id = _bolt_gl_plugin_texture_id;
             batch.texture_functions.size = _bolt_gl_plugin_texture_size;
             batch.texture_functions.compare = _bolt_gl_plugin_texture_compare;
+            batch.texture_functions.data = _bolt_gl_plugin_texture_data;
 
             _bolt_plugin_handle_2d(&batch);
         }
@@ -1279,6 +1280,7 @@ void _bolt_gl_onDrawElements(uint32_t mode, unsigned int count, uint32_t type, c
             render.texture_functions.id = _bolt_gl_plugin_texture_id;
             render.texture_functions.size = _bolt_gl_plugin_texture_size;
             render.texture_functions.compare = _bolt_gl_plugin_texture_compare;
+            render.texture_functions.data = _bolt_gl_plugin_texture_data;
 
             _bolt_plugin_handle_3d(&render);
         }
@@ -1494,6 +1496,12 @@ uint8_t _bolt_gl_plugin_texture_compare(void* userdata, size_t x, size_t y, size
         return 0;
     }
     return !memcmp(tex->data + start_offset, data, len);
+}
+
+uint8_t* _bolt_gl_plugin_texture_data(void* userdata, size_t x, size_t y) {
+    const struct GLPluginTextureUserData* data = userdata;
+    const struct GLTexture2D* tex = data->tex;
+    return tex->data + (tex->width * y * 4) + (x * 4);
 }
 
 void _bolt_gl_plugin_surface_init(struct SurfaceFunctions* functions, unsigned int width, unsigned int height) {

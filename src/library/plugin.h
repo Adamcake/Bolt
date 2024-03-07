@@ -74,6 +74,10 @@ struct TextureFunctions {
     /// Note that changing the in-game "texture compression" setting will change the contents of
     /// the texture for some images and therefore change the result of this comparison.
     uint8_t (*compare)(void* userdata, size_t x, size_t y, size_t len, const unsigned char* data);
+
+    /// Fetches a pointer to the texture's pixel data at coordinates x and y. Doesn't do any checks
+    /// on whether x and y are in-bounds. Data is always RGBA and pixel rows are always contiguous.
+    uint8_t* (*data)(void* userdata, size_t x, size_t y);
 };
 
 /// Struct containing "vtable" callback information for surfaces.
