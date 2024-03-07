@@ -395,12 +395,14 @@ void _bolt_unpack_rgb565(uint16_t packed, uint8_t out[3]) {
 // use a lookup table for each of the possible 5-bit and 6-bit values for consistency across platforms
 // `lut5 = [round(pow(((x << 3) | (x >> 2)) / 255.0, 2.2) * 255.0) for x in range(32)]`
 // `lut6 = [round(pow(((x << 2) | (x >> 4)) / 255.0, 2.2) * 255.0) for x in range(64)]`
-const uint8_t lut5[] = {0, 0, 1, 1, 3, 5, 7, 9, 13, 17, 21, 26, 32, 38, 44, 51, 60, 68, 77, 87, 98, 109, 120, 132, 146, 159, 173, 188, 205, 221, 238, 255};
-const uint8_t lut6[] = {0, 0, 0, 0, 1, 1, 1, 2, 3, 3, 4, 5, 6, 8, 9, 11, 13, 14, 16, 18, 20, 23, 25, 28, 30, 33, 36, 39, 43, 46, 49, 53, 58, 62, 66, 70, 75, 79, 84, 89, 94, 99, 105, 110, 116, 121, 127, 133, 141, 148, 154, 161, 168, 175, 182, 190, 197, 205, 213, 221, 229, 238, 246, 255};
+//const uint8_t lut5[] = {0, 0, 1, 1, 3, 5, 7, 9, 13, 17, 21, 26, 32, 38, 44, 51, 60, 68, 77, 87, 98, 109, 120, 132, 146, 159, 173, 188, 205, 221, 238, 255};
+//const uint8_t lut6[] = {0, 0, 0, 0, 1, 1, 1, 2, 3, 3, 4, 5, 6, 8, 9, 11, 13, 14, 16, 18, 20, 23, 25, 28, 30, 33, 36, 39, 43, 46, 49, 53, 58, 62, 66, 70, 75, 79, 84, 89, 94, 99, 105, 110, 116, 121, 127, 133, 141, 148, 154, 161, 168, 175, 182, 190, 197, 205, 213, 221, 229, 238, 246, 255};
 void _bolt_unpack_srgb565(uint16_t packed, uint8_t out[3]) {
-    out[0] = lut5[(packed >> 11) & 0b00011111];
-    out[1] = lut6[(packed >> 5) & 0b00111111];
-    out[2] = lut5[packed & 0b00011111];
+    // game seems to be giving us RGBA and telling us it's SRGB, so for now, just don't convert it
+    _bolt_unpack_rgb565(packed, out);
+    //out[0] = lut5[(packed >> 11) & 0b00011111];
+    //out[1] = lut6[(packed >> 5) & 0b00111111];
+    //out[2] = lut5[packed & 0b00011111];
 }
 
 void _bolt_gl_load(void* (*GetProcAddress)(const char*)) {
@@ -742,8 +744,11 @@ void _bolt_glCompressedTexSubImage2D(uint32_t target, int level, int xoffset, in
         for (size_t j = 0; j < 4; j += 1) {
             for (size_t i = 0; i < 4; i += 1) {
                 if (out_xoffset + i >= 0 && out_yoffset + j >= 0 && out_xoffset + i < tex->width && out_yoffset + j < tex->height) {
-                    uint8_t* pixel_ptr = out_ptr + (tex->width * i * 4) + (j * 4);
-                    const uint8_t code = (ctable >> (2 * (4 * i + j))) & 0b11;
+                    uint8_t* pixel_ptr = out_ptr + (tex->width * j * 4) + (i * 4);
+                    uint8_t pixel_index = (4 * j) + i;
+                    const uint8_t code = (ctable >> (pixel_index * 2)) & 0b11;
+
+                    // parse colour table and set R, G and B bytes for this pixel
                     switch(code) {
                         case 0:
                             memcpy(pixel_ptr, c0_rgb, 3);
@@ -773,6 +778,7 @@ void _bolt_glCompressedTexSubImage2D(uint32_t target, int level, int xoffset, in
                             break;
                     }
 
+                    // parse alpha table (if any) and set alpha byte for this pixel
                     switch (format) {
                         case GL_COMPRESSED_RGB_S3TC_DXT1_EXT:
                         case GL_COMPRESSED_SRGB_S3TC_DXT1_EXT: {
@@ -789,13 +795,13 @@ void _bolt_glCompressedTexSubImage2D(uint32_t target, int level, int xoffset, in
                         case GL_COMPRESSED_RGBA_S3TC_DXT3_EXT:
                         case GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT: {
                             // 4-bit alpha value from the alpha chunk
-                            pixel_ptr[3] = ((ptr[(j * 4 + i) / 2] >> ((i & 1) ? 4 : 0)) & 0b1111) * 17;
+                            pixel_ptr[3] = ((ptr[pixel_index / 2] >> ((i & 1) ? 4 : 0)) & 0b1111) * 17;
                             break;
                         }
                         case GL_COMPRESSED_RGBA_S3TC_DXT5_EXT:
                         case GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT: {
                             // 3-bit instruction value from atable
-                            const uint8_t code = (atable >> (3 * (4 * i + j))) & 0b111;
+                            const uint8_t code = (atable >> (pixel_index * 3)) & 0b111;
                             switch (code) {
                                 case 0:
                                     pixel_ptr[3] = alpha0;
