@@ -101,6 +101,11 @@ if(NOT WIN32)
         set(CMAKE_INSTALL_PREFIX /)
     endif()
 
+    # location to install the CEF blob, default location is /opt
+    if(NOT BOLT_CEF_INSTALLDIR)
+        set(BOLT_CEF_INSTALLDIR opt)
+    endif()
+
     # defines DESTINATION of shell script (relative to CMAKE_INSTALL_PREFIX, unless set to an absolute path)
     # things like flatpak need to override this
     if(NOT BOLT_BINDIR)
@@ -118,7 +123,7 @@ if(NOT WIN32)
     endif()
 
     # Short shell script to be installed in /usr/local/bin, gets renamed to "bolt" later
-    file(RELATIVE_PATH BOLT_SCRIPT_CD_PATH "${CMAKE_INSTALL_PREFIX}/${BOLT_BINDIR}" "${CMAKE_INSTALL_PREFIX}/opt/bolt-launcher")
+    file(RELATIVE_PATH BOLT_SCRIPT_CD_PATH "${CMAKE_INSTALL_PREFIX}/${BOLT_BINDIR}" "${CMAKE_INSTALL_PREFIX}/${BOLT_CEF_INSTALLDIR}/bolt-launcher")
     file(GENERATE OUTPUT bolt-run.sh CONTENT "#!/bin/sh -eu\ncd \"$(dirname \"$0\")/${BOLT_SCRIPT_CD_PATH}\"\nexec ./bolt \"$@\"\n")
 
     # auto-generated helper for running from build dir; this file does not get installed
@@ -134,7 +139,7 @@ if(NOT WIN32)
         "export XDG_DATA_DIRS=${CMAKE_CURRENT_BINARY_DIR}/${BOLT_SHAREDIR}\${XDG_DATA_DIRS:+:\${XDG_DATA_DIRS}}"
         "export XDG_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/config"
         "export XDG_DATA_HOME=${CMAKE_CURRENT_BINARY_DIR}/data"
-        "cd ${CMAKE_CURRENT_BINARY_DIR}/opt/bolt-launcher"
+        "cd ${CMAKE_CURRENT_BINARY_DIR}/${BOLT_CEF_INSTALLDIR}/bolt-launcher"
         "exec ./bolt \"$@\""
         ""
     )
@@ -242,7 +247,7 @@ endif()
 # fake java wrapper for running hdos
 if(NOT WIN32)
     add_executable(java-proxy src/fake_java.c)
-    install(TARGETS java-proxy DESTINATION opt/bolt-launcher)
+    install(TARGETS java-proxy DESTINATION ${BOLT_CEF_INSTALLDIR}/bolt-launcher)
 endif()
 
 # Bolt uses GTK on all platforms, but it must specifically use gtk3
@@ -259,8 +264,8 @@ endif()
 if(APPLE)
     # TODO: mac support
 else()
-    install(TARGETS bolt DESTINATION opt/bolt-launcher)
-    install(DIRECTORY "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/" "${CEF_ROOT}/Resources/" DESTINATION opt/bolt-launcher USE_SOURCE_PERMISSIONS)
+    install(TARGETS bolt DESTINATION ${BOLT_CEF_INSTALLDIR}/bolt-launcher)
+    install(DIRECTORY "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/" "${CEF_ROOT}/Resources/" DESTINATION ${BOLT_CEF_INSTALLDIR}/bolt-launcher USE_SOURCE_PERMISSIONS)
 endif()
 
 # Build helper libraries
