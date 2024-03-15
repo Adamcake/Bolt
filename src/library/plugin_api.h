@@ -351,3 +351,18 @@ static int api_render3d_texturecompare(lua_State*);
 /// Encoding Lua strings is computationally expensive, and indexing the data one byte at a time is
 /// even more so. Unless you really need to do that, use `texturecompare()` instead.
 static int api_render3d_texturedata(lua_State*);
+
+/// [-4, +3, -]
+/// Converts an XYZ coordinate from model space to world space using this render's model matrix.
+static int api_render3d_toworldspace(lua_State*);
+
+/// [-4, +2, -]
+/// Converts an XYZ coordinate from model space to screen space using this render's model, view,
+/// and projection matrices. Output is in pixels.
+static int api_render3d_toscreenspace(lua_State*);
+
+/// [-1, +3, -]
+/// Returns the world coordinates this model is being rendered at.
+///
+/// Equivalent to `render:toworldspace(0, 0, 0)`
+static int api_render3d_worldposition(lua_State*);

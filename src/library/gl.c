@@ -1246,13 +1246,16 @@ void _bolt_gl_onDrawElements(uint32_t mode, unsigned int count, uint32_t type, c
         int draw_tex;
         gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
         if (draw_tex == c->target_3d_tex) {
-            int atlas, settings_atlas;
+            int atlas, settings_atlas, ubo_binding, ubo_view_index, ubo_viewport_index;
             float atlas_meta[4];
             gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uTextureAtlas, &atlas);
             gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uTextureAtlasSettings, &settings_atlas);
             gl.GetUniformfv(c->bound_program->id, c->bound_program->loc_uAtlasMeta, atlas_meta);
             struct GLTexture2D* tex = c->texture_units[atlas];
             struct GLTexture2D* tex_settings = c->texture_units[settings_atlas];
+            gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ViewTransforms, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
+            gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_view_index);
+            const float* view_proj_matrix = (float*)(_bolt_context_get_buffer(c, ubo_view_index)->data + c->bound_program->offset_uViewProjMatrix);
 
             struct GLPluginDrawElementsVertex3DUserData vertex_userdata;
             vertex_userdata.c = c;
@@ -1268,6 +1271,10 @@ void _bolt_gl_onDrawElements(uint32_t mode, unsigned int count, uint32_t type, c
             struct GLPluginTextureUserData tex_userdata;
             tex_userdata.tex = tex;
 
+            struct GLPlugin3DMatrixUserData matrix_userdata;
+            gl.GetUniformfv(c->bound_program->id, c->bound_program->loc_uModelMatrix, matrix_userdata.model_matrix);
+            memcpy(matrix_userdata.viewproj_matrix, view_proj_matrix, 16 * sizeof(float));
+
             struct Render3D render;
             render.vertex_count = count;
             render.vertex_functions.userdata = &vertex_userdata;
@@ -1281,6 +1288,10 @@ void _bolt_gl_onDrawElements(uint32_t mode, unsigned int count, uint32_t type, c
             render.texture_functions.size = _bolt_gl_plugin_texture_size;
             render.texture_functions.compare = _bolt_gl_plugin_texture_compare;
             render.texture_functions.data = _bolt_gl_plugin_texture_data;
+            render.matrix_functions.userdata = &matrix_userdata;
+            render.matrix_functions.to_world_space = _bolt_gl_plugin_matrix3d_toworldspace;
+            render.matrix_functions.to_screen_space = _bolt_gl_plugin_matrix3d_toscreenspace;
+            render.matrix_functions.world_pos = _bolt_gl_plugin_matrix3d_worldpos;
 
             _bolt_plugin_handle_3d(&render);
         }
@@ -1471,6 +1482,48 @@ void _bolt_gl_plugin_drawelements_vertex3d_colour(size_t index, void* userdata, 
     out[1] = (double)colour[2];
     out[2] = (double)colour[1];
     out[3] = (double)colour[0];
+}
+
+void _bolt_gl_plugin_matrix3d_toworldspace(int x, int y, int z, void* userdata, double* out) {
+    const struct GLPlugin3DMatrixUserData* data = userdata;
+    const double dx = (double)x;
+    const double dy = (double)y;
+    const double dz = (double)z;
+    const float* mmx = data->model_matrix;
+    const double outx = (dx * (double)mmx[0]) + (dy * mmx[4]) + (dz * mmx[8]) + mmx[12];
+    const double outy = (dx * (double)mmx[1]) + (dy * mmx[5]) + (dz * mmx[9]) + mmx[13];
+    const double outz = (dx * (double)mmx[2]) + (dy * mmx[6]) + (dz * mmx[10]) + mmx[14];
+    const double homogenous = (dx * (double)mmx[3]) + (dy * mmx[7]) + (dz * mmx[11]) + mmx[15];
+    out[0] = outx / homogenous;
+    out[1] = outy / homogenous;
+    out[2] = outz / homogenous;
+}
+
+void _bolt_gl_plugin_matrix3d_toscreenspace(int x, int y, int z, void* userdata, double* out) {
+    const struct GLContext* c = _bolt_context();
+    struct GLPlugin3DMatrixUserData* data = userdata;
+    const double dx = (double)x;
+    const double dy = (double)y;
+    const double dz = (double)z;
+    const float* mmx = data->model_matrix;
+    const float* vpmx = data->viewproj_matrix;
+    const double mx = (dx * (double)mmx[0]) + (dy * (double)mmx[4]) + (dz * (double)mmx[8]) + (double)mmx[12];
+    const double my = (dx * (double)mmx[1]) + (dy * (double)mmx[5]) + (dz * (double)mmx[9]) + (double)mmx[13];
+    const double mz = (dx * (double)mmx[2]) + (dy * (double)mmx[6]) + (dz * (double)mmx[10]) + (double)mmx[14];
+    const double mh = (dx * (double)mmx[3]) + (dy * (double)mmx[7]) + (dz * (double)mmx[11]) + (double)mmx[15];
+    const double outx = (mx * (double)vpmx[0]) + (my * (double)vpmx[4]) + (mz * (double)vpmx[8]) + (mh * (double)vpmx[12]);
+    const double outy = (mx * (double)vpmx[1]) + (my * (double)vpmx[5]) + (mz * (double)vpmx[9]) + (mh * (double)vpmx[13]);
+    const double homogenous = (mx * (double)vpmx[3]) + (my * (double)vpmx[7]) + (mz * (double)vpmx[11]) + (mh * (double)vpmx[15]);
+    out[0] = (((outx  / homogenous) + 1.0) * c->game_view_w / 2.0) + (double)c->game_view_x;
+    out[1] = (((-outy / homogenous) + 1.0) * c->game_view_h / 2.0) + (double)c->game_view_y;
+}
+
+void _bolt_gl_plugin_matrix3d_worldpos(void* userdata, double* out) {
+    struct GLPlugin3DMatrixUserData* data = userdata;
+    const float* mmx = data->model_matrix;
+    out[0] = (double)data->model_matrix[12];
+    out[1] = (double)data->model_matrix[13];
+    out[2] = (double)data->model_matrix[14];
 }
 
 size_t _bolt_gl_plugin_texture_id(void* userdata) {

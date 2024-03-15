@@ -80,6 +80,21 @@ struct TextureFunctions {
     uint8_t* (*data)(void* userdata, size_t x, size_t y);
 };
 
+/// Struct containing "vtable" callback information for 3D renders' transformation matrices.
+struct Render3DMatrixFunctions {
+    /// Userdata which will be passed to the functions contained in this struct.
+    void* userdata;
+
+    /// Converts an XYZ coordinate from model space to world space.
+    void (*to_world_space)(int x, int y, int z, void* userdata, double* out);
+
+    /// Converts an XYZ coordinate from model space to screen space in pixels.
+    void (*to_screen_space)(int x, int y, int z, void* userdata, double* out);
+
+    /// Gets the world-space coordinate equivalent to (0,0,0) in model space.
+    void (*world_pos)(void* userdata, double* out);
+};
+
 /// Struct containing "vtable" callback information for surfaces.
 struct SurfaceFunctions {
     /// Userdata which will be passed to the functions contained in this struct.
@@ -107,6 +122,7 @@ struct Render3D {
     uint32_t vertex_count;
     struct Vertex3DFunctions vertex_functions;
     struct TextureFunctions texture_functions;
+    struct Render3DMatrixFunctions matrix_functions;
 };
 
 struct RenderMinimapEvent {

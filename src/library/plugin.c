@@ -131,7 +131,7 @@ void _bolt_plugin_init(void (*_surface_init)(struct SurfaceFunctions*, unsigned 
     lua_pushstring(state, RENDER3D_META_REGISTRYNAME);
     lua_newtable(state);
     lua_pushstring(state, "__index");
-    lua_createtable(state, 0, 10);
+    lua_createtable(state, 0, 13);
     API_ADD_SUB(vertexcount, render3d)
     API_ADD_SUB(vertexxyz, render3d)
     API_ADD_SUB(vertexmeta, render3d)
@@ -142,6 +142,9 @@ void _bolt_plugin_init(void (*_surface_init)(struct SurfaceFunctions*, unsigned 
     API_ADD_SUB(texturesize, render3d)
     API_ADD_SUB(texturecompare, render3d)
     API_ADD_SUB(texturedata, render3d)
+    API_ADD_SUB(toworldspace, render3d)
+    API_ADD_SUB(toscreenspace, render3d)
+    API_ADD_SUB(worldposition, render3d)
     API_ADD_SUB_ALIAS(vertexcolour, vertexcolor, render3d)
     lua_settable(state, -3);
     lua_settable(state, LUA_REGISTRYINDEX);
@@ -627,4 +630,42 @@ static int api_render3d_texturedata(lua_State* state) {
     const uint8_t* ret = render->texture_functions.data(render->texture_functions.userdata, x, y);
     lua_pushlstring(state, (const char*)ret, len);
     return 1;
+}
+
+static int api_render3d_toworldspace(lua_State* state) {
+    _bolt_check_argc(state, 4, "render3d_toworldspace");
+    struct Render3D* render = lua_touserdata(state, 1);
+    const int x = lua_tointeger(state, 2);
+    const int y = lua_tointeger(state, 3);
+    const int z = lua_tointeger(state, 4);
+    double out[3];
+    render->matrix_functions.to_world_space(x, y, z, render->matrix_functions.userdata, out);
+    lua_pushnumber(state, out[0]);
+    lua_pushnumber(state, out[1]);
+    lua_pushnumber(state, out[2]);
+    return 3;
+}
+
+static int api_render3d_toscreenspace(lua_State* state) {
+    _bolt_check_argc(state, 4, "render3d_toscreenspace");
+    struct Render3D* render = lua_touserdata(state, 1);
+    const int x = lua_tointeger(state, 2);
+    const int y = lua_tointeger(state, 3);
+    const int z = lua_tointeger(state, 4);
+    double out[2];
+    render->matrix_functions.to_screen_space(x, y, z, render->matrix_functions.userdata, out);
+    lua_pushnumber(state, out[0]);
+    lua_pushnumber(state, out[1]);
+    return 2;
+}
+
+static int api_render3d_worldposition(lua_State* state) {
+    _bolt_check_argc(state, 1, "render3d_worldposition");
+    struct Render3D* render = lua_touserdata(state, 1);
+    double out[3];
+    render->matrix_functions.world_pos(render->matrix_functions.userdata, out);
+    lua_pushnumber(state, out[0]);
+    lua_pushnumber(state, out[1]);
+    lua_pushnumber(state, out[2]);
+    return 3;
 }

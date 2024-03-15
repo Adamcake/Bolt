@@ -310,6 +310,14 @@ void _bolt_gl_plugin_drawelements_vertex3d_meta_xywh(size_t meta, void* userdata
 void _bolt_gl_plugin_drawelements_vertex3d_uv(size_t index, void* userdata, double* out);
 void _bolt_gl_plugin_drawelements_vertex3d_colour(size_t index, void* userdata, double* out);
 
+struct GLPlugin3DMatrixUserData {
+    float model_matrix[16];
+    float viewproj_matrix[16];
+};
+void _bolt_gl_plugin_matrix3d_toworldspace(int x, int y, int z, void* userdata, double* out);
+void _bolt_gl_plugin_matrix3d_toscreenspace(int x, int y, int z, void* userdata, double* out);
+void _bolt_gl_plugin_matrix3d_worldpos(void* userdata, double* out);
+
 struct GLPluginTextureUserData {
     struct GLTexture2D* tex;
 };
