@@ -42,7 +42,7 @@ constexpr int img_bps = 8;
 
 void GtkStart(int argc, char** argv, Browser::Client*);
 int BoltRunBrowserProcess(CefMainArgs, CefRefPtr<Browser::App>);
-bool LockXdgDirectories(std::filesystem::path&, std::filesystem::path&);
+bool LockXdgDirectories(std::filesystem::path&, std::filesystem::path&, std::filesystem::path&);
 
 int BoltRunAnyProcess(CefMainArgs main_args) {
 	// CefApp struct - this implements handlers used by multiple processes
@@ -63,12 +63,13 @@ int BoltRunBrowserProcess(CefMainArgs main_args, CefRefPtr<Browser::App> cef_app
 	// find and lock the xdg base directories (or an approximation of them on Windows)
 	std::filesystem::path config_dir;
 	std::filesystem::path data_dir;
-	if (!LockXdgDirectories(config_dir, data_dir)) {
+	std::filesystem::path runtime_dir;
+	if (!LockXdgDirectories(config_dir, data_dir, runtime_dir)) {
 		return 1;
 	}
 
 	// CefClient struct - central object for main thread, and implements lots of handlers for browser process
-	CefRefPtr<Browser::Client> client = new Browser::Client(cef_app, config_dir, data_dir);
+	CefRefPtr<Browser::Client> client = new Browser::Client(cef_app, config_dir, data_dir/*, runtime_dir*/);
 
 	// CEF settings - only set the ones we're interested in
 	CefSettings settings = CefSettings();
@@ -147,7 +148,7 @@ int main(int argc, char* argv[]) {
 	return ret;
 }
 
-bool LockXdgDirectories(std::filesystem::path& config_dir, std::filesystem::path& data_dir) {
+bool LockXdgDirectories(std::filesystem::path& config_dir, std::filesystem::path& data_dir, std::filesystem::path& runtime_dir) {
 	// As well as trying to obtain a lockfile, this function will also explicitly set the XDG_*_HOME
 	// env vars to their defaults if they're not set. This avoids issues later down the line with
 	// needing to spoof $HOME for certain games.
@@ -155,6 +156,7 @@ bool LockXdgDirectories(std::filesystem::path& config_dir, std::filesystem::path
 	const char* xdg_data_home = getenv("XDG_DATA_HOME");
 	const char* xdg_cache_home = getenv("XDG_CACHE_HOME");
 	const char* xdg_state_home = getenv("XDG_STATE_HOME");
+	const char* xdg_runtime_dir = getenv("XDG_RUNTIME_DIR");
 	const char* home = getenv("HOME");
 
 	if (!home || !*home) {
@@ -192,8 +194,15 @@ bool LockXdgDirectories(std::filesystem::path& config_dir, std::filesystem::path
 		setenv("XDG_STATE_HOME", dir.c_str(), true);
 	}
 
+	if (xdg_runtime_dir && *xdg_runtime_dir) {
+		runtime_dir.assign(xdg_runtime_dir);
+	} else {
+		runtime_dir.assign("/tmp");
+	}
+
 	config_dir.append(PROGRAM_DIRNAME);
 	data_dir.append(PROGRAM_DIRNAME);
+	runtime_dir.append(PROGRAM_DIRNAME);
 	std::error_code err;
 	std::filesystem::create_directories(config_dir, err);
 	if (err.value() != 0) {
@@ -205,9 +214,15 @@ bool LockXdgDirectories(std::filesystem::path& config_dir, std::filesystem::path
 		fmt::print("Could not create data directories (error {}) {}\n", err.value(), data_dir.c_str());
 		return false;
 	}
+	std::filesystem::create_directories(runtime_dir, err);
+	if (err.value() != 0) {
+		fmt::print("Could not create runtime directory (error {}) {}\n", err.value(), runtime_dir.c_str());
+		return false;
+	}
 
-	std::filesystem::path data_lock = data_dir;
+	std::filesystem::path data_lock = runtime_dir;
 	data_lock.append("lock");
+	printf("%s\n", data_lock.c_str());
 	int lockfile = open(data_lock.c_str(), O_WRONLY | O_CREAT | O_CLOEXEC, 0666);
 	if (flock(lockfile, LOCK_EX | LOCK_NB)) {
 		fmt::print("Failed to obtain lockfile; is the program already running?\n");
@@ -273,7 +288,7 @@ int wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, wchar_t* lpCmdLine, i
 	}
 }
 
-bool LockXdgDirectories(std::filesystem::path& config_dir, std::filesystem::path& data_dir) {
+bool LockXdgDirectories(std::filesystem::path& config_dir, std::filesystem::path& data_dir, std::filesystem::path& runtime_dir) {
 	const char* appdata = getenv("appdata");
 	std::filesystem::path appdata_dir;
 	if (appdata && *appdata) {
@@ -288,6 +303,8 @@ bool LockXdgDirectories(std::filesystem::path& config_dir, std::filesystem::path
 	config_dir.append("config");
 	data_dir = appdata_dir;
 	data_dir.append("data");
+	runtime_dir = appdata_dir;
+	runtime_dir.append("run");
 
 	std::error_code err;
 	std::filesystem::create_directories(config_dir, err);
@@ -298,6 +315,11 @@ bool LockXdgDirectories(std::filesystem::path& config_dir, std::filesystem::path
 	std::filesystem::create_directories(data_dir, err);
 	if (err.value() != 0) {
 		fmt::print("Could not create data directories (error {}) {}/{}\n", err.value(), appdata, PROGRAM_DIRNAME);
+		return false;
+	}
+	std::filesystem::create_directories(runtime_dir, err);
+	if (err.value() != 0) {
+		fmt::print("Could not create runtime directory (error {}) {}/{}\n", err.value(), appdata, PROGRAM_DIRNAME);
 		return false;
 	}
 
