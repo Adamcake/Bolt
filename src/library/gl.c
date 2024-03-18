@@ -649,13 +649,13 @@ void _bolt_glGenBuffers(uint32_t n, unsigned int* buffers) {
     LOG("glGenBuffers\n");
     gl.GenBuffers(n, buffers);
     struct GLContext* c = _bolt_context();
-    _bolt_rwlock_lock_write(&c->textures->rwlock);
+    _bolt_rwlock_lock_write(&c->buffers->rwlock);
     for (size_t i = 0; i < n; i += 1) {
         struct GLArrayBuffer* buffer = calloc(1, sizeof(struct GLArrayBuffer));
         buffer->id = buffers[i];
         hashmap_set(c->buffers->map, &buffer);
     }
-    _bolt_rwlock_unlock_write(&c->textures->rwlock);
+    _bolt_rwlock_unlock_write(&c->buffers->rwlock);
     LOG("glGenBuffers end\n");
 }
 
