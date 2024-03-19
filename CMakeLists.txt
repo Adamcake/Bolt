@@ -277,6 +277,7 @@ if(NOT BOLT_SKIP_LIBRARIES)
     endif()
     target_include_directories(${BOLT_PLUGIN_LIB_NAME} PUBLIC "${CEF_ROOT}" "${BOLT_LUAJIT_INCLUDE_DIR}" modules/fmt/include)
     target_link_libraries(${BOLT_PLUGIN_LIB_NAME} luajit-5.1)
+    target_compile_definitions(bolt PUBLIC BOLT_PLUGINS=1)
     target_compile_definitions(bolt PUBLIC BOLT_LIB_NAME="${BOLT_PLUGIN_LIB_NAME}")
 endif()
 
