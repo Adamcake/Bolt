@@ -222,8 +222,7 @@ bool LockXdgDirectories(std::filesystem::path& config_dir, std::filesystem::path
 
 	std::filesystem::path data_lock = runtime_dir;
 	data_lock.append("lock");
-	printf("%s\n", data_lock.c_str());
-	int lockfile = open(data_lock.c_str(), O_WRONLY | O_CREAT | O_CLOEXEC, 0666);
+	int lockfile = open(data_lock.c_str(), O_RDWR | O_CREAT | O_CLOEXEC, 0600);
 	if (flock(lockfile, LOCK_EX | LOCK_NB)) {
 		fmt::print("Failed to obtain lockfile; is the program already running?\n");
 		return false;
