@@ -14,6 +14,10 @@
 #include <xcb/xcb.h>
 #endif
 
+#if defined(BOLT_PLUGINS)
+#include <thread>
+#endif
+
 #if defined(BOLT_DEV_LAUNCHER_DIRECTORY)
 #include "../file_manager/directory.hxx"
 typedef FileManager::Directory CLIENT_FILEHANDLER;
@@ -29,7 +33,7 @@ namespace Browser {
 	/// https://github.com/chromiumembedded/cef/blob/5735/include/cef_life_span_handler.h
 	/// https://github.com/chromiumembedded/cef/blob/5735/include/cef_request_handler.h
 	struct Client: public CefClient, CefBrowserProcessHandler, CefLifeSpanHandler, CefRequestHandler, CLIENT_FILEHANDLER {
-		Client(CefRefPtr<Browser::App>, std::filesystem::path config_dir, std::filesystem::path data_dir);
+		Client(CefRefPtr<Browser::App>, std::filesystem::path config_dir, std::filesystem::path data_dir, std::filesystem::path runtime_dir);
 
 		/// Either opens a launcher window, or focuses an existing one. No more than one launcher window
 		/// may be open at a given time. A launcher window will be opened automatically on startup,
@@ -42,6 +46,14 @@ namespace Browser {
 
 		/// Handler to be called when a new CefWindow is created. Must be called before Show()
 		void OnWindowCreated(CefRefPtr<CefWindow>);
+
+#if defined(BOLT_PLUGINS)
+		/// Creates and binds an IPC socket, ready for IPCRun() to accept connections - OS-specific
+		void IPCBind();
+
+		/// Repeatedly blocks on new client connections and handles them - OS-specific
+		void IPCRun();
+#endif
 
 #if defined(BOLT_DEV_LAUNCHER_DIRECTORY)
 		/* FileManager override */
@@ -102,9 +114,15 @@ namespace Browser {
 			bool show_devtools;
 			std::filesystem::path config_dir;
 			std::filesystem::path data_dir;
+			std::filesystem::path runtime_dir;
 
 #if defined(CEF_X11)
 			xcb_connection_t* xcb;
+#endif
+
+#if defined(BOLT_PLUGINS)
+			std::thread ipc_thread;
+			int ipc_fd;
 #endif
 
 			// Mutex-locked vector - may be accessed from either UI thread (most of the time) or IO thread (GetResourceRequestHandler)

@@ -26,13 +26,18 @@ constexpr Browser::Details LAUNCHER_DETAILS = {
 	.frame = true,
 };
 
-Browser::Client::Client(CefRefPtr<Browser::App> app,std::filesystem::path config_dir, std::filesystem::path data_dir):
+Browser::Client::Client(CefRefPtr<Browser::App> app,std::filesystem::path config_dir, std::filesystem::path data_dir, std::filesystem::path runtime_dir):
 #if defined(BOLT_DEV_LAUNCHER_DIRECTORY)
 	CLIENT_FILEHANDLER(BOLT_DEV_LAUNCHER_DIRECTORY),
 #endif
-	is_closing(false), show_devtools(SHOW_DEVTOOLS), config_dir(config_dir), data_dir(data_dir)
+	is_closing(false), show_devtools(SHOW_DEVTOOLS), config_dir(config_dir), data_dir(data_dir), runtime_dir(runtime_dir)
 {
 	app->SetBrowserProcessHandler(this);
+
+#if defined(BOLT_PLUGINS)
+	this->IPCBind();
+	this->ipc_thread = std::thread(&Browser::Client::IPCRun, this);
+#endif
 
 #if defined(CEF_X11)
 	this->xcb = xcb_connect(nullptr, nullptr);

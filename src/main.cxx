@@ -69,7 +69,7 @@ int BoltRunBrowserProcess(CefMainArgs main_args, CefRefPtr<Browser::App> cef_app
 	}
 
 	// CefClient struct - central object for main thread, and implements lots of handlers for browser process
-	CefRefPtr<Browser::Client> client = new Browser::Client(cef_app, config_dir, data_dir/*, runtime_dir*/);
+	CefRefPtr<Browser::Client> client = new Browser::Client(cef_app, config_dir, data_dir, runtime_dir);
 
 	// CEF settings - only set the ones we're interested in
 	CefSettings settings = CefSettings();
