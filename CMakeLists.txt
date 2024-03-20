@@ -165,11 +165,13 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CEF_ROOT}/cmake")
 find_package(CEF REQUIRED)
 add_subdirectory(${CEF_LIBCEF_DLL_WRAPPER_PATH} libcef_dll_wrapper)
 
-# select an implementation for OS-specific behaviour of launcher window
+# select implementations for OS-specific behaviour
 if(WIN32)
     set(WINDOW_LAUNCHER_OS_SPECIFIC src/browser/window_launcher_win.cxx)
+    set(CLIENT_OS_SPECIFIC src/browser/client_win.cxx)
 else()
     set(WINDOW_LAUNCHER_OS_SPECIFIC src/browser/window_launcher_posix.cxx)
+    set(CLIENT_OS_SPECIFIC src/browser/client_posix.cxx)
 endif()
 
 # compile an auto-generator, then use it to auto-generate a C++ file containing icon data
@@ -198,8 +200,9 @@ endif()
 # This line needs to be updated manually with any new/deleted object files; cmake discourages GLOBbing source files
 add_executable(bolt
     modules/fmt/src/format.cc src/main.cxx src/browser.cxx src/browser/app.cxx src/browser/client.cxx
-    src/browser/resource_handler.cxx src/browser/window_launcher.cxx ${WINDOW_LAUNCHER_OS_SPECIFIC}
-    src/mime.cxx src/file_manager/directory.cxx client_cmake_gen.cxx ${BOLT_FILE_MANAGER_LAUNCHER_GEN}
+    ${CLIENT_OS_SPECIFIC} src/browser/resource_handler.cxx src/browser/window_launcher.cxx
+    ${WINDOW_LAUNCHER_OS_SPECIFIC} src/mime.cxx src/file_manager/directory.cxx client_cmake_gen.cxx
+    ${BOLT_FILE_MANAGER_LAUNCHER_GEN}
 )
 
 # Various build properties
