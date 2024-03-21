@@ -53,6 +53,9 @@ namespace Browser {
 
 		/// Repeatedly blocks on new client connections and handles them - OS-specific
 		void IPCRun();
+
+		/// Stops and joins the IPC thread - OS specific
+		void IPCStop();
 #endif
 
 #if defined(BOLT_DEV_LAUNCHER_DIRECTORY)

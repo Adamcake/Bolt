@@ -63,6 +63,9 @@ void Browser::Client::Exit() {
 #if defined(CEF_X11)
 		xcb_disconnect(this->xcb);
 #endif
+#if defined(BOLT_PLUGINS)
+		this->IPCStop();
+#endif
 	} else {
 		this->is_closing = true;
 		this->closing_windows_remaining = 0;
