@@ -1,10 +1,15 @@
 #include "plugin.h"
 #include "plugin_api.h"
 
+#include <errno.h>
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
 #include <time.h>
+
+#include <stdlib.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 
 #define API_VERSION_MAJOR 1
 #define API_VERSION_MINOR 0
@@ -88,7 +93,19 @@ static int surface_gc(lua_State* state) {
     return 0;
 }
 
+int fd;
 void _bolt_plugin_init(void (*_surface_init)(struct SurfaceFunctions*, unsigned int, unsigned int), void (*_surface_destroy)(void*)) {
+    int olderr = errno;
+    struct sockaddr_un addr = {.sun_family = AF_UNIX};
+    fd = socket(addr.sun_family, SOCK_STREAM, 0);
+    const char* runtime_dir = getenv("XDG_RUNTIME_DIR");
+    const char* prefix = (runtime_dir && *runtime_dir) ? runtime_dir : "/tmp";
+    snprintf(addr.sun_path, sizeof(addr.sun_path) - 1, "%s/bolt-launcher/ipc-0", prefix);
+    if (connect(fd, (const struct sockaddr*)&addr, sizeof(addr)) == -1) {
+        printf("error: IPC connect() error %i\n", errno);
+    }
+    errno = olderr;
+
     surface_init = _surface_init;
     surface_destroy = _surface_destroy;
     state = luaL_newstate();
@@ -313,6 +330,12 @@ static int api_time(lua_State* state) {
     clock_gettime(CLOCK_MONOTONIC, &s);
     const uint64_t microseconds = (s.tv_sec * 1000000) + (s.tv_nsec / 1000);
     lua_pushinteger(state, microseconds);
+
+    int olderr = errno;
+    uint8_t b = (uint8_t)s.tv_nsec;
+    int r = send(fd, &b, 1, MSG_NOSIGNAL);
+    errno = olderr;
+
     return 1;
 }
 

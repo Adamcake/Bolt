@@ -275,7 +275,7 @@ endif()
 if(NOT BOLT_SKIP_LIBRARIES)
     # todo: anything other than linux
     if(UNIX AND NOT APPLE)
-        add_library(${BOLT_PLUGIN_LIB_NAME} SHARED src/library/so/main.c src/library/plugin.c src/library/gl.c src/library/rwlock/rwlock_posix.c modules/hashmap/hashmap.c)
+        add_library(${BOLT_PLUGIN_LIB_NAME} SHARED src/library/so/main.c src/library/plugin/plugin.c src/library/gl.c src/library/rwlock/rwlock_posix.c modules/hashmap/hashmap.c)
         install(TARGETS ${BOLT_PLUGIN_LIB_NAME} DESTINATION "${BOLT_LIBDIR}")
     endif()
     target_include_directories(${BOLT_PLUGIN_LIB_NAME} PUBLIC "${CEF_ROOT}" "${BOLT_LUAJIT_INCLUDE_DIR}" modules/fmt/include)
