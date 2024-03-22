@@ -1,6 +1,5 @@
 #include "gl.h"
 #include "plugin.h"
-#include "rwlock.h"
 
 #include <math.h>
 #include <stdio.h>
