@@ -145,6 +145,12 @@ uint8_t _bolt_plugin_is_inited();
 /// Close the plugin library.
 void _bolt_plugin_close();
 
+/// Opens the IPC channel. (OS-specific)
+void _bolt_plugin_ipc_init(int*);
+
+/// Closes the IPC channel. (OS-specific)
+void _bolt_plugin_ipc_close(int);
+
 /// Handle all incoming IPC messages.
 void _bolt_plugin_handle_messages();
 

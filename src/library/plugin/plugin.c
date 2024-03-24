@@ -1,7 +1,6 @@
 #include "plugin.h"
 
 #include "../ipc.h"
-#include "ipc.h"
 #include "plugin_api.h"
 
 #include <lua.h>
@@ -35,6 +34,8 @@ enum {
 };
 
 static int _bolt_api_init(lua_State* state);
+
+int fd = 0;
 
 lua_State* state = NULL;
 
@@ -92,7 +93,7 @@ static int surface_gc(lua_State* state) {
 }
 
 void _bolt_plugin_init(void (*_surface_init)(struct SurfaceFunctions*, unsigned int, unsigned int), void (*_surface_destroy)(void*)) {
-    _bolt_plugin_ipc_init();
+    _bolt_plugin_ipc_init(&fd);
 
     surface_init = _surface_init;
     surface_destroy = _surface_destroy;
@@ -220,13 +221,13 @@ uint8_t _bolt_plugin_is_inited() {
 void _bolt_plugin_close() {
     lua_close(state);
     state = NULL;
-    _bolt_plugin_ipc_close();
+    _bolt_plugin_ipc_close(fd);
 }
 
 void _bolt_plugin_handle_messages() {
     struct BoltIPCMessage message;
-    while (_bolt_plugin_ipc_poll()) {
-        if (_bolt_plugin_ipc_receive(&message, sizeof(message)) != 0) break;
+    while (_bolt_ipc_poll(fd)) {
+        if (_bolt_ipc_receive(fd, &message, sizeof(message)) != 0) break;
         printf("type %u items %u\n", message.message_type, message.items);
     }
 }
