@@ -20,6 +20,10 @@ struct BoltIPCMessage {
     uint32_t items;
 };
 
+#if defined(__cplusplus)
+extern "C" {
+#endif
+
 /// Sends the given bytes on the IPC channel and returns zero on success or non-zero on failure.
 uint8_t _bolt_ipc_send(int fd, const void* data, size_t len);
 
@@ -30,5 +34,9 @@ uint8_t _bolt_ipc_receive(int fd, void* data, size_t len);
 
 /// Checks whether ipc_receive would return immediately (1) or block (0) or return an error (0).
 uint8_t _bolt_ipc_poll(int fd);
+
+#if defined(__cplusplus)
+}
+#endif
 
 #endif
