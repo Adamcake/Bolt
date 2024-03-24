@@ -154,17 +154,20 @@ function removePendingGameAuth(pending, close_window) {
     pendingGameAuth.splice(pendingGameAuth.indexOf(pending), 1);
 }
 
+// toggles disclaimer on/off, can be closed by clicking 'I Understand'
 let toggle_disclaimer = () => {
     let disclaimer = document.getElementById('disclaimer');
     disclaimer.hidden = !disclaimer.hidden;
 };
 
+// after config is loaded, check which theme (light/dark) the user prefers
 let load_theme = () => {
     if (config.use_dark_theme == false) {
         document.documentElement.classList.remove('dark');
     }
 }
 
+// tailwind can easily change theme by adding or removing 'dark' to the root 'html' element
 let change_theme = () => {
     let html = document.documentElement;
     if (html.classList.contains('dark')) html.classList.remove('dark');
@@ -174,6 +177,7 @@ let change_theme = () => {
     configIsDirty = true;
 };
 
+// toggles settings popup
 let toggle_settings = () => {
     let settings = document.getElementById("settings");
     settings.hidden = !settings.hidden;
@@ -769,32 +773,32 @@ function addNewAccount(name, creds, genLoginVars, select) {
     accountSelect.onchange();
 }
 
-// populates the gameAccountSelection element and by extension the launch_game_buttons element
-// "f" is the function passed to generateLaunchButtons, "select" and "game_select" are HTML Select elements,
-// and "launch_game_buttons" is a HTML Div element to be targeted by these buttons' callbacks
+// populates the gameAccountSelection element
+// "f" is the function passed to generateLaunchButtons, "game_account_select" is an HTML select element
 function generateAccountSelection(f, game_account_select) {
     clearElement(gameAccountSelection);
-    game_account_select.onchange = () => {
-        if (game_account_select.selectedIndex >= 0) {
-            generateLaunchButtonsOsrs(f, game_account_select.options[game_account_select.selectedIndex]);
-            generateLaunchButtonsRs3(f, game_account_select.options[game_account_select.selectedIndex]);
+    for (let option of game_account_select.options) {
+        option.classList = "bg-slate-100 text-slate-950 dark:bg-slate-900 dark:text-slate-50"
+        gameAccountSelection.appendChild(option);
+    }
+
+    gameAccountSelection.onchange = () => {
+        if (gameAccountSelection.selectedIndex >= 0) {
+            generateLaunchButtonsOsrs(f, gameAccountSelection.options[gameAccountSelection.selectedIndex]);
+            generateLaunchButtonsRs3(f, gameAccountSelection.options[gameAccountSelection.selectedIndex]);
             if (accountSelect.selectedIndex != -1) {
                 if (!config.selected_game_accounts) config.selected_game_accounts = {};
                 const key = accountSelect.options[accountSelect.selectedIndex].creds.sub;
-                const val = game_account_select.options[game_account_select.selectedIndex].seq;
+                const val = gameAccountSelection.options[gameAccountSelection.selectedIndex].seq;
                 config.selected_game_accounts[key] = val;
             }
         }
         configIsDirty = true;
     };
-    game_account_select.onchange();
-    for (let option of game_account_select.options) {
-        option.classList = "bg-slate-100 text-slate-950 dark:bg-slate-900 dark:text-slate-50"
-        gameAccountSelection.appendChild(option);
-    }
+    gameAccountSelection.onchange();
 }
 
-// populates the launchGameButtons element with buttons
+// provides onclick methods to rs3 buttons
 // the parameter is a function callback, which must take exactly two arguments:
 // 1. a function which your function should invoke with JX env variables, e.g. launchRS3Linux
 // 2. a HTML Button element, which should be passed to parameter 1 when invoking it, or, if not
@@ -810,7 +814,7 @@ function generateLaunchButtonsRs3(f, opt) {
     }
 }
 
-// populates the launchGameButtons element with buttons
+// provides onclick methods to osrs buttons
 // the parameter is a function callback, which must take exactly two arguments:
 // 1. a function which your function should invoke with JX env variables, e.g. launchRS3Linux
 // 2. a HTML Button element, which should be passed to parameter 1 when invoking it, or, if not
@@ -1121,16 +1125,16 @@ function err(str, do_throw) {
     if (!do_throw) {
         console.error(str);
     }
-    var p = insertMessage(str);
-    p.setAttribute("class", "p-err");
+    var li = insertMessage(str);
+    li.setAttribute("class", "text-rose-500");
     if (do_throw) {
         throw new Error(str);
     } else {
-        return p;
+        return li;
     }
 }
 
-// inserts a message into the message list and returns the new <p> element
+// inserts a message into the message list and returns the new <li> element
 // don't call this directly, call msg or err instead
 function insertMessage(str) {
     var li = document.createElement("li");
