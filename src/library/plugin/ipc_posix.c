@@ -1,6 +1,7 @@
 #include "ipc.h"
 
 #include <errno.h>
+#include <poll.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/socket.h>
@@ -28,7 +29,7 @@ void _bolt_plugin_ipc_close() {
     errno = olderr;
 }
 
-void _bolt_plugin_ipc_send(void* data, size_t len) {
+uint8_t _bolt_plugin_ipc_send(const void* data, size_t len) {
     const int olderr = errno;
     size_t remaining = len;
     size_t sent = 0;
@@ -37,9 +38,39 @@ void _bolt_plugin_ipc_send(void* data, size_t len) {
         if (r == -1) {
             printf("error: IPC send() failed, error %i\n", errno);
             errno = olderr;
-            return;
+            return 1;
         }
         remaining -= r;
         sent += r;
     }
+    return 0;
+}
+
+uint8_t _bolt_plugin_ipc_receive(void* data, size_t len) {
+    const int olderr = errno;
+    size_t remaining = len;
+    size_t received = 0;
+    while (remaining > 0) {
+        int r = recv(fd, data + received, remaining, 0);
+        if (r == -1) {
+            printf("error: IPC recv() failed, error %i\n", errno);
+            errno = olderr;
+            return 1;
+        }
+        remaining -= r;
+        received += r;
+    }
+    return 0;
+}
+
+uint8_t _bolt_plugin_ipc_poll() {
+    const int olderr = errno;
+    struct pollfd pfd = {.events = POLLIN, .fd = fd};
+    int r = poll(&pfd, 1, 0);
+    if (r == -1) {
+        printf("error: IPC poll() failed, error %i\n", errno);
+        errno = olderr;
+        return 0;
+    }
+    return r && (pfd.revents & POLLIN);
 }

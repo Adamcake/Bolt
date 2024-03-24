@@ -145,6 +145,9 @@ uint8_t _bolt_plugin_is_inited();
 /// Close the plugin library.
 void _bolt_plugin_close();
 
+/// Handle all incoming IPC messages.
+void _bolt_plugin_handle_messages();
+
 /// Creates a new instance of a plugin with its own Lua environment (lua_setfenv).
 /// The `lua` param will be loaded and executed in a fresh environment, then event callbacks will be
 /// sent to it until it is destroyed by the plugin being stopped.

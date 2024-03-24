@@ -1,5 +1,6 @@
 #include "plugin.h"
 
+#include "../ipc.h"
 #include "ipc.h"
 #include "plugin_api.h"
 
@@ -220,6 +221,14 @@ void _bolt_plugin_close() {
     lua_close(state);
     state = NULL;
     _bolt_plugin_ipc_close();
+}
+
+void _bolt_plugin_handle_messages() {
+    struct BoltIPCMessage message;
+    while (_bolt_plugin_ipc_poll()) {
+        if (_bolt_plugin_ipc_receive(&message, sizeof(message)) != 0) break;
+        printf("type %u items %u\n", message.message_type, message.items);
+    }
 }
 
 uint64_t _bolt_plugin_add(const char* lua) {
