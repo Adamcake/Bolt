@@ -56,6 +56,16 @@ namespace Browser {
 
 		/// Stops and joins the IPC thread - OS specific
 		void IPCStop();
+
+		/// Handles a new client connecting to the IPC socket. Called by the IPC thread.
+		void IPCHandleNewClient(int fd);
+
+		/// Handles a new message being sent to the IPC socket by a client. Called by the IPC thread.
+		/// The message hasn't actually been pulled from the socket yet when this function is called;
+		/// rather this function will pull it using ipc_receive from ipc.h.
+		///
+		/// Returns true on success, false on failure.
+		bool IPCHandleMessage(int fd);
 #endif
 
 #if defined(BOLT_DEV_LAUNCHER_DIRECTORY)

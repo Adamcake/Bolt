@@ -42,7 +42,7 @@ void Browser::Client::IPCRun() {
 				break;
 			}
 			pfds.push_back({.fd = client_fd, .events = POLLIN});
-			fmt::print("[I] new client fd {}\n", client_fd);
+			this->IPCHandleNewClient(client_fd);
 		} else if (pfds[0].revents != 0) {
 			fmt::print("[I] IPC thread exiting due to poll event {}\n", pfds[0].revents);
 			break;
@@ -52,20 +52,14 @@ void Browser::Client::IPCRun() {
 		for (auto i = pfds.begin() + 1; i != pfds.end(); i += 1) {
 			if (i->revents != 0) {
 				uint8_t byte;
-				bool is_pollin = !!(i->revents & POLLIN);
-				size_t read_size;
-				if (is_pollin && (read_size = read(i->fd, &byte, 1)) > 0) {
-					fmt::print("[I] fd {} received byte {}\n", i->fd, (int)byte);
-				} else {
-					if (is_pollin) {
-						if (read_size == 0) {
-							fmt::print("[I] dropping client fd {} due to read eof\n", i->fd);
-						} else {
-							fmt::print("[I] dropping client fd {} due to read error {}\n", i->fd, errno);
-						}
-					} else {
-						fmt::print("[I] dropping client fd {} due to poll event {}\n", i->fd, i->revents);
+				if (i->revents & POLLIN) {
+					if (!this->IPCHandleMessage(i->fd)) {
+						fmt::print("[I] dropping client fd {} due to read error or eof\n", i->fd);
+						close(i->fd);
+						i->fd = 0;
 					}
+				} else {
+					fmt::print("[I] dropping client fd {} due to poll event {}\n", i->fd, i->revents);
 					close(i->fd);
 					i->fd = 0;
 				}

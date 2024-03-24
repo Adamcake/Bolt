@@ -1,8 +1,12 @@
 #include "client.hxx"
+
+#include "include/cef_life_span_handler.h"
 #include "include/cef_app.h"
 #include "window_launcher.hxx"
 
-#include "include/cef_life_span_handler.h"
+#if defined(BOLT_PLUGINS)
+#include "../library/ipc.h"
+#endif
 
 #include <algorithm>
 #include <fcntl.h>
@@ -248,3 +252,18 @@ CefRefPtr<CefResourceRequestHandler> Browser::Client::GetResourceRequestHandler(
 		return (*it)->GetResourceRequestHandler(browser, frame, request, is_navigation, is_download, request_initiator, disable_default_handling);
 	}
 }
+
+#if defined(BOLT_PLUGINS)
+void Browser::Client::IPCHandleNewClient(int fd) {
+	fmt::print("[I] new client fd {}\n", fd);
+}
+
+bool Browser::Client::IPCHandleMessage(int fd) {
+	BoltIPCMessage message;
+	if (_bolt_ipc_receive(fd, &message, sizeof(message))) {
+		return false;
+	}
+	fmt::print("[I] new message, type {}, items={}\n", message.message_type, message.items);
+	return true;
+}
+#endif
