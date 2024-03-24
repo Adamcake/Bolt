@@ -1056,6 +1056,7 @@ void _bolt_gl_onSwapBuffers(uint32_t window_width, uint32_t window_height) {
     if (_bolt_plugin_is_inited()) {
         struct SwapBuffersEvent event;
         _bolt_plugin_handle_swapbuffers(&event);
+        _bolt_plugin_handle_messages();
     }
 }
 
