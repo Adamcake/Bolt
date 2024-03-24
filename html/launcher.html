@@ -1,10 +1,169 @@
 <!doctype html>
-<html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<title>Bolt Launcher</title>
-		<link rel="stylesheet" href="/launcher.css">
-		<script src="/launcher.js"></script>
-	</head>
-	<body></body>
+<html lang="en" class="dark">
+
+<head>
+	<meta charset="utf-8" />
+	<title>Bolt Launcher</title>
+	<link rel="stylesheet" href="output.css">
+</head>
+
+<body
+	class="container mx-auto duration-200 text-slate-900 bg-slate-100 dark:text-slate-50 dark:bg-slate-900 h-screen text-xs sm:text-sm md:text-base">
+	<div id="disclaimer">
+		<div class="w-screen h-screen absolute left-0 top-0 backdrop-filter backdrop-blur-sm z-10"></div>
+		<div class="absolute left-0 top-0 w-screen h-screen z-10 bg-black opacity-75"></div>
+		<div
+			class="absolute left-1/4 top-1/4 rounded shadow-lg w-1/2 p-5 z-20 text-center bg-slate-100 dark:bg-slate-900">
+			<p class="p-2">
+				<script>
+					let p1 = atob("Qm9sdCBpcyBhbiA8Yj51bm9mZmljaWFsIHRoaXJkLXBhcnR5IGxhdW5jaGVyPC9iPi4gSXQncyBmcmVlIGFuZCBvcGVuLXNvdXJjZSBzb2Z0d2FyZSBsaWNlbnNlZCB1bmRlciBBR1BMIDMuMC4=");
+					document.write(p1);
+				</script>
+			</p>
+			<p class="p-2">
+				<script>
+					let p2 = atob("SmFnZXggaXMgPGI+bm90IHJlc3BvbnNpYmxlPC9iPiBmb3IgYW55IHByb2JsZW1zIG9yIGRhbWFnZSBjYXVzZWQgYnkgdXNpbmcgdGhpcyBwcm9kdWN0Lg");
+					document.write(p2);
+				</script>
+			</p>
+			<button class="border-2 border-sky-500 hover:opacity-75 duration-200 rounded m-5 p-2"
+				onclick="toggle_disclaimer()">I Understand</button>
+		</div>
+	</div>
+
+	<div id="settings" hidden>
+		<div class="w-screen h-screen absolute left-0 top-0 backdrop-filter backdrop-blur-sm z-10"></div>
+		<div class="absolute left-0 top-0 w-screen h-screen z-10 bg-black opacity-75"></div>
+		<div
+			class="absolute left-[15%] top-[15%] rounded shadow-lg w-3/4 p-5 z-20 text-center bg-slate-100 dark:bg-slate-900">
+			<div class="grid grid-cols-2">
+				<div class="border-r border-r-slate-300 dark:border-r-slate-950">
+					<p class="font-bold mb-5 underline decoration-purple-500">OSRS</p>
+					<div id="flatpak_div" class="mx-auto p-2">
+						<label for="flatpak_rich_presence">Expose rich presense to Flatpak Discord: </label>
+						<input type="checkbox" name="flatpak_rich_presence" id="flatpak_rich_presence" class="ml-2">
+					</div>
+					<div class="mx-auto p-2">
+						<label for="custom_jar">Use custom RuneLite JAR: </label>
+						<input type="checkbox" name="custom_jar" id="custom_jar" onchange="toggle_custom_jar()"
+							class="ml-2">
+					</div>
+					<div id="custom_jar_div" class="mx-auto p-2 opacity-25">
+						<textarea disabled name="custom_jar_file" id="custom_jar_file"
+							class="h-10 rounded border-2 border-slate-300 dark:border-slate-950 text-slate-950 bg-slate-100 dark:text-slate-50 dark:bg-slate-900"></textarea>
+						<br>
+						<button disabled id="custom_jar_file_button"
+							class="p-1 mt-1 rounded border-2 border-sky-500 hover:opacity-75 duration-200">Select
+							File</button>
+					</div>
+				</div>
+				<div>
+					<p class="font-bold mb-5 underline decoration-green-500">RS3</p>
+					<div class="mx-auto p-2">
+						<label for="custom_uri">Use custom config URI: </label>
+						<input type="checkbox" name="custom_uri" id="custom_uri" onchange="toggle_custom_uri()"
+							class="ml-2">
+					</div>
+					<div id="config_uri_div" class="mx-auto p-2 opacity-25">
+						<textarea disabled name="config_uri" id="config_uri" rows="4"
+							class="rounded border-2 border-slate-300 dark:border-slate-950 text-slate-950 bg-slate-100 dark:text-slate-50 dark:bg-slate-900"></textarea>
+					</div>
+				</div>
+			</div>
+			<button class="border-2 border-rose-600 hover:opacity-75 duration-200 rounded m-5 mt-10 p-2"
+				onclick="toggle_settings()">Close</button>
+		</div>
+	</div>
+
+	<button class="rounded-full shadow-lg p-2 absolute right-5 top-5 bg-sky-500 hover:opacity-75 duration-200"
+		onclick="change_theme()">
+		<img src="svgs/palette-solid.svg" class="w-5 h-5"></object>
+	</button>
+
+	<button class="p-2 rounded-full shadow-lg absolute top-16 right-5 bg-sky-500 hover:opacity-75 duration-200"
+		onclick="toggle_settings()">
+		<img src="svgs/gear-solid.svg" class="h-5 w-5">
+	</button>
+
+	<div class="grid grid-cols-4 h-full">
+		<div class="col-span-1 p-2 text-center border-r border-r-slate-300 dark:border-r-slate-950">
+			<div class="grid grid-rows-6 h-full">
+				<div class="row-span-5 mt-5">
+					<button id="login_button"
+						class="p-1 rounded border-2 border-sky-500 hover:opacity-75 duration-200">Log In</button>
+					<button id="logout_button"
+						class="p-1 rounded border-2 border-rose-500 hover:opacity-75 duration-200">Log Out</button>
+					<br>
+					<img src="svgs/user-solid.svg" alt="" class="w-9 h-9 p-1 mt-5 rounded-full bg-slate-400 mx-auto">
+					<select name="account_select" id="account_select"
+						class="mb-5 cursor-pointer rounded w-full text-inherit p-2 mt-2 bg-inherit border-2 border-slate-300 dark:border-slate-950 hover:opacity-75"></select>
+				</div>
+				<div class="row-start-6 my-auto">
+					<button id="data_dir_button" class="p-1 hover:opacity-75">
+						<div class="flex">
+							<img src="svgs/database-solid.svg" alt="" class="w-7 h-7 p-1 mr-2 rounded-lg bg-sky-500">
+							Data
+						</div>
+					</button>
+				</div>
+			</div>
+		</div>
+		<div class="col-start-2 col-span-3">
+			<div class="grid grid-rows-6">
+				<div class="p-5 row-span-5 mx-auto">
+					<select name="game_account_select" id="game_account_select"
+						class="cursor-pointer rounded w-64 text-inherit p-2 mt-2 bg-inherit border-2 border-slate-300 dark:border-slate-950 hover:opacity-75"></select>
+					<br>
+					<div id="osrs_buttons" class="mt-10">
+						<button id="rl_launch" class="p-2 hover:opacity-75"
+							onclick="msg('Launcher unavailable, please log in first')">
+							<div class="flex">
+								<img src="svgs/rocket-solid.svg" alt=""
+									class="w-7 h-7 p-1 mr-2 rounded-lg bg-purple-500">
+								Launch RuneLite
+							</div>
+						</button>
+						<button id="rl_configure" class="p-2 hover:opacity-75"
+							onclick="msg('Launcher unavailable, please log in first')">
+							<div class="flex">
+								<img src="svgs/wrench-solid.svg" alt="" class="w-7 h-7 p-1 mr-2 rounded-lg bg-pink-500">
+								Configure RuneLite
+							</div>
+						</button>
+						<br>
+						<button id="hdos_launch" class="p-2 hover:opacity-75 mt-10"
+							onclick="msg('Launcher unavailable, please log in first')">
+							<div class="flex">
+								<img src="svgs/rocket-solid.svg" alt=""
+									class="w-7 h-7 p-1 mr-2 rounded-lg bg-amber-500">
+								Launch HDOS
+							</div>
+						</button>
+					</div>
+					<div id="rs3_buttons" class="mt-10">
+						<button id="rs3_launch" class="p-2 hover:opacity-75"
+							onclick="msg('Launcher unavailable, please log in first')">
+							<div class="flex">
+								<img src="svgs/rocket-solid.svg" alt=""
+									class="w-7 h-7 p-1 mr-2 rounded-lg bg-green-500">
+								Launch RS3
+							</div>
+						</button>
+					</div>
+				</div>
+				<div
+					class="pl-2 border-t duration-200 border-t-slate-300 dark:border-t-slate-950 fixed bottom-0 w-full bg-slate-100 dark:bg-slate-900">
+					<div class="flex p-2">
+						<img src="svgs/circle-info-solid.svg" alt="" class="w-7 h-7 p-[3px] rounded-full bg-rose-500 hover:opacity-75 cursor-pointer" onclick="toggle_disclaimer()">
+					</div>
+					<ol id="message_list"
+						class="overflow-auto h-[calc(100vh-75vh)] list-disc pl-5 list-inside marker:text-rose-500"></ol>
+				</div>
+			</div>
+		</div>
+	</div>
+</body>
+
+<script src="launcher.js"></script>
+
 </html>

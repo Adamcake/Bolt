@@ -14,21 +14,20 @@ var isLoading = true;
 var isFlathub = null;
 
 // globally-available root elements
-var messages = document.createElement("ul");
-var accountSelect = document.createElement("select");
-var loginButton = document.createElement("button");
-var logoutButton = document.createElement("button");
-var dataDirButton = document.createElement("button");
-var loggedInInfo = document.createElement("div");
-var loginButtons = document.createElement("div");
-var gameAccountSelection = document.createElement("div");
-var footer = document.createElement("div");
+var messages = document.getElementById("message_list");
+var accountSelect = document.getElementById("account_select");
+var loginButton = document.getElementById("login_button");
+var logoutButton = document.getElementById("logout_button");
+var dataDirButton = document.getElementById("data_dir_button");
+var gameAccountSelection = document.getElementById("game_account_select");
 
 // config setting elements
-var runeliteFlatpakRichPresence = document.createElement("input");
-var runeliteUseCustomJar = document.createElement("input");
-var runeliteCustomJar = document.createElement("textarea");
-var rsConfigUri = document.createElement("textarea");
+var runeliteFlatpakRichPresence = document.getElementById("flatpak_rich_presence");
+var runeliteUseCustomJar = document.getElementById("custom_jar");
+var runeliteCustomJar = document.getElementById("custom_jar_file");
+var runeliteCustomJarDiv = document.getElementById("custom_jar_div");
+var rsConfigUri = document.getElementById("config_uri");
+var rsConfigUriDiv = document.getElementById("config_uri_div");
 
 // Checks if `credentials` are about to expire or have already expired,
 // and renews them using the oauth endpoint if so.
@@ -129,7 +128,7 @@ function makeRandomVerifier() {
     var t = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
     var n = new Uint32Array(43);
     crypto.getRandomValues(n);
-    return Array.from(n, function(e) {
+    return Array.from(n, function (e) {
         return t[e % t.length]
     }).join("")
 }
@@ -154,6 +153,31 @@ function removePendingGameAuth(pending, close_window) {
     }
     pendingGameAuth.splice(pendingGameAuth.indexOf(pending), 1);
 }
+
+let toggle_disclaimer = () => {
+    let disclaimer = document.getElementById('disclaimer');
+    disclaimer.hidden = !disclaimer.hidden;
+};
+
+let load_theme = () => {
+    if (config.use_dark_theme == false) {
+        document.documentElement.classList.remove('dark');
+    }
+}
+
+let change_theme = () => {
+    let html = document.documentElement;
+    if (html.classList.contains('dark')) html.classList.remove('dark');
+    else html.classList.add('dark');
+
+    config.use_dark_theme = html.classList.contains("dark");
+    configIsDirty = true;
+};
+
+let toggle_settings = () => {
+    let settings = document.getElementById("settings");
+    settings.hidden = !settings.hidden;
+};
 
 // body's onload function
 function start(s) {
@@ -186,6 +210,8 @@ function start(s) {
             err(`Couldn't parse config file: ${e.toString()}`);
         }
     }
+
+    load_theme();
 
     const allowed_origins = [internal_url, s_origin, atob(s.origin_2fa)];
     window.addEventListener("message", (event) => {
@@ -297,62 +323,40 @@ function start(s) {
         }
     });
 
-    var launchGameButtons = document.createElement("div");
-    var settingsOsrs = document.createElement("div");
-    settingsOsrs.setAttribute("class", "div-settings");
-    var settingsRs3 = document.createElement("div");
-    settingsRs3.setAttribute("class", "div-settings");
-
-    var rsConfigUriLabel = document.createElement("label");
-    rsConfigUriLabel.innerText = "Config URI: ";
-    rsConfigUriLabel.for = rsConfigUri;
-
-    rsConfigUri.setAttribute("rows", 1);
     rsConfigUri.onchange = () => {
         config.rs_config_uri = rsConfigUri.value;
         configIsDirty = true;
     };
+
+    var rsConfigUriReset = document.getElementById("custom_uri");
+    rsConfigUriReset.onchange = () => {
+        if (!rsConfigUriReset.checked) {
+            rsConfigUri.value = atob(s.default_config_uri);
+            delete config.rs_config_uri;
+            configIsDirty = true;
+            rsConfigUriDiv.classList.add("opacity-25");
+            rsConfigUri.disabled = true;
+        } else {
+            rsConfigUriDiv.classList.remove("opacity-25");
+            rsConfigUri.disabled = false;
+        }
+    };
+
     if (config.rs_config_uri) {
         rsConfigUri.value = config.rs_config_uri;
+        rsConfigUriReset.checked = true;
     } else {
         rsConfigUri.value = atob(s.default_config_uri);
     }
-    settingsRs3.appendChild(rsConfigUriLabel);
-    settingsRs3.appendChild(rsConfigUri);
+    rsConfigUriReset.onchange();
 
-    var rsConfigUriReset = document.createElement("button");
-    rsConfigUriReset.setAttribute("class", "button-red");
-    rsConfigUriReset.innerText = "Reset To Default";
-    rsConfigUriReset.onclick = () => {
-        rsConfigUri.value = atob(s.default_config_uri);
-        delete config.rs_config_uri;
-        configIsDirty = true;
-    };
-    settingsRs3.appendChild(rsConfigUriReset);
-
-    var runeliteFlatpakRichPresenceLabel = document.createElement("label");
-    runeliteFlatpakRichPresenceLabel.innerText = "Expose rich presence to Flatpak Discord: ";
-    runeliteFlatpakRichPresenceLabel.for = runeliteFlatpakRichPresence;
-
-    runeliteFlatpakRichPresence.type = "checkbox";
     runeliteFlatpakRichPresence.checked = config.flatpak_rich_presence || false;
     runeliteFlatpakRichPresence.onchange = () => {
         config.flatpak_rich_presence = runeliteFlatpakRichPresence.checked;
         configIsDirty = true;
     };
 
-    var runeliteCustomJarLabel = document.createElement("label");
-    runeliteCustomJarLabel.innerText = "Use custom RuneLite JAR: ";
-    runeliteCustomJarLabel.for = runeliteUseCustomJar;
-
-    runeliteUseCustomJar.type = "checkbox";
-    runeliteUseCustomJar.checked = config.runelite_use_custom_jar || false;
-
-    runeliteCustomJar.disabled = true;
-    runeliteCustomJar.setAttribute("rows", 1);
-    if (config.runelite_custom_jar) runeliteCustomJar.value = config.runelite_custom_jar;
-
-    var runeliteCustomJarSelect = document.createElement("button");
+    var runeliteCustomJarSelect = document.getElementById("custom_jar_file_button");
     runeliteCustomJarSelect.onclick = () => {
         runeliteUseCustomJar.disabled = true;
         runeliteCustomJarSelect.disabled = true;
@@ -376,9 +380,17 @@ function start(s) {
         xml.open('GET', "/jar-file-picker", true);
         xml.send();
     };
-    runeliteCustomJarSelect.innerText = "Select File";
     runeliteUseCustomJar.onchange = () => {
-        runeliteCustomJarSelect.disabled = !runeliteUseCustomJar.checked;
+        if (runeliteUseCustomJar.checked) {
+            runeliteCustomJarDiv.classList.remove("opacity-25");
+            runeliteCustomJar.disabled = false;
+            runeliteCustomJarSelect.disabled = false;
+        } else {
+            runeliteCustomJarDiv.classList.add("opacity-25");
+            runeliteCustomJar.disabled = true;
+            runeliteCustomJarSelect.disabled = true;
+        }
+
         config.runelite_use_custom_jar = runeliteUseCustomJar.checked;
         if (config.runelite_use_custom_jar) {
             if (runeliteUseCustomJar.persisted_path) config.runelite_custom_jar = runeliteUseCustomJar.persisted_path;
@@ -388,53 +400,25 @@ function start(s) {
         }
         configIsDirty = true;
     };
-    runeliteCustomJarSelect.disabled = !runeliteUseCustomJar.checked;
 
-    if (platform === "linux") {
-        settingsOsrs.appendChild(runeliteFlatpakRichPresenceLabel);
-        settingsOsrs.appendChild(runeliteFlatpakRichPresence);
-        settingsOsrs.appendChild(document.createElement("br"));
+    runeliteUseCustomJar.checked = config.runelite_use_custom_jar || false;
+    if (runeliteUseCustomJar.checked) {
+        runeliteCustomJarDiv.classList.remove("opacity-25")
+        runeliteCustomJar.disabled = false;
+        runeliteCustomJarSelect.disabled = false;
     }
-    settingsOsrs.appendChild(runeliteCustomJarLabel);
-    settingsOsrs.appendChild(runeliteUseCustomJar);
-    settingsOsrs.appendChild(runeliteCustomJar);
-    settingsOsrs.appendChild(runeliteCustomJarSelect);
-    settingsOsrs.appendChild(document.createElement("br"));
+    if (config.runelite_custom_jar) runeliteCustomJar.value = config.runelite_custom_jar;
 
-    var accounts_label = document.createElement("label");
-    accounts_label.innerText = "Logged in as:";
-    accounts_label.for = accountSelect;
-    loggedInInfo.appendChild(accounts_label);
-    loggedInInfo.appendChild(accountSelect);
-
-    var game_select = document.createElement("select");
-    s.games.forEach((x, i) => {
-        var opt = document.createElement("option");
-        opt.name = atob(x);
-        opt.innerText = opt.name;
-        opt.value = i;
-        switch (i) {
-            case 0:
-                opt.genLaunchButtons = generateLaunchButtonsRs3;
-                opt.settingsElement = settingsRs3;
-                break;
-            case 1:
-                opt.genLaunchButtons = generateLaunchButtonsOsrs;
-                opt.settingsElement = settingsOsrs;
-                break;
-        }
-        game_select.appendChild(opt);
-    });
-    if (config.selected_game_index) {
-        game_select.selectedIndex = config.selected_game_index;
+    if (platform !== "linux") {
+        let flatpakDiv = document.getElementById("flatpak_div")
+        flatpakDiv.remove();
     }
 
     accountSelect.onchange = () => {
-        clearElement(launchGameButtons);
         clearElement(gameAccountSelection);
         if (accountSelect.selectedIndex >= 0) {
             const opt = accountSelect.options[accountSelect.selectedIndex];
-            generateAccountSelection(opt.genLoginVars, opt.gameAccountSelect, game_select, launchGameButtons);
+            generateAccountSelection(opt.genLoginVars, opt.gameAccountSelect);
             if (!isLoading) {
                 config.selected_account = opt.creds.sub;
                 configIsDirty = true;
@@ -442,7 +426,6 @@ function start(s) {
         }
     };
 
-    loginButton.innerText = "Log in";
     loginButton.onclick = () => {
         if (pendingOauth === null || pendingOauth.win.closed) {
             var state = makeRandomState();
@@ -465,13 +448,10 @@ function start(s) {
         }
     };
 
-    logoutButton.innerText = "Log out";
-    logoutButton.setAttribute("class", "button-red");
     logoutButton.removeLogin = (opt, creds) => {
         accountSelect.removeChild(opt);
         accountSelect.selectedIndex = -1;
         clearElement(gameAccountSelection);
-        clearElement(launchGameButtons);
         credentials.splice(creds, 1);
         credentialsAreDirty = true;
         saveAllCreds();
@@ -502,8 +482,6 @@ function start(s) {
         });
     };
 
-    dataDirButton.innerText = "Browse data...";
-    dataDirButton.setAttribute("class", "button-right-align");
     dataDirButton.onclick = () => {
         var xml = new XMLHttpRequest();
         xml.open('GET', "/browse-data");
@@ -515,50 +493,8 @@ function start(s) {
         xml.send();
     };
 
-    var text = document.createElement("text");
-    text.innerText = " | ";
-
-    var p = document.createElement("p");
-    p.innerText = "Messages:";
-    loginButtons.appendChild(loginButton);
-    loginButtons.appendChild(text);
-    loginButtons.appendChild(logoutButton);
-    loginButtons.appendChild(dataDirButton);
-    document.body.appendChild(loginButtons);
-    document.body.appendChild(loggedInInfo);
-    document.body.appendChild(document.createElement("br"));
-    document.body.appendChild(document.createElement("hr"));
-    document.body.appendChild(gameAccountSelection);
-    document.body.appendChild(launchGameButtons);
-    document.body.appendChild(document.createElement("br"));
-    document.body.appendChild(document.createElement("hr"));
-    document.body.appendChild(p);
-    document.body.appendChild(messages);
-
-    var loading = document.createElement("div");
-    loading.setAttribute("class", "div-bg");
-    document.body.appendChild(loading);
-
-    if (!creds) {
-        var disclaimer = document.createElement("div");
-        var close_disclaimer = document.createElement("button");
-        disclaimer.setAttribute("class", "div-bg");
-        close_disclaimer.setAttribute("class", "button-disclaimer");
-        close_disclaimer.innerText = "I understand";
-        close_disclaimer.onclick = () => {
-            disclaimer.remove();
-        };
-        var p1 = document.createElement("p");
-        p1.setAttribute("class", "p-disclaimer");
-        p1.innerHTML = atob("Qm9sdCBpcyBhbiA8Yj51bm9mZmljaWFsIHRoaXJkLXBhcnR5IGxhdW5jaGVyPC9iPi4gSXQncyBmcmVlIGFuZCBvcGVuLXNvdXJjZSBzb2Z0d2FyZSBsaWNlbnNlZCB1bmRlciBBR1BMIDMuMC4=");
-        var p2 = document.createElement("p");
-        p2.setAttribute("class", "p-disclaimer");
-        p2.innerHTML = atob("SmFnZXggaXMgPGI+bm90IHJlc3BvbnNpYmxlPC9iPiBmb3IgYW55IHByb2JsZW1zIG9yIGRhbWFnZSBjYXVzZWQgYnkgdXNpbmcgdGhpcyBwcm9kdWN0Lg");
-        disclaimer.appendChild(document.createElement("br"));
-        disclaimer.appendChild(p1);
-        disclaimer.appendChild(p2);
-        disclaimer.appendChild(close_disclaimer);
-        document.body.appendChild(disclaimer);
+    if (creds) {
+        toggle_disclaimer();
     }
 
     (async () => {
@@ -581,7 +517,7 @@ function start(s) {
             saveAllCreds();
 
             for (var i = 0; i < accountSelect.childElementCount; i += 1) {
-                if (accountSelect.options[i].creds.sub === config.selected_account) {
+                if (accountSelect.options[i].creds.sub === config.selected_account && accountSelect.selectedIndex != i) {
                     accountSelect.selectedIndex = i;
                     accountSelect.onchange();
                     break;
@@ -590,7 +526,6 @@ function start(s) {
         }
         isLoading = false;
         configIsDirty = false; // overrides all cases where this gets set to "true" due to loading existing config values
-        loading.remove();
     })();
 }
 
@@ -829,6 +764,7 @@ function addNewAccount(name, creds, genLoginVars, select) {
     opt.innerText = name;
     opt.gameAccountSelect = select;
     opt.creds = creds;
+    opt.classList = "bg-slate-100 text-slate-950 dark:bg-slate-900 dark:text-slate-50"
     accountSelect.add(opt);
     accountSelect.onchange();
 }
@@ -836,35 +772,12 @@ function addNewAccount(name, creds, genLoginVars, select) {
 // populates the gameAccountSelection element and by extension the launch_game_buttons element
 // "f" is the function passed to generateLaunchButtons, "select" and "game_select" are HTML Select elements,
 // and "launch_game_buttons" is a HTML Div element to be targeted by these buttons' callbacks
-function generateAccountSelection(f, game_account_select, game_select, launch_game_buttons) {
+function generateAccountSelection(f, game_account_select) {
     clearElement(gameAccountSelection);
-    var label = document.createElement("label");
-    label.for = game_account_select;
-    label.innerText = "Choose a game account and game: ";
-
-    var settings_container = document.createElement("div");
-    var show_hide_settings = document.createElement("button");
-    
     game_account_select.onchange = () => {
-        clearElement(launch_game_buttons);
-
-        if (game_account_select.selectedIndex >= 0 && game_select.selectedIndex >= 0) {
-            launch_game_buttons.appendChild(settings_container);
-            const opt = game_select.options[game_select.selectedIndex];
-
-            show_hide_settings.show_settings_fn = () => {
-                settings_container.appendChild(opt.settingsElement);
-                show_hide_settings.onclick = show_hide_settings.hide_settings_fn;
-                show_hide_settings.innerText = "Hide Settings";
-            };
-            show_hide_settings.hide_settings_fn = () => {
-                clearElement(settings_container);
-                show_hide_settings.onclick = show_hide_settings.show_settings_fn;
-                show_hide_settings.innerText = "Show Settings";
-            };
-            show_hide_settings.hide_settings_fn();        
-
-            opt.genLaunchButtons(f, game_account_select.options[game_account_select.selectedIndex], launch_game_buttons);
+        if (game_account_select.selectedIndex >= 0) {
+            generateLaunchButtonsOsrs(f, game_account_select.options[game_account_select.selectedIndex]);
+            generateLaunchButtonsRs3(f, game_account_select.options[game_account_select.selectedIndex]);
             if (accountSelect.selectedIndex != -1) {
                 if (!config.selected_game_accounts) config.selected_game_accounts = {};
                 const key = accountSelect.options[accountSelect.selectedIndex].creds.sub;
@@ -872,32 +785,12 @@ function generateAccountSelection(f, game_account_select, game_select, launch_ga
                 config.selected_game_accounts[key] = val;
             }
         }
-        config.selected_game_index = game_select.selectedIndex;        
         configIsDirty = true;
     };
-    game_select.onchange = game_account_select.onchange;
     game_account_select.onchange();
-    gameAccountSelection.appendChild(label);
-    gameAccountSelection.appendChild(game_account_select);
-    gameAccountSelection.appendChild(game_select);
-    gameAccountSelection.appendChild(show_hide_settings);
-}
-
-// populates the launchGameButtons element with buttons
-// the parameter is a function callback, which must take exactly two arguments:
-// 1. a function which your function should invoke with JX env variables, e.g. launchRS3Linux
-// 2. a HTML Button element, which should be passed to parameter 1 when invoking it, or, if not
-//    invoking the callback for some reason, then set disabled=false on parameter 2 before returning
-// 3. a HTML Option element, representing the currently selected game account
-// 4. the "Basic" auth header used for legacy-style logins to this game
-function generateLaunchButtonsRs3(f, opt, target) {
-    const basic_auth = "Basic Y29tX2phZ2V4X2F1dGhfZGVza3RvcF9yczpwdWJsaWM=";
-
-    if (platform === "linux") {
-        var rs3_linux = document.createElement("button");
-        rs3_linux.onclick = () => { rs3_linux.disabled = true; f(launchRS3Linux, rs3_linux, opt, basic_auth); };
-        rs3_linux.innerText = "Launch RS3";
-        target.appendChild(rs3_linux);
+    for (let option of game_account_select.options) {
+        option.classList = "bg-slate-100 text-slate-950 dark:bg-slate-900 dark:text-slate-50"
+        gameAccountSelection.appendChild(option);
     }
 }
 
@@ -908,23 +801,33 @@ function generateLaunchButtonsRs3(f, opt, target) {
 //    invoking the callback for some reason, then set disabled=false on parameter 2 before returning
 // 3. a HTML Option element, representing the currently selected game account
 // 4. the "Basic" auth header used for legacy-style logins to this game
-function generateLaunchButtonsOsrs(f, opt, target) {
+function generateLaunchButtonsRs3(f, opt) {
+    const basic_auth = "Basic Y29tX2phZ2V4X2F1dGhfZGVza3RvcF9yczpwdWJsaWM=";
+
+    if (platform === "linux") {
+        var rs3_linux = document.getElementById("rs3_launch");
+        rs3_linux.onclick = () => { rs3_linux.disabled = true; f(launchRS3Linux, rs3_linux, opt, basic_auth); };
+    }
+}
+
+// populates the launchGameButtons element with buttons
+// the parameter is a function callback, which must take exactly two arguments:
+// 1. a function which your function should invoke with JX env variables, e.g. launchRS3Linux
+// 2. a HTML Button element, which should be passed to parameter 1 when invoking it, or, if not
+//    invoking the callback for some reason, then set disabled=false on parameter 2 before returning
+// 3. a HTML Option element, representing the currently selected game account
+// 4. the "Basic" auth header used for legacy-style logins to this game
+function generateLaunchButtonsOsrs(f, opt) {
     const basic_auth = "Basic Y29tX2phZ2V4X2F1dGhfZGVza3RvcF9vc3JzOnB1YmxpYw==";
 
-    var rl = document.createElement("button");
+    var rl = document.getElementById("rl_launch");
     rl.onclick = () => { rl.disabled = true; f(launchRuneLite, rl, opt, basic_auth); };
-    rl.innerText = "Launch RuneLite";
-    target.appendChild(rl);
 
-    var rl_config = document.createElement("button");
+    var rl_config = document.getElementById("rl_configure");
     rl_config.onclick = () => { rl_config.disabled = true; f(launchRuneLiteConfigure, rl_config, opt, basic_auth); };
-    rl_config.innerText = "Configure RuneLite";
-    target.appendChild(rl_config);
 
-    var hdos = document.createElement("button");
+    var hdos = document.getElementById("hdos_launch");
     hdos.onclick = () => { hdos.disabled = true; f(launchHdos, hdos, opt, basic_auth); };
-    hdos.innerText = "Launch HDOS";
-    target.appendChild(hdos);
 }
 
 // asynchronously download and launch RS3's official .deb client using the given env variables
@@ -1021,7 +924,7 @@ function launchRuneLiteInner(s, element, jx_access_token, jx_refresh_token, jx_s
         if (jx_character_id) params.jx_character_id = jx_character_id;
         if (jx_display_name) params.jx_display_name = jx_display_name;
         if (runeliteFlatpakRichPresence.checked) params.flatpak_rich_presence = "";
-        xml.open(jar ? 'POST': 'GET', launch_path.concat(new URLSearchParams(params)), true);
+        xml.open(jar ? 'POST' : 'GET', launch_path.concat(new URLSearchParams(params)), true);
         xml.onreadystatechange = () => {
             if (xml.readyState == 4) {
                 msg(`Game launch status: '${xml.responseText.trim()}'`);
@@ -1230,15 +1133,13 @@ function err(str, do_throw) {
 // inserts a message into the message list and returns the new <p> element
 // don't call this directly, call msg or err instead
 function insertMessage(str) {
-    var p = document.createElement("p");
-    p.innerText = str;
     var li = document.createElement("li");
-    li.appendChild(p);
+    li.innerHTML = str
     messages.insertBefore(li, messages.firstChild);
     while (messages.childElementCount > 20) {
         messages.removeChild(messages.lastChild);
     }
-    return p;
+    return li;
 }
 
 onload = () => start(s());

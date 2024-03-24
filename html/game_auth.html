@@ -1,22 +1,26 @@
 <!DOCTYPE html>
-<html lang="en">
-	<head>
-		<title>Bolt Launcher</title>
-		<script>
-			const parentWindow = window.opener || window.parent;
-			if (parentWindow) {
-				const searchParams = new URLSearchParams(window.location.search);
+<html lang="en" class="dark">
 
-				parentWindow.postMessage({
-					"type": "gameSessionServerAuth",
-					"code": searchParams.get('code'),
-                    "id_token": searchParams.get('id_token'),
-					"state": searchParams.get('state'),
-				}, "*");
-			}
-		</script>
-	</head>
-	<body style="background-color: #0B111A">
-		<p><b>Authorising...</b></p>
-	</body>
+<head>
+	<title>Bolt Launcher</title>
+	<link rel="stylesheet" href="output.css">
+	<script>
+		const parentWindow = window.opener || window.parent;
+		if (parentWindow) {
+			const searchParams = new URLSearchParams(window.location.search);
+
+			parentWindow.postMessage({
+				"type": "gameSessionServerAuth",
+				"code": searchParams.get('code'),
+				"id_token": searchParams.get('id_token'),
+				"state": searchParams.get('state'),
+			}, "*");
+		}
+	</script>
+</head>
+
+<body class="bg-slate-100 text-slate-900 dark:bg-slate-900 dark:text-slate-50 container p-5 text-center mx-auto">
+	<img src="svgs/circle-notch-solid.svg" alt="" class="animate-spin w-1/6 h-1/6 mx-auto">
+</body>
+
 </html>
