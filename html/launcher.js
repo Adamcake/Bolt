@@ -1113,14 +1113,14 @@ function clearElement(e) {
     }
 }
 
-// adds a message to the message list, returning the inner <p> element
+// adds a message to the message list, returning the inner <li> element
 function msg(str) {
     console.log(str);
     return insertMessage(str);
 }
 
 // adds an error message to the message list
-// if do_throw is true, throws the error message, otherwise returns the new <p> element
+// if do_throw is true, throws the error message, otherwise returns the new <li> element
 function err(str, do_throw) {
     if (!do_throw) {
         console.error(str);
