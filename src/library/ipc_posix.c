@@ -33,6 +33,10 @@ uint8_t _bolt_ipc_receive(int fd, void* data, size_t len) {
             errno = olderr;
             return 1;
         }
+        if (r == 0) {
+            printf("[IPC] IPC recv() got EOF\n");
+            return 1;
+        }
         remaining -= r;
         received += r;
     }
