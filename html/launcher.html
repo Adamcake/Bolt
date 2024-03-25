@@ -34,15 +34,43 @@
 		<div class="w-screen h-screen absolute left-0 top-0 backdrop-filter backdrop-blur-sm z-10"></div>
 		<div class="absolute left-0 top-0 w-screen h-screen z-10 bg-black opacity-75"></div>
 		<div
-			class="absolute left-[15%] top-[15%] rounded shadow-lg w-3/4 p-5 z-20 text-center bg-slate-100 dark:bg-slate-900">
-			<div class="grid grid-cols-2">
-				<div class="border-r border-r-slate-300 dark:border-r-slate-950">
-					<p class="font-bold mb-5 underline decoration-purple-500">OSRS</p>
-					<div id="flatpak_div" class="mx-auto p-2">
+			class="absolute left-[13%] top-[13%] rounded shadow-lg w-3/4 h-3/4 z-20 text-center bg-slate-100 dark:bg-slate-900">
+			<div class="grid grid-cols-4 h-full">
+				<div class="h-full border-r border-slate-300 dark:border-slate-950 relative">
+					<button
+						class="absolute top-3 left-3 bg-rose-500 hover:opacity-75 duration-200 rounded-full w-[20px] h-[20px]"
+						onclick="toggle_settings()"></button><br>
+					<button id="general_button"
+						class="border-2 border-sky-500 hover:opacity-75 duration-200 rounded p-1 mx-auto my-1 mt-16 w-3/4"
+						onclick="switch_general_options()">General</button><br>
+					<button id="osrs_button"
+						class="border-2 border-sky-500 bg-sky-500 hover:opacity-75 duration-200 rounded p-1 mx-auto my-1 w-3/4"
+						onclick="switch_osrs_options()">OSRS</button><br>
+					<button id="rs3_button"
+						class="border-2 border-sky-500 hover:opacity-75 duration-200 rounded p-1 mx-auto my-1 w-3/4"
+						onclick="switch_rs3_options()">RS3</button>
+				</div>
+				<div hidden id="general_options" class="col-span-3 p-5">
+					<button id="data_dir_button" class="p-2 hover:opacity-75">
+						<div class="flex">
+							<img src="svgs/database-solid.svg" alt="" class="w-7 h-7 p-1 mr-2 rounded-lg bg-violet-500">
+							Browse App Data
+						</div>
+					</button>
+				</div>
+				<div id="osrs_options" class="col-span-3 p-5">
+					<button id="rl_configure" class="p-2 hover:opacity-75"
+						onclick="msg('Launcher unavailable, please log in first')">
+						<div class="flex">
+							<img src="svgs/wrench-solid.svg" alt="" class="w-7 h-7 p-1 mr-2 rounded-lg bg-pink-500">
+							Configure RuneLite
+						</div>
+					</button>
+					<div id="flatpak_div" class="mx-auto p-2 border-t border-slate-300 dark:border-slate-950">
 						<label for="flatpak_rich_presence">Expose rich presense to Flatpak Discord: </label>
 						<input type="checkbox" name="flatpak_rich_presence" id="flatpak_rich_presence" class="ml-2">
 					</div>
-					<div class="mx-auto p-2">
+					<div class="mx-auto p-2 border-t border-slate-300 dark:border-slate-950">
 						<label for="custom_jar">Use custom RuneLite JAR: </label>
 						<input type="checkbox" name="custom_jar" id="custom_jar" onchange="toggle_custom_jar()"
 							class="ml-2">
@@ -56,8 +84,7 @@
 							File</button>
 					</div>
 				</div>
-				<div>
-					<p class="font-bold mb-5 underline decoration-green-500">RS3</p>
+				<div hidden id="rs3_options" class="col-span-3 p-5">
 					<div class="mx-auto p-2">
 						<label for="custom_uri">Use custom config URI: </label>
 						<input type="checkbox" name="custom_uri" id="custom_uri" onchange="toggle_custom_uri()"
@@ -69,97 +96,76 @@
 					</div>
 				</div>
 			</div>
-			<button class="border-2 border-rose-600 hover:opacity-75 duration-200 rounded m-5 mt-10 p-2"
-				onclick="toggle_settings()">Close</button>
 		</div>
 	</div>
 
-	<button class="rounded-full shadow-lg p-2 absolute right-5 top-5 bg-sky-500 hover:opacity-75 duration-200"
+	<button class="rounded-full shadow-lg p-2 absolute right-5 top-5 bg-sky-500 hover:opacity-75 duration-200 hover:rotate-45"
 		onclick="change_theme()">
-		<img src="svgs/palette-solid.svg" class="w-5 h-5"></object>
+		<img src="svgs/lightbulb-solid.svg" class="w-5 h-5"></object>
 	</button>
 
-	<button class="p-2 rounded-full shadow-lg absolute top-16 right-5 bg-sky-500 hover:opacity-75 duration-200"
+	<button class="p-2 rounded-full shadow-lg absolute top-16 right-5 bg-sky-500 hover:opacity-75 duration-200 hover:rotate-45"
 		onclick="toggle_settings()">
 		<img src="svgs/gear-solid.svg" class="h-5 w-5">
 	</button>
 
-	<div class="grid grid-cols-4 h-full">
+	<div class="grid grid-cols-3 h-full">
 		<div class="col-span-1 p-2 text-center border-r border-r-slate-300 dark:border-r-slate-950">
 			<div class="grid grid-rows-6 h-full">
 				<div class="row-span-5 mt-5">
-					<button id="login_button"
-						class="p-1 rounded border-2 border-sky-500 hover:opacity-75 duration-200">Log In</button>
-					<button id="logout_button"
-						class="p-1 rounded border-2 border-rose-500 hover:opacity-75 duration-200">Log Out</button>
-					<br>
-					<img src="svgs/user-solid.svg" alt="" class="w-9 h-9 p-1 mt-5 rounded-full bg-slate-400 mx-auto">
+					<img src="svgs/user-solid.svg" alt=""
+						class="w-[36px] h-[36px] p-[6px] rounded-full bg-slate-400 mx-auto">
 					<select name="account_select" id="account_select"
 						class="mb-5 cursor-pointer rounded w-full text-inherit p-2 mt-2 bg-inherit border-2 border-slate-300 dark:border-slate-950 hover:opacity-75"></select>
+					<select name="game_account_select" id="game_account_select"
+						class="cursor-pointer rounded w-full text-inherit p-2 mt-2 bg-inherit border-2 border-slate-300 dark:border-slate-950 hover:opacity-75"></select>
 				</div>
 				<div class="row-start-6 my-auto">
-					<button id="data_dir_button" class="p-1 hover:opacity-75">
+					<button id="login_button"
+						class="p-1 rounded border-2 border-sky-500 hover:opacity-75 duration-200 mr-1">Log In</button>
+					<button id="logout_button"
+						class="p-1 rounded border-2 border-rose-500 hover:opacity-75 duration-200">Log Out</button>
+				</div>
+			</div>
+		</div>
+		<div class="col-start-2 col-span-2">
+			<div class="p-10">
+				<div class="w-fit mx-auto">
+					<button id="rl_launch" class="p-2 hover:opacity-75 duration-200"
+						onclick="msg('Launcher unavailable, please log in first')">
 						<div class="flex">
-							<img src="svgs/database-solid.svg" alt="" class="w-7 h-7 p-1 mr-2 rounded-lg bg-sky-500">
-							Data
+							<img src="svgs/rocket-solid.svg" alt="" class="w-7 h-7 p-1 mr-2 rounded-lg bg-purple-500">
+							Launch RuneLite
+						</div>
+					</button>
+					<br>
+					<button id="hdos_launch" class="p-2 hover:opacity-75 mt-5 sm:mt-7 md:mt-10 duration-200"
+						onclick="msg('Launcher unavailable, please log in first')">
+						<div class="flex">
+							<img src="svgs/rocket-solid.svg" alt="" class="w-7 h-7 p-1 mr-2 rounded-lg bg-amber-500">
+							Launch HDOS
+						</div>
+					</button>
+					<br>
+					<button id="rs3_launch" class="p-2 hover:opacity-75 mt-5 sm:mt-7 md:mt-10 duration-200"
+						onclick="msg('Launcher unavailable, please log in first')">
+						<div class="flex">
+							<img src="svgs/rocket-solid.svg" alt="" class="w-7 h-7 p-1 mr-2 rounded-lg bg-green-500">
+							Launch RS3
 						</div>
 					</button>
 				</div>
 			</div>
-		</div>
-		<div class="col-start-2 col-span-3">
-			<div class="grid grid-rows-6">
-				<div class="p-5 row-span-5 mx-auto">
-					<select name="game_account_select" id="game_account_select"
-						class="cursor-pointer rounded w-64 text-inherit p-2 mt-2 bg-inherit border-2 border-slate-300 dark:border-slate-950 hover:opacity-75"></select>
-					<br>
-					<div id="osrs_buttons" class="mt-10">
-						<button id="rl_launch" class="p-2 hover:opacity-75"
-							onclick="msg('Launcher unavailable, please log in first')">
-							<div class="flex">
-								<img src="svgs/rocket-solid.svg" alt=""
-									class="w-7 h-7 p-1 mr-2 rounded-lg bg-purple-500">
-								Launch RuneLite
-							</div>
-						</button>
-						<button id="rl_configure" class="p-2 hover:opacity-75"
-							onclick="msg('Launcher unavailable, please log in first')">
-							<div class="flex">
-								<img src="svgs/wrench-solid.svg" alt="" class="w-7 h-7 p-1 mr-2 rounded-lg bg-pink-500">
-								Configure RuneLite
-							</div>
-						</button>
-						<br>
-						<button id="hdos_launch" class="p-2 hover:opacity-75 mt-10"
-							onclick="msg('Launcher unavailable, please log in first')">
-							<div class="flex">
-								<img src="svgs/rocket-solid.svg" alt=""
-									class="w-7 h-7 p-1 mr-2 rounded-lg bg-amber-500">
-								Launch HDOS
-							</div>
-						</button>
-					</div>
-					<div id="rs3_buttons" class="mt-10">
-						<button id="rs3_launch" class="p-2 hover:opacity-75"
-							onclick="msg('Launcher unavailable, please log in first')">
-							<div class="flex">
-								<img src="svgs/rocket-solid.svg" alt=""
-									class="w-7 h-7 p-1 mr-2 rounded-lg bg-green-500">
-								Launch RS3
-							</div>
-						</button>
-					</div>
+			<div
+				class="border-t fixed bottom-0 h-[44%] w-3/4 duration-200 border-t-slate-300 dark:border-t-slate-950 bg-slate-100 dark:bg-slate-900">
+				<div class="p-2">
+					<img src="svgs/circle-info-solid.svg" alt=""
+						class="w-7 h-7 p-[3px] rounded-full bg-rose-500 hover:opacity-75 cursor-pointer duration-200"
+						onclick="toggle_disclaimer()">
 				</div>
-				<div
-					class="pl-2 border-t duration-200 border-t-slate-300 dark:border-t-slate-950 fixed bottom-0 w-full bg-slate-100 dark:bg-slate-900">
-					<div class="flex p-2">
-						<img src="svgs/circle-info-solid.svg" alt=""
-							class="w-7 h-7 p-[3px] rounded-full bg-rose-500 hover:opacity-75 cursor-pointer"
-							onclick="toggle_disclaimer()">
-					</div>
-					<ol id="message_list"
-						class="overflow-auto h-[calc(100vh-75vh)] list-disc pl-5 list-inside marker:text-rose-500"></ol>
-				</div>
+				<ol id="message_list"
+					class="overflow-y-auto overflow-x-hidden h-full list-disc pl-5 list-inside marker:text-rose-500">
+				</ol>
 			</div>
 		</div>
 	</div>

@@ -154,6 +154,44 @@ function removePendingGameAuth(pending, close_window) {
     pendingGameAuth.splice(pendingGameAuth.indexOf(pending), 1);
 }
 
+// elements that are commonly changed within the settings menu by the functions below
+let general_button = document.getElementById("general_button");
+let osrs_button = document.getElementById("osrs_button");
+let rs3_button = document.getElementById("rs3_button");
+let general_options = document.getElementById("general_options");
+let osrs_options = document.getElementById("osrs_options");
+let rs3_options = document.getElementById("rs3_options");
+
+let switch_general_options = () => {
+    general_options.hidden = false;
+    osrs_options.hidden = true;
+    rs3_options.hidden = true;
+
+    general_button.classList.add("bg-sky-500");
+    osrs_button.classList.remove("bg-sky-500");
+    rs3_button.classList.remove("bg-sky-500");
+};
+
+let switch_osrs_options = () => {
+    general_options.hidden = true;
+    osrs_options.hidden = false;
+    rs3_options.hidden = true;
+
+    general_button.classList.remove("bg-sky-500");
+    osrs_button.classList.add("bg-sky-500");
+    rs3_button.classList.remove("bg-sky-500");
+};
+
+let switch_rs3_options = () => {
+    general_options.hidden = true;
+    osrs_options.hidden = true;
+    rs3_options.hidden = false;
+
+    general_button.classList.remove("bg-sky-500");
+    osrs_button.classList.remove("bg-sky-500");
+    rs3_button.classList.add("bg-sky-500");
+};
+
 // toggles disclaimer on/off, can be closed by clicking 'I Understand'
 let toggle_disclaimer = () => {
     let disclaimer = document.getElementById('disclaimer');
