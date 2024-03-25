@@ -602,12 +602,12 @@ video {
   left: 25%;
 }
 
-.left-3 {
-  left: 0.75rem;
-}
-
 .left-\[13\%\] {
   left: 13%;
+}
+
+.right-3 {
+  right: 0.75rem;
 }
 
 .right-5 {
@@ -709,10 +709,6 @@ video {
   margin-top: 0.25rem;
 }
 
-.mt-16 {
-  margin-top: 4rem;
-}
-
 .mt-2 {
   margin-top: 0.5rem;
 }
@@ -757,10 +753,6 @@ video {
   height: 1.75rem;
 }
 
-.h-\[20px\] {
-  height: 20px;
-}
-
 .h-\[36px\] {
   height: 36px;
 }
@@ -795,10 +787,6 @@ video {
 
 .w-7 {
   width: 1.75rem;
-}
-
-.w-\[20px\] {
-  width: 20px;
 }
 
 .w-\[36px\] {
@@ -979,6 +967,10 @@ video {
   padding: 1.25rem;
 }
 
+.p-\[2px\] {
+  padding: 2px;
+}
+
 .p-\[3px\] {
   padding: 3px;
 }
@@ -989,6 +981,10 @@ video {
 
 .pl-5 {
   padding-left: 1.25rem;
+}
+
+.pt-10 {
+  padding-top: 2.5rem;
 }
 
 .text-center {
@@ -1062,6 +1058,11 @@ video {
 
 .hover\:rotate-45:hover {
   --tw-rotate: 45deg;
+  transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
+}
+
+.hover\:rotate-90:hover {
+  --tw-rotate: 90deg;
   transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
 }
 

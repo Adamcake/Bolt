@@ -32,16 +32,17 @@
 
 	<div id="settings" hidden>
 		<div class="w-screen h-screen absolute left-0 top-0 backdrop-filter backdrop-blur-sm z-10"></div>
-		<div class="absolute left-0 top-0 w-screen h-screen z-10 bg-black opacity-75"></div>
+		<div class="absolute left-0 top-0 w-screen h-screen z-10 bg-black opacity-75" onclick="toggle_settings()"></div>
 		<div
 			class="absolute left-[13%] top-[13%] rounded shadow-lg w-3/4 h-3/4 z-20 text-center bg-slate-100 dark:bg-slate-900">
+			<button class="rounded-full shadow-lg p-[2px] absolute right-3 top-3 bg-rose-500 hover:opacity-75 duration-200 hover:rotate-90"
+				onclick="toggle_settings()">
+				<img src="svgs/xmark-solid.svg" class="w-5 h-5"></object>
+			</button>
 			<div class="grid grid-cols-4 h-full">
-				<div class="h-full border-r border-slate-300 dark:border-slate-950 relative">
-					<button
-						class="absolute top-3 left-3 bg-rose-500 hover:opacity-75 duration-200 rounded-full w-[20px] h-[20px]"
-						onclick="toggle_settings()"></button><br>
+				<div class="h-full border-r border-slate-300 dark:border-slate-950 relative pt-10">
 					<button id="general_button"
-						class="border-2 border-sky-500 hover:opacity-75 duration-200 rounded p-1 mx-auto my-1 mt-16 w-3/4"
+						class="border-2 border-sky-500 hover:opacity-75 duration-200 rounded p-1 mx-auto my-1 w-3/4"
 						onclick="switch_general_options()">General</button><br>
 					<button id="osrs_button"
 						class="border-2 border-sky-500 bg-sky-500 hover:opacity-75 duration-200 rounded p-1 mx-auto my-1 w-3/4"
@@ -50,7 +51,7 @@
 						class="border-2 border-sky-500 hover:opacity-75 duration-200 rounded p-1 mx-auto my-1 w-3/4"
 						onclick="switch_rs3_options()">RS3</button>
 				</div>
-				<div hidden id="general_options" class="col-span-3 p-5">
+				<div hidden id="general_options" class="col-span-3 p-5 pt-10">
 					<button id="data_dir_button" class="p-2 hover:opacity-75">
 						<div class="flex">
 							<img src="svgs/database-solid.svg" alt="" class="w-7 h-7 p-1 mr-2 rounded-lg bg-violet-500">
@@ -58,7 +59,7 @@
 						</div>
 					</button>
 				</div>
-				<div id="osrs_options" class="col-span-3 p-5">
+				<div id="osrs_options" class="col-span-3 p-5 pt-10">
 					<button id="rl_configure" class="p-2 hover:opacity-75"
 						onclick="msg('Launcher unavailable, please log in first')">
 						<div class="flex">
@@ -84,7 +85,7 @@
 							File</button>
 					</div>
 				</div>
-				<div hidden id="rs3_options" class="col-span-3 p-5">
+				<div hidden id="rs3_options" class="col-span-3 p-5 pt-10">
 					<div class="mx-auto p-2">
 						<label for="custom_uri">Use custom config URI: </label>
 						<input type="checkbox" name="custom_uri" id="custom_uri" onchange="toggle_custom_uri()"
