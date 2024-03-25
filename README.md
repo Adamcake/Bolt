@@ -43,6 +43,23 @@ Once that's done, you can start building. Open a command window or terminal in t
 
 After that, the helper script `./build/bolt.sh` can be used to launch Bolt from its staging location.
 
+#### Potential Build / Launch Issues
+- LuaJIT
+  - When building, you may run into an error with 'luajit'. 
+  - This can be solved by installing it; follow the instructions on their [website](https://luajit.org/index.html)
+- libcrypto.so.1.1
+  - This comes from openssl1.1, which is reaching deprecation but is still widely used.
+  - Install it with your package manager; it is usually called `openssl1.1-devel` or something similar.
+- JDK17
+  - When attempting to launch, you may see an error about 'jdk17' in the console.
+  - This can be solved by installing a couple packages with your package manager.  
+    Something similar to `java-17-openjdk` & `java-17-openjdk-devel`.
+- JAVA_HOME
+  - Another launch issue you may see in the console.
+  - This is solved by setting the JAVA_HOME environment variable.
+  - This is usually located in /usr/lib/jvm, so, it might look like this:  
+    `export JAVA_HOME="/usr/lib/jvm/java-17-openjdk-17.0.9.0.9-3.fc39.x86_64"`
+
 ### Windows
 Windows builds have only been tested using Visual Studio 2022 (a.k.a. Visual Studio 17) in Release mode, per recommendations by chromium/cef. Other configurations may work but have not been tested.
 - `cmake -S . -B build -G "Visual Studio 17"`
@@ -58,6 +75,19 @@ When doing the initial cmake setup step, the following options exist which you m
 - `-D BOLT_HTML_DIR=/some/directory`: the location of the launcher's internal webpage content, `html/` by default
 - `-D BOLT_DEV_SHOW_DEVTOOLS=1`: enables chromium developer tools for the launcher
 - `-D BOLT_DEV_LAUNCHER_DIRECTORY=1`: instead of embedding the contents of the html dir into the output executable, the files will be served from disk at runtime; on supported platforms the launcher will automatically reload the page when those files are changed
+
+### tailwindcss
+Styling for html elements is done with [tailwindcss](https://tailwindcss.com/).
+- Installation
+  - It can be installed via `npm` and used with `npx`. 
+  - Or as a standalone executable. Get the binary for your OS [here](https://github.com/tailwindlabs/tailwindcss/releases)
+- Usage
+  - Be sure to run tailwind in the same directory as the 'tailwind.config.js'.
+  - To use while developing, you will likely want to watch for css changes, here is an example using a binary:  
+    `./tailwindcss-linux-x64 -i html/input.css -o html/output.css --watch`  
+- Optimizing for production
+  - To minify the 'output.css', use this:  
+    `./tailwindcss-linux-x64 -o html/output.css --minify`
 
 ## Credit
 Icons - [Kia](https://twitter.com/KiaWildin)  
