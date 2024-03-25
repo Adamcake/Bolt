@@ -2,9 +2,12 @@
 
 #include "include/cef_life_span_handler.h"
 #include "include/cef_app.h"
+#include "include/cef_values.h"
+#include "include/internal/cef_types.h"
 #include "window_launcher.hxx"
 
 #if defined(BOLT_PLUGINS)
+#include "include/cef_parser.h"
 #include "../library/ipc.h"
 #endif
 
@@ -30,6 +33,35 @@ constexpr Browser::Details LAUNCHER_DETAILS = {
 	.frame = true,
 };
 
+#if defined(BOLT_PLUGINS)
+bool ReadPlugins(const CefRefPtr<CefValue> config, std::vector<BoltPlugin>& plugins) {
+	CefRefPtr<CefListValue> list = config->GetList();
+	if (!list) {
+		fmt::print("[B] error: plugins.json: base element must be a list\n");
+		return false;
+	}
+	for (size_t i = 0; i < list->GetSize(); i += 1) {
+		BoltPlugin plugin;
+		CefRefPtr<CefDictionaryValue> item = list->GetDictionary(i);
+		if (!item) {
+			fmt::print("[B] error: plugins.json: expected dict at list element {}\n", i);
+			return false;
+		}
+		if (!item->HasKey("name") || !item->HasKey("path") || !item->HasKey("main")) {
+			fmt::print("[B] error: plugins.json: at least one required key 'name', 'path', 'main' is missing at list element {}\n", i);
+			return false;
+		}
+		plugin.has_desc = item->HasKey("desc");
+		plugin.name = item->GetString("name");
+		if (plugin.has_desc) plugin.desc = item->GetString("desc");
+		plugin.path = item->GetString("path");
+		plugin.main = item->GetString("main");
+		plugins.push_back(plugin);
+	}
+	return true;
+}
+#endif
+
 Browser::Client::Client(CefRefPtr<Browser::App> app,std::filesystem::path config_dir, std::filesystem::path data_dir, std::filesystem::path runtime_dir):
 #if defined(BOLT_DEV_LAUNCHER_DIRECTORY)
 	CLIENT_FILEHANDLER(BOLT_DEV_LAUNCHER_DIRECTORY),
@@ -39,6 +71,21 @@ Browser::Client::Client(CefRefPtr<Browser::App> app,std::filesystem::path config
 	app->SetBrowserProcessHandler(this);
 
 #if defined(BOLT_PLUGINS)
+	std::filesystem::path plugins_conf = config_dir;
+	plugins_conf.append("plugins.json");
+	std::ifstream ifs(plugins_conf.c_str(), std::ios::in | std::ios::binary);
+	if (!ifs.fail()) {
+		std::stringstream ss;
+		ss << ifs.rdbuf();
+		std::vector<BoltPlugin> plugins;
+		CefRefPtr<CefValue> plugin_info = CefParseJSON(CefString(ss.str()), JSON_PARSER_ALLOW_TRAILING_COMMAS);
+		if (ReadPlugins(plugin_info, plugins)) {
+			this->plugins = plugins;
+		} else {
+			fmt::print("[B] config file plugins.json was ignored as it contained an error\n");
+		}
+	}
+	
 	this->IPCBind();
 	this->ipc_thread = std::thread(&Browser::Client::IPCRun, this);
 #endif

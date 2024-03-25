@@ -16,6 +16,13 @@
 
 #if defined(BOLT_PLUGINS)
 #include <thread>
+struct BoltPlugin {
+	CefString name;
+	CefString desc;
+	CefString path;
+	CefString main;
+	bool has_desc;
+};
 #endif
 
 #if defined(BOLT_DEV_LAUNCHER_DIRECTORY)
@@ -134,6 +141,7 @@ namespace Browser {
 #endif
 
 #if defined(BOLT_PLUGINS)
+			std::vector<BoltPlugin> plugins;
 			std::thread ipc_thread;
 			int ipc_fd;
 #endif
