@@ -81,13 +81,13 @@
 	});
 </script>
 
-<div class="p-5 flex flex-col h-full duration-200 bg-grad border-slate-300 dark:border-slate-800">
+<div class="bg-grad flex h-full flex-col border-slate-300 p-5 duration-200 dark:border-slate-800">
 	<img
 		src="svgs/rocket-solid.svg"
 		alt="Launch icon"
-		class="from-rose-500 to-violet-500 bg-gradient-to-br p-5 w-24 mb-5 mx-auto rounded-3xl" />
+		class="mx-auto mb-5 w-24 rounded-3xl bg-gradient-to-br from-rose-500 to-violet-500 p-5" />
 	<button
-		class="p-2 w-52 mx-auto font-bold rounded-lg bg-emerald-500 text-black hover:opacity-75 mb-2 duration-200"
+		class="mx-auto mb-2 w-52 rounded-lg bg-emerald-500 p-2 font-bold text-black duration-200 hover:opacity-75"
 		on:click={() => {
 			play_clicked();
 		}}>
@@ -98,7 +98,7 @@
 		<br />
 		<select
 			id="game_client_select"
-			class="p-2 duration-200 cursor-pointer w-52 mx-auto border-2 rounded-lg bg-inherit text-inherit border-slate-300 dark:border-slate-800 hover:opacity-75"
+			class="mx-auto w-52 cursor-pointer rounded-lg border-2 border-slate-300 bg-inherit p-2 text-inherit duration-200 hover:opacity-75 dark:border-slate-800"
 			bind:this={client_select}
 			on:change={() => {
 				client_changed();
@@ -116,7 +116,7 @@
 		<br />
 		<select
 			id="character_select"
-			class="p-2 duration-200 cursor-pointer w-52 mx-auto border-2 rounded-lg bg-inherit text-inherit border-slate-300 dark:border-slate-800 hover:opacity-75"
+			class="mx-auto w-52 cursor-pointer rounded-lg border-2 border-slate-300 bg-inherit p-2 text-inherit duration-200 hover:opacity-75 dark:border-slate-800"
 			bind:this={character_select}
 			on:change={() => character_changed()}>
 			{#if $selected_play.account}

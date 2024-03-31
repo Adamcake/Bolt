@@ -71,16 +71,16 @@
 			show_settings = false;
 		}}></Backdrop>
 	<div
-		class="absolute left-[13%] top-[13%] rounded-lg shadow-lg w-3/4 h-3/4 z-20 text-center bg-slate-100 dark:bg-slate-900">
+		class="absolute left-[13%] top-[13%] z-20 h-3/4 w-3/4 rounded-lg bg-slate-100 text-center shadow-lg dark:bg-slate-900">
 		<button
-			class="rounded-full shadow-lg p-[2px] absolute right-3 top-3 bg-rose-500 hover:opacity-75 duration-200 hover:rotate-90"
+			class="absolute right-3 top-3 rounded-full bg-rose-500 p-[2px] shadow-lg duration-200 hover:rotate-90 hover:opacity-75"
 			on:click={() => {
 				show_settings = false;
 			}}>
-			<img src="svgs/xmark-solid.svg" class="w-5 h-5" alt="Close" />
+			<img src="svgs/xmark-solid.svg" class="h-5 w-5" alt="Close" />
 		</button>
-		<div class="grid grid-cols-4 h-full">
-			<div class="h-full border-r-2 border-slate-300 dark:border-slate-800 relative pt-10">
+		<div class="grid h-full grid-cols-4">
+			<div class="relative h-full border-r-2 border-slate-300 pt-10 dark:border-slate-800">
 				<button
 					id="general_button"
 					bind:this={general_button}

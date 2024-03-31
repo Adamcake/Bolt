@@ -133,7 +133,7 @@
 </script>
 
 <div
-	class="w-48 rounded-lg shadow p-3 border-2 border-slate-300 dark:border-slate-800 z-10 bg-slate-100 dark:bg-slate-900"
+	class="z-10 w-48 rounded-lg border-2 border-slate-300 bg-slate-100 p-3 shadow dark:border-slate-800 dark:bg-slate-900"
 	role="none"
 	on:mouseenter={() => {
 		moused_over = true;
@@ -144,7 +144,7 @@
 	<select
 		name="account_select"
 		id="account_select"
-		class="cursor-pointer w-full p-2 rounded-lg bg-inherit border-2 border-inherit text-center"
+		class="w-full cursor-pointer rounded-lg border-2 border-inherit bg-inherit p-2 text-center"
 		bind:this={account_select}
 		on:change={() => {
 			account_changed();
@@ -154,16 +154,16 @@
 				>{account[1].displayName}</option>
 		{/each}
 	</select>
-	<div class="flex mt-5">
+	<div class="mt-5 flex">
 		<button
-			class="font-bold p-2 duration-200 mx-auto rounded-lg text-black bg-blue-500 hover:opacity-75 mr-2"
+			class="mx-auto mr-2 rounded-lg bg-blue-500 p-2 font-bold text-black duration-200 hover:opacity-75"
 			on:click={() => {
 				loginClicked();
 			}}>
 			Log In
 		</button>
 		<button
-			class="font-bold p-2 duration-200 mx-auto border-2 rounded-lg border-blue-500 hover:opacity-75"
+			class="mx-auto rounded-lg border-2 border-blue-500 p-2 font-bold duration-200 hover:opacity-75"
 			on:click={() => {
 				logout_clicked();
 			}}>

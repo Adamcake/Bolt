@@ -14,7 +14,7 @@
 <div id="disclaimer">
 	<Backdrop></Backdrop>
 	<div
-		class="absolute left-1/4 top-1/4 rounded-lg shadow-lg w-1/2 p-5 z-20 text-center bg-slate-100 dark:bg-slate-900">
+		class="absolute left-1/4 top-1/4 z-20 w-1/2 rounded-lg bg-slate-100 p-5 text-center shadow-lg dark:bg-slate-900">
 		<p class="p-2">
 			{first_text}
 		</p>
@@ -22,7 +22,7 @@
 			{second_text}
 		</p>
 		<button
-			class="border-2 border-blue-500 hover:opacity-75 duration-200 rounded-lg m-5 p-2"
+			class="m-5 rounded-lg border-2 border-blue-500 p-2 duration-200 hover:opacity-75"
 			on:click={() => {
 				$show_disclaimer = false;
 			}}>I Understand</button>

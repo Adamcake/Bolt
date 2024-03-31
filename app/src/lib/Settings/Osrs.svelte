@@ -103,13 +103,13 @@
 			<img
 				src="svgs/wrench-solid.svg"
 				alt="Configure RuneLite"
-				class="w-7 h-7 p-1 mr-2 rounded-lg bg-pink-500" />
+				class="mr-2 h-7 w-7 rounded-lg bg-pink-500 p-1" />
 			Configure RuneLite
 		</div>
 	</button>
 	<div
 		id="flatpak_div"
-		class="mx-auto p-2 py-5 border-t-2 border-slate-300 dark:border-slate-800"
+		class="mx-auto border-t-2 border-slate-300 p-2 py-5 dark:border-slate-800"
 		bind:this={flatpak_div}>
 		<label for="flatpak_rich_presence">Expose rich presense to Flatpak Discord: </label>
 		<input
@@ -122,7 +122,7 @@
 				toggle_rich_presence();
 			}} />
 	</div>
-	<div class="mx-auto p-2 pt-5 border-t-2 border-slate-300 dark:border-slate-800">
+	<div class="mx-auto border-t-2 border-slate-300 p-2 pt-5 dark:border-slate-800">
 		<label for="use_custom_jar">Use custom RuneLite JAR: </label>
 		<input
 			type="checkbox"
@@ -143,14 +143,14 @@
 			on:change={() => {
 				text_changed();
 			}}
-			class="h-10 rounded border-2 border-slate-300 dark:border-slate-800 text-slate-950 bg-slate-100 dark:text-slate-50 dark:bg-slate-900"
+			class="h-10 rounded border-2 border-slate-300 bg-slate-100 text-slate-950 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50"
 		></textarea>
 		<br />
 		<button
 			disabled
 			id="custom_jar_file_button"
 			bind:this={custom_jar_file_button}
-			class="p-1 mt-1 rounded-lg border-2 border-blue-500 hover:opacity-75 duration-200"
+			class="mt-1 rounded-lg border-2 border-blue-500 p-1 duration-200 hover:opacity-75"
 			on:click={() => {
 				select_file();
 			}}>

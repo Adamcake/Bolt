@@ -25,7 +25,7 @@
 			<img
 				src="svgs/database-solid.svg"
 				alt="Browse app data"
-				class="w-7 h-7 p-1 mr-2 rounded-lg bg-violet-500" />
+				class="mr-2 h-7 w-7 rounded-lg bg-violet-500 p-1" />
 			Browse App Data
 		</div>
 	</button>

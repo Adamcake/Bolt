@@ -54,7 +54,7 @@
 			<Settings bind:show_settings></Settings>
 		{/if}
 		<TopBar bind:show_settings></TopBar>
-		<div class="grid grid-cols-3 grid-flow-col mt-16 h-full">
+		<div class="mt-16 grid h-full grid-flow-col grid-cols-3">
 			<div></div>
 			<Launch></Launch>
 			<div></div>

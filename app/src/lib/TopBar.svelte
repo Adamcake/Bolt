@@ -62,10 +62,10 @@
 </script>
 
 <div
-	class="h-16 w-screen fixed top-0 border-b-2 duration-200 bg-slate-100 border-slate-300 dark:bg-slate-900 dark:border-slate-800 flex">
+	class="fixed top-0 flex h-16 w-screen border-b-2 border-slate-300 bg-slate-100 duration-200 dark:border-slate-800 dark:bg-slate-900">
 	<div class="m-3 ml-9 font-bold">
 		<button
-			class="mx-1 p-2 rounded-lg border-2 border-blue-500 hover:opacity-75 duration-200 w-20"
+			class="mx-1 w-20 rounded-lg border-2 border-blue-500 p-2 duration-200 hover:opacity-75"
 			bind:this={rs3_button}
 			on:click={() => {
 				toggle_game(Game.RS3);
@@ -73,7 +73,7 @@
 			RS3
 		</button>
 		<button
-			class="mx-1 p-2 rounded-lg border-2 border-blue-500 bg-blue-500 text-black hover:opacity-75 duration-200 w-20"
+			class="mx-1 w-20 rounded-lg border-2 border-blue-500 bg-blue-500 p-2 text-black duration-200 hover:opacity-75"
 			bind:this={osrs_button}
 			on:click={() => {
 				toggle_game(Game.OSRS);
@@ -83,19 +83,19 @@
 	</div>
 	<div class="ml-auto flex">
 		<button
-			class="p-2 my-3 rounded-full bg-blue-500 hover:opacity-75 duration-200 hover:rotate-45 w-10 h-10"
+			class="my-3 h-10 w-10 rounded-full bg-blue-500 p-2 duration-200 hover:rotate-45 hover:opacity-75"
 			on:click={() => change_theme()}>
-			<img src="svgs/lightbulb-solid.svg" class="w-6 h-6" alt="Change Theme" />
+			<img src="svgs/lightbulb-solid.svg" class="h-6 w-6" alt="Change Theme" />
 		</button>
 		<button
-			class="p-2 m-3 rounded-full bg-blue-500 hover:opacity-75 duration-200 hover:rotate-45 w-10 h-10"
+			class="m-3 h-10 w-10 rounded-full bg-blue-500 p-2 duration-200 hover:rotate-45 hover:opacity-75"
 			on:click={() => {
 				show_settings = true;
 			}}>
-			<img src="svgs/gear-solid.svg" class="w-6 h-6" alt="Settings" />
+			<img src="svgs/gear-solid.svg" class="h-6 w-6" alt="Settings" />
 		</button>
 		<button
-			class="text-center font-bold duration-200 w-48 m-2 rounded-lg text-black dark:text-slate-50 p-2 bg-inherit border-2 border-slate-300 dark:border-slate-800 hover:opacity-75"
+			class="m-2 w-48 rounded-lg border-2 border-slate-300 bg-inherit p-2 text-center font-bold text-black duration-200 hover:opacity-75 dark:border-slate-800 dark:text-slate-50"
 			bind:this={account_button}
 			on:mouseenter={() => {
 				hover_account_button = true;

@@ -59,7 +59,7 @@
 				uri_address_changed();
 			}}
 			bind:this={config_uri_address}
-			class="rounded border-2 border-slate-300 dark:border-slate-800 text-slate-950 bg-slate-100 dark:text-slate-50 dark:bg-slate-900">
+			class="rounded border-2 border-slate-300 bg-slate-100 text-slate-950 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50">
 		</textarea>
 	</div>
 </div>

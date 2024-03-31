@@ -7,10 +7,10 @@
 </script>
 
 <div>
-	<div class="w-screen h-screen absolute left-0 top-0 backdrop-filter backdrop-blur-sm z-10">
+	<div class="absolute left-0 top-0 z-10 h-screen w-screen backdrop-blur-sm backdrop-filter">
 	</div>
 	<div
-		class="absolute left-0 top-0 w-screen h-screen z-10 bg-black opacity-75"
+		class="absolute left-0 top-0 z-10 h-screen w-screen bg-black opacity-75"
 		role="none"
 		on:click={() => {
 			dispatch('click');
