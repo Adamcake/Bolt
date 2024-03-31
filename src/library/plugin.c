@@ -78,7 +78,7 @@ static int api_setcallback##APINAME(lua_State *state) { \
     } else { \
         lua_pushnil(state); \
     } \
-    lua_settable(state, LUA_REGISTRYINDEX); \
+    lua_settable(state, LUA_GLOBALSINDEX); \
     return 0; \
 }
 
@@ -187,7 +187,7 @@ void _bolt_plugin_init(void (*_surface_init)(struct SurfaceFunctions*, unsigned 
     lua_settable(state, LUA_REGISTRYINDEX);
 
     // load Bolt API into package.preload, so that `require("bolt")` will find it
-    lua_getfield(state, LUA_REGISTRYINDEX, "package");
+    lua_getfield(state, LUA_GLOBALSINDEX, "package");
     lua_getfield(state, -1, "preload");
     lua_pushstring(state, BOLT_REGISTRYNAME);
     lua_pushcfunction(state, _bolt_api_init);
@@ -239,7 +239,7 @@ uint64_t _bolt_plugin_add(const char* lua) {
     // allow the new env access to the outer env via __index
     lua_newtable(state);
     lua_pushstring(state, "__index");
-    lua_pushvalue(state, LUA_REGISTRYINDEX);
+    lua_pushvalue(state, LUA_GLOBALSINDEX);
     lua_settable(state, -3);
     lua_setmetatable(state, -2);
 
