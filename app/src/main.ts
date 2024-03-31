@@ -79,7 +79,7 @@ function start(): void {
 			msg(`discarding window message from origin ${event.origin}`);
 			return;
 		}
-		let pending: any = pending_oauth_sub;
+		let pending: Auth | undefined = pending_oauth_sub;
 		const xml = new XMLHttpRequest();
 		switch (event.data.type) {
 			case 'authCode':
@@ -98,7 +98,7 @@ function start(): void {
 								const result = parseCredentials(xml.response);
 								const creds = unwrap(result);
 								if (creds) {
-									handleLogin(pending?.win, creds).then((x) => {
+									handleLogin(<Window>pending?.win, creds).then((x) => {
 										if (x) {
 											credentials.update((data) => {
 												data.set(creds.sub, creds);
@@ -174,7 +174,7 @@ function start(): void {
 									if (x) {
 										credentials.update((data) => {
 											data.set(
-												<string>pending!.creds.sub,
+												<string>pending?.creds?.sub,
 												<Credentials>pending!.creds
 											);
 											return data;
@@ -206,8 +206,8 @@ function start(): void {
 	(async () => {
 		if (credentials_sub.size > 0) {
 			const old_credentials_size = credentials_sub.size;
-			const promises: Array<any> = [];
-			credentials_sub.forEach(async (value, _key) => {
+			const promises: Array<Record<string, Credentials | boolean>> = [];
+			credentials_sub.forEach(async (value) => {
 				const result = await checkRenewCreds(value, exchange_url, client_id);
 				if (result !== null && result !== 0) {
 					err(`Discarding expired login for #${value.sub}`, false);
@@ -226,9 +226,10 @@ function start(): void {
 			});
 			const responses = await Promise.all(promises);
 			const valid_creds = responses.filter((x) => x.valid).map((x) => x.creds);
-			valid_creds.forEach((value: Credentials) => {
+			valid_creds.forEach((value) => {
+				const creds = <Credentials>value;
 				credentials.update((data) => {
-					data.set(value.sub, value);
+					data.set(creds.sub, creds);
 					return data;
 				});
 			});

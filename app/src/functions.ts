@@ -78,7 +78,7 @@ export function loginClicked() {
 			flow: 'launcher',
 			pkceState: state,
 			pkceCodeVerifier: verifier
-		}).then((url: URL) => {
+		}).then((url: string) => {
 			const win = window.open(url, '', 'width=480,height=720');
 			pending_oauth.set({ state: state, verifier: verifier, win: win });
 		});
@@ -98,7 +98,7 @@ export function url_search_params(): void {
 		try {
 			// no need to set credentials_are_dirty here because the contents came directly from the file
 			const creds_array: Array<Credentials> = JSON.parse(creds);
-			creds_array.forEach((value, _index) => {
+			creds_array.forEach((value) => {
 				credentials.update((data) => {
 					data.set(value.sub, value);
 					return data;
@@ -124,7 +124,7 @@ export function url_search_params(): void {
 // Does not save credentials but sets credentials_are_dirty as appropriate.
 // Returns null on success or an http status code on failure
 export async function checkRenewCreds(creds: Credentials, url: string, client_id: string) {
-	return new Promise((resolve, _reject) => {
+	return new Promise((resolve) => {
 		// only renew if less than 30 seconds left
 		if (creds.expiry - Date.now() < 30000) {
 			const post_data = new URLSearchParams({
@@ -195,7 +195,7 @@ export function parseCredentials(str: string): Result<Credentials> {
 
 // builds the url to be opened in the login window
 // async because crypto.subtle.digest is async for some reason, so remember to `await`
-export async function makeLoginUrl(url: any) {
+export async function makeLoginUrl(url: Record<string, string>) {
 	const verifier_data = new TextEncoder().encode(url.pkceCodeVerifier);
 	const digested = await crypto.subtle.digest('SHA-256', verifier_data);
 	let raw = '';
@@ -255,7 +255,7 @@ export async function handleNewSessionId(
 	accounts_url: string,
 	account_info_promise: Promise<Account>
 ) {
-	return new Promise((resolve, _reject) => {
+	return new Promise((resolve) => {
 		const xml = new XMLHttpRequest();
 		xml.onreadystatechange = () => {
 			if (xml.readyState == 4) {
@@ -354,7 +354,7 @@ async function handleStandardLogin(win: Window | null, creds: Credentials) {
 // makes a request to the account_info endpoint and returns the promise
 // the promise will return either a JSON object on success or a status code on failure
 function getStandardAccountInfo(creds: Credentials): Promise<Account | number> {
-	return new Promise((resolve, _reject) => {
+	return new Promise((resolve) => {
 		const url = `${atob(bolt_sub.api)}/users/${creds.sub}/displayName`;
 		const xml = new XMLHttpRequest();
 		xml.onreadystatechange = () => {
@@ -391,7 +391,7 @@ export function addNewAccount(account: Account) {
 // revokes the given oauth tokens, returning an http status code.
 // tokens were revoked only if response is 200
 export function revokeOauthCreds(access_token: string, revoke_url: string, client_id: string) {
-	return new Promise((resolve, _reject) => {
+	return new Promise((resolve) => {
 		const xml = new XMLHttpRequest();
 		xml.open('POST', revoke_url, true);
 		xml.onreadystatechange = () => {
@@ -423,7 +423,7 @@ export async function saveAllCreds() {
 		});
 
 		const creds_array: Array<Credentials> = [];
-		credentials_sub.forEach((value, key) => {
+		credentials_sub.forEach((value) => {
 			creds_array.push(value);
 		});
 		xml.send(JSON.stringify(creds_array));
@@ -440,13 +440,13 @@ export function launchRS3Linux(
 ) {
 	saveConfig();
 
-	const launch = (hash?: any, deb?: any) => {
+	const launch = (hash?: unknown, deb?: never) => {
 		const xml = new XMLHttpRequest();
-		const params: any = {};
-		if (hash) params.hash = hash;
+		const params: Record<string, string> = {};
+		if (hash) params.hash = <string>hash;
 		// if (jx_access_token) params.jx_access_token = jx_access_token; // setting these cause login to fail
 		// if (jx_refresh_token) params.jx_refresh_token = jx_refresh_token; // setting these cause login to fail
-		params.jx_access_token = '';
+		params.hash = '';
 		params.jx_refresh_token = '';
 		if (jx_session_id) params.jx_session_id = jx_session_id;
 		if (jx_character_id) params.jx_character_id = jx_character_id;
@@ -461,7 +461,7 @@ export function launchRS3Linux(
 			if (xml.readyState == 4) {
 				msg(`Game launch status: '${xml.responseText.trim()}'`);
 				if (xml.status == 200 && hash) {
-					rs3_installed_hash.set(hash);
+					rs3_installed_hash.set(<string>hash);
 				}
 			}
 		};
@@ -475,7 +475,7 @@ export function launchRS3Linux(
 	xml.onreadystatechange = () => {
 		if (xml.readyState == 4 && xml.status == 200) {
 			const lines = Object.fromEntries(
-				xml.response.split('\n').map((x: any) => {
+				xml.response.split('\n').map((x: string) => {
 					return x.split(': ');
 				})
 			);
@@ -540,11 +540,11 @@ function launchRuneLiteInner(
 	saveConfig();
 	const launch_path = configure ? '/launch-runelite-jar-configure?' : '/launch-runelite-jar?';
 
-	const launch = (id?: any, jar?: any, jar_path?: any) => {
+	const launch = (id?: unknown, jar?: unknown, jar_path?: unknown) => {
 		const xml = new XMLHttpRequest();
-		const params: any = {};
-		if (id) params.id = id;
-		if (jar_path) params.jar_path = jar_path;
+		const params: Record<string, string> = {};
+		if (id) params.id = <string>id;
+		if (jar_path) params.jar_path = <string>jar_path;
 		// if (jx_access_token) params.jx_access_token = jx_access_token; // setting these seem to cause login to fail
 		// if (jx_refresh_token) params.jx_refresh_token = jx_refresh_token; // setting these seem to cause login to fail
 		params.jx_access_token = '';
@@ -562,11 +562,11 @@ function launchRuneLiteInner(
 			if (xml.readyState == 4) {
 				msg(`Game launch status: '${xml.responseText.trim()}'`);
 				if (xml.status == 200 && id) {
-					runelite_installed_id.set(id);
+					runelite_installed_id.set(<string>id);
 				}
 			}
 		};
-		xml.send(jar);
+		xml.send(<string>jar);
 	};
 
 	if (config_sub.runelite_use_custom_jar) {
@@ -581,9 +581,9 @@ function launchRuneLiteInner(
 		if (xml.readyState == 4) {
 			if (xml.status == 200) {
 				const runelite = JSON.parse(xml.responseText)
-					.map((x: any) => x.assets)
+					.map((x: Record<string, string>) => x.assets)
 					.flat()
-					.find((x: any) => x.name.toLowerCase() == 'runelite.jar');
+					.find((x: Record<string, string>) => x.name.toLowerCase() == 'runelite.jar');
 				if (runelite.id != get(runelite_installed_id)) {
 					message_list.update((data: Array<Message>) => {
 						data.unshift({ is_error: false, text: 'Downloading RuneLite...' });
@@ -672,9 +672,9 @@ export function launchHdos(
 ) {
 	saveConfig();
 
-	const launch = (version?: any, jar?: any) => {
+	const launch = (version?: string, jar?: string) => {
 		const xml = new XMLHttpRequest();
-		const params: any = {};
+		const params: Record<string, string> = {};
 		if (version) params.version = version;
 		// if (jx_access_token) params.jx_access_token = jx_access_token; // setting these cause login to fail
 		// if (jx_refresh_token) params.jx_refresh_token = jx_refresh_token; // setting these cause login to fail
@@ -721,9 +721,9 @@ export function launchHdos(
 									launch(latest_version, xml_hdos.response);
 								} else {
 									const runelite = JSON.parse(xml.responseText)
-										.map((x: any) => x.assets)
+										.map((x: Record<string, string>) => x.assets)
 										.flat()
-										.find((x: any) => x.name.toLowerCase() == 'runelite.jar');
+										.find((x: Record<string, string>) => x.name.toLowerCase() == 'runelite.jar');
 									err(
 										`Error downloading from ${runelite.url}: ${xml_hdos.status}: ${xml_hdos.responseText}`,
 										false
