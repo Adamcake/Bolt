@@ -72,7 +72,6 @@
 	}
 
 	onMount(() => {
-		console.log($config);
 		if ($config.selected_game_index == Game.OSRS) {
 			client_select.selectedIndex = <number>$config.selected_client_index;
 			$selected_play.client = client_select.selectedIndex;
