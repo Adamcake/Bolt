@@ -11,7 +11,8 @@ import {
 	pending_game_auth,
 	bolt,
 	account_list,
-	selected_play
+	selected_play,
+	show_disclaimer
 } from './store';
 import { get, type Unsubscriber } from 'svelte/store';
 import {
@@ -22,7 +23,7 @@ import {
 	checkRenewCreds,
 	load_theme,
 	saveConfig,
-	removePendingGameAuth,
+	removePendingGameAuth
 } from './functions';
 import type { Bolt, Account, Auth, Config, Credentials, Message, SelectedPlay } from './interfaces';
 import { unwrap } from './interfaces';
@@ -65,6 +66,10 @@ function start(): void {
 	const s_origin = atob(bolt_sub.origin);
 	const client_id = atob(bolt_sub.clientid);
 	const exchange_url = s_origin.concat('/oauth2/token');
+
+	if (credentials_sub.size == 0) {
+		show_disclaimer.set(true);
+	}
 
 	load_theme();
 

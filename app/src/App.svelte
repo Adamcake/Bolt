@@ -6,8 +6,8 @@
 	import Launch from './lib/Launch.svelte';
 	import Auth from './lib/Auth.svelte';
 	import { url_search_params } from './functions';
+	import { show_disclaimer } from './store';
 
-	let show_dislaimer: boolean = true;
 	let show_settings: boolean = false;
 	let authorizing: boolean = false;
 
@@ -47,8 +47,8 @@
 	{#if authorizing}
 		<Auth></Auth>
 	{:else}
-		{#if show_dislaimer}
-			<Disclaimer bind:show_dislaimer></Disclaimer>
+		{#if $show_disclaimer}
+			<Disclaimer></Disclaimer>
 		{/if}
 		{#if show_settings}
 			<Settings bind:show_settings></Settings>

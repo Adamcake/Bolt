@@ -35,3 +35,4 @@ export const selected_play: Writable<SelectedPlay> = writable({
 	game: Game.OSRS,
 	client: Client.RuneLite
 });
+export const show_disclaimer: Writable<boolean> = writable(false);

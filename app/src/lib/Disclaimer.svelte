@@ -1,8 +1,6 @@
 <script lang="ts">
 	import Backdrop from './Backdrop.svelte';
-
-	// user must click 'I Understand' to close
-	export let show_dislaimer: boolean;
+	import { show_disclaimer } from '../store';
 
 	// atob encodings created from btoa; for disclaimer text
 	const first_text: string = atob(
@@ -26,7 +24,7 @@
 		<button
 			class="border-2 border-blue-500 hover:opacity-75 duration-200 rounded-lg m-5 p-2"
 			on:click={() => {
-				show_dislaimer = false;
+				$show_disclaimer = false;
 			}}>I Understand</button>
 	</div>
 </div>
