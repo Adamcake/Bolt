@@ -4,7 +4,7 @@
 #include <stddef.h>
 
 enum BoltMessageType {
-    IPC_PLUGIN_LIST,
+    IPC_MSG_NEWPLUGINS,
 };
 
 /// A generic message. The host process and game clients will always assume incoming data is an

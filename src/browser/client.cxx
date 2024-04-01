@@ -9,6 +9,8 @@
 #if defined(BOLT_PLUGINS)
 #include "include/cef_parser.h"
 #include "../library/ipc.h"
+#include <new>
+#include <cstring>
 #endif
 
 #include <algorithm>
@@ -303,6 +305,47 @@ CefRefPtr<CefResourceRequestHandler> Browser::Client::GetResourceRequestHandler(
 #if defined(BOLT_PLUGINS)
 void Browser::Client::IPCHandleNewClient(int fd) {
 	fmt::print("[I] new client fd {}\n", fd);
+	for (const BoltPlugin& plugin: this->plugins) {
+		cef_string_utf8_t plugin_name;
+		cef_string_utf8_t plugin_desc = {.length = 0};
+		cef_string_utf8_t plugin_path;
+		cef_string_utf8_t plugin_main;
+		cef_string_to_utf8(plugin.name.c_str(), plugin.name.length(), &plugin_name);
+		if (plugin.has_desc) cef_string_to_utf8(plugin.desc.c_str(), plugin.desc.length(), &plugin_desc);
+		cef_string_to_utf8(plugin.path.c_str(), plugin.path.length(), &plugin_path);
+		cef_string_to_utf8(plugin.main.c_str(), plugin.main.length(), &plugin_main);
+		size_t len = sizeof(BoltIPCMessage) + (4 * sizeof(uint32_t)) + plugin_name.length + plugin_desc.length + plugin_path.length + plugin_main.length;
+		if (len > 0) {
+			char* message = new (std::align_val_t(sizeof(uint32_t))) char[len];
+			BoltIPCMessage* header = (BoltIPCMessage*)message;
+			header->message_type = IPC_MSG_NEWPLUGINS;
+			header->items = 1;
+			char* ptr = message + sizeof(BoltIPCMessage);
+			memcpy(ptr, &plugin_name.length, sizeof(uint32_t));
+			memcpy(ptr + sizeof(uint32_t), plugin_name.str, plugin_name.length);
+			ptr += sizeof(uint32_t) + plugin_name.length;
+			if (plugin.has_desc) {
+				memcpy(ptr, &plugin_desc.length, sizeof(uint32_t));
+				memcpy(ptr + sizeof(uint32_t), plugin_desc.str, plugin_desc.length);
+				ptr += sizeof(uint32_t) + plugin_desc.length;
+			} else {
+				const uint32_t no_value = ~0;
+				memcpy(ptr, &no_value, sizeof(uint32_t));
+				ptr += sizeof(uint32_t);
+			}
+			memcpy(ptr, &plugin_path.length, sizeof(uint32_t));
+			memcpy(ptr + sizeof(uint32_t), plugin_path.str, plugin_path.length);
+			ptr += sizeof(uint32_t) + plugin_path.length;
+			memcpy(ptr, &plugin_main.length, sizeof(uint32_t));
+			memcpy(ptr + sizeof(uint32_t), plugin_main.str, plugin_main.length);
+			_bolt_ipc_send(fd, message, len);
+			delete[] message;
+		}
+		cef_string_utf8_clear(&plugin_name);
+		if (plugin.has_desc) cef_string_utf8_clear(&plugin_desc);
+		cef_string_utf8_clear(&plugin_path);
+		cef_string_utf8_clear(&plugin_main);
+	}
 }
 
 bool Browser::Client::IPCHandleMessage(int fd) {

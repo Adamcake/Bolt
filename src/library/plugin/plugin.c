@@ -6,6 +6,7 @@
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
+#include <stdlib.h>
 #include <time.h>
 
 #define API_VERSION_MAJOR 1
@@ -228,7 +229,45 @@ void _bolt_plugin_handle_messages() {
     struct BoltIPCMessage message;
     while (_bolt_ipc_poll(fd)) {
         if (_bolt_ipc_receive(fd, &message, sizeof(message)) != 0) break;
-        printf("type %u items %u\n", message.message_type, message.items);
+        switch (message.message_type) {
+            case IPC_MSG_NEWPLUGINS: {
+                for (uint32_t i = 0; i < message.items; i += 1) {
+                    // these strings are sent utf-8 encoded
+                    uint8_t has_desc;
+                    uint32_t name_len, desc_len, path_len, main_len;
+                    char* name,* desc,* path,* main;
+                    _bolt_ipc_receive(fd, &name_len, sizeof(name_len));
+                    name = malloc(name_len);
+                    _bolt_ipc_receive(fd, name, name_len);
+                    _bolt_ipc_receive(fd, &desc_len, sizeof(desc_len));
+                    if (desc_len != ~0) {
+                        has_desc = 1;
+                        desc = malloc(desc_len);
+                        _bolt_ipc_receive(fd, desc, desc_len);
+                    } else {
+                        has_desc = 0;
+                    }
+                    _bolt_ipc_receive(fd, &path_len, sizeof(path_len));
+                    path = malloc(path_len);
+                    _bolt_ipc_receive(fd, path, path_len);
+                    _bolt_ipc_receive(fd, &main_len, sizeof(main_len));
+                    main = malloc(main_len);
+                    _bolt_ipc_receive(fd, main, main_len);
+
+                    if (has_desc) {
+                        printf("plugin added: '%.*s', '%.*s'\n", name_len, name, desc_len, desc);
+                    } else {
+                        printf("plugin added: '%.*s'\n", name_len, name);
+                    }
+
+                    free(name);
+                    if (has_desc) free(desc);
+                    free(path);
+                    free(main);
+                }
+                break;
+            }
+        }
     }
 }
 
