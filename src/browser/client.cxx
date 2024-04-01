@@ -37,22 +37,28 @@ constexpr Browser::Details LAUNCHER_DETAILS = {
 
 #if defined(BOLT_PLUGINS)
 bool ReadPlugins(const CefRefPtr<CefValue> config, std::vector<BoltPlugin>& plugins) {
-	CefRefPtr<CefListValue> list = config->GetList();
+	CefRefPtr<CefDictionaryValue> list = config->GetDictionary();
 	if (!list) {
-		fmt::print("[B] error: plugins.json: base element must be a list\n");
+		fmt::print("[B] error: plugins.json: base element must be a dictionary\n");
 		return false;
 	}
-	for (size_t i = 0; i < list->GetSize(); i += 1) {
+	CefDictionaryValue::KeyList keys;
+	if (!list->GetKeys(keys)) {
+		fmt::print("[B] error: plugins.json: failed to parse key list\n");
+		return false;
+	}
+	for (const CefString& plugin_id: keys) {
 		BoltPlugin plugin;
-		CefRefPtr<CefDictionaryValue> item = list->GetDictionary(i);
+		CefRefPtr<CefDictionaryValue> item = list->GetDictionary(plugin_id);
 		if (!item) {
-			fmt::print("[B] error: plugins.json: expected dict at list element {}\n", i);
+			fmt::print("[B] error: plugins.json: expected value of '{}' to be a dictionary\n", plugin_id.ToString());
 			return false;
 		}
 		if (!item->HasKey("name") || !item->HasKey("path") || !item->HasKey("main")) {
-			fmt::print("[B] error: plugins.json: at least one required key 'name', 'path', 'main' is missing at list element {}\n", i);
+			fmt::print("[B] error: plugins.json: at least one required key 'name', 'path', 'main' is missing from '{}'\n", plugin_id.ToString());
 			return false;
 		}
+		plugin.id = plugin_id;
 		plugin.has_desc = item->HasKey("desc");
 		plugin.name = item->GetString("name");
 		if (plugin.has_desc) plugin.desc = item->GetString("desc");
@@ -305,11 +311,10 @@ CefRefPtr<CefResourceRequestHandler> Browser::Client::GetResourceRequestHandler(
 #if defined(BOLT_PLUGINS)
 void Browser::Client::IPCHandleNewClient(int fd) {
 	fmt::print("[I] new client fd {}\n", fd);
+
+	// immediately send all configured plugins to the new client
 	for (const BoltPlugin& plugin: this->plugins) {
-		cef_string_utf8_t plugin_name;
-		cef_string_utf8_t plugin_desc = {.length = 0};
-		cef_string_utf8_t plugin_path;
-		cef_string_utf8_t plugin_main;
+		cef_string_utf8_t plugin_name, plugin_desc = {.length = 0}, plugin_path, plugin_main;
 		cef_string_to_utf8(plugin.name.c_str(), plugin.name.length(), &plugin_name);
 		if (plugin.has_desc) cef_string_to_utf8(plugin.desc.c_str(), plugin.desc.length(), &plugin_desc);
 		cef_string_to_utf8(plugin.path.c_str(), plugin.path.length(), &plugin_path);

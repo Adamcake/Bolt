@@ -17,6 +17,7 @@
 #if defined(BOLT_PLUGINS)
 #include <thread>
 struct BoltPlugin {
+	CefString id;
 	CefString name;
 	CefString desc;
 	CefString path;
