@@ -2,7 +2,7 @@
 	import { msg } from '../../main';
 
 	// opens local data on disk
-	function open_data_dir(): void {
+	function openDataDir(): void {
 		var xml = new XMLHttpRequest();
 		xml.open('GET', '/browse-data');
 		xml.onreadystatechange = () => {
@@ -19,7 +19,7 @@
 		id="data_dir_button"
 		class="p-2 hover:opacity-75"
 		on:click={() => {
-			open_data_dir();
+			openDataDir();
 		}}>
 		<div class="flex">
 			<img

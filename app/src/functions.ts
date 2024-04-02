@@ -9,96 +9,96 @@ import {
 	type Message
 } from './interfaces';
 import {
-	bolt_sub,
-	config_sub,
-	credentials_are_dirty,
-	credentials_sub,
+	boltSub,
+	configSub,
+	credentialsAreDirty,
+	credentialsSub,
 	err,
 	msg,
-	pending_game_auth_sub,
-	pending_oauth_sub,
-	selected_play_sub
+	pendingGameAuthSub,
+	pendingOauthSub,
+	selectedPlaySub
 } from './main';
 import {
-	account_list,
+	accountList,
 	config,
 	credentials,
-	hdos_installed_version,
-	is_config_dirty,
-	message_list,
-	pending_game_auth,
-	pending_oauth,
+	hdosInstalledVersion,
+	isConfigDirty,
+	messageList,
+	pendingGameAuth,
+	pendingOauth,
 	platform,
-	production_client_id,
-	rs3_installed_hash,
-	runelite_installed_id,
-	selected_play
+	productionClientId,
+	rs3InstalledHash,
+	runeLiteInstalledId,
+	selectedPlay
 } from './store';
 
 // deprecated?
 // const rs3_basic_auth = 'Basic Y29tX2phZ2V4X2F1dGhfZGVza3RvcF9yczpwdWJsaWM=';
 // const osrs_basic_auth = 'Basic Y29tX2phZ2V4X2F1dGhfZGVza3RvcF9vc3JzOnB1YmxpYw==';
-let is_flathub: boolean = false;
+let isFlathub: boolean = false;
 
 // after config is loaded, check which theme (light/dark) the user prefers
-export function load_theme() {
-	if (config_sub.use_dark_theme == false) {
+export function loadTheme() {
+	if (configSub.use_dark_theme == false) {
 		document.documentElement.classList.remove('dark');
 	}
 }
 
 // remove an entry by its reference from the pending_game_auth list
 // this function assumes this entry is in the list
-export function removePendingGameAuth(pending: Auth, close_window: boolean) {
-	if (close_window) {
+export function removePendingGameAuth(pending: Auth, closeWindow: boolean) {
+	if (closeWindow) {
 		pending.win!.close();
 	}
-	pending_game_auth.update((data) => {
-		data.splice(pending_game_auth_sub.indexOf(pending), 1);
+	pendingGameAuth.update((data) => {
+		data.splice(pendingGameAuthSub.indexOf(pending), 1);
 		return data;
 	});
 }
 
 // checks if a login window is already open or not, then launches the window with the necessary parameters
 export function loginClicked() {
-	if (pending_oauth_sub && pending_oauth_sub.win && !pending_oauth_sub.win.closed) {
-		pending_oauth_sub.win.focus();
+	if (pendingOauthSub && pendingOauthSub.win && !pendingOauthSub.win.closed) {
+		pendingOauthSub.win.focus();
 	} else if (
-		(pending_oauth_sub && pending_oauth_sub.win && pending_oauth_sub.win.closed) ||
-		pending_oauth_sub
+		(pendingOauthSub && pendingOauthSub.win && pendingOauthSub.win.closed) ||
+		pendingOauthSub
 	) {
 		const state = makeRandomState();
 		const verifier = makeRandomVerifier();
 		makeLoginUrl({
-			origin: atob(bolt_sub.origin),
-			redirect: atob(bolt_sub.redirect),
+			origin: atob(boltSub.origin),
+			redirect: atob(boltSub.redirect),
 			authMethod: '',
 			loginType: '',
-			clientid: atob(bolt_sub.clientid),
+			clientid: atob(boltSub.clientid),
 			flow: 'launcher',
 			pkceState: state,
 			pkceCodeVerifier: verifier
 		}).then((url: string) => {
 			const win = window.open(url, '', 'width=480,height=720');
-			pending_oauth.set({ state: state, verifier: verifier, win: win });
+			pendingOauth.set({ state: state, verifier: verifier, win: win });
 		});
 	}
 }
 
 // queries the url for relevant information, including credentials and config
-export function url_search_params(): void {
+export function urlSearchParams(): void {
 	const query = new URLSearchParams(window.location.search);
 	platform.set(query.get('platform'));
-	is_flathub = query.get('flathub') != '0';
-	rs3_installed_hash.set(query.get('rs3_linux_installed_hash'));
-	runelite_installed_id.set(query.get('runelite_installed_id'));
-	hdos_installed_version.set(query.get('hdos_installed_version'));
+	isFlathub = query.get('flathub') != '0';
+	rs3InstalledHash.set(query.get('rs3_linux_installed_hash'));
+	runeLiteInstalledId.set(query.get('runelite_installed_id'));
+	hdosInstalledVersion.set(query.get('hdos_installed_version'));
 	const creds = query.get('credentials');
 	if (creds) {
 		try {
 			// no need to set credentials_are_dirty here because the contents came directly from the file
-			const creds_array: Array<Credentials> = JSON.parse(creds);
-			creds_array.forEach((value) => {
+			const credsList: Array<Credentials> = JSON.parse(creds);
+			credsList.forEach((value) => {
 				credentials.update((data) => {
 					data.set(value.sub, value);
 					return data;
@@ -123,13 +123,13 @@ export function url_search_params(): void {
 // and renews them using the oauth endpoint if so.
 // Does not save credentials but sets credentials_are_dirty as appropriate.
 // Returns null on success or an http status code on failure
-export async function checkRenewCreds(creds: Credentials, url: string, client_id: string) {
+export async function checkRenewCreds(creds: Credentials, url: string, clientId: string) {
 	return new Promise((resolve) => {
 		// only renew if less than 30 seconds left
 		if (creds.expiry - Date.now() < 30000) {
-			const post_data = new URLSearchParams({
+			const postData = new URLSearchParams({
 				grant_type: 'refresh_token',
-				client_id: client_id,
+				client_id: clientId,
 				refresh_token: creds.refresh_token
 			});
 			const xml = new XMLHttpRequest();
@@ -155,7 +155,7 @@ export async function checkRenewCreds(creds: Credentials, url: string, client_id
 			xml.open('POST', url, true);
 			xml.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
 			xml.setRequestHeader('Accept', 'application/json');
-			xml.send(post_data);
+			xml.send(postData);
 		} else {
 			resolve(null);
 		}
@@ -165,30 +165,30 @@ export async function checkRenewCreds(creds: Credentials, url: string, client_id
 // parses a response from the oauth endpoint
 // returns a Result, it may
 export function parseCredentials(str: string): Result<Credentials> {
-	const oauth_creds = JSON.parse(str);
-	const sections = oauth_creds.id_token.split('.');
+	const oauthCreds = JSON.parse(str);
+	const sections = oauthCreds.id_token.split('.');
 	if (sections.length !== 3) {
-		const err_msg: string = `Malformed id_token: ${sections.length} sections, expected 3`;
-		err(err_msg, false);
-		return { ok: false, error: new Error(err_msg) };
+		const errMsg: string = `Malformed id_token: ${sections.length} sections, expected 3`;
+		err(errMsg, false);
+		return { ok: false, error: new Error(errMsg) };
 	}
 	const header = JSON.parse(atob(sections[0]));
 	if (header.typ !== 'JWT') {
-		const err_msg: string = `Bad id_token header: typ ${header.typ}, expected JWT`;
-		err(err_msg, false);
-		return { ok: false, error: new Error(err_msg) };
+		const errMsg: string = `Bad id_token header: typ ${header.typ}, expected JWT`;
+		err(errMsg, false);
+		return { ok: false, error: new Error(errMsg) };
 	}
 	const payload = JSON.parse(atob(sections[1]));
 	return {
 		ok: true,
 		value: {
-			access_token: oauth_creds.access_token,
-			id_token: oauth_creds.id_token,
-			refresh_token: oauth_creds.refresh_token,
+			access_token: oauthCreds.access_token,
+			id_token: oauthCreds.id_token,
+			refresh_token: oauthCreds.refresh_token,
 			sub: payload.sub,
 			login_provider: payload.login_provider || null,
-			expiry: Date.now() + oauth_creds.expires_in * 1000,
-			session_id: oauth_creds.session_id
+			expiry: Date.now() + oauthCreds.expires_in * 1000,
+			session_id: oauthCreds.session_id
 		}
 	};
 }
@@ -196,14 +196,14 @@ export function parseCredentials(str: string): Result<Credentials> {
 // builds the url to be opened in the login window
 // async because crypto.subtle.digest is async for some reason, so remember to `await`
 export async function makeLoginUrl(url: Record<string, string>) {
-	const verifier_data = new TextEncoder().encode(url.pkceCodeVerifier);
-	const digested = await crypto.subtle.digest('SHA-256', verifier_data);
+	const verifierData = new TextEncoder().encode(url.pkceCodeVerifier);
+	const digested = await crypto.subtle.digest('SHA-256', verifierData);
 	let raw = '';
 	const bytes = new Uint8Array(digested);
 	for (let i = 0; i < bytes.byteLength; i++) {
 		raw += String.fromCharCode(bytes[i]);
 	}
-	const code_challenge = btoa(raw).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+	const codeChallenge = btoa(raw).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 	return url.origin.concat('/oauth2/auth?').concat(
 		new URLSearchParams({
 			auth_method: url.authMethod,
@@ -212,7 +212,7 @@ export async function makeLoginUrl(url: Record<string, string>) {
 			response_type: 'code',
 			client_id: url.clientid,
 			redirect_uri: url.redirect,
-			code_challenge: code_challenge,
+			code_challenge: codeChallenge,
 			code_challenge_method: 'S256',
 			prompt: 'login',
 			scope: 'openid offline gamesso.token.create user.profile.read',
@@ -252,21 +252,21 @@ export function makeRandomState() {
 // persisted session id.
 export async function handleNewSessionId(
 	creds: Credentials,
-	accounts_url: string,
-	account_info_promise: Promise<Account>
+	accountsUrl: string,
+	accountsInfoPromise: Promise<Account>
 ) {
 	return new Promise((resolve) => {
 		const xml = new XMLHttpRequest();
 		xml.onreadystatechange = () => {
 			if (xml.readyState == 4) {
 				if (xml.status == 200) {
-					account_info_promise.then((account_info) => {
-						if (typeof account_info !== 'number') {
+					accountsInfoPromise.then((accountInfo) => {
+						if (typeof accountInfo !== 'number') {
 							const account: Account = {
-								id: account_info.id,
-								userId: account_info.userId,
-								displayName: account_info.displayName,
-								suffix: account_info.suffix,
+								id: accountInfo.id,
+								userId: accountInfo.userId,
+								displayName: accountInfo.displayName,
+								suffix: accountInfo.suffix,
 								characters: new Map()
 							};
 							msg(`Successfully added login for ${account.displayName}`);
@@ -280,17 +280,17 @@ export async function handleNewSessionId(
 							addNewAccount(account);
 							resolve(true);
 						} else {
-							err(`Error getting account info: ${account_info}`, false);
+							err(`Error getting account info: ${accountInfo}`, false);
 							resolve(false);
 						}
 					});
 				} else {
-					err(`Error: from ${accounts_url}: ${xml.status}: ${xml.response}`, false);
+					err(`Error: from ${accountsUrl}: ${xml.status}: ${xml.response}`, false);
 					resolve(false);
 				}
 			}
 		};
-		xml.open('GET', accounts_url, true);
+		xml.open('GET', accountsUrl, true);
 		xml.setRequestHeader('Accept', 'application/json');
 		xml.setRequestHeader('Authorization', 'Bearer '.concat(creds.session_id));
 		xml.send();
@@ -308,7 +308,7 @@ export async function handleLogin(win: Window | null, creds: Credentials) {
 async function handleStandardLogin(win: Window | null, creds: Credentials) {
 	const state = makeRandomState();
 	const nonce: string = crypto.randomUUID();
-	const location = atob(bolt_sub.origin)
+	const location = atob(boltSub.origin)
 		.concat('/oauth2/auth?')
 		.concat(
 			new URLSearchParams({
@@ -318,21 +318,21 @@ async function handleStandardLogin(win: Window | null, creds: Credentials) {
 				redirect_uri: 'http://localhost',
 				response_type: 'id_token code',
 				state: state,
-				client_id: get(production_client_id),
+				client_id: get(productionClientId),
 				scope: 'openid offline'
 			}).toString()
 		);
-	const account_info_promise: Promise<Account | number> = getStandardAccountInfo(creds);
+	const accountInfoPromise: Promise<Account | number> = getStandardAccountInfo(creds);
 
 	if (win) {
 		win.location.href = location;
-		pending_game_auth.update((data) => {
+		pendingGameAuth.update((data) => {
 			data.push({
 				state: state,
 				nonce: nonce,
 				creds: creds,
 				win: win,
-				account_info_promise: <Promise<Account>>account_info_promise
+				account_info_promise: <Promise<Account>>accountInfoPromise
 			});
 			return data;
 		});
@@ -345,8 +345,8 @@ async function handleStandardLogin(win: Window | null, creds: Credentials) {
 
 		return await handleNewSessionId(
 			creds,
-			atob(bolt_sub.auth_api).concat('/accounts'),
-			<Promise<Account>>account_info_promise
+			atob(boltSub.auth_api).concat('/accounts'),
+			<Promise<Account>>accountInfoPromise
 		);
 	}
 }
@@ -355,7 +355,7 @@ async function handleStandardLogin(win: Window | null, creds: Credentials) {
 // the promise will return either a JSON object on success or a status code on failure
 function getStandardAccountInfo(creds: Credentials): Promise<Account | number> {
 	return new Promise((resolve) => {
-		const url = `${atob(bolt_sub.api)}/users/${creds.sub}/displayName`;
+		const url = `${atob(boltSub.api)}/users/${creds.sub}/displayName`;
 		const xml = new XMLHttpRequest();
 		xml.onreadystatechange = () => {
 			if (xml.readyState == 4) {
@@ -374,40 +374,40 @@ function getStandardAccountInfo(creds: Credentials): Promise<Account | number> {
 
 // adds an account to the accounts_list store item
 export function addNewAccount(account: Account) {
-	account_list.update((data) => {
+	accountList.update((data) => {
 		data.set(account.userId, account);
 		return data;
 	});
-	selected_play.update((data) => {
+	selectedPlay.update((data) => {
 		data.account = account;
-		const [first_key] = account.characters.keys();
-		data.character = account.characters.get(first_key);
-		if (credentials_sub.size > 0) data.credentials = credentials_sub.get(account.userId);
+		const [firstKey] = account.characters.keys();
+		data.character = account.characters.get(firstKey);
+		if (credentialsSub.size > 0) data.credentials = credentialsSub.get(account.userId);
 		return data;
 	});
-	pending_oauth.set({});
+	pendingOauth.set({});
 }
 
 // revokes the given oauth tokens, returning an http status code.
 // tokens were revoked only if response is 200
-export function revokeOauthCreds(access_token: string, revoke_url: string, client_id: string) {
+export function revokeOauthCreds(accessToken: string, revokeUrl: string, clientId: string) {
 	return new Promise((resolve) => {
 		const xml = new XMLHttpRequest();
-		xml.open('POST', revoke_url, true);
+		xml.open('POST', revokeUrl, true);
 		xml.onreadystatechange = () => {
 			if (xml.readyState == 4) {
 				resolve(xml.status);
 			}
 		};
 		xml.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-		xml.send(new URLSearchParams({ token: access_token, client_id: client_id }));
+		xml.send(new URLSearchParams({ token: accessToken, client_id: clientId }));
 	});
 }
 
 // sends a request to save all credentials to their config file,
 // overwriting the previous file, if any
 export async function saveAllCreds() {
-	if (credentials_are_dirty) {
+	if (credentialsAreDirty) {
 		const xml = new XMLHttpRequest();
 		xml.open('POST', '/save-credentials', true);
 		xml.setRequestHeader('Content-Type', 'application/json');
@@ -417,16 +417,16 @@ export async function saveAllCreds() {
 			}
 		};
 
-		selected_play.update((data) => {
-			data.credentials = credentials_sub.get(<string>selected_play_sub.account?.userId);
+		selectedPlay.update((data) => {
+			data.credentials = credentialsSub.get(<string>selectedPlaySub.account?.userId);
 			return data;
 		});
 
-		const creds_array: Array<Credentials> = [];
-		credentials_sub.forEach((value) => {
-			creds_array.push(value);
+		const credsList: Array<Credentials> = [];
+		credentialsSub.forEach((value) => {
+			credsList.push(value);
 		});
-		xml.send(JSON.stringify(creds_array));
+		xml.send(JSON.stringify(credsList));
 	}
 }
 
@@ -451,17 +451,17 @@ export function launchRS3Linux(
 		if (jx_session_id) params.jx_session_id = jx_session_id;
 		if (jx_character_id) params.jx_character_id = jx_character_id;
 		if (jx_display_name) params.jx_display_name = jx_display_name;
-		if (config_sub.rs_config_uri) {
-			params.config_uri = config_sub.rs_config_uri;
+		if (configSub.rs_config_uri) {
+			params.config_uri = configSub.rs_config_uri;
 		} else {
-			params.config_uri = atob(bolt_sub.default_config_uri);
+			params.config_uri = atob(boltSub.default_config_uri);
 		}
 		xml.open('POST', '/launch-rs3-deb?'.concat(new URLSearchParams(params).toString()), true);
 		xml.onreadystatechange = () => {
 			if (xml.readyState == 4) {
 				msg(`Game launch status: '${xml.responseText.trim()}'`);
 				if (xml.status == 200 && hash) {
-					rs3_installed_hash.set(<string>hash);
+					rs3InstalledHash.set(<string>hash);
 				}
 			}
 		};
@@ -469,8 +469,8 @@ export function launchRS3Linux(
 	};
 
 	const xml = new XMLHttpRequest();
-	const content_url = atob(bolt_sub.content_url);
-	const url = content_url.concat('dists/trusty/non-free/binary-amd64/Packages');
+	const contentUrl = atob(boltSub.content_url);
+	const url = contentUrl.concat('dists/trusty/non-free/binary-amd64/Packages');
 	xml.open('GET', url, true);
 	xml.onreadystatechange = () => {
 		if (xml.readyState == 4 && xml.status == 200) {
@@ -484,35 +484,35 @@ export function launchRS3Linux(
 				launch();
 				return;
 			}
-			if (lines.SHA256 !== get(rs3_installed_hash)) {
-				message_list.update((data) => {
-					data.unshift({ is_error: false, text: 'Downloading RS3 client...' });
+			if (lines.SHA256 !== get(rs3InstalledHash)) {
+				messageList.update((data) => {
+					data.unshift({ isError: false, text: 'Downloading RS3 client...' });
 					return data;
 				});
-				const exe_xml = new XMLHttpRequest();
-				exe_xml.open('GET', content_url.concat(lines.Filename), true);
-				exe_xml.responseType = 'arraybuffer';
-				exe_xml.onprogress = (e) => {
+				const exeXml = new XMLHttpRequest();
+				exeXml.open('GET', contentUrl.concat(lines.Filename), true);
+				exeXml.responseType = 'arraybuffer';
+				exeXml.onprogress = (e) => {
 					if (e.loaded) {
-						message_list.update((data) => {
+						messageList.update((data) => {
 							data[0] = {
-								is_error: false,
+								isError: false,
 								text: `Downloading RS3 client... ${(Math.round((1000.0 * e.loaded) / e.total) / 10.0).toFixed(1)}%`
 							};
 							return data;
 						});
 					}
 				};
-				exe_xml.onreadystatechange = () => {
-					if (exe_xml.readyState == 4 && exe_xml.status == 200) {
-						launch(lines.SHA256, exe_xml.response);
+				exeXml.onreadystatechange = () => {
+					if (exeXml.readyState == 4 && exeXml.status == 200) {
+						launch(lines.SHA256, exeXml.response);
 					}
 				};
-				exe_xml.onerror = () => {
+				exeXml.onerror = () => {
 					err(`Error downloading game client: from ${url}: non-http error`, false);
 					launch();
 				};
-				exe_xml.send();
+				exeXml.send();
 			} else {
 				msg('Latest client is already installed');
 				launch();
@@ -538,13 +538,13 @@ function launchRuneLiteInner(
 	configure: boolean
 ) {
 	saveConfig();
-	const launch_path = configure ? '/launch-runelite-jar-configure?' : '/launch-runelite-jar?';
+	const launchPath = configure ? '/launch-runelite-jar-configure?' : '/launch-runelite-jar?';
 
-	const launch = (id?: unknown, jar?: unknown, jar_path?: unknown) => {
+	const launch = (id?: unknown, jar?: unknown, jarPath?: unknown) => {
 		const xml = new XMLHttpRequest();
 		const params: Record<string, string> = {};
 		if (id) params.id = <string>id;
-		if (jar_path) params.jar_path = <string>jar_path;
+		if (jarPath) params.jar_path = <string>jarPath;
 		// if (jx_access_token) params.jx_access_token = jx_access_token; // setting these seem to cause login to fail
 		// if (jx_refresh_token) params.jx_refresh_token = jx_refresh_token; // setting these seem to cause login to fail
 		params.jx_access_token = '';
@@ -552,25 +552,25 @@ function launchRuneLiteInner(
 		if (jx_session_id) params.jx_session_id = jx_session_id;
 		if (jx_character_id) params.jx_character_id = jx_character_id;
 		if (jx_display_name) params.jx_display_name = jx_display_name;
-		if (config_sub.flatpak_rich_presence) params.flatpak_rich_presence = '';
+		if (configSub.flatpak_rich_presence) params.flatpak_rich_presence = '';
 		xml.open(
 			jar ? 'POST' : 'GET',
-			launch_path.concat(new URLSearchParams(params).toString()),
+			launchPath.concat(new URLSearchParams(params).toString()),
 			true
 		);
 		xml.onreadystatechange = () => {
 			if (xml.readyState == 4) {
 				msg(`Game launch status: '${xml.responseText.trim()}'`);
 				if (xml.status == 200 && id) {
-					runelite_installed_id.set(<string>id);
+					runeLiteInstalledId.set(<string>id);
 				}
 			}
 		};
 		xml.send(<string>jar);
 	};
 
-	if (config_sub.runelite_use_custom_jar) {
-		launch(null, null, config_sub.runelite_custom_jar);
+	if (configSub.runelite_use_custom_jar) {
+		launch(null, null, configSub.runelite_custom_jar);
 		return;
 	}
 
@@ -584,38 +584,38 @@ function launchRuneLiteInner(
 					.map((x: Record<string, string>) => x.assets)
 					.flat()
 					.find((x: Record<string, string>) => x.name.toLowerCase() == 'runelite.jar');
-				if (runelite.id != get(runelite_installed_id)) {
-					message_list.update((data: Array<Message>) => {
-						data.unshift({ is_error: false, text: 'Downloading RuneLite...' });
+				if (runelite.id != get(runeLiteInstalledId)) {
+					messageList.update((data: Array<Message>) => {
+						data.unshift({ isError: false, text: 'Downloading RuneLite...' });
 						return data;
 					});
-					const xml_rl = new XMLHttpRequest();
-					xml_rl.open('GET', runelite.browser_download_url, true);
-					xml_rl.responseType = 'arraybuffer';
-					xml_rl.onreadystatechange = () => {
-						if (xml_rl.readyState == 4) {
-							if (xml_rl.status == 200) {
-								launch(runelite.id, xml_rl.response);
+					const xmlRl = new XMLHttpRequest();
+					xmlRl.open('GET', runelite.browser_download_url, true);
+					xmlRl.responseType = 'arraybuffer';
+					xmlRl.onreadystatechange = () => {
+						if (xmlRl.readyState == 4) {
+							if (xmlRl.status == 200) {
+								launch(runelite.id, xmlRl.response);
 							} else {
 								err(
-									`Error downloading from ${runelite.url}: ${xml_rl.status}: ${xml_rl.responseText}`,
+									`Error downloading from ${runelite.url}: ${xmlRl.status}: ${xmlRl.responseText}`,
 									false
 								);
 							}
 						}
 					};
-					xml_rl.onprogress = (e) => {
+					xmlRl.onprogress = (e) => {
 						if (e.loaded && e.lengthComputable) {
-							message_list.update((data) => {
+							messageList.update((data) => {
 								data[0] = {
-									is_error: false,
+									isError: false,
 									text: `Downloading RuneLite... ${(Math.round((1000.0 * e.loaded) / e.total) / 10.0).toFixed(1)}%`
 								};
 								return data;
 							});
 						}
 					};
-					xml_rl.send();
+					xmlRl.send();
 				} else {
 					msg('Latest JAR is already installed');
 					launch();
@@ -688,7 +688,7 @@ export function launchHdos(
 			if (xml.readyState == 4) {
 				msg(`Game launch status: '${xml.responseText.trim()}'`);
 				if (xml.status == 200 && version) {
-					hdos_installed_version.set(version);
+					hdosInstalledVersion.set(version);
 				}
 			}
 		};
@@ -701,48 +701,51 @@ export function launchHdos(
 	xml.onreadystatechange = () => {
 		if (xml.readyState == 4) {
 			if (xml.status == 200) {
-				const version_regex: RegExpMatchArray | null = xml.responseText.match(
+				const versionRegex: RegExpMatchArray | null = xml.responseText.match(
 					/^launcher\.version *= *(.*?)$/m
 				);
-				if (version_regex && version_regex.length >= 2) {
-					const latest_version = version_regex[1];
-					if (latest_version !== get(hdos_installed_version)) {
-						const jar_url = `https://cdn.hdos.dev/launcher/v${latest_version}/hdos-launcher.jar`;
-						message_list.update((data) => {
-							data.unshift({ is_error: false, text: 'Downloading HDOS...' });
+				if (versionRegex && versionRegex.length >= 2) {
+					const latestVersion = versionRegex[1];
+					if (latestVersion !== get(hdosInstalledVersion)) {
+						const jarUrl = `https://cdn.hdos.dev/launcher/v${latestVersion}/hdos-launcher.jar`;
+						messageList.update((data) => {
+							data.unshift({ isError: false, text: 'Downloading HDOS...' });
 							return data;
 						});
-						const xml_hdos = new XMLHttpRequest();
-						xml_hdos.open('GET', jar_url, true);
-						xml_hdos.responseType = 'arraybuffer';
-						xml_hdos.onreadystatechange = () => {
-							if (xml_hdos.readyState == 4) {
-								if (xml_hdos.status == 200) {
-									launch(latest_version, xml_hdos.response);
+						const xmlHdos = new XMLHttpRequest();
+						xmlHdos.open('GET', jarUrl, true);
+						xmlHdos.responseType = 'arraybuffer';
+						xmlHdos.onreadystatechange = () => {
+							if (xmlHdos.readyState == 4) {
+								if (xmlHdos.status == 200) {
+									launch(latestVersion, xmlHdos.response);
 								} else {
 									const runelite = JSON.parse(xml.responseText)
 										.map((x: Record<string, string>) => x.assets)
 										.flat()
-										.find((x: Record<string, string>) => x.name.toLowerCase() == 'runelite.jar');
+										.find(
+											(x: Record<string, string>) =>
+												x.name.toLowerCase() == 'runelite.jar'
+										);
 									err(
-										`Error downloading from ${runelite.url}: ${xml_hdos.status}: ${xml_hdos.responseText}`,
+										`Error downloading from ${runelite.url}: ${xmlHdos.status}: ${xmlHdos.responseText}`,
 										false
 									);
 								}
 							}
 						};
-						xml_hdos.onprogress = (e) => {
+						xmlHdos.onprogress = (e) => {
 							if (e.loaded && e.lengthComputable) {
-								message_list.update((data) => {
+								messageList.update((data) => {
 									data[0] = {
-										is_error: false,
+										isError: false,
 										text: `Downloading HDOS... ${(Math.round((1000.0 * e.loaded) / e.total) / 10.0).toFixed(1)}%`
 									};
 									return data;
 								});
 							}
 						};
-						xml_hdos.send();
+						xmlHdos.send();
 					} else {
 						msg('Latest JAR is already installed');
 						launch();
@@ -760,22 +763,22 @@ export function launchHdos(
 }
 
 // sends an asynchronous request to save the current user config to disk, if it has changed
-let save_config_in_progess: boolean = false;
+let saveConfigInProgress: boolean = false;
 export function saveConfig() {
-	if (get(is_config_dirty) && !save_config_in_progess) {
-		save_config_in_progess = true;
+	if (get(isConfigDirty) && !saveConfigInProgress) {
+		saveConfigInProgress = true;
 		const xml = new XMLHttpRequest();
 		xml.open('POST', '/save-config', true);
 		xml.onreadystatechange = () => {
 			if (xml.readyState == 4) {
 				msg(`Save config status: '${xml.responseText.trim()}'`);
 				if (xml.status == 200) {
-					is_config_dirty.set(false);
+					isConfigDirty.set(false);
 				}
-				save_config_in_progess = false;
+				saveConfigInProgress = false;
 			}
 		};
 		xml.setRequestHeader('Content-Type', 'application/json');
-		xml.send(JSON.stringify(config_sub, null, 4));
+		xml.send(JSON.stringify(configSub, null, 4));
 	}
 }

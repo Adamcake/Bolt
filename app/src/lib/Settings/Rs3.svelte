@@ -1,37 +1,37 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { bolt, config, is_config_dirty } from '../../store';
+	import { bolt, config, isConfigDirty } from '../../store';
 
-	let config_uri_div: HTMLDivElement;
-	let config_uri_address: HTMLTextAreaElement;
-	let use_uri: HTMLInputElement;
+	let configUriDiv: HTMLDivElement;
+	let configUriAddress: HTMLTextAreaElement;
+	let useUri: HTMLInputElement;
 
 	// enables the ability to use a custom uri
 	// decided by config load as well
-	function toggle_uri_div(): void {
-		config_uri_div.classList.toggle('opacity-25');
-		config_uri_address.disabled = !config_uri_address.disabled;
-		$is_config_dirty = true;
+	function toggleUriDiv(): void {
+		configUriDiv.classList.toggle('opacity-25');
+		configUriAddress.disabled = !configUriAddress.disabled;
+		$isConfigDirty = true;
 
-		if (!use_uri.checked) {
-			config_uri_address.value = atob($bolt.default_config_uri);
+		if (!useUri.checked) {
+			configUriAddress.value = atob($bolt.default_config_uri);
 			$config.rs_config_uri = '';
 		}
 	}
 
-	function uri_address_changed(): void {
-		$config.rs_config_uri = config_uri_address.value;
-		$is_config_dirty = true;
+	function uriAddressChanged(): void {
+		$config.rs_config_uri = configUriAddress.value;
+		$isConfigDirty = true;
 	}
 
 	// loads configs for menu
 	onMount(() => {
 		if ($config.rs_config_uri) {
-			config_uri_address.value = $config.rs_config_uri;
-			use_uri.checked = true;
-			toggle_uri_div();
+			configUriAddress.value = $config.rs_config_uri;
+			useUri.checked = true;
+			toggleUriDiv();
 		} else {
-			config_uri_address.value = atob($bolt.default_config_uri);
+			configUriAddress.value = atob($bolt.default_config_uri);
 		}
 	});
 </script>
@@ -43,22 +43,22 @@
 			type="checkbox"
 			name="use_custom_uri"
 			id="use_custom_uri"
-			bind:this={use_uri}
+			bind:this={useUri}
 			on:change={() => {
-				toggle_uri_div();
+				toggleUriDiv();
 			}}
 			class="ml-2" />
 	</div>
-	<div id="config_uri_div" class="mx-auto p-2 opacity-25" bind:this={config_uri_div}>
+	<div id="config_uri_div" class="mx-auto p-2 opacity-25" bind:this={configUriDiv}>
 		<textarea
 			disabled
 			name="config_uri_address"
 			id="config_uri_address"
 			rows="4"
 			on:change={() => {
-				uri_address_changed();
+				uriAddressChanged();
 			}}
-			bind:this={config_uri_address}
+			bind:this={configUriAddress}
 			class="rounded border-2 border-slate-300 bg-slate-100 text-slate-950 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50">
 		</textarea>
 	</div>

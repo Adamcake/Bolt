@@ -3,80 +3,80 @@
 	import { launchHdos, launchRS3Linux, launchRuneLite } from '../functions';
 	import { Client, Game } from '../interfaces';
 	import { msg } from '../main';
-	import { config, is_config_dirty, selected_play } from '../store';
+	import { config, isConfigDirty, selectedPlay } from '../store';
 
-	let character_select: HTMLSelectElement;
-	let client_select: HTMLSelectElement;
+	let characterSelect: HTMLSelectElement;
+	let clientSelect: HTMLSelectElement;
 
 	// update selected_play store
-	export function character_changed(): void {
-		if (!$selected_play.account) return;
+	export function characterChanged(): void {
+		if (!$selectedPlay.account) return;
 
 		const key: string = <string>(
-			character_select[character_select.selectedIndex].getAttribute('data-id')
+			characterSelect[characterSelect.selectedIndex].getAttribute('data-id')
 		);
-		$selected_play.character = $selected_play.account.characters.get(key);
+		$selectedPlay.character = $selectedPlay.account.characters.get(key);
 	}
 
 	// update selected_play
-	function client_changed(): void {
-		if (client_select.value == 'RuneLite') {
-			$selected_play.client = Client.RuneLite;
-			$config.selected_client_index = Client.RuneLite;
-		} else if (client_select.value == 'HDOS') {
-			$selected_play.client = Client.HDOS;
-			$config.selected_client_index = Client.HDOS;
-		} else if (client_select.value == 'RS3') {
-			$selected_play.client = Client.RS3;
+	function clientChanged(): void {
+		if (clientSelect.value == 'RuneLite') {
+			$selectedPlay.client = Client.runeLite;
+			$config.selected_client_index = Client.runeLite;
+		} else if (clientSelect.value == 'HDOS') {
+			$selectedPlay.client = Client.hdos;
+			$config.selected_client_index = Client.hdos;
+		} else if (clientSelect.value == 'RS3') {
+			$selectedPlay.client = Client.rs3;
 		}
-		$is_config_dirty = true;
+		$isConfigDirty = true;
 	}
 
 	// when play is clicked, check the selected_play store for all relevant details
 	// calls the appropriate launch functions
 	function play_clicked(): void {
-		if (!$selected_play.account || !$selected_play.character) {
+		if (!$selectedPlay.account || !$selectedPlay.character) {
 			msg('Please log in to launch a client');
 			return;
 		}
-		switch ($selected_play.game) {
-			case Game.OSRS:
-				if ($selected_play.client == Client.RuneLite) {
+		switch ($selectedPlay.game) {
+			case Game.osrs:
+				if ($selectedPlay.client == Client.runeLite) {
 					launchRuneLite(
-						<string>$selected_play.credentials?.access_token,
-						<string>$selected_play.credentials?.refresh_token,
-						<string>$selected_play.credentials?.session_id,
-						<string>$selected_play.character?.accountId,
-						<string>$selected_play.character?.displayName
+						<string>$selectedPlay.credentials?.access_token,
+						<string>$selectedPlay.credentials?.refresh_token,
+						<string>$selectedPlay.credentials?.session_id,
+						<string>$selectedPlay.character?.accountId,
+						<string>$selectedPlay.character?.displayName
 					);
-				} else if ($selected_play.client == Client.HDOS) {
+				} else if ($selectedPlay.client == Client.hdos) {
 					launchHdos(
-						<string>$selected_play.credentials?.access_token,
-						<string>$selected_play.credentials?.refresh_token,
-						<string>$selected_play.credentials?.session_id,
-						<string>$selected_play.character?.accountId,
-						<string>$selected_play.character?.displayName
+						<string>$selectedPlay.credentials?.access_token,
+						<string>$selectedPlay.credentials?.refresh_token,
+						<string>$selectedPlay.credentials?.session_id,
+						<string>$selectedPlay.character?.accountId,
+						<string>$selectedPlay.character?.displayName
 					);
 				}
 				break;
-			case Game.RS3:
+			case Game.rs3:
 				launchRS3Linux(
-					<string>$selected_play.credentials?.access_token,
-					<string>$selected_play.credentials?.refresh_token,
-					<string>$selected_play.credentials?.session_id,
-					<string>$selected_play.character?.accountId,
-					<string>$selected_play.character?.displayName
+					<string>$selectedPlay.credentials?.access_token,
+					<string>$selectedPlay.credentials?.refresh_token,
+					<string>$selectedPlay.credentials?.session_id,
+					<string>$selectedPlay.character?.accountId,
+					<string>$selectedPlay.character?.displayName
 				);
 				break;
 		}
 	}
 
 	onMount(() => {
-		if ($config.selected_game_index == Game.OSRS) {
-			client_select.selectedIndex = <number>$config.selected_client_index;
-			$selected_play.client = client_select.selectedIndex;
+		if ($config.selected_game_index == Game.osrs) {
+			clientSelect.selectedIndex = <number>$config.selected_client_index;
+			$selectedPlay.client = clientSelect.selectedIndex;
 		} else {
-			$selected_play.client = Client.RS3;
+			$selectedPlay.client = Client.rs3;
 		}
 	});
 </script>
@@ -99,14 +99,14 @@
 		<select
 			id="game_client_select"
 			class="mx-auto w-52 cursor-pointer rounded-lg border-2 border-slate-300 bg-inherit p-2 text-inherit duration-200 hover:opacity-75 dark:border-slate-800"
-			bind:this={client_select}
+			bind:this={clientSelect}
 			on:change={() => {
-				client_changed();
+				clientChanged();
 			}}>
-			{#if $selected_play.game == Game.OSRS}
+			{#if $selectedPlay.game == Game.osrs}
 				<option class="dark:bg-slate-900">RuneLite</option>
 				<option class="dark:bg-slate-900">HDOS</option>
-			{:else if $selected_play.game == Game.RS3}
+			{:else if $selectedPlay.game == Game.rs3}
 				<option class="dark:bg-slate-900">RS3</option>
 			{/if}
 		</select>
@@ -117,10 +117,10 @@
 		<select
 			id="character_select"
 			class="mx-auto w-52 cursor-pointer rounded-lg border-2 border-slate-300 bg-inherit p-2 text-inherit duration-200 hover:opacity-75 dark:border-slate-800"
-			bind:this={character_select}
-			on:change={() => character_changed()}>
-			{#if $selected_play.account}
-				{#each $selected_play.account.characters as character}
+			bind:this={characterSelect}
+			on:change={() => characterChanged()}>
+			{#if $selectedPlay.account}
+				{#each $selectedPlay.account.characters as character}
 					<option data-id={character[1].accountId} class="dark:bg-slate-900">
 						{character[1].displayName}
 					</option>

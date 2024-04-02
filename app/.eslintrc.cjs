@@ -32,5 +32,5 @@ module.exports = {
 	// rules: {
 	// 	'@typescript-eslint/naming-convention': 'error'
 	// },
-	ignorePatterns: ['dist/']
+	ignorePatterns: ['dist/', '*.cjs']
 };

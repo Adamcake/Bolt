@@ -1,18 +1,18 @@
 import './assets/output.css';
 import App from './App.svelte';
 import {
-	message_list,
+	messageList,
 	config,
 	platform,
-	internal_url,
+	internalUrl,
 	credentials,
-	is_config_dirty,
-	pending_oauth,
-	pending_game_auth,
+	isConfigDirty,
+	pendingOauth,
+	pendingGameAuth,
 	bolt,
-	account_list,
-	selected_play,
-	show_disclaimer
+	accountList,
+	selectedPlay,
+	showDisclaimer
 } from './store';
 import { get, type Unsubscriber } from 'svelte/store';
 import {
@@ -21,7 +21,7 @@ import {
 	saveAllCreds,
 	handleNewSessionId,
 	checkRenewCreds,
-	load_theme,
+	loadTheme as loadTheme,
 	saveConfig,
 	removePendingGameAuth
 } from './functions';
@@ -37,60 +37,60 @@ export default app;
 // store access, subscribers, and unsubscribers array
 const unsubscribers: Array<Unsubscriber> = [];
 
-const internal_url_sub = get(internal_url);
+const internalUrlSub = get(internalUrl);
 
-export let bolt_sub: Bolt;
-unsubscribers.push(bolt.subscribe((data) => (bolt_sub = data)));
-export let config_sub: Config;
-unsubscribers.push(config.subscribe((data) => (config_sub = data)));
-export let platform_sub: string;
-unsubscribers.push(platform.subscribe((data) => (platform_sub = data as string)));
-export let credentials_sub: Map<string, Credentials>;
-unsubscribers.push(credentials.subscribe((data) => (credentials_sub = data)));
-export let pending_oauth_sub: Auth;
-unsubscribers.push(pending_oauth.subscribe((data) => (pending_oauth_sub = <Auth>data)));
-export let pending_game_auth_sub: Array<Auth>;
-unsubscribers.push(pending_game_auth.subscribe((data) => (pending_game_auth_sub = data)));
-export let message_list_sub: Array<Message>;
-unsubscribers.push(message_list.subscribe((data) => (message_list_sub = data)));
-export let account_list_sub: Map<string, Account>;
-unsubscribers.push(account_list.subscribe((data) => (account_list_sub = data)));
-export let selected_play_sub: SelectedPlay;
-unsubscribers.push(selected_play.subscribe((data) => (selected_play_sub = data)));
+export let boltSub: Bolt;
+unsubscribers.push(bolt.subscribe((data) => (boltSub = data)));
+export let configSub: Config;
+unsubscribers.push(config.subscribe((data) => (configSub = data)));
+export let platformSub: string;
+unsubscribers.push(platform.subscribe((data) => (platformSub = data as string)));
+export let credentialsSub: Map<string, Credentials>;
+unsubscribers.push(credentials.subscribe((data) => (credentialsSub = data)));
+export let pendingOauthSub: Auth;
+unsubscribers.push(pendingOauth.subscribe((data) => (pendingOauthSub = <Auth>data)));
+export let pendingGameAuthSub: Array<Auth>;
+unsubscribers.push(pendingGameAuth.subscribe((data) => (pendingGameAuthSub = data)));
+export let messageListSub: Array<Message>;
+unsubscribers.push(messageList.subscribe((data) => (messageListSub = data)));
+export let accountListSub: Map<string, Account>;
+unsubscribers.push(accountList.subscribe((data) => (accountListSub = data)));
+export let selectedPlaySub: SelectedPlay;
+unsubscribers.push(selectedPlay.subscribe((data) => (selectedPlaySub = data)));
 
 // variables
-export let credentials_are_dirty: boolean = false;
+export let credentialsAreDirty: boolean = false;
 
 // body's onload function
 function start(): void {
-	const s_origin = atob(bolt_sub.origin);
-	const client_id = atob(bolt_sub.clientid);
-	const exchange_url = s_origin.concat('/oauth2/token');
+	const sOrigin = atob(boltSub.origin);
+	const clientId = atob(boltSub.clientid);
+	const exchangeUrl = sOrigin.concat('/oauth2/token');
 
-	if (credentials_sub.size == 0) {
-		show_disclaimer.set(true);
+	if (credentialsSub.size == 0) {
+		showDisclaimer.set(true);
 	}
 
-	load_theme();
+	loadTheme();
 
-	const allowed_origins = [internal_url_sub, s_origin, atob(bolt_sub.origin_2fa)];
+	const allowedOrigins = [internalUrlSub, sOrigin, atob(boltSub.origin_2fa)];
 	window.addEventListener('message', (event: MessageEvent) => {
-		if (!allowed_origins.includes(event.origin)) {
+		if (!allowedOrigins.includes(event.origin)) {
 			msg(`discarding window message from origin ${event.origin}`);
 			return;
 		}
-		let pending: Auth | undefined = pending_oauth_sub;
+		let pending: Auth | undefined = pendingOauthSub;
 		const xml = new XMLHttpRequest();
 		switch (event.data.type) {
 			case 'authCode':
 				if (pending) {
-					pending_oauth.set({});
+					pendingOauth.set({});
 					const post_data = new URLSearchParams({
 						grant_type: 'authorization_code',
-						client_id: atob(bolt_sub.clientid),
+						client_id: atob(boltSub.clientid),
 						code: event.data.code,
 						code_verifier: <string>pending.verifier,
-						redirect_uri: atob(bolt_sub.redirect)
+						redirect_uri: atob(boltSub.redirect)
 					});
 					xml.onreadystatechange = () => {
 						if (xml.readyState == 4) {
@@ -104,7 +104,7 @@ function start(): void {
 												data.set(creds.sub, creds);
 												return data;
 											});
-											credentials_are_dirty = true;
+											credentialsAreDirty = true;
 											saveAllCreds();
 										}
 									});
@@ -114,14 +114,14 @@ function start(): void {
 								}
 							} else {
 								err(
-									`Error: from ${exchange_url}: ${xml.status}: ${xml.response}`,
+									`Error: from ${exchangeUrl}: ${xml.status}: ${xml.response}`,
 									false
 								);
 								pending!.win!.close();
 							}
 						}
 					};
-					xml.open('POST', exchange_url, true);
+					xml.open('POST', exchangeUrl, true);
 					xml.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
 					xml.setRequestHeader('Accept', 'application/json');
 					xml.send(post_data);
@@ -140,7 +140,7 @@ function start(): void {
 				xml.send(event.data.url);
 				break;
 			case 'gameSessionServerAuth':
-				pending = pending_game_auth_sub.find((x: Auth) => {
+				pending = pendingGameAuthSub.find((x: Auth) => {
 					return event.data.state == x.state;
 				});
 				if (pending) {
@@ -160,15 +160,15 @@ function start(): void {
 						err('Incorrect nonce in id_token', false);
 						break;
 					}
-					const sessions_url = atob(bolt_sub.auth_api).concat('/sessions');
+					const sessionsUrl = atob(boltSub.auth_api).concat('/sessions');
 					xml.onreadystatechange = () => {
 						if (xml.readyState == 4) {
 							if (xml.status == 200) {
-								const accounts_url = atob(bolt_sub.auth_api).concat('/accounts');
+								const accountsUrl = atob(boltSub.auth_api).concat('/accounts');
 								pending!.creds!.session_id = JSON.parse(xml.response).sessionId;
 								handleNewSessionId(
 									<Credentials>pending!.creds,
-									accounts_url,
+									accountsUrl,
 									<Promise<Account>>pending!.account_info_promise
 								).then((x) => {
 									if (x) {
@@ -179,19 +179,19 @@ function start(): void {
 											);
 											return data;
 										});
-										credentials_are_dirty = true;
+										credentialsAreDirty = true;
 										saveAllCreds();
 									}
 								});
 							} else {
 								err(
-									`Error: from ${sessions_url}: ${xml.status}: ${xml.response}`,
+									`Error: from ${sessionsUrl}: ${xml.status}: ${xml.response}`,
 									false
 								);
 							}
 						}
 					};
-					xml.open('POST', sessions_url, true);
+					xml.open('POST', sessionsUrl, true);
 					xml.setRequestHeader('Content-Type', 'application/json');
 					xml.setRequestHeader('Accept', 'application/json');
 					xml.send(`{"idToken": "${event.data.id_token}"}`);
@@ -204,18 +204,18 @@ function start(): void {
 	});
 
 	(async () => {
-		if (credentials_sub.size > 0) {
-			const old_credentials_size = credentials_sub.size;
+		if (credentialsSub.size > 0) {
+			const oldCredentialsSize = credentialsSub.size;
 			const promises: Array<Record<string, Credentials | boolean>> = [];
-			credentials_sub.forEach(async (value) => {
-				const result = await checkRenewCreds(value, exchange_url, client_id);
+			credentialsSub.forEach(async (value) => {
+				const result = await checkRenewCreds(value, exchangeUrl, clientId);
 				if (result !== null && result !== 0) {
 					err(`Discarding expired login for #${value.sub}`, false);
 					credentials.update((data) => {
 						data.delete(value.sub);
 						return data;
 					});
-					credentials_are_dirty = true;
+					credentialsAreDirty = true;
 					saveAllCreds();
 				}
 				if (result === null && (await handleLogin(null, value))) {
@@ -225,18 +225,18 @@ function start(): void {
 				}
 			});
 			const responses = await Promise.all(promises);
-			const valid_creds = responses.filter((x) => x.valid).map((x) => x.creds);
-			valid_creds.forEach((value) => {
+			const validCreds = responses.filter((x) => x.valid).map((x) => x.creds);
+			validCreds.forEach((value) => {
 				const creds = <Credentials>value;
 				credentials.update((data) => {
 					data.set(creds.sub, creds);
 					return data;
 				});
 			});
-			credentials_are_dirty = credentials_sub.size != old_credentials_size;
+			credentialsAreDirty = credentialsSub.size != oldCredentialsSize;
 			saveAllCreds();
 		}
-		is_config_dirty.set(false); // overrides all cases where this gets set to "true" due to loading existing config values
+		isConfigDirty.set(false); // overrides all cases where this gets set to "true" due to loading existing config values
 	})();
 }
 
@@ -244,11 +244,11 @@ function start(): void {
 export function msg(str: string) {
 	console.log(str);
 	const message: Message = {
-		is_error: false,
+		isError: false,
 		text: str,
 		time: new Date(Date.now())
 	};
-	message_list.update((list: Array<Message>) => {
+	messageList.update((list: Array<Message>) => {
 		list.unshift(message);
 		return list;
 	});
@@ -256,18 +256,18 @@ export function msg(str: string) {
 
 // adds an error message to the message list
 // if do_throw is true, throws the error message
-export function err(str: string, do_throw: boolean) {
+export function err(str: string, doThrow: boolean) {
 	const message: Message = {
-		is_error: true,
+		isError: true,
 		text: str,
 		time: new Date(Date.now())
 	};
-	message_list.update((list: Array<Message>) => {
+	messageList.update((list: Array<Message>) => {
 		list.unshift(message);
 		return list;
 	});
 
-	if (!do_throw) {
+	if (!doThrow) {
 		console.error(str);
 	} else {
 		throw new Error(str);

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { message_list } from '../store';
+	import { messageList } from '../store';
 </script>
 
 <div
@@ -13,8 +13,8 @@
 	<ol
 		id="message_list"
 		class="h-full w-[105%] list-inside list-disc overflow-y-auto pl-5 pt-1 marker:text-blue-500">
-		{#each $message_list as message}
-			{#if message.is_error}
+		{#each $messageList as message}
+			{#if message.isError}
 				<li class="text-rose-500">
 					{message.time?.getHours()}:{message.time?.getMinutes()}:{message.time?.getSeconds()}
 					- {message.text}

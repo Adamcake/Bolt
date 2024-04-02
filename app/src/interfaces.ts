@@ -20,21 +20,21 @@ export function unwrap<T, E = Error>(result: Result<T, E>): T {
 
 // game enum
 export enum Game {
-	RS3,
-	OSRS
+	rs3,
+	osrs
 }
 
 // client enum, maybe this list will grow as clients are added
 export enum Client {
-	RuneLite,
-	HDOS,
-	RS3
+	runeLite,
+	hdos,
+	rs3
 }
 
 // messge object
 export interface Message {
 	text: string;
-	is_error: boolean;
+	isError: boolean;
 	time?: Date;
 }
 
@@ -68,7 +68,7 @@ export interface Config {
 }
 
 // if no config is loaded, these defaults are set to ensure the app runs
-export const config_defaults: Pick<
+export const configDefaults: Pick<
 	Config,
 	| 'use_dark_theme'
 	| 'flatpak_rich_presence'

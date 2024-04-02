@@ -1,12 +1,12 @@
 <script lang="ts">
 	import Backdrop from './Backdrop.svelte';
-	import { show_disclaimer } from '../store';
+	import { showDisclaimer } from '../store';
 
 	// atob encodings created from btoa; for disclaimer text
-	const first_text: string = atob(
+	const firstText: string = atob(
 		'Qm9sdCBpcyBhbiB1bm9mZmljaWFsIHRoaXJkLXBhcnR5IGxhdW5jaGVyLiBJdCdzIGZyZWUgYW5kIG9wZW4tc291cmNlIHNvZnR3YXJlIGxpY2Vuc2VkIHVuZGVyIEFHUEwgMy4wLg=='
 	);
-	const second_text: string = atob(
+	const secondText: string = atob(
 		'SmFnZXggaXMgbm90IHJlc3BvbnNpYmxlIGZvciBhbnkgcHJvYmxlbXMgb3IgZGFtYWdlIGNhdXNlZCBieSB1c2luZyB0aGlzIHByb2R1Y3Qu'
 	);
 </script>
@@ -16,15 +16,15 @@
 	<div
 		class="absolute left-1/4 top-1/4 z-20 w-1/2 rounded-lg bg-slate-100 p-5 text-center shadow-lg dark:bg-slate-900">
 		<p class="p-2">
-			{first_text}
+			{firstText}
 		</p>
 		<p class="p-2">
-			{second_text}
+			{secondText}
 		</p>
 		<button
 			class="m-5 rounded-lg border-2 border-blue-500 p-2 duration-200 hover:opacity-75"
 			on:click={() => {
-				$show_disclaimer = false;
+				$showDisclaimer = false;
 			}}>I Understand</button>
 	</div>
 </div>

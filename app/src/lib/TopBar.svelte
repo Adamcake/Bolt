@@ -2,17 +2,17 @@
 	import { onMount } from 'svelte';
 	import { loginClicked } from '../functions';
 	import { Client, Game } from '../interfaces';
-	import { config, is_config_dirty, selected_play } from '../store';
+	import { config, isConfigDirty, selectedPlay } from '../store';
 	import Account from './Account.svelte';
 
 	// prop
-	export let show_settings: boolean;
+	export let showSettings: boolean;
 
-	let show_account_dropdown: boolean = false;
-	let hover_account_button: boolean = false;
-	let rs3_button: HTMLButtonElement;
-	let osrs_button: HTMLButtonElement;
-	let account_button: HTMLButtonElement;
+	let showAccountDropdown: boolean = false;
+	let hoverAccountButton: boolean = false;
+	let rs3Button: HTMLButtonElement;
+	let osrsButton: HTMLButtonElement;
+	let accountButton: HTMLButtonElement;
 
 	// tailwind can easily change theme by adding or removing 'dark' to the root 'html' element
 	function change_theme(): void {
@@ -20,28 +20,28 @@
 		if (html.classList.contains('dark')) html.classList.remove('dark');
 		else html.classList.add('dark');
 		$config.use_dark_theme = !$config.use_dark_theme;
-		$is_config_dirty = true;
+		$isConfigDirty = true;
 	}
 
 	// swaps game visually, will effect all relevant selects
 	function toggle_game(game: Game): void {
 		switch (game) {
-			case Game.OSRS:
-				$selected_play.game = Game.OSRS;
-				$selected_play.client = Client.RuneLite;
-				$config.selected_game_index = Game.OSRS;
-				$config.selected_client_index = Client.RuneLite;
-				$is_config_dirty = true;
-				osrs_button.classList.add('bg-blue-500', 'text-black');
-				rs3_button.classList.remove('bg-blue-500', 'text-black');
+			case Game.osrs:
+				$selectedPlay.game = Game.osrs;
+				$selectedPlay.client = Client.runeLite;
+				$config.selected_game_index = Game.osrs;
+				$config.selected_client_index = Client.runeLite;
+				$isConfigDirty = true;
+				osrsButton.classList.add('bg-blue-500', 'text-black');
+				rs3Button.classList.remove('bg-blue-500', 'text-black');
 				break;
-			case Game.RS3:
-				$selected_play.game = Game.RS3;
-				$config.selected_game_index = Game.RS3;
-				$config.selected_client_index = Client.RS3;
-				$is_config_dirty = true;
-				osrs_button.classList.remove('bg-blue-500', 'text-black');
-				rs3_button.classList.add('bg-blue-500', 'text-black');
+			case Game.rs3:
+				$selectedPlay.game = Game.rs3;
+				$config.selected_game_index = Game.rs3;
+				$config.selected_client_index = Client.rs3;
+				$isConfigDirty = true;
+				osrsButton.classList.remove('bg-blue-500', 'text-black');
+				rs3Button.classList.add('bg-blue-500', 'text-black');
 				break;
 		}
 	}
@@ -49,11 +49,11 @@
 	// if no account is signed in, open the Jagex login
 	// else, toggle the account dropdown
 	function toggle_account(): void {
-		if (account_button.innerHTML == 'Log In') {
+		if (accountButton.innerHTML == 'Log In') {
 			loginClicked();
 			return;
 		}
-		show_account_dropdown = !show_account_dropdown;
+		showAccountDropdown = !showAccountDropdown;
 	}
 
 	onMount(() => {
@@ -66,17 +66,17 @@
 	<div class="m-3 ml-9 font-bold">
 		<button
 			class="mx-1 w-20 rounded-lg border-2 border-blue-500 p-2 duration-200 hover:opacity-75"
-			bind:this={rs3_button}
+			bind:this={rs3Button}
 			on:click={() => {
-				toggle_game(Game.RS3);
+				toggle_game(Game.rs3);
 			}}>
 			RS3
 		</button>
 		<button
 			class="mx-1 w-20 rounded-lg border-2 border-blue-500 bg-blue-500 p-2 text-black duration-200 hover:opacity-75"
-			bind:this={osrs_button}
+			bind:this={osrsButton}
 			on:click={() => {
-				toggle_game(Game.OSRS);
+				toggle_game(Game.osrs);
 			}}>
 			OSRS
 		</button>
@@ -90,31 +90,31 @@
 		<button
 			class="m-3 h-10 w-10 rounded-full bg-blue-500 p-2 duration-200 hover:rotate-45 hover:opacity-75"
 			on:click={() => {
-				show_settings = true;
+				showSettings = true;
 			}}>
 			<img src="svgs/gear-solid.svg" class="h-6 w-6" alt="Settings" />
 		</button>
 		<button
 			class="m-2 w-48 rounded-lg border-2 border-slate-300 bg-inherit p-2 text-center font-bold text-black duration-200 hover:opacity-75 dark:border-slate-800 dark:text-slate-50"
-			bind:this={account_button}
+			bind:this={accountButton}
 			on:mouseenter={() => {
-				hover_account_button = true;
+				hoverAccountButton = true;
 			}}
 			on:mouseleave={() => {
-				hover_account_button = false;
+				hoverAccountButton = false;
 			}}
 			on:click={() => toggle_account()}>
-			{#if $selected_play.account}
-				{$selected_play.account?.displayName}
+			{#if $selectedPlay.account}
+				{$selectedPlay.account?.displayName}
 			{:else}
 				Log In
 			{/if}
 		</button>
 	</div>
 
-	{#if show_account_dropdown}
+	{#if showAccountDropdown}
 		<div class="absolute right-2 top-[72px]">
-			<Account bind:show_account_dropdown {hover_account_button}></Account>
+			<Account bind:showAccountDropdown {hoverAccountButton}></Account>
 		</div>
 	{/if}
 </div>

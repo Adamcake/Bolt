@@ -5,13 +5,13 @@
 	import Messages from './lib/Messages.svelte';
 	import Launch from './lib/Launch.svelte';
 	import Auth from './lib/Auth.svelte';
-	import { url_search_params } from './functions';
-	import { show_disclaimer } from './store';
+	import { urlSearchParams } from './functions';
+	import { showDisclaimer } from './store';
 
-	let show_settings: boolean = false;
+	let showSettings: boolean = false;
 	let authorizing: boolean = false;
 
-	url_search_params();
+	urlSearchParams();
 
 	// called from cxx code in the url, to send message from auth window to main window
 	const parentWindow = window.opener || window.parent;
@@ -47,13 +47,13 @@
 	{#if authorizing}
 		<Auth></Auth>
 	{:else}
-		{#if $show_disclaimer}
+		{#if $showDisclaimer}
 			<Disclaimer></Disclaimer>
 		{/if}
-		{#if show_settings}
-			<Settings bind:show_settings></Settings>
+		{#if showSettings}
+			<Settings bind:showSettings></Settings>
 		{/if}
-		<TopBar bind:show_settings></TopBar>
+		<TopBar bind:showSettings></TopBar>
 		<div class="mt-16 grid h-full grid-flow-col grid-cols-3">
 			<div></div>
 			<Launch></Launch>
