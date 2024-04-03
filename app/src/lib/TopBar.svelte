@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { loginClicked } from '../functions';
-	import { Client, Game } from '../interfaces';
+	import { Game } from '../interfaces';
 	import { config, isConfigDirty, selectedPlay } from '../store';
 	import Account from './Account.svelte';
 
@@ -28,9 +28,8 @@
 		switch (game) {
 			case Game.osrs:
 				$selectedPlay.game = Game.osrs;
-				$selectedPlay.client = Client.runeLite;
+				$selectedPlay.client = $config.selected_client_index;
 				$config.selected_game_index = Game.osrs;
-				$config.selected_client_index = Client.runeLite;
 				$isConfigDirty = true;
 				osrsButton.classList.add('bg-blue-500', 'text-black');
 				rs3Button.classList.remove('bg-blue-500', 'text-black');
@@ -38,7 +37,6 @@
 			case Game.rs3:
 				$selectedPlay.game = Game.rs3;
 				$config.selected_game_index = Game.rs3;
-				$config.selected_client_index = Client.rs3;
 				$isConfigDirty = true;
 				osrsButton.classList.remove('bg-blue-500', 'text-black');
 				rs3Button.classList.add('bg-blue-500', 'text-black');

@@ -63,6 +63,7 @@ export interface Config {
 	runelite_custom_jar?: string;
 	selected_account?: string;
 	selected_characters?: Map<string, string>; // account userId, then character accountId
+	selected_game_accounts?: Map<string, string>; // legacy version of selected_characters
 	selected_game_index?: number;
 	selected_client_index?: number;
 }
@@ -77,6 +78,7 @@ export const configDefaults: Pick<
 	| 'runelite_use_custom_jar'
 	| 'selected_account'
 	| 'selected_characters'
+	| 'selected_game_accounts'
 	| 'selected_game_index'
 	| 'selected_client_index'
 > = {
@@ -87,6 +89,7 @@ export const configDefaults: Pick<
 	runelite_use_custom_jar: false,
 	selected_account: '',
 	selected_characters: new Map(),
+	selected_game_accounts: new Map(),
 	selected_game_index: 1,
 	selected_client_index: 1
 };

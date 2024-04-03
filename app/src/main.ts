@@ -73,6 +73,15 @@ function start(): void {
 
 	loadTheme();
 
+	// support legacy config name, selected_game_accounts; load it into the new one
+	if (configSub.selected_game_accounts && configSub.selected_game_accounts?.size > 0) {
+		config.update((data) => {
+			data.selected_characters = data.selected_game_accounts;
+			data.selected_game_accounts?.clear();
+			return data;
+		});
+	}
+
 	const allowedOrigins = [internalUrlSub, sOrigin, atob(boltSub.origin_2fa)];
 	window.addEventListener('message', (event: MessageEvent) => {
 		if (!allowedOrigins.includes(event.origin)) {

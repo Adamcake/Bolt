@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { afterUpdate, onMount } from 'svelte';
 	import { launchHdos, launchRS3Linux, launchRuneLite } from '../functions';
 	import { Client, Game } from '../interfaces';
 	import { msg } from '../main';
@@ -16,6 +16,12 @@
 			characterSelect[characterSelect.selectedIndex].getAttribute('data-id')
 		);
 		$selectedPlay.character = $selectedPlay.account.characters.get(key);
+		if ($selectedPlay.character) {
+			$config.selected_characters?.set(
+				$selectedPlay.account.userId,
+				$selectedPlay.character?.accountId
+			);
+		}
 	}
 
 	// update selected_play
@@ -26,8 +32,6 @@
 		} else if (clientSelect.value == 'HDOS') {
 			$selectedPlay.client = Client.hdos;
 			$config.selected_client_index = Client.hdos;
-		} else if (clientSelect.value == 'RS3') {
-			$selectedPlay.client = Client.rs3;
 		}
 		$isConfigDirty = true;
 	}
@@ -71,12 +75,29 @@
 		}
 	}
 
+	afterUpdate(() => {
+		if ($selectedPlay.game == Game.osrs && $selectedPlay.client) {
+			clientSelect.selectedIndex = $selectedPlay.client;
+		}
+		if (
+			$selectedPlay.account &&
+			$config.selected_characters?.has($selectedPlay.account.userId)
+		) {
+			for (let i = 0; i < characterSelect.options.length; i++) {
+				if (
+					characterSelect[i].getAttribute('data-id') ==
+					$config.selected_characters.get($selectedPlay.account.userId)
+				) {
+					characterSelect.selectedIndex = i;
+				}
+			}
+		}
+	});
+
 	onMount(() => {
 		if ($config.selected_game_index == Game.osrs) {
 			clientSelect.selectedIndex = <number>$config.selected_client_index;
 			$selectedPlay.client = clientSelect.selectedIndex;
-		} else {
-			$selectedPlay.client = Client.rs3;
 		}
 	});
 </script>
@@ -104,10 +125,10 @@
 				clientChanged();
 			}}>
 			{#if $selectedPlay.game == Game.osrs}
-				<option class="dark:bg-slate-900">RuneLite</option>
-				<option class="dark:bg-slate-900">HDOS</option>
+				<option data-id={Client.runeLite} class="dark:bg-slate-900">RuneLite</option>
+				<option data-id={Client.hdos} class="dark:bg-slate-900">HDOS</option>
 			{:else if $selectedPlay.game == Game.rs3}
-				<option class="dark:bg-slate-900">RS3</option>
+				<option data-id={Client.rs3} class="dark:bg-slate-900">RS3</option>
 			{/if}
 		</select>
 	</div>
