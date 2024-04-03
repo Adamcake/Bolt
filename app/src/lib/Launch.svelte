@@ -22,6 +22,7 @@
 				$selectedPlay.character?.accountId
 			);
 		}
+		$isConfigDirty = true;
 	}
 
 	// update selected_play

@@ -112,7 +112,18 @@ export function urlSearchParams(): void {
 	if (conf) {
 		try {
 			// as above, no need to set configIsDirty
-			config.set(JSON.parse(conf));
+			const parsedConf = JSON.parse(conf);
+			config.set(parsedConf);
+			// convert parsed objects into Maps
+			config.update((data) => {
+				if (data.selected_game_accounts) {
+					data.selected_characters = new Map(Object.entries(data.selected_game_accounts));
+					delete data.selected_game_accounts;
+				} else if (data.selected_characters) {
+					data.selected_characters = new Map(Object.entries(data.selected_characters));
+				}
+				return data;
+			});
 		} catch (error: unknown) {
 			err(`Couldn't parse config file: ${error}`, false);
 		}
@@ -779,6 +790,18 @@ export function saveConfig() {
 			}
 		};
 		xml.setRequestHeader('Content-Type', 'application/json');
-		xml.send(JSON.stringify(configSub, null, 4));
+
+		// converting map into something that is compatible for JSON.stringify
+		// maybe the map should be converted into a Record<string, string>
+		// but this has other problems and implications
+		const characters: Record<string, string> = {};
+		configSub.selected_characters?.forEach((value, key) => {
+			characters[key] = value;
+		});
+		const object: Record<string, unknown> = {};
+		Object.assign(object, configSub);
+		object.selected_characters = characters;
+		const json = JSON.stringify(object, null, 4);
+		xml.send(json);
 	}
 }
