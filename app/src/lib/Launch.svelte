@@ -48,16 +48,12 @@
 			case Game.osrs:
 				if ($selectedPlay.client == Client.runeLite) {
 					launchRuneLite(
-						<string>$selectedPlay.credentials?.access_token,
-						<string>$selectedPlay.credentials?.refresh_token,
 						<string>$selectedPlay.credentials?.session_id,
 						<string>$selectedPlay.character?.accountId,
 						<string>$selectedPlay.character?.displayName
 					);
 				} else if ($selectedPlay.client == Client.hdos) {
 					launchHdos(
-						<string>$selectedPlay.credentials?.access_token,
-						<string>$selectedPlay.credentials?.refresh_token,
 						<string>$selectedPlay.credentials?.session_id,
 						<string>$selectedPlay.character?.accountId,
 						<string>$selectedPlay.character?.displayName
@@ -66,8 +62,6 @@
 				break;
 			case Game.rs3:
 				launchRS3Linux(
-					<string>$selectedPlay.credentials?.access_token,
-					<string>$selectedPlay.credentials?.refresh_token,
 					<string>$selectedPlay.credentials?.session_id,
 					<string>$selectedPlay.character?.accountId,
 					<string>$selectedPlay.character?.displayName
@@ -144,7 +138,11 @@
 			{#if $selectedPlay.account}
 				{#each $selectedPlay.account.characters as character}
 					<option data-id={character[1].accountId} class="dark:bg-slate-900">
-						{character[1].displayName}
+						{#if character[1].displayName}
+							{character[1].displayName}
+						{:else}
+							New Character
+						{/if}
 					</option>
 				{/each}
 			{/if}

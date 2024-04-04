@@ -385,17 +385,28 @@ function getStandardAccountInfo(creds: Credentials): Promise<Account | number> {
 
 // adds an account to the accounts_list store item
 export function addNewAccount(account: Account) {
+	const updateSelectedPlay = () => {
+		selectedPlay.update((data) => {
+			data.account = account;
+			const [firstKey] = account.characters.keys();
+			data.character = account.characters.get(firstKey);
+			if (credentialsSub.size > 0) data.credentials = credentialsSub.get(account.userId);
+			return data;
+		});
+	};
+
 	accountList.update((data) => {
 		data.set(account.userId, account);
 		return data;
 	});
-	selectedPlay.update((data) => {
-		data.account = account;
-		const [firstKey] = account.characters.keys();
-		data.character = account.characters.get(firstKey);
-		if (credentialsSub.size > 0) data.credentials = credentialsSub.get(account.userId);
-		return data;
-	});
+
+	if (selectedPlaySub.account && configSub.selected_account) {
+		if (account.userId == configSub.selected_account) {
+			updateSelectedPlay();
+		}
+	} else if (!selectedPlaySub.account) {
+		updateSelectedPlay();
+	}
 	pendingOauth.set({});
 }
 
@@ -443,8 +454,6 @@ export async function saveAllCreds() {
 
 // asynchronously download and launch RS3's official .deb client using the given env variables
 export function launchRS3Linux(
-	jx_access_token: string,
-	jx_refresh_token: string,
 	jx_session_id: string,
 	jx_character_id: string,
 	jx_display_name: string
@@ -455,10 +464,6 @@ export function launchRS3Linux(
 		const xml = new XMLHttpRequest();
 		const params: Record<string, string> = {};
 		if (hash) params.hash = <string>hash;
-		// if (jx_access_token) params.jx_access_token = jx_access_token; // setting these cause login to fail
-		// if (jx_refresh_token) params.jx_refresh_token = jx_refresh_token; // setting these cause login to fail
-		params.hash = '';
-		params.jx_refresh_token = '';
 		if (jx_session_id) params.jx_session_id = jx_session_id;
 		if (jx_character_id) params.jx_character_id = jx_character_id;
 		if (jx_display_name) params.jx_display_name = jx_display_name;
@@ -541,8 +546,6 @@ export function launchRS3Linux(
 // then attempt to launch it with the given env variables
 // last param indices whether --configure will be passed or not
 function launchRuneLiteInner(
-	jx_access_token: string,
-	jx_refresh_token: string,
 	jx_session_id: string,
 	jx_character_id: string,
 	jx_display_name: string,
@@ -556,10 +559,6 @@ function launchRuneLiteInner(
 		const params: Record<string, string> = {};
 		if (id) params.id = <string>id;
 		if (jarPath) params.jar_path = <string>jarPath;
-		// if (jx_access_token) params.jx_access_token = jx_access_token; // setting these seem to cause login to fail
-		// if (jx_refresh_token) params.jx_refresh_token = jx_refresh_token; // setting these seem to cause login to fail
-		params.jx_access_token = '';
-		params.jx_refresh_token = '';
 		if (jx_session_id) params.jx_session_id = jx_session_id;
 		if (jx_character_id) params.jx_character_id = jx_character_id;
 		if (jx_display_name) params.jx_display_name = jx_display_name;
@@ -640,43 +639,23 @@ function launchRuneLiteInner(
 }
 
 export function launchRuneLite(
-	jx_access_token: string,
-	jx_refresh_token: string,
 	jx_session_id: string,
 	jx_character_id: string,
 	jx_display_name: string
 ) {
-	return launchRuneLiteInner(
-		jx_access_token,
-		jx_refresh_token,
-		jx_session_id,
-		jx_character_id,
-		jx_display_name,
-		false
-	);
+	return launchRuneLiteInner(jx_session_id, jx_character_id, jx_display_name, false);
 }
 
 export function launchRuneLiteConfigure(
-	jx_access_token: string,
-	jx_refresh_token: string,
 	jx_session_id: string,
 	jx_character_id: string,
 	jx_display_name: string
 ) {
-	return launchRuneLiteInner(
-		jx_access_token,
-		jx_refresh_token,
-		jx_session_id,
-		jx_character_id,
-		jx_display_name,
-		true
-	);
+	return launchRuneLiteInner(jx_session_id, jx_character_id, jx_display_name, true);
 }
 
 // locate hdos's .jar from their CDN, then attempt to launch it with the given env variables
 export function launchHdos(
-	jx_access_token: string,
-	jx_refresh_token: string,
 	jx_session_id: string,
 	jx_character_id: string,
 	jx_display_name: string
@@ -687,10 +666,6 @@ export function launchHdos(
 		const xml = new XMLHttpRequest();
 		const params: Record<string, string> = {};
 		if (version) params.version = version;
-		// if (jx_access_token) params.jx_access_token = jx_access_token; // setting these cause login to fail
-		// if (jx_refresh_token) params.jx_refresh_token = jx_refresh_token; // setting these cause login to fail
-		params.jx_access_token = '';
-		params.jx_refresh_token = '';
 		if (jx_session_id) params.jx_session_id = jx_session_id;
 		if (jx_character_id) params.jx_character_id = jx_character_id;
 		if (jx_display_name) params.jx_display_name = jx_display_name;

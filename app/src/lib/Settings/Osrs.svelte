@@ -69,8 +69,6 @@
 			return;
 		}
 		launchRuneLiteConfigure(
-			<string>$selectedPlay.credentials?.access_token,
-			<string>$selectedPlay.credentials?.refresh_token,
 			<string>$selectedPlay.credentials?.session_id,
 			<string>$selectedPlay.character?.accountId,
 			<string>$selectedPlay.character?.displayName
