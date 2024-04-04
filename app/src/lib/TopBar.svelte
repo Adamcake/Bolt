@@ -44,7 +44,7 @@
 		}
 	}
 
-	// if no account is signed in, open the Jagex login
+	// if no account is signed in, open auth window
 	// else, toggle the account dropdown
 	function toggle_account(): void {
 		if (accountButton.innerHTML == 'Log In') {
