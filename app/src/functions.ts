@@ -11,7 +11,6 @@ import {
 import {
 	boltSub,
 	configSub,
-	credentialsAreDirty,
 	credentialsSub,
 	err,
 	msg,
@@ -429,27 +428,25 @@ export function revokeOauthCreds(accessToken: string, revokeUrl: string, clientI
 // sends a request to save all credentials to their config file,
 // overwriting the previous file, if any
 export async function saveAllCreds() {
-	if (credentialsAreDirty) {
-		const xml = new XMLHttpRequest();
-		xml.open('POST', '/save-credentials', true);
-		xml.setRequestHeader('Content-Type', 'application/json');
-		xml.onreadystatechange = () => {
-			if (xml.readyState == 4) {
-				msg(`Save-credentials status: ${xml.responseText.trim()}`);
-			}
-		};
+	const xml = new XMLHttpRequest();
+	xml.open('POST', '/save-credentials', true);
+	xml.setRequestHeader('Content-Type', 'application/json');
+	xml.onreadystatechange = () => {
+		if (xml.readyState == 4) {
+			msg(`Save-credentials status: ${xml.responseText.trim()}`);
+		}
+	};
 
-		selectedPlay.update((data) => {
-			data.credentials = credentialsSub.get(<string>selectedPlaySub.account?.userId);
-			return data;
-		});
+	selectedPlay.update((data) => {
+		data.credentials = credentialsSub.get(<string>selectedPlaySub.account?.userId);
+		return data;
+	});
 
-		const credsList: Array<Credentials> = [];
-		credentialsSub.forEach((value) => {
-			credsList.push(value);
-		});
-		xml.send(JSON.stringify(credsList));
-	}
+	const credsList: Array<Credentials> = [];
+	credentialsSub.forEach((value) => {
+		credsList.push(value);
+	});
+	xml.send(JSON.stringify(credsList));
 }
 
 // asynchronously download and launch RS3's official .deb client using the given env variables

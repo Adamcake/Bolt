@@ -58,9 +58,6 @@ unsubscribers.push(accountList.subscribe((data) => (accountListSub = data)));
 export let selectedPlaySub: SelectedPlay;
 unsubscribers.push(selectedPlay.subscribe((data) => (selectedPlaySub = data)));
 
-// variables
-export let credentialsAreDirty: boolean = false;
-
 // body's onload function
 function start(): void {
 	const sOrigin = atob(boltSub.origin);
@@ -113,7 +110,6 @@ function start(): void {
 												data.set(creds.sub, creds);
 												return data;
 											});
-											credentialsAreDirty = true;
 											saveAllCreds();
 										}
 									});
@@ -188,7 +184,6 @@ function start(): void {
 											);
 											return data;
 										});
-										credentialsAreDirty = true;
 										saveAllCreds();
 									}
 								});
@@ -224,7 +219,6 @@ function start(): void {
 						data.delete(value.sub);
 						return data;
 					});
-					credentialsAreDirty = true;
 					saveAllCreds();
 				}
 				if (result === null && (await handleLogin(null, value))) {
@@ -242,8 +236,9 @@ function start(): void {
 					return data;
 				});
 			});
-			credentialsAreDirty = credentialsSub.size != oldCredentialsSize;
-			saveAllCreds();
+			if (credentialsSub.size != oldCredentialsSize) {
+				saveAllCreds();
+			}
 		}
 		isConfigDirty.set(false); // overrides all cases where this gets set to "true" due to loading existing config values
 	})();
