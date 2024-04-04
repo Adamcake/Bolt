@@ -1,17 +1,17 @@
 # Table of Contents
 
--   [Table of Contents](#table-of-contents)
--   [Launcher](#launcher)
-    -   [Query Params](#query-params)
-    -   [Request API](#request-api)
-    -   [JX Variables](#jx-variables)
--   [App](#app)
-    -   [Developing](#developing)
-        -   [Svelte](#svelte)
-        -   [tailwindcss](#tailwindcss)
-        -   [Linting \& Formatting](#linting--formatting)
-    -   [Building](#building)
-        -   [Minifying](#minifying)
+- [Table of Contents](#table-of-contents)
+- [Launcher](#launcher)
+  - [Query Params](#query-params)
+  - [Request API](#request-api)
+  - [JX Variables](#jx-variables)
+- [App](#app)
+  - [Developing](#developing)
+    - [Svelte](#svelte)
+    - [tailwindcss](#tailwindcss)
+    - [Linting \& Formatting](#linting--formatting)
+  - [Building](#building)
+    - [Minifying](#minifying)
 
 # Launcher
 
@@ -72,15 +72,22 @@ The following variables are used to pass authentication info to a game when laun
 This app is developed using [Svelte](https://svelte.dev/docs/introduction).  
 They recommend using SvelteKit over base Svelte, but for this project, it made sense to keep things simple.  
 Svelte uses [Vite](https://vitejs.dev/guide/why.html) under the hood, which is a fantastic build and testing tool.  
-This app also uses [TypeScript](https://www.typescriptlang.org/docs/handbook/intro.html) over JavaScript. There are plenty of reasons for this, check out their site for more information!
+This app also uses [TypeScript](https://www.typescriptlang.org/docs/handbook/intro.html) over JavaScript. There are plenty of reasons for this, check out their site for more information!  
 
-Begin by running `npm install`, this will install all necesssary dependancies for development and release.  
-Take a look inside the `package.json` file, this will show you all the different packages being used as well as the commands you can run using `npm run [COMMAND]`.
+This was mentioned in the other README, but in case you missedd it:  
+Instead of `npm` and a `package-lock.json`, the frontend uses `bun` with a `bun.lockb`. Checkout [Bun](https://bun.sh/docs) to see why!  
+Bun can be easily installed using npm:  
+```bash
+npm install -g bun
+```
+
+Begin by running `bun install`, this will install all necesssary dependancies for development and release.  
+Take a look inside the `package.json` file, this will show you all the different packages being used as well as the commands you can run using `bun run [COMMAND]`.
 
 Because we are developing inside of [CEF](https://github.com/chromiumembedded/cef), here are some recommendation when doing development:
 
 -   Use `-D BOLT_HTML_DIR=/app/dist`, `-D BOLT_DEV_SHOW_DEVTOOLS=1`, and `-D BOLT_DEV_LAUNCHER_DIRECTORY=1` when initializing cmake. This will allow us to debug and take advantage of hot reloading when we make changes in our files.
--   Use `npm run watch`. This is a wrapper for `vite build --watch`. The reason we prefer this over `npm run dev` is because CEF wants plain html, js, and css files. Perhaps there is a way to get the dev server working with CEF, but building after every change is fast enough (100ms or less).
+-   Use `bun run watch`. This is a wrapper for `vite build --watch`. The reason we prefer this over `bun run dev` is because CEF wants plain html, js, and css files. Perhaps there is a way to get the dev server working with CEF, but building after every change is fast enough (100ms or less).
 
 General folder structure:
 
@@ -96,16 +103,16 @@ General folder structure:
 Styling for the app is done with [tailwindcss](https://tailwindcss.com/).
 
 -   Installation
-    -   Running `npm install` within this directory will install it as a dev dependancy.
-    -   It can be used with `npx`.
+    -   Running `bun install` within this directory will install it as a dev dependancy.
+    -   It can be used with `bunx`.
     -   Or as a standalone executable. Get the binary for your OS [here](https://github.com/tailwindlabs/tailwindcss/releases)
 -   Usage
     -   Be sure to run tailwind in the same directory as the 'tailwind.config.js'.
-    -   To use while developing, you will likely want to watch for css changes, here is an example using a binary:  
-        `./tailwindcss-linux-x64 -i src/assets/input.css -o src/assets/output.css --watch`
+    -   To use while developing, you will likely want to watch for css changes, here is an example:  
+        `bunx tailwindcss -i src/assets/input.css -o src/assets/output.css --watch`
 -   Optimizing for production
     -   To minify the 'output.css', use this:  
-        `./tailwindcss-linux-x64 -o src/assets/output.css --minify`
+        `bunx tailwindcss -o src/assets/output.css --minify`
 
 ### Linting & Formatting
 
@@ -114,14 +121,14 @@ Check in the package.json to see how to run the relevant linters and formatters.
 The linter being used is [TSLint](https://typescript-eslint.io/getting-started). The formatter is [Prettier](https://prettier.io/docs/en/).  
 Rules can be changed in their relevant .rc files.
 
-When running `npm run lint`, you may notice an output about running prettier, go ahead and run `npm run format` so prettier can format the files.  
+When running `bun run lint`, you may notice an output about running prettier, go ahead and run `bun run format` so prettier can format the files.  
 Then, run lint again. Another thing to note is that you may get some errors regarding the use of type `any`.  
 We want to avoid using type `any` at all cost, but sometimes giving a type to very arbitrary values is tough and tedious, use it as a last resort.
 
 ## Building
 
-Be sure to have everything installed: `npm install`.  
-Then, `npm run build` to have Vite build and output files into the `dist` directory.  
+Be sure to have everything installed: `bun install`.  
+Then, `bun run build` to have Vite build and output files into the `dist` directory.  
 Those files will be the ones used in release.
 
 ### Minifying
@@ -130,9 +137,9 @@ When doing a release build, it is useful to optimize the code further, whether i
 'Minify' means to make the files as small as possible. Lets see how we can minify the output.
 
 First, lets minify the css:  
-`./tailwindcss-linux-x64 -o src/assets/output.css --minify`  
+`bunx tailwindcss -o src/assets/output.css --minify`  
 Then, the html and js:  
-`npm run minify` - Check the package.json to see what that does.  
+`bun run minify` - Check the package.json to see what that does.  
 You could run just the second step. But maybe tailwind makes different decisions or optimization on minifying its css.
 
 We can see the result is incredibly small files:

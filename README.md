@@ -48,12 +48,18 @@ You will need **GTK3 development libraries** and cmake's **pkg-config** installe
 - libarchive development libraries (`libarchive-devel` or `libarchive-dev` on most package managers)
 
 The frontend of Bolt uses [Svelte](https://svelte.dev/docs/introduction). This means we will need [Node](https://nodejs.org/en/download/package-manager), preferably the LTS version. This can easily be installed using NVM.  
+Instead of `npm` and a `package-lock.json`, the frontend uses `bun` with a `bun.lockb`. Checkout [Bun](https://bun.sh/docs) to see why!  
+Bun can be easily installed using npm:  
+```bash
+npm install -g bun
+```
 Checkout the README in the `app` folder to see how to install and build the frontend files. As well as configuration and other tips.   
 Quick shortcut steps to building:
 ```bash
 cd app
-npm install
-npm run build
+bun install
+bunx tailwindcss -i src/assets/input.css -o src/assets/output.css
+bun run build
 ```
 
 Once that's done, you can start building. Open a command window or terminal in the root directory of this repository, then follow the build instructions for your platform.
