@@ -147,9 +147,15 @@ export async function checkRenewCreds(creds: Credentials, url: string, clientId:
 				if (xml.readyState == 4) {
 					if (xml.status == 200) {
 						const result = parseCredentials(xml.response);
-						const creds = unwrap(result);
-						if (creds) {
-							Object.assign(creds, creds);
+						const resultCreds = unwrap(result);
+						if (resultCreds) {
+							creds.access_token = resultCreds.access_token;
+							creds.expiry = resultCreds.expiry;
+							creds.id_token = resultCreds.id_token;
+							creds.login_provider = resultCreds.login_provider;
+							creds.refresh_token = resultCreds.refresh_token;
+							if (resultCreds.session_id) creds.session_id = resultCreds.session_id;
+							creds.sub = resultCreds.sub;
 							resolve(null);
 						} else {
 							resolve(0);

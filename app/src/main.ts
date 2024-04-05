@@ -209,8 +209,6 @@ function start(): void {
 
 	(async () => {
 		if (credentialsSub.size > 0) {
-			const oldCredentialsSize = credentialsSub.size;
-			const promises: Array<Record<string, Credentials | boolean>> = [];
 			credentialsSub.forEach(async (value) => {
 				const result = await checkRenewCreds(value, exchangeUrl, clientId);
 				if (result !== null && result !== 0) {
@@ -221,24 +219,21 @@ function start(): void {
 					});
 					saveAllCreds();
 				}
+				let checkedCred: Record<string, Credentials | boolean>;
 				if (result === null && (await handleLogin(null, value))) {
-					promises.push({ creds: value, valid: true });
+					checkedCred = { creds: value, valid: true };
 				} else {
-					promises.push({ creds: value, valid: result === 0 });
+					checkedCred = { creds: value, valid: result === 0 };
+				}
+				if (checkedCred.valid) {
+					const creds = <Credentials>value;
+					credentials.update((data) => {
+						data.set(creds.sub, creds);
+						return data;
+					});
+					saveAllCreds();
 				}
 			});
-			const responses = await Promise.all(promises);
-			const validCreds = responses.filter((x) => x.valid).map((x) => x.creds);
-			validCreds.forEach((value) => {
-				const creds = <Credentials>value;
-				credentials.update((data) => {
-					data.set(creds.sub, creds);
-					return data;
-				});
-			});
-			if (credentialsSub.size != oldCredentialsSize) {
-				saveAllCreds();
-			}
 		}
 		isConfigDirty.set(false); // overrides all cases where this gets set to "true" due to loading existing config values
 	})();
