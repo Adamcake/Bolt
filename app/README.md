@@ -1,17 +1,17 @@
 # Table of Contents
 
-- [Table of Contents](#table-of-contents)
-- [Launcher](#launcher)
-  - [Query Params](#query-params)
-  - [Request API](#request-api)
-  - [JX Variables](#jx-variables)
-- [App](#app)
-  - [Developing](#developing)
-    - [Svelte](#svelte)
-    - [tailwindcss](#tailwindcss)
-    - [Linting \& Formatting](#linting--formatting)
-  - [Building](#building)
-    - [Minifying](#minifying)
+-   [Table of Contents](#table-of-contents)
+-   [Launcher](#launcher)
+    -   [Query Params](#query-params)
+    -   [Request API](#request-api)
+    -   [JX Variables](#jx-variables)
+-   [App](#app)
+    -   [Developing](#developing)
+        -   [Svelte](#svelte)
+        -   [tailwindcss](#tailwindcss)
+        -   [Linting \& Formatting](#linting--formatting)
+    -   [Building](#building)
+        -   [Minifying](#minifying)
 
 # Launcher
 
@@ -72,11 +72,12 @@ The following variables are used to pass authentication info to a game when laun
 This app is developed using [Svelte](https://svelte.dev/docs/introduction).  
 They recommend using SvelteKit over base Svelte, but for this project, it made sense to keep things simple.  
 Svelte uses [Vite](https://vitejs.dev/guide/why.html) under the hood, which is a fantastic build and testing tool.  
-This app also uses [TypeScript](https://www.typescriptlang.org/docs/handbook/intro.html) over JavaScript. There are plenty of reasons for this, check out their site for more information!  
+This app also uses [TypeScript](https://www.typescriptlang.org/docs/handbook/intro.html) over JavaScript. There are plenty of reasons for this, check out their site for more information!
 
 This was mentioned in the other README, but in case you missed it:  
 Instead of `npm` and a `package-lock.json`, the frontend uses `bun` with a `bun.lockb`. Checkout [Bun](https://bun.sh/docs) to see why!  
-Bun can be easily installed using npm:  
+Bun can be easily installed using npm:
+
 ```bash
 npm install -g bun
 ```
