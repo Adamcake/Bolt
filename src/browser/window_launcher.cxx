@@ -78,9 +78,6 @@ Browser::Launcher::Launcher(
 	std::filesystem::path config_dir,
 	std::filesystem::path data_dir
 ): Window(client, details, show_devtools), data_dir(data_dir), file_manager(file_manager) {
-	std::stringstream url;
-	url << this->internal_url << URI << "&flathub=" << BOLT_FLATHUB_BUILD;
-
 	this->creds_path = data_dir;
 	this->creds_path.append("creds");
 
@@ -105,42 +102,8 @@ Browser::Launcher::Launcher(
 	this->hdos_version_path = data_dir;
 	this->hdos_version_path.append("hdos_version.bin");
 
-	std::ifstream rs_deb_hashfile(this->rs3_hash_path.c_str(), std::ios::in | std::ios::binary);
-	if (!rs_deb_hashfile.fail()) {
-		url << "&rs3_linux_installed_hash=" << rs_deb_hashfile.rdbuf();
-	}
-
-	std::ifstream rl_hashfile(this->runelite_id_path.c_str(), std::ios::in | std::ios::binary);
-	if (!rl_hashfile.fail()) {
-		url << "&runelite_installed_id=" << rl_hashfile.rdbuf();
-	}
-
-	std::ifstream hdos_hashfile(this->hdos_version_path.c_str(), std::ios::in | std::ios::binary);
-	if (!hdos_hashfile.fail()) {
-		url << "&hdos_installed_version=" << hdos_hashfile.rdbuf();
-	}
-
-	std::ifstream creds_file(this->creds_path.c_str(), std::ios::in | std::ios::binary);
-	std::string creds_str;
-	if (!creds_file.fail()) {
-		std::stringstream ss;
-		ss << creds_file.rdbuf();
-		creds_str = CefURIEncode(CefString(ss.str()), true).ToString();
-		url << "&credentials=" << creds_str;
-		creds_file.close();
-	}
-
-	std::ifstream config_file(this->config_path.c_str(), std::ios::in | std::ios::binary);
-	std::string config_str;
-	if (!config_file.fail()) {
-		std::stringstream ss;
-		ss << config_file.rdbuf();
-		config_str = CefURIEncode(CefString(ss.str()), true).ToString();
-		url << "&config=" << config_str;
-		config_file.close();
-	}
-
-	this->Init(client, details, url.str(), show_devtools);
+	CefString url = this->BuildURL();
+	this->Init(client, details, url, show_devtools);
 }
 
 bool Browser::Launcher::IsLauncher() const {
@@ -337,6 +300,54 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 void Browser::Launcher::OnBrowserDestroyed(CefRefPtr<CefBrowserView> view, CefRefPtr<CefBrowser> browser) {
 	Window::OnBrowserDestroyed(view, browser);
 	this->file_manager = nullptr;
+}
+
+CefString Browser::Launcher::BuildURL() const {
+	std::stringstream url;
+	url << this->internal_url << URI << "&flathub=" << BOLT_FLATHUB_BUILD;
+
+	std::ifstream rs_deb_hashfile(this->rs3_hash_path.c_str(), std::ios::in | std::ios::binary);
+	if (!rs_deb_hashfile.fail()) {
+		url << "&rs3_linux_installed_hash=" << rs_deb_hashfile.rdbuf();
+	}
+
+	std::ifstream rl_hashfile(this->runelite_id_path.c_str(), std::ios::in | std::ios::binary);
+	if (!rl_hashfile.fail()) {
+		url << "&runelite_installed_id=" << rl_hashfile.rdbuf();
+	}
+
+	std::ifstream hdos_hashfile(this->hdos_version_path.c_str(), std::ios::in | std::ios::binary);
+	if (!hdos_hashfile.fail()) {
+		url << "&hdos_installed_version=" << hdos_hashfile.rdbuf();
+	}
+
+	std::ifstream creds_file(this->creds_path.c_str(), std::ios::in | std::ios::binary);
+	std::string creds_str;
+	if (!creds_file.fail()) {
+		std::stringstream ss;
+		ss << creds_file.rdbuf();
+		creds_str = CefURIEncode(CefString(ss.str()), true).ToString();
+		url << "&credentials=" << creds_str;
+		creds_file.close();
+	}
+
+	std::ifstream config_file(this->config_path.c_str(), std::ios::in | std::ios::binary);
+	std::string config_str;
+	if (!config_file.fail()) {
+		std::stringstream ss;
+		ss << config_file.rdbuf();
+		config_str = CefURIEncode(CefString(ss.str()), true).ToString();
+		url << "&config=" << config_str;
+		config_file.close();
+	}
+
+	return url.str();
+}
+
+void Browser::Launcher::Refresh() const {
+	// override the default behaviour, which would be to call ReloadIgnoreCache() (a.k.a. ctrl+f5)
+	// because if certain config files have changed, we need to set different URL params than before
+	this->browser->GetMainFrame()->LoadURL(this->BuildURL());
 }
 
 CefRefPtr<CefResourceRequestHandler> SaveFileFromPost(CefRefPtr<CefRequest> request, const std::filesystem::path::value_type* path) {
