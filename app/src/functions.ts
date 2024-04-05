@@ -498,20 +498,14 @@ export function launchRS3Linux(
 				return;
 			}
 			if (lines.SHA256 !== get(rs3InstalledHash)) {
-				messageList.update((data) => {
-					data.unshift({ isError: false, text: 'Downloading RS3 client...' });
-					return data;
-				});
+				msg('Downloading RS3 client...');
 				const exeXml = new XMLHttpRequest();
 				exeXml.open('GET', contentUrl.concat(lines.Filename), true);
 				exeXml.responseType = 'arraybuffer';
 				exeXml.onprogress = (e) => {
 					if (e.loaded) {
 						messageList.update((data) => {
-							data[0] = {
-								isError: false,
-								text: `Downloading RS3 client... ${(Math.round((1000.0 * e.loaded) / e.total) / 10.0).toFixed(1)}%`
-							};
+							data[0].text = `Downloading RS3 client... ${(Math.round((1000.0 * e.loaded) / e.total) / 10.0).toFixed(1)}%`;
 							return data;
 						});
 					}
@@ -592,10 +586,7 @@ function launchRuneLiteInner(
 					.flat()
 					.find((x: Record<string, string>) => x.name.toLowerCase() == 'runelite.jar');
 				if (runelite.id != get(runeLiteInstalledId)) {
-					messageList.update((data: Array<Message>) => {
-						data.unshift({ isError: false, text: 'Downloading RuneLite...' });
-						return data;
-					});
+					msg('Downloading RuneLite...');
 					const xmlRl = new XMLHttpRequest();
 					xmlRl.open('GET', runelite.browser_download_url, true);
 					xmlRl.responseType = 'arraybuffer';
@@ -614,10 +605,7 @@ function launchRuneLiteInner(
 					xmlRl.onprogress = (e) => {
 						if (e.loaded && e.lengthComputable) {
 							messageList.update((data) => {
-								data[0] = {
-									isError: false,
-									text: `Downloading RuneLite... ${(Math.round((1000.0 * e.loaded) / e.total) / 10.0).toFixed(1)}%`
-								};
+								data[0].text = `Downloading RuneLite... ${(Math.round((1000.0 * e.loaded) / e.total) / 10.0).toFixed(1)}%`;
 								return data;
 							});
 						}
@@ -691,10 +679,7 @@ export function launchHdos(
 					const latestVersion = versionRegex[1];
 					if (latestVersion !== get(hdosInstalledVersion)) {
 						const jarUrl = `https://cdn.hdos.dev/launcher/v${latestVersion}/hdos-launcher.jar`;
-						messageList.update((data) => {
-							data.unshift({ isError: false, text: 'Downloading HDOS...' });
-							return data;
-						});
+						msg('Downloading HDOS...');
 						const xmlHdos = new XMLHttpRequest();
 						xmlHdos.open('GET', jarUrl, true);
 						xmlHdos.responseType = 'arraybuffer';
@@ -720,10 +705,7 @@ export function launchHdos(
 						xmlHdos.onprogress = (e) => {
 							if (e.loaded && e.lengthComputable) {
 								messageList.update((data) => {
-									data[0] = {
-										isError: false,
-										text: `Downloading HDOS... ${(Math.round((1000.0 * e.loaded) / e.total) / 10.0).toFixed(1)}%`
-									};
+									data[0].text = `Downloading HDOS... ${(Math.round((1000.0 * e.loaded) / e.total) / 10.0).toFixed(1)}%`;
 									return data;
 								});
 							}

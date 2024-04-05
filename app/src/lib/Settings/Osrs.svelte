@@ -6,7 +6,7 @@
 
 	let customJarDiv: HTMLDivElement;
 	let customJarFile: HTMLTextAreaElement;
-	let cutomJarFileButton: HTMLButtonElement;
+	let customJarFileButton: HTMLButtonElement;
 	let useJar: HTMLInputElement;
 	let flatpakPresence: HTMLInputElement;
 	let flatpakDiv: HTMLDivElement;
@@ -16,7 +16,7 @@
 	function toggleJarDiv(): void {
 		customJarDiv.classList.toggle('opacity-25');
 		customJarFile.disabled = !customJarFile.disabled;
-		cutomJarFileButton.disabled = !cutomJarFileButton.disabled;
+		customJarFileButton.disabled = !customJarFileButton.disabled;
 
 		$config.runelite_use_custom_jar = useJar.checked;
 		if ($config.runelite_use_custom_jar) {
@@ -24,6 +24,7 @@
 		} else {
 			customJarFile.value = '';
 			$config.runelite_custom_jar = '';
+			$config.runelite_use_custom_jar = false;
 		}
 		$isConfigDirty = true;
 	}
@@ -40,7 +41,7 @@
 
 	function selectFile(): void {
 		useJar.disabled = true;
-		cutomJarFileButton!.disabled = true;
+		customJarFileButton!.disabled = true;
 
 		// note: this would give only the file contents, whereas we need the path and don't want the contents:
 		//window.showOpenFilePicker({"types": [{"description": "Java Archive (JAR)", "accept": {"application/java-archive": [".jar"]}}]}).then((x) => { });
@@ -54,7 +55,7 @@
 					$config.runelite_custom_jar = xml.responseText;
 					$isConfigDirty = true;
 				}
-				cutomJarFileButton.disabled = false;
+				customJarFileButton.disabled = false;
 				useJar.disabled = false;
 			}
 		};
@@ -75,7 +76,7 @@
 		);
 	}
 
-	// load config into the menues
+	// load config into the menus
 	onMount(() => {
 		flatpakPresence.checked = <boolean>$config.flatpak_rich_presence;
 
@@ -83,10 +84,11 @@
 		if (useJar.checked && $config.runelite_custom_jar) {
 			customJarDiv.classList.remove('opacity-25');
 			customJarFile.disabled = false;
-			cutomJarFileButton.disabled = false;
+			customJarFileButton.disabled = false;
 			customJarFile.value = $config.runelite_custom_jar;
 		} else {
 			useJar.checked = false;
+			$config.runelite_use_custom_jar = false;
 		}
 
 		if ($platform !== 'linux') {
@@ -109,7 +111,7 @@
 		id="flatpak_div"
 		class="mx-auto border-t-2 border-slate-300 p-2 py-5 dark:border-slate-800"
 		bind:this={flatpakDiv}>
-		<label for="flatpak_rich_presence">Expose rich presense to Flatpak Discord: </label>
+		<label for="flatpak_rich_presence">Expose rich presence to Flatpak Discord: </label>
 		<input
 			type="checkbox"
 			name="flatpak_rich_presence"
@@ -147,7 +149,7 @@
 		<button
 			disabled
 			id="custom_jar_file_button"
-			bind:this={cutomJarFileButton}
+			bind:this={customJarFileButton}
 			class="mt-1 rounded-lg border-2 border-blue-500 p-1 duration-200 hover:opacity-75"
 			on:click={() => {
 				selectFile();

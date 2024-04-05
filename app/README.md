@@ -74,19 +74,19 @@ They recommend using SvelteKit over base Svelte, but for this project, it made s
 Svelte uses [Vite](https://vitejs.dev/guide/why.html) under the hood, which is a fantastic build and testing tool.  
 This app also uses [TypeScript](https://www.typescriptlang.org/docs/handbook/intro.html) over JavaScript. There are plenty of reasons for this, check out their site for more information!  
 
-This was mentioned in the other README, but in case you missedd it:  
+This was mentioned in the other README, but in case you missed it:  
 Instead of `npm` and a `package-lock.json`, the frontend uses `bun` with a `bun.lockb`. Checkout [Bun](https://bun.sh/docs) to see why!  
 Bun can be easily installed using npm:  
 ```bash
 npm install -g bun
 ```
 
-Begin by running `bun install`, this will install all necesssary dependancies for development and release.  
+Begin by running `bun install`, this will install all necessary dependencies for development and release.  
 Take a look inside the `package.json` file, this will show you all the different packages being used as well as the commands you can run using `bun run [COMMAND]`.
 
 Because we are developing inside of [CEF](https://github.com/chromiumembedded/cef), here are some recommendation when doing development:
 
--   Use `-D BOLT_HTML_DIR=/app/dist`, `-D BOLT_DEV_SHOW_DEVTOOLS=1`, and `-D BOLT_DEV_LAUNCHER_DIRECTORY=1` when initializing cmake. This will allow us to debug and take advantage of hot reloading when we make changes in our files.
+-   Use `-D BOLT_HTML_DIR=/app/dist`, `-D BOLT_DEV_SHOW_DEVTOOLS=1`, and `-D BOLT_DEV_LAUNCHER_DIRECTORY=1` when initialising cmake. This will allow us to debug and take advantage of hot reloading when we make changes in our files.
 -   Use `bun run watch`. This is a wrapper for `vite build --watch`. The reason we prefer this over `bun run dev` is because CEF wants plain html, js, and css files. Perhaps there is a way to get the dev server working with CEF, but building after every change is fast enough (100ms or less).
 
 General folder structure:
@@ -103,14 +103,14 @@ General folder structure:
 Styling for the app is done with [tailwindcss](https://tailwindcss.com/).
 
 -   Installation
-    -   Running `bun install` within this directory will install it as a dev dependancy.
+    -   Running `bun install` within this directory will install it as a dev dependency.
     -   It can be used with `bunx`.
     -   Or as a standalone executable. Get the binary for your OS [here](https://github.com/tailwindlabs/tailwindcss/releases)
 -   Usage
     -   Be sure to run tailwind in the same directory as the 'tailwind.config.js'.
     -   To use while developing, you will likely want to watch for css changes, here is an example:  
         `bunx tailwindcss -i src/assets/input.css -o src/assets/output.css --watch`
--   Optimizing for production
+-   Optimising for production
     -   To minify the 'output.css', use this:  
         `bunx tailwindcss -o src/assets/output.css --minify`
 
@@ -133,14 +133,14 @@ Those files will be the ones used in release.
 
 ### Minifying
 
-When doing a release build, it is useful to optimize the code further, whether it be for speed or size.  
+When doing a release build, it is useful to optimise the code further, whether it be for speed or size.  
 'Minify' means to make the files as small as possible. Lets see how we can minify the output.
 
 First, lets minify the css:  
 `bunx tailwindcss -o src/assets/output.css --minify`  
 Then, the html and js:  
 `bun run minify` - Check the package.json to see what that does.  
-You could run just the second step. But maybe tailwind makes different decisions or optimization on minifying its css.
+You could run just the second step. But maybe tailwind makes different decisions or optimisation on minifying its css.
 
 We can see the result is incredibly small files:
 

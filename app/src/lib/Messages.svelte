@@ -16,12 +16,12 @@
 		{#each $messageList as message}
 			{#if message.isError}
 				<li class="text-rose-500">
-					{message.time?.getHours()}:{message.time?.getMinutes()}:{message.time?.getSeconds()}
+					{message.time?.toLocaleTimeString()}
 					- {message.text}
 				</li>
 			{:else}
 				<li>
-					{message.time?.getHours()}:{message.time?.getMinutes()}:{message.time?.getSeconds()}
+					{message.time?.toLocaleTimeString()}
 					- {message.text}
 				</li>
 			{/if}
