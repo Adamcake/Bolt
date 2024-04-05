@@ -134,9 +134,9 @@ Those files will be the ones used in release.
 ### Minifying
 
 When doing a release build, it is useful to optimise the code further, whether it be for speed or size.  
-'Minify' means to make the files as small as possible. Lets see how we can minify the output.
+'Minify' means to make the files as small as possible. Let's see how we can minify the output.
 
-First, lets minify the css:  
+First, let's minify the css:  
 `bunx tailwindcss -o src/assets/output.css --minify`  
 Then, the html and js:  
 `bun run minify` - Check the package.json to see what that does.  
