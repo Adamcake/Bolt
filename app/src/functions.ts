@@ -5,8 +5,7 @@ import {
 	type Account,
 	type Auth,
 	type Character,
-	unwrap,
-	type Message
+	unwrap
 } from './interfaces';
 import {
 	boltSub,
