@@ -24,12 +24,18 @@ namespace Browser {
 
 		void OnBrowserDestroyed(CefRefPtr<CefBrowserView>, CefRefPtr<CefBrowser>) override;
 
+		void Refresh() const override;
+
 		/// Attempts to open the given URL externally in the user's browser
 		void OpenExternalUrl(char* url) const;
 
 		/// Attempts to open Bolt's data directory externally in the user's file explorer.
 		/// Returns the value returned by `fork`, which is 0 on success or -1 on error.
 		int BrowseData() const;
+
+		/// Builds and returns the URL for the launcher to open, including reading config files and
+		/// inserting their contents into the query params
+		CefString BuildURL() const;
 
 		/* 
 		Functions called by GetResourceRequestHandler. The result will be returned immediately and must not be null.
