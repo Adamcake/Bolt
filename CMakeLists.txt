@@ -154,7 +154,7 @@ file(GENERATE OUTPUT .gitignore CONTENT "*")
 
 # source html directory
 if(NOT BOLT_HTML_DIR)
-    set(BOLT_HTML_DIR "${CMAKE_CURRENT_SOURCE_DIR}/html")
+    set(BOLT_HTML_DIR "${CMAKE_CURRENT_SOURCE_DIR}/app/dist")
 endif()
 
 # libcef C++ wrapper

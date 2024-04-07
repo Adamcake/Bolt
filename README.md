@@ -1,10 +1,27 @@
+# Table of Contents
+- [Table of Contents](#table-of-contents)
+- [Bolt](#bolt)
+  - [Contact](#contact)
+  - [Installing](#installing)
+  - [Building](#building)
+    - [Linux](#linux)
+    - [Windows](#windows)
+    - [Mac](#mac)
+  - [Maintenance](#maintenance)
+  - [Troubleshooting](#troubleshooting)
+  - [Credit](#credit)
+  - [Disclaimer](#disclaimer)
+
 # Bolt
+
 A third-party launcher and helper for your favourite MMO
 
 ## Contact
+
 Bolt, as well as the other Linux community projects, is being discussed at [7orm's Discord server](https://discord.gg/aX7GT2Mkdu). If you want to talk about development or need help getting set up, that's the place to go.
 
 ## Installing
+
 For Linux/Steamdeck users, Bolt is available on the following package managers:
 - flatpak: `com.adamcake.Bolt`
 - AUR: `bolt-launcher`
@@ -12,6 +29,7 @@ For Linux/Steamdeck users, Bolt is available on the following package managers:
 Others should see the "releases" section on the right.
 
 ## Building
+
 If you just want to get Bolt installed then you don't need to build it from source! See the "Installing" section.
 
 But if you do want to build from source, the first thing you should know is that Bolt is based on [Chromium Embedded Framework](https://bitbucket.org/chromiumembedded/cef) (CEF), so to build it, you'll first need either to [build](https://bitbucket.org/chromiumembedded/cef/wiki/MasterBuildQuickStart.md) or [download](https://adamcake.com/cef) a binary distribution of CEF.
@@ -29,9 +47,25 @@ You will need **GTK3 development libraries** and cmake's **pkg-config** installe
 - xcb development libraries (`libxcb-devel` or `libxcb1-dev` on most package managers)
 - libarchive development libraries (`libarchive-devel` or `libarchive-dev` on most package managers)
 
+The frontend of Bolt uses [Svelte](https://svelte.dev/docs/introduction). This means we will need [Node](https://nodejs.org/en/download/package-manager), preferably the LTS version. This can easily be installed using NVM.  
+Instead of `npm` and a `package-lock.json`, the frontend uses `bun` with a `bun.lockb`. Checkout [Bun](https://bun.sh/docs) to see why!  
+Bun can be easily installed using npm:  
+```bash
+npm install -g bun
+```
+Checkout the README in the `app` folder to see how to install and build the frontend files. As well as configuration and other tips.   
+Quick shortcut steps to building:
+```bash
+cd app
+bun install
+bunx tailwindcss -i src/assets/input.css -o src/assets/output.css
+bun run build
+```
+
 Once that's done, you can start building. Open a command window or terminal in the root directory of this repository, then follow the build instructions for your platform.
 
 ### Linux
+
 - `cmake -S . -B build -D CMAKE_BUILD_TYPE=Release`
   - note: build types "Debug" and "Release" are supported
   - note: if you have Ninja installed, specify `-G Ninja` for much faster builds
@@ -44,6 +78,7 @@ Once that's done, you can start building. Open a command window or terminal in t
 After that, the helper script `./build/bolt.sh` can be used to launch Bolt from its staging location.
 
 ### Windows
+
 Windows builds have only been tested using Visual Studio 2022 (a.k.a. Visual Studio 17) in Release mode, per recommendations by chromium/cef. Other configurations may work but have not been tested.
 - `cmake -S . -B build -G "Visual Studio 17"`
   - note: use `-A Win32` instead for 32-bit targets
@@ -51,6 +86,7 @@ Windows builds have only been tested using Visual Studio 2022 (a.k.a. Visual Stu
 - Create a new directory and copy all of the following into it: bolt.exe, the entire contents of the "Release" and "Resources" directories from your CEF distribution, and the "html" folder from this repository. Then you can run bolt.exe from that directory.
 
 ### Mac
+
 Not yet supported
 
 ## Maintenance
@@ -59,11 +95,32 @@ When doing the initial cmake setup step, the following options exist which you m
 - `-D BOLT_DEV_SHOW_DEVTOOLS=1`: enables chromium developer tools for the launcher
 - `-D BOLT_DEV_LAUNCHER_DIRECTORY=1`: instead of embedding the contents of the html dir into the output executable, the files will be served from disk at runtime; on supported platforms the launcher will automatically reload the page when those files are changed
 
+## Troubleshooting
+
+- LuaJIT
+  - When building, you may run into an error with 'luajit'. 
+  - This can be solved by installing it; follow the instructions on their [website](https://luajit.org/index.html)
+  - Keep in mind Bolt is built using Lua 5.1.
+- libcrypto.so.1.1
+  - This comes from openssl1.1, which is reaching deprecation but is still widely used.
+  - Install it with your package manager; it is usually called `openssl1.1-devel` or something similar.
+- JDK17
+  - When attempting to launch, you may see an error about 'jdk17' in the console.
+  - This can be solved by installing a couple packages with your package manager.  
+    Something similar to `java-17-openjdk` & `java-17-openjdk-devel`.
+- JAVA_HOME
+  - Another launch issue you may see in the console.
+  - This is solved by setting the JAVA_HOME environment variable.
+  - This is usually located in /usr/lib/jvm, so, it might look like this:  
+    `export JAVA_HOME="/usr/lib/jvm/java-17-openjdk-17.0.9.0.9-3.fc39.x86_64"`
+
 ## Credit
+
 Icons - [Kia](https://twitter.com/KiaWildin)  
 Flatpak integration - [@nmlynch94](https://github.com/nmlynch94)
 
 ## Disclaimer
+
 Bolt is an unofficial third-party project and is not in any way affiliated with any of the games or companies it interacts with. Said games and companies are not responsible for any problems with Bolt nor any damage caused by using Bolt.
 
 Bolt is NOT a game client. It simply downloads and runs unmodified game clients. Bolt has absolutely no ability to modify or automate gameplay.

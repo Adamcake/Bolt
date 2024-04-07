@@ -11,15 +11,15 @@
 #include <sstream>
 
 #if defined(__linux__)
-constexpr std::string_view URI = "launcher.html?platform=linux";
+constexpr std::string_view URI = "index.html?platform=linux";
 #endif
 
 #if defined(_WIN32)
-constexpr std::string_view URI = "launcher.html?platform=windows";
+constexpr std::string_view URI = "index.html?platform=windows";
 #endif
 
 #if defined(__APPLE__)
-constexpr std::string_view URI = "launcher.html?platform=mac";
+constexpr std::string_view URI = "index.html?platform=mac";
 #endif
 
 CefRefPtr<CefResourceRequestHandler> SaveFileFromPost(CefRefPtr<CefRequest>, const std::filesystem::path::value_type*);
@@ -168,7 +168,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 		if (has_code && has_state) {
 			disable_default_handling = true;
 			const char* data = "Moved\n";
-			CefString location = CefString(this->internal_url + "oauth.html?code=" + std::string(code) + "&state=" + std::string(state));
+			CefString location = CefString(this->internal_url + "index.html?code=" + std::string(code) + "&state=" + std::string(state));
 			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 302, "text/plain", location);
 		} else {
 			return nullptr;
@@ -196,7 +196,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 	if (domain == launcher_redirect_domain && path == launcher_redirect_path) {
 		disable_default_handling = true;
 		const char* data = "Moved\n";
-		CefString location = CefString(this->internal_url + "oauth.html?" + std::string(query));
+		CefString location = CefString(this->internal_url + "index.html?" + std::string(query));
 		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 302, "text/plain", location);
 	}
 
@@ -204,7 +204,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 	if (domain == "localhost" && path == "/" && comment.starts_with("code=")) {
 		disable_default_handling = true;
 		const char* data = "Moved\n";
-		CefString location = CefString(this->internal_url + "game_auth.html?" + std::string(comment));
+		CefString location = CefString(this->internal_url + "index.html?" + std::string(comment));
 		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 302, "text/plain", location);
 	}
 
