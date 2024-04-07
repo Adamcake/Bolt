@@ -192,7 +192,7 @@ add_custom_command(
 
 # compile the generator for embedded launcher file contents
 if(NOT BOLT_DEV_LAUNCHER_DIRECTORY)
-    add_executable(html_gen html/generator.cxx src/mime.cxx)
+    add_executable(html_gen app/generator.cxx src/mime.cxx)
     set_target_properties(html_gen PROPERTIES CXX_STANDARD 20 CXX_EXTENSIONS OFF)
     file(GLOB_RECURSE BOLT_HTML_FILE_LIST FOLLOW_SYMLINKS LIST_DIRECTORIES false CONFIGURE_DEPENDS "${BOLT_HTML_DIR}/*")
     add_custom_command(
