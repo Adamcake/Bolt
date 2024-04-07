@@ -212,12 +212,6 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 	if (domain == "bolt-internal") {
 		disable_default_handling = true;
 
-		if (path == "/close") {
-			frame->SendProcessMessage(PID_RENDERER, CefProcessMessage::Create("__bolt_close"));
-			const char* data = "OK\n";
-			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
-		}
-
 		// instruction to launch RS3 .deb
 		if (path == "/launch-rs3-deb") {
 			return this->LaunchRs3Deb(request, query);
