@@ -115,7 +115,7 @@ There's not much to say here except that I have fairly high standards, so don't 
 ## Credit
 
 Icons - [Kia](https://twitter.com/KiaWildin)  
-Flatpak integration - [@nmlynch94](https://github.com/nmlynch94)
+Flatpak integration - [@nmlynch94](https://github.com/nmlynch94)  
 Most of the UI - [@smithcol11](https://github.com/smithcol11)
 
 ## Disclaimer
