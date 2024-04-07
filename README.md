@@ -14,7 +14,7 @@
 
 # Bolt
 
-A third-party launcher and helper for your favourite MMO
+A third-party launcher for your favourite MMO
 
 ## Contact
 
@@ -85,9 +85,9 @@ Not yet supported
 
 ## Maintenance
 When doing the initial cmake setup step, the following options exist which you may find useful. These are to be used for local development only.
-- `-D BOLT_HTML_DIR=/some/directory`: the location of the launcher's internal webpage content, `html/` by default
+- `-D BOLT_HTML_DIR=/some/directory`: the location of the launcher's internal webpage content, `$PWD/app/dist` by default (note: must be an ABSOLUTE path)
 - `-D BOLT_DEV_SHOW_DEVTOOLS=1`: enables chromium developer tools for the launcher
-- `-D BOLT_DEV_LAUNCHER_DIRECTORY=1`: instead of embedding the contents of the html dir into the output executable, the files will be served from disk at runtime; on supported platforms the launcher will automatically reload the page when those files are changed
+- `-D BOLT_DEV_LAUNCHER_DIRECTORY=1`: instead of embedding the contents of BOLT_HTML_DIR into the output executable, the files will be served from disk at runtime; on supported platforms the launcher will automatically reload the page when those files are changed
 
 ## Troubleshooting
 
@@ -108,10 +108,15 @@ When doing the initial cmake setup step, the following options exist which you m
   - This is usually located in /usr/lib/jvm, so, it might look like this:  
     `export JAVA_HOME="/usr/lib/jvm/java-17-openjdk-17.0.9.0.9-3.fc39.x86_64"`
 
+## Contributing
+
+There's not much to say here except that I have fairly high standards, so don't give me code that's messy or unfinished. Use a development environment that supports [editorconfig](https://editorconfig.org/) before starting work. If committing to the frontend UI then see [app/README.md](https://github.com/Adamcake/Bolt/tree/master/app#app), especially the Linting & Formatting section, for some UI-specific guidelines. Follow the general etiquette of git, i.e. commit messages 50 characters maximum, all changes in a commit must be relevant to the commit, and all commits in a PR must be relevant to the PR.
+
 ## Credit
 
 Icons - [Kia](https://twitter.com/KiaWildin)  
 Flatpak integration - [@nmlynch94](https://github.com/nmlynch94)
+Most of the UI - [@smithcol11](https://github.com/smithcol11)
 
 ## Disclaimer
 
