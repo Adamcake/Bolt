@@ -42,31 +42,25 @@ If you accidentally cloned without submodules (no `modules` directory), you can 
 
 Place your entire CEF binary distribution folder inside the `cef` directory with the name "dist", or create a symbolic link with the same effect.
 
-You will need **GTK3 development libraries** and cmake's **pkg-config** installed. If building on Linux, the following are also required:
+If building on Linux, the following are required:
 - X11 development libraries (`libX11-devel` or `libx11-dev` on most package managers)
 - xcb development libraries (`libxcb-devel` or `libxcb1-dev` on most package managers)
 - libarchive development libraries (`libarchive-devel` or `libarchive-dev` on most package managers)
+- LuaJIT development libraries (`luajit-devel` or `luajit-dev` on most package managers) (OPTIONAL - only needed if you want to build the plugin library)
 
-The frontend of Bolt uses [Svelte](https://svelte.dev/docs/introduction). This means we will need [Node](https://nodejs.org/en/download/package-manager), preferably the LTS version. This can easily be installed using NVM.  
-Instead of `npm` and a `package-lock.json`, the frontend uses `bun` with a `bun.lockb`. Checkout [Bun](https://bun.sh/docs) to see why!  
-Bun can be easily installed using npm:  
-```bash
-npm install -g bun
-```
-Checkout the README in the `app` folder to see how to install and build the frontend files. As well as configuration and other tips.   
-Quick shortcut steps to building:
-```bash
-cd app
-bun install
-bunx tailwindcss -i src/assets/input.css -o src/assets/output.css
-bun run build
-```
+OPTIONAL: build the frontend. Bolt's html frontend is already committed to this repo in `app/dist`, so building it yourself isn't necessary. If you want to build it from source anyway then see [app/README.md](https://github.com/Adamcake/Bolt/tree/master/app#app) for full details on how this build system works, but here's the short version:
+- `cd app/`
+- `npm install -g bun` (needs root access on Linux)
+- `bun install`
+- `bunx tailwindcss -o src/assets/output.css --minify && bun run minify`
+- `cd ..`
 
-Once that's done, you can start building. Open a command window or terminal in the root directory of this repository, then follow the build instructions for your platform.
+Now you can start building. Open a command window or terminal in the root directory of this repository, then follow the build instructions for your platform.
 
 ### Linux
 
 - `cmake -S . -B build -D CMAKE_BUILD_TYPE=Release`
+  - note: you'll need to specify either `-D BOLT_LUAJIT_INCLUDE_DIR=/usr/include/luajit-2.1` OR `-D BOLT_SKIP_LIBRARIES=1` depending on whether you want to build the plugin library
   - note: build types "Debug" and "Release" are supported
   - note: if you have Ninja installed, specify `-G Ninja` for much faster builds
   - note: specify CC and CXX env variables at this stage to direct cmake to the C and C++ compilers you want it to use
@@ -83,7 +77,7 @@ Windows builds have only been tested using Visual Studio 2022 (a.k.a. Visual Stu
 - `cmake -S . -B build -G "Visual Studio 17"`
   - note: use `-A Win32` instead for 32-bit targets
 - Open the .sln file created in the `build` directory and go to "Build" > "Build Solution"
-- Create a new directory and copy all of the following into it: bolt.exe, the entire contents of the "Release" and "Resources" directories from your CEF distribution, and the "html" folder from this repository. Then you can run bolt.exe from that directory.
+- Create a new directory and copy all of the following into it: bolt.exe, and the entire contents of the "Release" and "Resources" directories from your CEF distribution. Then you can run bolt.exe from that directory.
 
 ### Mac
 
@@ -98,9 +92,9 @@ When doing the initial cmake setup step, the following options exist which you m
 ## Troubleshooting
 
 - LuaJIT
-  - When building, you may run into an error with 'luajit'. 
-  - This can be solved by installing it; follow the instructions on their [website](https://luajit.org/index.html)
-  - Keep in mind Bolt is built using Lua 5.1.
+  - When building, you may run into an error with 'luajit'. [website](https://luajit.org/index.html)
+  - You can either install it by following the instructions on their website (or just via your package manager), or specify `-D BOLT_SKIP_LIBRARIES=1` when building.
+  - Keep in mind LuaJIT is based on Lua 5.1. If you have a Lua version later than that installed and Bolt is picking it up, the build will fail.
 - libcrypto.so.1.1
   - This comes from openssl1.1, which is reaching deprecation but is still widely used.
   - Install it with your package manager; it is usually called `openssl1.1-devel` or something similar.
