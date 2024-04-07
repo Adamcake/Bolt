@@ -259,16 +259,6 @@ if(NOT WIN32)
     install(TARGETS java-proxy DESTINATION ${BOLT_CEF_INSTALLDIR}/bolt-launcher)
 endif()
 
-# Bolt uses GTK on all platforms, but it must specifically use gtk3
-# to avoid symbols conflicting with CEF's GTK usage on Unix platforms
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(GTK3 REQUIRED gtk+-3.0)
-target_include_directories(bolt PUBLIC ${GTK3_INCLUDE_DIRS})
-target_link_libraries(bolt PUBLIC ${GTK3_LIBRARIES})
-if(MSVC)
-    target_link_directories(bolt PUBLIC ${GTK3_LIBRARY_DIRS})
-endif()
-
 # Install commands for target dir layout - as per https://bitbucket.org/chromiumembedded/cef/wiki/Tutorial.md
 if(APPLE)
     # TODO: mac support
