@@ -74,7 +74,7 @@ Browser::Client::Client(CefRefPtr<Browser::App> app,std::filesystem::path config
 #if defined(BOLT_DEV_LAUNCHER_DIRECTORY)
 	CLIENT_FILEHANDLER(BOLT_DEV_LAUNCHER_DIRECTORY),
 #endif
-	is_closing(false), show_devtools(SHOW_DEVTOOLS), config_dir(config_dir), data_dir(data_dir), runtime_dir(runtime_dir)
+	show_devtools(SHOW_DEVTOOLS), config_dir(config_dir), data_dir(data_dir), runtime_dir(runtime_dir)
 {
 	app->SetBrowserProcessHandler(this);
 
@@ -114,25 +114,22 @@ void Browser::Client::OpenLauncher() {
 	}
 }
 
-void Browser::Client::Exit() {
-	fmt::print("[B] Exit\n");
-	if (this->windows.size() == 0) {
+void Browser::Client::TryExit() {
+	this->windows_lock.lock();
+	size_t window_count = this->windows.size();
+	this->windows_lock.unlock();
+	bool can_exit = window_count == 0;
+	fmt::print("[B] TryExit, windows={}, exit={}\n", window_count, can_exit);
+
+	if (can_exit) {
 		this->StopFileManager();
-		CefQuitMessageLoop();
 #if defined(CEF_X11)
 		xcb_disconnect(this->xcb);
 #endif
 #if defined(BOLT_PLUGINS)
 		this->IPCStop();
 #endif
-	} else {
-		this->is_closing = true;
-		this->closing_windows_remaining = 0;
-		for (CefRefPtr<Browser::Window>& window: this->windows) {
-			this->closing_windows_remaining += window->CountBrowsers();
-			window->Close();
-		}
-		this->windows.clear();
+		CefQuitMessageLoop();
 	}
 }
 
@@ -209,32 +206,21 @@ void Browser::Client::OnAfterCreated(CefRefPtr<CefBrowser> browser) {
 
 bool Browser::Client::DoClose(CefRefPtr<CefBrowser> browser) {
 	fmt::print("[B] DoClose for browser {}\n", browser->GetIdentifier());
-
-	// if closing, Exit() is already holding the mutex lock, plus there's no need to clean up
-	// individual windows when all are being closed at once
-	if (!this->is_closing) {
-		std::lock_guard<std::mutex> _(this->windows_lock);
-		this->windows.erase(
-			std::remove_if(
-				this->windows.begin(),
-				this->windows.end(),
-				[&browser](const CefRefPtr<Browser::Window>& window){ return window->OnBrowserClosing(browser); }
-			),
-			this->windows.end()
-		);
-	}
+	std::lock_guard<std::mutex> _(this->windows_lock);
+	this->windows.erase(
+		std::remove_if(
+			this->windows.begin(),
+			this->windows.end(),
+			[&browser](const CefRefPtr<Browser::Window>& window){ return window->OnBrowserClosing(browser); }
+		),
+		this->windows.end()
+	);
 	return false;
 }
 
 void Browser::Client::OnBeforeClose(CefRefPtr<CefBrowser> browser) {
 	fmt::print("[B] OnBeforeClose for browser {}, remaining windows {}\n", browser->GetIdentifier(), this->windows.size());
-	if (this->is_closing) {
-		this->closing_windows_remaining -= 1;
-		if (this->closing_windows_remaining == 0) {
-			// retry Exit(), hoping this time windows.size() will be 0
-			this->Exit();
-		}
-	}
+	this->TryExit();
 }
 
 bool Browser::Client::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefProcessId, CefRefPtr<CefProcessMessage> message) {
@@ -255,12 +241,6 @@ bool Browser::Client::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, Ce
 
 	if (name == "__bolt_app_begin_drag") {
 		fmt::print("[B] bolt_app_begin_drag received for browser {}\n", browser->GetIdentifier());
-		return true;
-	}
-
-	if (name == "__bolt_close") {
-		fmt::print("[B] bolt_close message received, exiting\n");
-		this->Exit();
 		return true;
 	}
 

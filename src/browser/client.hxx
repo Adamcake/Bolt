@@ -48,9 +48,9 @@ namespace Browser {
 		/// but this function may be used to open another after previous ones have been closed.
 		void OpenLauncher();
 
-		/// Must be called from the main thread, and windows_lock must be held when calling.
-		/// Cleans up and eventually causes CefRunMessageLoop() to return.
-		void Exit();
+		/// Checks if it's safe to call CefQuitMessageLoop() and exit the process, and if so, does so.
+		/// Implementation differs depending on which build features are enabled.
+		void TryExit();
 
 		/// Handler to be called when a new CefWindow is created. Must be called before Show()
 		void OnWindowCreated(CefRefPtr<CefWindow>);
@@ -130,8 +130,6 @@ namespace Browser {
 			DISALLOW_COPY_AND_ASSIGN(Client);
 			IMPLEMENT_REFCOUNTING(Client);
 
-			bool is_closing;
-			size_t closing_windows_remaining;
 			bool show_devtools;
 			std::filesystem::path config_dir;
 			std::filesystem::path data_dir;
