@@ -196,11 +196,66 @@ if(NOT BOLT_DEV_LAUNCHER_DIRECTORY)
 endif()
 
 # This line needs to be updated manually with any new/deleted object files; cmake discourages GLOBbing source files
-add_executable(bolt
+set(BOLT_SRCS
     modules/fmt/src/format.cc src/main.cxx src/browser.cxx src/browser/app.cxx src/browser/client.cxx
     src/browser/resource_handler.cxx src/browser/window_launcher.cxx ${WINDOW_LAUNCHER_OS_SPECIFIC}
     src/mime.cxx src/file_manager/directory.cxx client_cmake_gen.cxx ${BOLT_FILE_MANAGER_LAUNCHER_GEN}
 )
+
+if(APPLE)
+    add_executable(bolt MACOSX_BUNDLE ${BOLT_SRCS})
+    # Copy the CEF framework into the Frameworks directory.
+    add_custom_command(
+        TARGET bolt
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/Chromium Embedded Framework.framework"
+                "${CMAKE_BINARY_DIR}/bolt.app/Contents/Frameworks/Chromium Embedded Framework.framework"
+        VERBATIM
+    )
+
+    set(BOLT_HELPER_SRCS
+        mac/process_helper.cc
+    )
+
+    # Create the multiple Helper app bundle targets.
+    foreach(_suffix_list ${CEF_HELPER_APP_SUFFIXES})
+        # Convert to a list and extract the suffix values.
+        string(REPLACE ":" ";" _suffix_list ${_suffix_list})
+        list(GET _suffix_list 0 _name_suffix)
+        list(GET _suffix_list 1 _target_suffix)
+        list(GET _suffix_list 2 _plist_suffix)
+
+        # Define Helper target and output names.
+        set(_helper_target "Bolt_Helper${_target_suffix}")
+        set(_helper_output_name "Bolt Helper${_name_suffix}")
+
+        # Create Helper executable target.
+        add_executable(${_helper_target} MACOSX_BUNDLE ${BOLT_HELPER_SRCS})
+        add_dependencies(${_helper_target} libcef_dll_wrapper)
+        target_include_directories(${_helper_target} PUBLIC "${CEF_ROOT}")
+        set_target_properties(${_helper_target} PROPERTIES CXX_STANDARD 20 CXX_EXTENSIONS OFF)
+        target_link_libraries(${_helper_target} libcef_dll_wrapper ${CEF_STANDARD_LIBS})
+        set_target_properties(${_helper_target} PROPERTIES
+            OUTPUT_NAME ${_helper_output_name}
+        )
+
+        # Add the Helper as a dependency of the main executable target.
+        add_dependencies(bolt "${_helper_target}")
+
+        # Copy the Helper app bundle into the Frameworks directory.
+        add_custom_command(
+            TARGET bolt
+            POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                    "${CMAKE_BINARY_DIR}/${_helper_output_name}.app"
+                    "${CMAKE_BINARY_DIR}/bolt.app/Contents/Frameworks/${_helper_output_name}.app"
+            VERBATIM
+        )
+    endforeach()
+else()
+    add_executable(bolt ${BOLT_SRCS})
+endif()
 
 # Various build properties
 target_include_directories(bolt PUBLIC ${CEF_ROOT} modules/fmt/include)
@@ -224,7 +279,15 @@ elseif(WIN32)
     target_link_libraries(bolt PUBLIC "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/libcef.lib")
     target_link_libraries(bolt PUBLIC "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/cef_sandbox.lib")
 elseif(APPLE)
-    # TODO: mac support
+    execute_process(
+        COMMAND brew --prefix libarchive
+        OUTPUT_VARIABLE LIBARCHIVE_PREFIX
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        COMMAND_ERROR_IS_FATAL ANY
+    )
+    set(LibArchive_INCLUDE_DIR "${LIBARCHIVE_PREFIX}/include")
+    find_package(LibArchive REQUIRED)
+    target_link_libraries(bolt PRIVATE LibArchive::LibArchive)
 endif()
 
 # compilation setting for enabling chromium dev tools
@@ -256,15 +319,14 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(GTK3 REQUIRED gtk+-3.0)
 target_include_directories(bolt PUBLIC ${GTK3_INCLUDE_DIRS})
 target_link_libraries(bolt PUBLIC ${GTK3_LIBRARIES})
-if(MSVC)
+if(MSVC OR APPLE)
     target_link_directories(bolt PUBLIC ${GTK3_LIBRARY_DIRS})
 endif()
 
+install(TARGETS bolt DESTINATION ${BOLT_CEF_INSTALLDIR}/bolt-launcher)
 # Install commands for target dir layout - as per https://bitbucket.org/chromiumembedded/cef/wiki/Tutorial.md
 if(APPLE)
-    # TODO: mac support
 else()
-    install(TARGETS bolt DESTINATION ${BOLT_CEF_INSTALLDIR}/bolt-launcher)
     install(DIRECTORY "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/" "${CEF_ROOT}/Resources/" DESTINATION ${BOLT_CEF_INSTALLDIR}/bolt-launcher USE_SOURCE_PERMISSIONS)
 endif()
 

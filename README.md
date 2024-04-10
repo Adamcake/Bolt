@@ -53,6 +53,14 @@ Windows builds have only been tested using Visual Studio 2022 (a.k.a. Visual Stu
 ### Mac
 Not yet supported
 
+<https://cef-builds.spotifycdn.com/index.html#macosarm64>
+
+```bash
+brew install cmake pkg-config gtk+3 libarchive
+cmake -S . -B build -D BOLT_SKIP_LIBRARIES=True -D CMAKE_BUILD_TYPE=Release -D CEF_ROOT=$HOME/Downloads/cef_binary_122.1.13+gde5b724+chromium-122.0.6261.130_macosarm64_minimal
+cmake --build build
+```
+
 ## Maintenance
 When doing the initial cmake setup step, the following options exist which you may find useful. These are to be used for local development only.
 - `-D BOLT_HTML_DIR=/some/directory`: the location of the launcher's internal webpage content, `html/` by default
