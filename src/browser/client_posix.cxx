@@ -68,10 +68,13 @@ void Browser::Client::IPCRun() {
 		pfds.erase(std::remove_if(pfds.begin(), pfds.end(), [](const pollfd& pfd) { return pfd.fd == 0; }), pfds.end());
 	}
 
-	// there should probably not be any fds left when we reach this point, but for good measure...
+	// between us closing our last FD and IPCStop() possibly being called, there might have been
+	// new connections, so we need to handle those by sending eof and closing them
 	for (auto i = pfds.begin() + 1; i != pfds.end(); i += 1) {
+		shutdown(i->fd, SHUT_RDWR);
 		close(i->fd);
 	}
+	close(pfds[0].fd);
 }
 
 void Browser::Client::IPCStop() {
