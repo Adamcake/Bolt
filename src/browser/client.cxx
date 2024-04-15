@@ -284,24 +284,6 @@ bool Browser::Client::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, Ce
 		}
 	}
 
-	if (name == "__bolt_app_settings") {
-		fmt::print("[B] bolt_app_settings received for browser {}\n", browser->GetIdentifier());
-		CefWindowInfo window_info; // ignored, because this is a BrowserView
-		CefBrowserSettings browser_settings;
-		browser->GetHost()->ShowDevTools(window_info, this, browser_settings, CefPoint());
-		return true;
-	}
-
-	if (name == "__bolt_app_minify") {
-		fmt::print("[B] bolt_app_minify received for browser {}\n", browser->GetIdentifier());
-		return true;
-	}
-
-	if (name == "__bolt_app_begin_drag") {
-		fmt::print("[B] bolt_app_begin_drag received for browser {}\n", browser->GetIdentifier());
-		return true;
-	}
-
 	if (name == "__bolt_refresh") {
 		this->windows_lock.lock();
 		fmt::print("[B] bolt_refresh message received, refreshing browser {}\n", browser->GetIdentifier());
