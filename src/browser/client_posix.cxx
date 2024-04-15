@@ -66,6 +66,10 @@ void Browser::Client::IPCRun() {
 			}
 		}
 		pfds.erase(std::remove_if(pfds.begin(), pfds.end(), [](const pollfd& pfd) { return pfd.fd == 0; }), pfds.end());
+		if (pfds.size() == 1) {
+			// only the incoming IPC socket remains
+			this->IPCHandleNoMoreClients();
+		}
 	}
 
 	// between us closing our last FD and IPCStop() possibly being called, there might have been

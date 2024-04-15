@@ -3,15 +3,6 @@
 
 #include <fmt/core.h>
 
-/*
-Any attempt to leverage the render process has resulted in a display of the truly staggering incompetence with
-which Chromium was developed. It is just about unusable. Despite CefRenderProcessHandler being the official way
-to do interop, Most CEF-based applications do interop by web requests that they can intercept in the browser
-process, and having tried to do it this way, I now understand why that is. Consider this your only warning:
-DO NOT try to use CefRenderProcessHandler for anything; every single one of its methods is BROKEN BEYOND BELIEF.
-Your time is valuable, don't waste it here.
-*/
-
 Browser::App::App(): browser_process_handler(nullptr) {
 	
 }
@@ -85,12 +76,10 @@ void Browser::App::OnUncaughtException(
 
 bool Browser::App::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefProcessId, CefRefPtr<CefProcessMessage> message) {
 	CefString name = message->GetName();
-
-	if (name == "__bolt_close" || name == "__bolt_refresh") {
+	if (name == "__bolt_close" || name == "__bolt_refresh" || name == "__bolt_new_client" || name == "__bolt_no_more_clients") {
 		frame->SendProcessMessage(PID_BROWSER, message);
 		return true;
 	}
-
 	return false;
 }
 

@@ -38,7 +38,7 @@ void Browser::Window::Refresh() const {
 
 void Browser::Window::OnWindowCreated(CefRefPtr<CefWindow> window) {
 	fmt::print("[B] OnWindowCreated {} this={}\n", window->GetID(), reinterpret_cast<uintptr_t>(this));
-	this->client->OnWindowCreated(window);
+	this->client->OnBoltWindowCreated(window);
 	this->window = std::move(window);
 	this->window->AddChildView(this->browser_view);
 	if (this->details.center_on_open) {
