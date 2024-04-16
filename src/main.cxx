@@ -5,6 +5,12 @@
 #include "browser/app.hxx"
 #include "browser/client.hxx"
 
+#if defined(BOLT_PLUGINS)
+#include <sys/un.h>
+#include <sys/socket.h>
+#include "library/ipc.h"
+#endif
+
 #if defined(_WIN32)
 #include <windows.h>
 #endif
@@ -41,6 +47,7 @@ constexpr int img_bps = 8;
 
 int BoltRunBrowserProcess(CefMainArgs, CefRefPtr<Browser::App>);
 bool LockXdgDirectories(std::filesystem::path&, std::filesystem::path&, std::filesystem::path&);
+void BoltFailToObtainLockfile(std::filesystem::path tempdir);
 
 int BoltRunAnyProcess(CefMainArgs main_args) {
 	// CefApp struct - this implements handlers used by multiple processes
@@ -105,6 +112,25 @@ int BoltRunBrowserProcess(CefMainArgs main_args, CefRefPtr<Browser::App> cef_app
 	CefShutdown();
 	
 	return 0;
+}
+
+// called after we fail to obtain the lockfile, likely meaning an instance of Bolt is already running
+void BoltFailToObtainLockfile(std::filesystem::path tempdir) {
+#if defined(BOLT_PLUGINS)
+	// probably doesn't compile on Windows
+	struct sockaddr_un addr = {.sun_family = AF_UNIX};
+    int fd = socket(addr.sun_family, SOCK_STREAM, 0);
+	tempdir.append("ipc-0");
+	strncpy(addr.sun_path, tempdir.c_str(), sizeof(addr.sun_path));
+    if (connect(fd, (const struct sockaddr*)&addr, sizeof(addr)) != -1) {
+		struct BoltIPCMessage message {.message_type = IPC_MSG_DUPLICATEPROCESS};
+        bool success = !_bolt_ipc_send(fd, &message, sizeof(message));
+		shutdown(fd, SHUT_RDWR);
+		close(fd);
+		if (success) return;
+    }
+#endif
+	fmt::print("Failed to obtain lockfile; is the program already running?\n");
 }
 
 #if defined(__linux__)
@@ -213,7 +239,7 @@ bool LockXdgDirectories(std::filesystem::path& config_dir, std::filesystem::path
 	data_lock.append("lock");
 	int lockfile = open(data_lock.c_str(), O_RDWR | O_CREAT | O_CLOEXEC, 0600);
 	if (flock(lockfile, LOCK_EX | LOCK_NB)) {
-		fmt::print("Failed to obtain lockfile; is the program already running?\n");
+		BoltFailToObtainLockfile(runtime_dir);
 		return false;
 	} else {
 		return true;
@@ -315,7 +341,7 @@ bool LockXdgDirectories(std::filesystem::path& config_dir, std::filesystem::path
 	data_lock.append("lock");
 	HANDLE lockfile = CreateFileW(data_lock.c_str(), GENERIC_READ, 0, NULL, CREATE_ALWAYS, 0, NULL);
 	if (lockfile == INVALID_HANDLE_VALUE) {
-		fmt::print("Failed to obtain lockfile; is the program already running? (error: {})\n", GetLastError());
+		BoltFailToObtainLockfile(runtime_dir);
 		return false;
 	} else {
 		return true;
