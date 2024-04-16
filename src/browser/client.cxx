@@ -282,6 +282,12 @@ bool Browser::Client::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, Ce
 			this->any_clients = true;
 			return true;
 		}
+
+		if (name == "__bolt_open_launcher") {
+			fmt::print("[B] open_launcher request\n");
+			this->OpenLauncher();
+			return true;
+		}
 	}
 
 	if (name == "__bolt_refresh") {
@@ -385,7 +391,16 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 	if (_bolt_ipc_receive(fd, &message, sizeof(message))) {
 		return false;
 	}
-	fmt::print("[I] new message, type {}, items={}\n", message.message_type, message.items);
+	switch (message.message_type) {
+		case IPC_MSG_DUPLICATEPROCESS: {
+			this->ipc_browser->GetMainFrame()->SendProcessMessage(PID_RENDERER, CefProcessMessage::Create("__bolt_open_launcher"));
+			break;
+		}
+		default: {
+			fmt::print("[I] got unknown message type {}\n", message.message_type);
+			break;
+		}
+	}
 	return true;
 }
 
