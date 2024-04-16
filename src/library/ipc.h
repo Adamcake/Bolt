@@ -4,6 +4,7 @@
 #include <stddef.h>
 
 enum BoltMessageType {
+    IPC_MSG_DUPLICATEPROCESS,
     IPC_MSG_NEWPLUGINS,
 };
 
