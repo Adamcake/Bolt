@@ -5,10 +5,12 @@
 	import Messages from './lib/Messages.svelte';
 	import Launch from './lib/Launch.svelte';
 	import Auth from './lib/Auth.svelte';
+	import PluginMenu from './lib/PluginMenu.svelte';
 	import { urlSearchParams } from './functions';
 	import { showDisclaimer } from './store';
 
 	let showSettings: boolean = false;
+	let showPluginMenu: boolean = false;
 	let authorizing: boolean = false;
 
 	urlSearchParams();
@@ -47,16 +49,19 @@
 	{#if authorizing}
 		<Auth></Auth>
 	{:else}
-		{#if $showDisclaimer}
-			<Disclaimer></Disclaimer>
+		{#if showPluginMenu}
+			<PluginMenu bind:showPluginMenu></PluginMenu>
 		{/if}
 		{#if showSettings}
 			<Settings bind:showSettings></Settings>
 		{/if}
+		{#if $showDisclaimer}
+			<Disclaimer></Disclaimer>
+		{/if}
 		<TopBar bind:showSettings></TopBar>
 		<div class="mt-16 grid h-full grid-flow-col grid-cols-3">
 			<div></div>
-			<Launch></Launch>
+			<Launch bind:showPluginMenu></Launch>
 			<div></div>
 		</div>
 		<Messages></Messages>

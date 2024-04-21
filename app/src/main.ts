@@ -6,6 +6,7 @@ import {
 	platform,
 	internalUrl,
 	credentials,
+	hasBoltPlugins,
 	isConfigDirty,
 	pendingOauth,
 	pendingGameAuth,
@@ -47,6 +48,8 @@ export let platformSub: string;
 unsubscribers.push(platform.subscribe((data) => (platformSub = data as string)));
 export let credentialsSub: Map<string, Credentials>;
 unsubscribers.push(credentials.subscribe((data) => (credentialsSub = data)));
+export let hasBoltPluginsSub: boolean;
+unsubscribers.push(hasBoltPlugins.subscribe((data) => (hasBoltPluginsSub = data ?? false)));
 export let pendingOauthSub: Auth;
 unsubscribers.push(pendingOauth.subscribe((data) => (pendingOauthSub = <Auth>data)));
 export let pendingGameAuthSub: Array<Auth>;

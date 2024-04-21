@@ -21,6 +21,7 @@ import {
 	accountList,
 	config,
 	credentials,
+	hasBoltPlugins,
 	hdosInstalledVersion,
 	isConfigDirty,
 	messageList,
@@ -87,10 +88,11 @@ export function loginClicked() {
 export function urlSearchParams(): void {
 	const query = new URLSearchParams(window.location.search);
 	platform.set(query.get('platform'));
-	isFlathub = query.get('flathub') != '0';
+	isFlathub = query.get('flathub') === '1';
 	rs3InstalledHash.set(query.get('rs3_linux_installed_hash'));
 	runeLiteInstalledId.set(query.get('runelite_installed_id'));
 	hdosInstalledVersion.set(query.get('hdos_installed_version'));
+	hasBoltPlugins.set(query.get('plugins') === '1');
 	const creds = query.get('credentials');
 	if (creds) {
 		try {
