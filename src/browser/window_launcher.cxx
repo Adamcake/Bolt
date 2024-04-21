@@ -300,6 +300,10 @@ CefString Browser::Launcher::BuildURL() const {
 	std::stringstream url;
 	url << this->internal_url << URI << "&flathub=" << BOLT_FLATHUB_BUILD;
 
+#if defined(BOLT_PLUGINS)
+	url << "&plugins=1";
+#endif
+
 	std::ifstream rs_deb_hashfile(this->rs3_hash_path.c_str(), std::ios::in | std::ios::binary);
 	if (!rs_deb_hashfile.fail()) {
 		url << "&rs3_linux_installed_hash=" << rs_deb_hashfile.rdbuf();
