@@ -352,7 +352,6 @@ CefString Browser::Launcher::BuildURL() const {
 
 #if defined(BOLT_PLUGINS)
 	std::ifstream plugin_file(this->plugin_config_path.c_str(), std::ios::in | std::ios::binary);
-	fmt::print("loading plugin file {}, {}\n", this->plugin_config_path.c_str(), plugin_file.fail());
 	std::string plugins_str;
 	if (!plugin_file.fail()) {
 		std::stringstream ss;
