@@ -135,9 +135,6 @@ function start(): void {
 					xml.send(post_data);
 				}
 				break;
-			case 'initAuth':
-				msg(`message: init auth: ${event.data.auth_method}`);
-				break;
 			case 'externalUrl':
 				xml.onreadystatechange = () => {
 					if (xml.readyState == 4) {
