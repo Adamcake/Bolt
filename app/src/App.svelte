@@ -7,7 +7,7 @@
 	import Auth from './lib/Auth.svelte';
 	import PluginMenu from './lib/PluginMenu.svelte';
 	import { urlSearchParams } from './functions';
-	import { clientListPromise, showDisclaimer } from './store';
+	import { showDisclaimer } from './store';
 
 	let showSettings: boolean = false;
 	let showPluginMenu: boolean = false;

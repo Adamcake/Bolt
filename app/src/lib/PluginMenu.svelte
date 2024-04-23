@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
-	import { get } from 'svelte/store';
 	import Backdrop from './Backdrop.svelte';
 	import { getNewClientListPromise } from '../functions';
 	import { clientListPromise } from '../store';
@@ -51,18 +50,21 @@
 				<p>loading...</p>
 			{:then clients}
 				{#if clients.length == 0}
-					<p>(start an RS3 game client with plugin library enabled and it will be listed here.)</p>
+					<p>
+						(start an RS3 game client with plugin library enabled and it will be listed
+						here.)
+					</p>
 				{:else}
 					{#each clients as client}
 						<button
 							class="m-1 h-[28px] w-[95%] rounded-lg border-2 border-blue-500 duration-200 hover:opacity-75">
-							{client.identity || "(unnamed)"}
+							{client.identity || '(unnamed)'}
 						</button>
 						<br />
 					{/each}
 				{/if}
-			{:catch error}
-					<p>error</p>
+			{:catch}
+				<p>error</p>
 			{/await}
 		</div>
 		<div class="h-full pt-10">

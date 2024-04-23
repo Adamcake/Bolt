@@ -10,7 +10,7 @@ import {
 	type GameClient,
 	configDefaults,
 	Game,
-	Client,
+	Client
 } from './interfaces';
 
 // readable stores. known at starup

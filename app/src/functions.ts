@@ -776,9 +776,16 @@ export function getNewClientListPromise(): Promise<GameClient[]> {
 		xml.open('GET', url, true);
 		xml.onreadystatechange = () => {
 			if (xml.readyState == 4) {
-				if (xml.status == 200 && xml.getResponseHeader('content-type') === 'application/json') {
+				if (
+					xml.status == 200 &&
+					xml.getResponseHeader('content-type') === 'application/json'
+				) {
 					const dict = JSON.parse(xml.responseText);
-					resolve(Object.keys(dict).map((uid) => <GameClient>{uid, identity: dict[uid].identity || null}))
+					resolve(
+						Object.keys(dict).map(
+							(uid) => <GameClient>{ uid, identity: dict[uid].identity || null }
+						)
+					);
 				} else {
 					reject(`error (${xml.responseText})`);
 				}
@@ -786,4 +793,4 @@ export function getNewClientListPromise(): Promise<GameClient[]> {
 		};
 		xml.send();
 	});
-};
+}
