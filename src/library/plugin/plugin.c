@@ -7,6 +7,7 @@
 #include <lauxlib.h>
 #include <lualib.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 
 #define API_VERSION_MAJOR 1
@@ -95,6 +96,14 @@ static int surface_gc(lua_State* state) {
 
 void _bolt_plugin_init(void (*_surface_init)(struct SurfaceFunctions*, unsigned int, unsigned int), void (*_surface_destroy)(void*)) {
     _bolt_plugin_ipc_init(&fd);
+
+    const char* display_name = getenv("JX_DISPLAY_NAME");
+    if (display_name && *display_name) {
+        size_t name_len = strlen(display_name);
+        struct BoltIPCMessage message = {.message_type = IPC_MSG_IDENTIFY, .items = name_len};
+        _bolt_ipc_send(fd, &message, sizeof(message));
+        _bolt_ipc_send(fd, display_name, name_len);
+    }
 
     surface_init = _surface_init;
     surface_destroy = _surface_destroy;

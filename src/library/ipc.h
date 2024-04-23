@@ -6,6 +6,7 @@
 enum BoltMessageType {
     IPC_MSG_DUPLICATEPROCESS,
     IPC_MSG_NEWPLUGINS,
+    IPC_MSG_IDENTIFY,
 };
 
 /// A generic message. The host process and game clients will always assume incoming data is an
