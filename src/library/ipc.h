@@ -5,7 +5,6 @@
 
 enum BoltMessageType {
     IPC_MSG_DUPLICATEPROCESS,
-    IPC_MSG_NEWPLUGINS,
     IPC_MSG_IDENTIFY,
 };
 
