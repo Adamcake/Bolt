@@ -7,9 +7,10 @@ import {
 	type Bolt,
 	type Account,
 	type SelectedPlay,
+	type GameClient,
 	configDefaults,
 	Game,
-	Client
+	Client,
 } from './interfaces';
 
 // readable stores. known at starup
@@ -24,6 +25,7 @@ export const platform: Writable<string | null> = writable('');
 export const config: Writable<Config> = writable({ ...configDefaults });
 export const credentials: Writable<Map<string, Credentials>> = writable(new Map());
 export const hasBoltPlugins: Writable<boolean | null> = writable(false);
+export const clientListPromise: Writable<Promise<GameClient[]>> = writable();
 export const messageList: Writable<Array<Message>> = writable([]);
 export const pendingOauth: Writable<Auth | null> = writable({});
 export const pendingGameAuth: Writable<Array<Auth>> = writable([]);

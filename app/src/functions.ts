@@ -5,6 +5,7 @@ import {
 	type Account,
 	type Auth,
 	type Character,
+	type GameClient,
 	unwrap
 } from './interfaces';
 import {
@@ -23,6 +24,7 @@ import {
 	credentials,
 	hasBoltPlugins,
 	hdosInstalledVersion,
+	internalUrl,
 	isConfigDirty,
 	messageList,
 	pendingGameAuth,
@@ -766,3 +768,22 @@ export function saveConfig() {
 		xml.send(json);
 	}
 }
+
+export function getNewClientListPromise(): Promise<GameClient[]> {
+	return new Promise((resolve, reject) => {
+		const xml = new XMLHttpRequest();
+		const url = get(internalUrl).concat('/list-game-clients');
+		xml.open('GET', url, true);
+		xml.onreadystatechange = () => {
+			if (xml.readyState == 4) {
+				if (xml.status == 200 && xml.getResponseHeader('content-type') === 'application/json') {
+					const dict = JSON.parse(xml.responseText);
+					resolve(Object.keys(dict).map((uid) => <GameClient>{uid, identity: dict[uid].identity || null}))
+				} else {
+					reject(`error (${xml.responseText})`);
+				}
+			}
+		};
+		xml.send();
+	});
+};

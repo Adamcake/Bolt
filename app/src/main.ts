@@ -2,6 +2,7 @@ import './assets/output.css';
 import App from './App.svelte';
 import {
 	messageList,
+	clientListPromise,
 	config,
 	platform,
 	internalUrl,
@@ -17,6 +18,7 @@ import {
 } from './store';
 import { get, type Unsubscriber } from 'svelte/store';
 import {
+	getNewClientListPromise,
 	parseCredentials,
 	handleLogin,
 	saveAllCreds,
@@ -200,6 +202,9 @@ function start(): void {
 					xml.setRequestHeader('Accept', 'application/json');
 					xml.send(`{"idToken": "${event.data.id_token}"}`);
 				}
+				break;
+			case 'gameClientListUpdate':
+				clientListPromise.set(getNewClientListPromise());
 				break;
 			default:
 				msg('Unknown message type: '.concat(event.data.type));

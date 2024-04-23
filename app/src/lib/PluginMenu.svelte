@@ -1,27 +1,31 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
+	import { get } from 'svelte/store';
 	import Backdrop from './Backdrop.svelte';
+	import { getNewClientListPromise } from '../functions';
+	import { clientListPromise } from '../store';
 
 	// props
 	export let showPluginMenu: boolean;
 
-	// hide settings on 'escape'
+	// get connected client list
+	clientListPromise.set(getNewClientListPromise());
+
+	// hide plugin menu on 'escape'
 	function escapeKeyPressed(evt: KeyboardEvent): void {
 		if (evt.key === 'Escape') {
 			showPluginMenu = false;
 		}
 	}
-
-	// check if user presses escape
 	addEventListener('keydown', escapeKeyPressed);
 
-	// When the component is removed, delete the event listener also
 	onDestroy(() => {
+		// When the component is removed, delete the event listener also
 		removeEventListener('keydown', escapeKeyPressed);
 	});
 </script>
 
-<div id="plugins">
+<div>
 	<Backdrop
 		on:click={() => {
 			showPluginMenu = false;
@@ -43,13 +47,23 @@
 				Manage Plugins
 			</button>
 			<hr class="p-1 dark:border-slate-700" />
-			{#each ['Client 1', 'Client 2', 'Client 3'] as username}
-				<button
-					class="m-1 h-[28px] w-[95%] rounded-lg border-2 border-blue-500 duration-200 hover:opacity-75">
-					{username}
-				</button>
-				<br />
-			{/each}
+			{#await $clientListPromise}
+				<p>loading...</p>
+			{:then clients}
+				{#if clients.length == 0}
+					<p>(start an RS3 game client with plugin library enabled and it will be listed here.)</p>
+				{:else}
+					{#each clients as client}
+						<button
+							class="m-1 h-[28px] w-[95%] rounded-lg border-2 border-blue-500 duration-200 hover:opacity-75">
+							{client.identity || "(unnamed)"}
+						</button>
+						<br />
+					{/each}
+				{/if}
+			{:catch error}
+					<p>error</p>
+			{/await}
 		</div>
 		<div class="h-full pt-10">
 			<p>menu</p>

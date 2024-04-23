@@ -140,3 +140,9 @@ export interface SelectedPlay {
 	game?: Game;
 	client?: Client;
 }
+
+// connected game client for plugin management purposes
+export interface GameClient {
+	uid: string,
+	identity?: string;
+}
