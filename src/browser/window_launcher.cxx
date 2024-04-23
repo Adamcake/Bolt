@@ -102,6 +102,11 @@ Browser::Launcher::Launcher(
 	this->hdos_version_path = data_dir;
 	this->hdos_version_path.append("hdos_version.bin");
 
+#if defined(BOLT_PLUGINS)
+	this->plugin_config_path = config_dir;
+	this->plugin_config_path.append("plugins.json");
+#endif
+
 	CefString url = this->BuildURL();
 	this->Init(client, details, url, show_devtools);
 }
@@ -310,10 +315,6 @@ CefString Browser::Launcher::BuildURL() const {
 	std::stringstream url;
 	url << this->internal_url << URI << "&flathub=" << BOLT_FLATHUB_BUILD;
 
-#if defined(BOLT_PLUGINS)
-	url << "&plugins=1";
-#endif
-
 	std::ifstream rs_deb_hashfile(this->rs3_hash_path.c_str(), std::ios::in | std::ios::binary);
 	if (!rs_deb_hashfile.fail()) {
 		url << "&rs3_linux_installed_hash=" << rs_deb_hashfile.rdbuf();
@@ -348,6 +349,21 @@ CefString Browser::Launcher::BuildURL() const {
 		url << "&config=" << config_str;
 		config_file.close();
 	}
+
+#if defined(BOLT_PLUGINS)
+	std::ifstream plugin_file(this->plugin_config_path.c_str(), std::ios::in | std::ios::binary);
+	fmt::print("loading plugin file {}, {}\n", this->plugin_config_path.c_str(), plugin_file.fail());
+	std::string plugins_str;
+	if (!plugin_file.fail()) {
+		std::stringstream ss;
+		ss << plugin_file.rdbuf();
+		plugins_str = CefURIEncode(CefString(ss.str()), true).ToString();
+		url << "&plugins=" << plugins_str;
+		plugin_file.close();
+	} else {
+		url << "&plugins=%7B%7D";
+	}
+#endif
 
 	return url.str();
 }

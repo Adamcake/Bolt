@@ -16,14 +16,6 @@
 
 #if defined(BOLT_PLUGINS)
 #include <thread>
-struct BoltPlugin {
-	CefString id;
-	CefString name;
-	CefString desc;
-	CefString path;
-	CefString main;
-	bool has_desc;
-};
 #endif
 
 #if defined(BOLT_DEV_LAUNCHER_DIRECTORY)
@@ -171,7 +163,6 @@ namespace Browser {
 				// identity may be null if game hasn't reported its identity yet or display name is unset
 				char* identity;
 			};
-			std::vector<BoltPlugin> plugins;
 			std::thread ipc_thread;
 			int ipc_fd;
 			CefRefPtr<CefBrowserView> ipc_view;

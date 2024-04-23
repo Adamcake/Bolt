@@ -58,6 +58,9 @@ namespace Browser {
 			std::filesystem::path runelite_id_path;
 			std::filesystem::path hdos_path;
 			std::filesystem::path hdos_version_path;
+#if defined(BOLT_PLUGINS)
+			std::filesystem::path plugin_config_path;
+#endif
 	};
 }
 
