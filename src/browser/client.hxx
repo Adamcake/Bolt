@@ -74,8 +74,14 @@ namespace Browser {
 		/// Handles a new client connecting to the IPC socket. Called by the IPC thread.
 		void IPCHandleNewClient(int fd);
 
+		/// Handles a client's file descriptor having been closed
+		void IPCHandleClosed(int fd);
+
 		/// Handles the case where a client disconnects and no more clients are connected
 		void IPCHandleNoMoreClients();
+
+		/// ResourceRequestHandler style function to return game_clients as JSON
+		CefRefPtr<CefResourceRequestHandler> ListGameClients();
 
 		/// Handles a new message being sent to the IPC socket by a client. Called by the IPC thread.
 		/// The message hasn't actually been pulled from the socket yet when this function is called;
@@ -154,13 +160,21 @@ namespace Browser {
 #endif
 
 #if defined(BOLT_PLUGINS)
+			struct GameClient {
+				uint64_t uid;
+				int fd;
+				// identity may be null if game hasn't reported its identity yet or display name is unset
+				char* identity;
+			};
 			std::vector<BoltPlugin> plugins;
 			std::thread ipc_thread;
 			int ipc_fd;
 			CefRefPtr<CefBrowserView> ipc_view;
 			CefRefPtr<CefWindow> ipc_window;
 			CefRefPtr<CefBrowser> ipc_browser;
-			bool any_clients;
+			uint64_t next_client_uid;
+			std::mutex game_clients_lock;
+			std::vector<GameClient> game_clients;
 #endif
 
 			// Mutex-locked vector - may be accessed from either UI thread (most of the time) or IO thread (GetResourceRequestHandler)

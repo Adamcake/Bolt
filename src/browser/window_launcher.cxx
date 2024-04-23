@@ -242,6 +242,16 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 			return SaveFileFromPost(request, this->creds_path.c_str());
 		}
 
+		// request for list of connected game clients
+		if (path == "/list-game-clients") {
+#if defined(BOLT_PLUGINS)
+			return this->client->ListGameClients();
+#else
+			const char* data = "Not supported\n";
+			return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+#endif
+		}
+
 		// instruction to try to open an external URL in the user's browser
 		if (path == "/open-external-url") {
 			CefRefPtr<CefPostData> post_data = request->GetPostData();

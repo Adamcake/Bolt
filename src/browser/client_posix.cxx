@@ -56,11 +56,13 @@ void Browser::Client::IPCRun() {
 					if (!this->IPCHandleMessage(i->fd)) {
 						fmt::print("[I] dropping client fd {} due to read error or eof\n", i->fd);
 						close(i->fd);
+						this->IPCHandleClosed(i->fd);
 						i->fd = 0;
 					}
 				} else {
 					fmt::print("[I] dropping client fd {} due to poll event {}\n", i->fd, i->revents);
 					close(i->fd);
+					this->IPCHandleClosed(i->fd);
 					i->fd = 0;
 				}
 			}

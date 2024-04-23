@@ -10,7 +10,6 @@
 #if defined(BOLT_PLUGINS)
 #include "include/cef_parser.h"
 #include "../library/ipc.h"
-#include <new>
 #include <cstring>
 #define BOLT_IPC_URL "https://bolt-blankpage/"
 #endif
@@ -77,7 +76,7 @@ Browser::Client::Client(CefRefPtr<Browser::App> app,std::filesystem::path config
 	CLIENT_FILEHANDLER(BOLT_DEV_LAUNCHER_DIRECTORY),
 #endif
 #if defined(BOLT_PLUGINS)
-	any_clients(false),
+	next_client_uid(0),
 #endif
 	show_devtools(SHOW_DEVTOOLS), config_dir(config_dir), data_dir(data_dir), runtime_dir(runtime_dir)
 {
@@ -125,8 +124,12 @@ void Browser::Client::TryExit() {
 	this->windows_lock.unlock();
 
 #if defined(BOLT_PLUGINS)
-	bool can_exit = (window_count == 0) && !this->any_clients;
-	fmt::print("[B] TryExit, windows={}, any_clients={}, exit={}\n", window_count, this->any_clients, can_exit);
+	this->game_clients_lock.lock();
+	size_t client_count = this->game_clients.size();
+	this->game_clients_lock.unlock();
+
+	bool can_exit = (window_count == 0) && (client_count == 0);
+	fmt::print("[B] TryExit, windows={}, clients={}, exit={}\n", window_count, client_count, can_exit);
 #else
 	bool can_exit = window_count == 0;
 	fmt::print("[B] TryExit, windows={}, exit={}\n", window_count, can_exit);
@@ -269,17 +272,11 @@ void Browser::Client::OnBeforeClose(CefRefPtr<CefBrowser> browser) {
 bool Browser::Client::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefProcessId, CefRefPtr<CefProcessMessage> message) {
 	CefString name = message->GetName();
 
+#if defined(BOLT_PLUGINS)
 	if (browser->IsSame(this->ipc_browser)) {
 		if (name == "__bolt_no_more_clients") {
 			fmt::print("[B] no more clients\n");
-			this->any_clients = false;
 			this->TryExit();
-			return true;
-		}
-
-		if (name == "__bolt_new_client") {
-			fmt::print("[B] new client\n");
-			this->any_clients = true;
 			return true;
 		}
 
@@ -289,6 +286,7 @@ bool Browser::Client::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, Ce
 			return true;
 		}
 	}
+#endif
 
 	if (name == "__bolt_refresh") {
 		this->windows_lock.lock();
@@ -321,10 +319,12 @@ CefRefPtr<CefResourceRequestHandler> Browser::Client::GetResourceRequestHandler(
 ) {
 	std::lock_guard<std::mutex> _(this->windows_lock);
 
+#if defined(BOLT_PLUGINS)
 	// check if this is the IPC dummy window spawning
 	if (request->GetURL() == BOLT_IPC_URL) {
 		return new Browser::ResourceHandler(nullptr, 0, 204, "text/plain");
 	}
+#endif
 
 	// find the Window responsible for this request, if any
 	auto it = std::find_if(
@@ -343,47 +343,19 @@ CefRefPtr<CefResourceRequestHandler> Browser::Client::GetResourceRequestHandler(
 #if defined(BOLT_PLUGINS)
 void Browser::Client::IPCHandleNewClient(int fd) {
 	fmt::print("[I] new client fd {}\n", fd);
-	this->ipc_browser->GetMainFrame()->SendProcessMessage(PID_RENDERER, CefProcessMessage::Create("__bolt_new_client"));
+	this->game_clients_lock.lock();
+	this->game_clients.push_back(GameClient {.uid = this->next_client_uid, .fd = fd, .identity = nullptr});
+	this->next_client_uid += 1;
+	this->game_clients_lock.unlock();
+}
 
-	// immediately send all configured plugins to the new client
-	for (const BoltPlugin& plugin: this->plugins) {
-		cef_string_utf8_t plugin_name, plugin_desc = {.length = 0}, plugin_path, plugin_main;
-		cef_string_to_utf8(plugin.name.c_str(), plugin.name.length(), &plugin_name);
-		if (plugin.has_desc) cef_string_to_utf8(plugin.desc.c_str(), plugin.desc.length(), &plugin_desc);
-		cef_string_to_utf8(plugin.path.c_str(), plugin.path.length(), &plugin_path);
-		cef_string_to_utf8(plugin.main.c_str(), plugin.main.length(), &plugin_main);
-		size_t len = sizeof(BoltIPCMessage) + (4 * sizeof(uint32_t)) + plugin_name.length + plugin_desc.length + plugin_path.length + plugin_main.length;
-		if (len > 0) {
-			char* message = new (std::align_val_t(sizeof(uint32_t))) char[len];
-			BoltIPCMessage* header = (BoltIPCMessage*)message;
-			header->message_type = IPC_MSG_NEWPLUGINS;
-			header->items = 1;
-			char* ptr = message + sizeof(BoltIPCMessage);
-			memcpy(ptr, &plugin_name.length, sizeof(uint32_t));
-			memcpy(ptr + sizeof(uint32_t), plugin_name.str, plugin_name.length);
-			ptr += sizeof(uint32_t) + plugin_name.length;
-			if (plugin.has_desc) {
-				memcpy(ptr, &plugin_desc.length, sizeof(uint32_t));
-				memcpy(ptr + sizeof(uint32_t), plugin_desc.str, plugin_desc.length);
-				ptr += sizeof(uint32_t) + plugin_desc.length;
-			} else {
-				const uint32_t no_value = ~0;
-				memcpy(ptr, &no_value, sizeof(uint32_t));
-				ptr += sizeof(uint32_t);
-			}
-			memcpy(ptr, &plugin_path.length, sizeof(uint32_t));
-			memcpy(ptr + sizeof(uint32_t), plugin_path.str, plugin_path.length);
-			ptr += sizeof(uint32_t) + plugin_path.length;
-			memcpy(ptr, &plugin_main.length, sizeof(uint32_t));
-			memcpy(ptr + sizeof(uint32_t), plugin_main.str, plugin_main.length);
-			_bolt_ipc_send(fd, message, len);
-			delete[] message;
-		}
-		cef_string_utf8_clear(&plugin_name);
-		if (plugin.has_desc) cef_string_utf8_clear(&plugin_desc);
-		cef_string_utf8_clear(&plugin_path);
-		cef_string_utf8_clear(&plugin_main);
+void Browser::Client::IPCHandleClosed(int fd) {
+	std::lock_guard<std::mutex> _(this->game_clients_lock);
+	auto it = std::remove_if(this->game_clients.begin(), this->game_clients.end(), [fd](const GameClient& g) { return g.fd == fd; });
+	for (auto i = it; i != this->game_clients.end(); i += 1) {
+		delete[] i->identity;
 	}
+	this->game_clients.erase(it, this->game_clients.end());
 }
 
 bool Browser::Client::IPCHandleMessage(int fd) {
@@ -396,6 +368,19 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 			this->ipc_browser->GetMainFrame()->SendProcessMessage(PID_RENDERER, CefProcessMessage::Create("__bolt_open_launcher"));
 			break;
 		}
+		case IPC_MSG_IDENTIFY: {
+			this->game_clients_lock.lock();
+			for (GameClient& g: this->game_clients) {
+				if (g.fd == fd) {
+					g.identity = new char[message.items + 1];
+					_bolt_ipc_receive(fd, g.identity, message.items);
+					g.identity[message.items] = '\0';
+					break;
+				}
+			}
+			this->game_clients_lock.unlock();
+			break;
+		}
 		default: {
 			fmt::print("[I] got unknown message type {}\n", message.message_type);
 			break;
@@ -406,6 +391,25 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 
 void Browser::Client::IPCHandleNoMoreClients() {
 	this->ipc_browser->GetMainFrame()->SendProcessMessage(PID_RENDERER, CefProcessMessage::Create("__bolt_no_more_clients"));
+}
+
+CefRefPtr<CefResourceRequestHandler> Browser::Client::ListGameClients() {
+	char buf[256];
+	CefRefPtr<CefDictionaryValue> dict = CefDictionaryValue::Create();
+	this->game_clients_lock.lock();
+	for (const GameClient& g: this->game_clients) {
+		CefRefPtr<CefDictionaryValue> inner_dict = CefDictionaryValue::Create();
+		snprintf(buf, 256, "%lu", g.uid);
+		if (g.identity) {
+			inner_dict->SetString("identity", g.identity);
+		}
+		dict->SetDictionary(buf, inner_dict);
+	}
+	this->game_clients_lock.unlock();
+	CefRefPtr<CefValue> value = CefValue::Create();
+	value->SetDictionary(dict);
+	std::string str = CefWriteJSON(value, JSON_WRITER_DEFAULT).ToString();
+	return new ResourceHandler(std::move(str), 200, "application/json");
 }
 
 void Browser::Client::OnWindowCreated(CefRefPtr<CefWindow> window) {
