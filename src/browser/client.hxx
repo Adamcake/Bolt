@@ -74,10 +74,15 @@ namespace Browser {
 		/// Handles a new client connecting to the IPC socket. Called by the IPC thread.
 		void IPCHandleNewClient(int fd);
 
+		/// Handles any case where the UI for the client list should be reloaded.
+		/// Should be called after updating it (e.g. by calling IPCHandleNewClient)
+		void IPCHandleClientListUpdate();
+
 		/// Handles a client's file descriptor having been closed
 		void IPCHandleClosed(int fd);
 
-		/// Handles the case where a client disconnects and no more clients are connected
+		/// Handles the case where a client disconnects and no more clients are connected.
+		/// This is separate from IPCHandleClientListUpdate and must be called separately.
 		void IPCHandleNoMoreClients();
 
 		/// ResourceRequestHandler style function to return game_clients as JSON

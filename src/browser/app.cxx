@@ -80,6 +80,23 @@ bool Browser::App::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRe
 		frame->SendProcessMessage(PID_BROWSER, message);
 		return true;
 	}
+	if (name == "__bolt_client_list_update") {
+		fmt::print("[R] handling client_list_update\n");
+		CefRefPtr<CefV8Context> context = frame->GetV8Context();
+		context->Enter();
+		CefRefPtr<CefV8Value> post_message = context->GetGlobal()->GetValue("postMessage");
+		if (post_message->IsFunction()) {
+			// equivalent to: `window.postMessage({type: 'gameClientListUpdate'}, '*')`
+			CefRefPtr<CefV8Value> dict = CefV8Value::CreateObject(nullptr, nullptr);
+			dict->SetValue("type", CefV8Value::CreateString("gameClientListUpdate"), V8_PROPERTY_ATTRIBUTE_READONLY);
+			CefV8ValueList value_list = {dict, CefV8Value::CreateString("*")};
+			post_message->ExecuteFunctionWithContext(context, nullptr, value_list);
+		} else {
+			fmt::print("[R] warning: window.postMessage is not a function, {} will be ignored\n", name.ToString());
+		}
+		context->Exit();
+		return true;
+	}
 	return false;
 }
 

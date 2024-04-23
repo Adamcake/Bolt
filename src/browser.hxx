@@ -64,6 +64,9 @@ namespace Browser {
 		/// Opens devtools for this browser
 		void ShowDevTools();
 
+		/// Send CEF process message for this browser
+		virtual void SendMessage(CefString);
+
 		/* CefWindowDelegate functions */
 		void OnWindowCreated(CefRefPtr<CefWindow>) override;
 		void OnWindowClosing(CefRefPtr<CefWindow>) override;

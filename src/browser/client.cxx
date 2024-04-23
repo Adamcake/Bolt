@@ -349,6 +349,14 @@ void Browser::Client::IPCHandleNewClient(int fd) {
 	this->game_clients_lock.unlock();
 }
 
+void Browser::Client::IPCHandleClientListUpdate() {
+	std::lock_guard<std::mutex> _(this->windows_lock);
+	auto it = std::find_if(this->windows.begin(), this->windows.end(), [](CefRefPtr<Window>& win) { return win->IsLauncher(); });
+	if (it != this->windows.end()) {
+		(*it)->SendMessage("__bolt_client_list_update");
+	}
+}
+
 void Browser::Client::IPCHandleClosed(int fd) {
 	std::lock_guard<std::mutex> _(this->game_clients_lock);
 	auto it = std::remove_if(this->game_clients.begin(), this->game_clients.end(), [fd](const GameClient& g) { return g.fd == fd; });
@@ -379,6 +387,7 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 				}
 			}
 			this->game_clients_lock.unlock();
+			this->IPCHandleClientListUpdate();
 			break;
 		}
 		default: {

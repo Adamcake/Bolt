@@ -43,6 +43,7 @@ void Browser::Client::IPCRun() {
 			}
 			pfds.push_back({.fd = client_fd, .events = POLLIN});
 			this->IPCHandleNewClient(client_fd);
+			this->IPCHandleClientListUpdate();
 		} else if (pfds[0].revents != 0) {
 			fmt::print("[I] IPC thread exiting due to poll event {}\n", pfds[0].revents);
 			break;
@@ -57,12 +58,14 @@ void Browser::Client::IPCRun() {
 						fmt::print("[I] dropping client fd {} due to read error or eof\n", i->fd);
 						close(i->fd);
 						this->IPCHandleClosed(i->fd);
+						this->IPCHandleClientListUpdate();
 						i->fd = 0;
 					}
 				} else {
 					fmt::print("[I] dropping client fd {} due to poll event {}\n", i->fd, i->revents);
 					close(i->fd);
 					this->IPCHandleClosed(i->fd);
+					this->IPCHandleClientListUpdate();
 					i->fd = 0;
 				}
 			}

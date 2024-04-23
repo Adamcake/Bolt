@@ -229,3 +229,7 @@ void Browser::Window::ShowDevTools() {
 	CefBrowserSettings browser_settings;
 	browser_host->ShowDevTools(window_info, browser_host->GetClient(), browser_settings, CefPoint());
 }
+
+void Browser::Window::SendMessage(CefString str) {
+	this->browser->GetMainFrame()->SendProcessMessage(PID_RENDERER, CefProcessMessage::Create(str));
+}
