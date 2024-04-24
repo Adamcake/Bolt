@@ -257,10 +257,35 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 			return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
 #endif
 		}
+
 		// request for list of connected game clients
 		if (path == "/list-game-clients") {
 #if defined(BOLT_PLUGINS)
 			return this->client->ListGameClients();
+#else
+			const char* data = "Not supported\n";
+			return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+#endif
+		}
+
+		// request for the contents of a JSON file - doesn't actually validate the contents
+		if (path == "/read-json-file") {
+#if defined(BOLT_PLUGINS)
+			if (!query.starts_with("path=") || !query.ends_with(".json") || query.find('&') != std::string_view::npos) {
+				const char* data = "Bad request\n";
+				return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+			}
+			std::ifstream file(CefURIDecode(std::string(query.substr(5, -1)), true, (cef_uri_unescape_rule_t)(UU_SPACES | UU_PATH_SEPARATORS | UU_REPLACE_PLUS_WITH_SPACE)).ToString(), std::ios::in | std::ios::binary);
+			if (!file.fail()) {
+				std::stringstream ss;
+				ss << file.rdbuf();
+				std::string str = ss.str();
+				file.close();
+				return new Browser::ResourceHandler(str, 200, "application/json");
+			} else {
+				const char* data = "Not found\n";
+				return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 404, "text/plain");
+			}
 #else
 			const char* data = "Not supported\n";
 			return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
