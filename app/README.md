@@ -25,7 +25,7 @@ The initial request to `launcher.html` may have any of the following query param
 -   `credentials`: a JSON-encoded string containing an array of objects, one for each account the user is signed in on. Contains access_token, id_token, refresh_token, expiry, login_provider, and sub (unique account ID). If this param is absent, the user has no credentials file.
 -   `config`: a JSON-encoded string containing the user config. Anything at all may be stored in the config object; when the object is sent in a `/save-config` request (described later in this readme), the same object will be present in this param next time Bolt opens. If this param is absent, the user has no config file.
 -   `flathub`: a boolean indicating whether this is a flathub build, useful for making error messages more helpful. Assume false if not present.
--   `plugins`: a boolean indicating whether this build supports RS3 plugins. Assume false if not present. If false, plugin-related API requests will not work, and will return 4xx.
+-   `plugins`: a JSON-encoded string containing the contents of plugins.json. If this is present (even as an empty dict), then plugins are supported on the current system. If not, all plugin-related features should be hidden or disabled, as they will not work.
 -   `rs3_linux_installed_hash`: if RS3 is installed, this param will be present indicating the hash of the .deb from which it was installed. Used for update-checking by comparing the hash against the one found in the metafile of the official download repo.
 -   `runelite_installed_id` - if RuneLite is installed, this param will be present indicating the unique ID of the [Github asset](https://api.github.com/repos/runelite/launcher/releases) from which the JAR was downloaded. Used for update-checking.
 -   `hdos_installed_version` - if HDOS is installed, this param will be present indicating the value `launcher.version` from the [getdown config](https://cdn.hdos.dev/client/getdown.txt) at the time when it was installed. Used for update-checking.
@@ -41,6 +41,7 @@ The following tasks are achieved by making web requests to `https://bolt-interna
 -   `/browse-data`: attempts to open Bolt's data directory in the user's file explorer.
 -   `/jar-file-picker`: shows the user a file-picker for .jar files. The response will contain an absolute file path in plain text, unless the user closed the dialog without choosing a file, in which case the response code will 204 and the response body should be ignored.
     -   Note: this request can take a very long time to complete since it waits indefinitely for user input, so do not run it synchronously and do not specify a timeout.
+-   `/json-file-picker`: shows the user a file-picker for .json files. Identical to the above, except for the file extension.
 -   `/launch-rs3-deb`: launches RS3 from the linux .deb file. Should only be used on platforms which support x86_64 ELF binaries (i.e. linux). May have the following query params:
     -   `jx_...`: see "JX Variables" section
     -   `hash`: a hash of a newer version of the game client to install. If set, there must also be POST data containing the downloaded contents of the .deb file. The .deb will be extracted, saved and launched. If all of that is successful, `rs3_linux_installed_hash` will be updated with the new hash.
@@ -54,15 +55,20 @@ The following tasks are achieved by making web requests to `https://bolt-interna
     -   `jx_...`: see "JX Variables" section
     -   `version`: a version of a newer launcher version to install (see `hdos_installed_version` above for where this number is obtained.) If set, there must also be POST data containing the downloaded contents of the JAR file. The JAR will be saved and launched. If successful, `hdos_installed_version` will be updated with the new version.
 
+If plugins are supported on the current system, these additional requests will be available. If not, these will respond with 400.
+
+-   `/list-game-clients`: responds with a JSON-encoded list of the game clients currently connected via the plugin library.
+-   `/save-plugin-config`: same as `save-config` except writing to plugins.json
+-   `/read-json-file`: responds with the contents of the given JSON file, or 404 if it doesn't exist
+    -   `path`: absolute path to the file, generally the one returned from json-file-picker
+
 ## JX Variables
 
 The following variables are used to pass authentication info to a game when launching it. They're the same across all games and clients.
 
--   `jx_access_token`: access token for legacy-type accounts
--   `jx_refresh_token`: login refresh token for legacy-type accounts
 -   `jx_session_id`: Session ID obtained from OAuth token exchange; stored as `session_id` in credentials object
--   `jx_character_id`: The ID of the unique game character the user wants to log into - not used for legacy accounts, since they contain only a single game account
--   `jx_display_name`: the display name of the account being logged into - optional, should be left unset if the account has no display name according to the login server
+-   `jx_character_id`: The ID of the unique game character the user wants to log into
+-   `jx_display_name`: the display name of the account being logged into - optional, as new accounts will not have a display name yet
 
 # App
 
