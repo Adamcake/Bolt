@@ -24,15 +24,15 @@ constexpr std::string_view URI = "index.html?platform=mac";
 
 CefRefPtr<CefResourceRequestHandler> SaveFileFromPost(CefRefPtr<CefRequest>, const std::filesystem::path::value_type*);
 
-struct JarFilePicker: public CefRunFileDialogCallback, Browser::ResourceHandler {
-	JarFilePicker(CefRefPtr<CefBrowser> browser): callback(nullptr), browser_host(browser->GetHost()), ResourceHandler("text/plain") { }
+struct FilePicker: public CefRunFileDialogCallback, Browser::ResourceHandler {
+	FilePicker(CefRefPtr<CefBrowser> browser, std::vector<CefString> accept_filters):
+		accept_filters(accept_filters), callback(nullptr), browser_host(browser->GetHost()), ResourceHandler("text/plain") { }
 
 	bool Open(CefRefPtr<CefRequest> request, bool& handle_request, CefRefPtr<CefCallback> callback) override {
 		this->callback = callback;
 		CefString title = "Select a JAR file...";
 		CefString default_file_path = "";
-		std::vector<CefString> accept_filters = { ".jar" };
-		this->browser_host->RunFileDialog(FILE_DIALOG_OPEN, title, "", accept_filters, this);
+		this->browser_host->RunFileDialog(FILE_DIALOG_OPEN, title, "", this->accept_filters, this);
 		this->browser_host = nullptr;
 		handle_request = false;
 		return true;
@@ -63,11 +63,12 @@ struct JarFilePicker: public CefRunFileDialogCallback, Browser::ResourceHandler 
 	}
 
 	private:
+		std::vector<CefString> accept_filters;
 		CefRefPtr<CefCallback> callback;
 		std::string data_;
 		CefRefPtr<CefBrowserHost> browser_host;
-		IMPLEMENT_REFCOUNTING(JarFilePicker);
-		DISALLOW_COPY_AND_ASSIGN(JarFilePicker);
+		IMPLEMENT_REFCOUNTING(FilePicker);
+		DISALLOW_COPY_AND_ASSIGN(FilePicker);
 };
 
 Browser::Launcher::Launcher(
@@ -247,6 +248,15 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 			return SaveFileFromPost(request, this->creds_path.c_str());
 		}
 
+		// instruction to save plugin config to disk
+		if (path == "/save-plugin-config") {
+#if defined(BOLT_PLUGINS)
+			return SaveFileFromPost(request, this->plugin_config_path.c_str());
+#else
+			const char* data = "Not supported\n";
+			return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+#endif
+		}
 		// request for list of connected game clients
 		if (path == "/list-game-clients") {
 #if defined(BOLT_PLUGINS)
@@ -289,7 +299,12 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 
 		// instruction to open a file picker for .jar files
 		if (path == "/jar-file-picker") {
-			return new JarFilePicker(browser);
+			return new FilePicker(browser, {".jar"});
+		}
+		
+		// instruction to open a file picker for .json files
+		if (path == "/json-file-picker") {
+			return new FilePicker(browser, {".json"});
 		}
 
 		// respond using internal hashmap of filenames
