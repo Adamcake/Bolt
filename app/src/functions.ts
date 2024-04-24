@@ -23,6 +23,7 @@ import {
 	config,
 	credentials,
 	hasBoltPlugins,
+	pluginList,
 	hdosInstalledVersion,
 	internalUrl,
 	isConfigDirty,
@@ -94,7 +95,14 @@ export function urlSearchParams(): void {
 	rs3InstalledHash.set(query.get('rs3_linux_installed_hash'));
 	runeLiteInstalledId.set(query.get('runelite_installed_id'));
 	hdosInstalledVersion.set(query.get('hdos_installed_version'));
-	hasBoltPlugins.set(query.get('plugins') === '1');
+	const queryPlugins: string | null = query.get('plugins');
+	if (queryPlugins !== null) {
+		hasBoltPlugins.set(true);
+		pluginList.set(JSON.parse(queryPlugins));
+	} else {
+		hasBoltPlugins.set(false);
+	}
+
 	const creds = query.get('credentials');
 	if (creds) {
 		try {
@@ -793,4 +801,16 @@ export function getNewClientListPromise(): Promise<GameClient[]> {
 		};
 		xml.send();
 	});
+}
+
+export function savePluginConfig(): void {
+	const xml = new XMLHttpRequest();
+	xml.open('POST', '/save-plugin-config', true);
+	xml.setRequestHeader('Content-Type', 'application/json');
+	xml.onreadystatechange = () => {
+		if (xml.readyState == 4) {
+			msg(`Save-plugin-config status: ${xml.responseText.trim()}`);
+		}
+	};
+	xml.send(JSON.stringify(get(pluginList)));
 }

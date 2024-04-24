@@ -146,3 +146,16 @@ export interface GameClient {
 	uid: string;
 	identity?: string;
 }
+
+// rs3 plugin configured in plugins.json
+export interface PluginMeta {
+	path?: string;
+	name?: string;
+}
+
+// rs3 plugin config, from the plugin's bolt.json
+export interface PluginConfig {
+	name?: string;
+	version?: string;
+	description?: string;
+}

@@ -8,6 +8,7 @@ import {
 	type Account,
 	type SelectedPlay,
 	type GameClient,
+	type PluginMeta,
 	configDefaults,
 	Game,
 	Client
@@ -24,7 +25,8 @@ export const bolt: Writable<Bolt> = writable();
 export const platform: Writable<string | null> = writable('');
 export const config: Writable<Config> = writable({ ...configDefaults });
 export const credentials: Writable<Map<string, Credentials>> = writable(new Map());
-export const hasBoltPlugins: Writable<boolean | null> = writable(false);
+export const hasBoltPlugins: Writable<boolean> = writable(false);
+export const pluginList: Writable<{ [key: string]: PluginMeta }> = writable();
 export const clientListPromise: Writable<Promise<GameClient[]>> = writable();
 export const messageList: Writable<Array<Message>> = writable([]);
 export const pendingOauth: Writable<Auth | null> = writable({});
