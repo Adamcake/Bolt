@@ -9,37 +9,52 @@
 	// props
 	export let showPluginMenu: boolean;
 
-	// new plugin handler
-	const handleNewPlugin = (folderPath: string, configPath: string) => {
-		var xml = new XMLHttpRequest();
-		xml.onreadystatechange = () => {
-			if (xml.readyState == 4) {
-				const plugin: PluginConfig = JSON.parse(xml.responseText);
-				if (!plugin.name) {
-					console.error(`Config file '${configPath}' missing required field "name"`);
-				} else {
-					const id: string = plugin.name
-						.replaceAll('@', '-')
-						.replaceAll(' ', '-')
-						.toLowerCase()
-						.concat(plugin.version ? `-${plugin.version}` : '');
-					if (Object.keys(get(pluginList)).includes(id)) {
-						console.error(
-							`Config file '${configPath}' gives id '${id}', which is already installed`
-						);
+	const getPluginConfigPromise = (dirpath: string): Promise<PluginConfig> => {
+		return new Promise((resolve, reject) => {
+			const path: string = dirpath.concat(dirpath.endsWith('/') ? 'bolt.json' : '/bolt.json');
+			var xml = new XMLHttpRequest();
+			xml.onreadystatechange = () => {
+				if (xml.readyState == 4) {
+					if (xml.status == 200) {
+						resolve(<PluginConfig>JSON.parse(xml.responseText));
 					} else {
-						$pluginList[id] = { name: plugin.name, path: folderPath };
-						savePluginConfig();
+						reject(xml.responseText);
 					}
 				}
-			}
-		};
-		xml.open(
-			'GET',
-			'/read-json-file?'.concat(new URLSearchParams({ path: configPath }).toString()),
-			true
-		);
-		xml.send();
+			};
+			xml.open(
+				'GET',
+				'/read-json-file?'.concat(new URLSearchParams({ path }).toString()),
+				true
+			);
+			xml.send();
+		});
+	};
+
+	const getPluginConfigPromiseFromID = (id: string): Promise<PluginConfig> | null => {
+		const list = get(pluginList);
+		const meta = list[id];
+		if (!meta) return null;
+		const path = meta.path;
+		return path ? getPluginConfigPromise(path) : null;
+	};
+
+	// new plugin handler
+	const unnamedPluginName = '(unnamed)';
+	const handleNewPlugin = (folderPath: string, configPath: string) => {
+		getPluginConfigPromise(folderPath)
+			.then((plugin: PluginConfig) => {
+				do {
+					selectedManagementPlugin = crypto.randomUUID();
+				} while (Object.keys(get(pluginList)).includes(selectedManagementPlugin));
+				$pluginList[selectedManagementPlugin] = {
+					name: plugin.name ?? unnamedPluginName,
+					path: folderPath
+				};
+			})
+			.catch((reason) => {
+				console.error(`Config file '${configPath}' couldn't be fetched, reason: ${reason}`);
+			});
 	};
 
 	// json file picker
@@ -84,6 +99,10 @@
 		}
 	}
 	addEventListener('keydown', keyPressed);
+
+	// plugin management interface - currently-selected plugin
+	var selectedManagementPlugin: string;
+	$: managementPluginPromise = getPluginConfigPromiseFromID(selectedManagementPlugin);
 
 	onDestroy(() => {
 		// When the component is removed, delete the event listener also
@@ -131,9 +150,11 @@
 		<div class="h-full pt-10">
 			{#if hasBoltPlugins}
 				<select
+					bind:value={selectedManagementPlugin}
 					class="mx-auto mb-4 w-[min(280px,_45%)] cursor-pointer rounded-lg border-2 border-slate-300 bg-inherit p-2 text-inherit duration-200 hover:opacity-75 dark:border-slate-800">
 					{#each Object.entries($pluginList) as [id, plugin]}
-						<option class="dark:bg-slate-900">{plugin.name ?? id}</option>
+						<option class="dark:bg-slate-900" value={id}
+							>{plugin.name ?? unnamedPluginName}</option>
 					{/each}
 				</select>
 				<button
@@ -142,7 +163,21 @@
 					disabled={disableButtons}>
 					+
 				</button>
-				{#if Object.entries($pluginList).length === 0}
+				<br />
+				{#if Object.entries($pluginList).length !== 0}
+					{#if Object.keys(get(pluginList)).includes(selectedManagementPlugin) && managementPluginPromise !== null}
+						{#await managementPluginPromise}
+							<p>loading...</p>
+						{:then plugin}
+							<p class="pb-4 text-xl font-bold">{plugin.name ?? unnamedPluginName}</p>
+							<p class={plugin.description ? 'not-italic' : 'italic'}>
+								{plugin.description ?? 'no description'}
+							</p>
+						{:catch}
+							<p>error</p>
+						{/await}
+					{/if}
+				{:else}
 					<p>
 						You have no plugins installed. Click the + button and select a plugin's
 						bolt.json file to add it.
