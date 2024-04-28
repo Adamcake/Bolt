@@ -170,7 +170,7 @@
 							<p>loading...</p>
 						{:then plugin}
 							<p class="pb-4 text-xl font-bold">{plugin.name ?? unnamedPluginName}</p>
-							<p class={plugin.description ? 'not-italic' : 'italic'}>
+							<p class={plugin.description ? null : 'italic'}>
 								{plugin.description ?? 'no description'}
 							</p>
 						{:catch}
