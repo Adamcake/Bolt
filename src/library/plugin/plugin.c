@@ -100,7 +100,7 @@ void _bolt_plugin_init(void (*_surface_init)(struct SurfaceFunctions*, unsigned 
     const char* display_name = getenv("JX_DISPLAY_NAME");
     if (display_name && *display_name) {
         size_t name_len = strlen(display_name);
-        struct BoltIPCMessage message = {.message_type = IPC_MSG_IDENTIFY, .items = name_len};
+        struct BoltIPCMessageToHost message = {.message_type = IPC_MSG_IDENTIFY, .items = name_len};
         _bolt_ipc_send(fd, &message, sizeof(message));
         _bolt_ipc_send(fd, display_name, name_len);
     }
@@ -235,7 +235,7 @@ void _bolt_plugin_close() {
 }
 
 void _bolt_plugin_handle_messages() {
-    struct BoltIPCMessage message;
+    struct BoltIPCMessageToHost message;
     while (_bolt_ipc_poll(fd)) {
         if (_bolt_ipc_receive(fd, &message, sizeof(message)) != 0) break;
         switch (message.message_type) {

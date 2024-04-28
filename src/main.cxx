@@ -123,7 +123,7 @@ void BoltFailToObtainLockfile(std::filesystem::path tempdir) {
 	tempdir.append("ipc-0");
 	strncpy(addr.sun_path, tempdir.c_str(), sizeof(addr.sun_path));
     if (connect(fd, (const struct sockaddr*)&addr, sizeof(addr)) != -1) {
-		struct BoltIPCMessage message {.message_type = IPC_MSG_DUPLICATEPROCESS};
+		struct BoltIPCMessageToHost message {.message_type = IPC_MSG_DUPLICATEPROCESS};
         bool success = !_bolt_ipc_send(fd, &message, sizeof(message));
 		shutdown(fd, SHUT_RDWR);
 		close(fd);

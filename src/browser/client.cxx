@@ -317,7 +317,7 @@ void Browser::Client::IPCHandleClosed(int fd) {
 }
 
 bool Browser::Client::IPCHandleMessage(int fd) {
-	BoltIPCMessage message;
+	BoltIPCMessageToHost message;
 	if (_bolt_ipc_receive(fd, &message, sizeof(message))) {
 		return false;
 	}
@@ -341,7 +341,7 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 			break;
 		}
 		default: {
-			fmt::print("[I] got unknown message type {}\n", message.message_type);
+			fmt::print("[I] got unknown message type {}\n", (int)message.message_type);
 			break;
 		}
 	}
