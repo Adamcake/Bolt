@@ -51,6 +51,7 @@
 					name: plugin.name ?? unnamedPluginName,
 					path: folderPath
 				};
+				pluginConfigDirty = true;
 			})
 			.catch((reason) => {
 				console.error(`Config file '${configPath}' couldn't be fetched, reason: ${reason}`);
@@ -104,7 +105,11 @@
 	var selectedManagementPlugin: string;
 	$: managementPluginPromise = getPluginConfigPromiseFromID(selectedManagementPlugin);
 
+	let pluginConfigDirty: boolean = false;
 	onDestroy(() => {
+		// save plugin config if it's been changed
+		if (pluginConfigDirty) savePluginConfig();
+
 		// When the component is removed, delete the event listener also
 		removeEventListener('keydown', keyPressed);
 	});
