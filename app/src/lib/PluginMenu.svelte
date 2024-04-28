@@ -178,6 +178,23 @@
 							<p class={plugin.description ? null : 'italic'}>
 								{plugin.description ?? 'no description'}
 							</p>
+							<br>
+							<button
+								class="mx-auto mb-1 w-[min(144px,_25%)] rounded-lg p-2 font-bold text-black duration-200 enabled:bg-rose-500 enabled:hover:opacity-75 disabled:bg-gray-500"
+								on:click={() => {
+									managementPluginPromise = null;
+									pluginConfigDirty = true;
+									let list = get(pluginList);
+									delete list[selectedManagementPlugin];
+									pluginList.set(list);
+								}}>
+								Remove
+							</button>
+							<button
+								class="mx-auto mb-1 w-[min(144px,_25%)] rounded-lg p-2 font-bold text-black duration-200 enabled:bg-blue-500 enabled:hover:opacity-75 disabled:bg-gray-500"
+								on:click={() => managementPluginPromise = getPluginConfigPromiseFromID(selectedManagementPlugin)}>
+								Reload
+							</button>
 						{:catch}
 							<p>error</p>
 						{/await}
