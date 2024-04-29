@@ -87,6 +87,9 @@ namespace Browser {
 		/// Returns true on success, false on failure.
 		bool IPCHandleMessage(int fd);
 
+		/// Sends an IPC message to the named client to start a plugin.
+		void StartPlugin(uint64_t client_id, std::string id, std::string path, std::string main);
+
 		/* CefWindowDelegate overrides */
 		void OnWindowCreated(CefRefPtr<CefWindow>) override;
 #endif

@@ -371,6 +371,33 @@ CefRefPtr<CefResourceRequestHandler> Browser::Client::ListGameClients() {
 	return new ResourceHandler(std::move(str), 200, "application/json");
 }
 
+void Browser::Client::StartPlugin(uint64_t client_id, std::string id, std::string path, std::string main) {
+	this->game_clients_lock.lock();
+	for (const GameClient& g: this->game_clients) {
+		if (g.uid == client_id) {
+			const size_t message_size = sizeof(BoltIPCMessageToClient) + (sizeof(uint32_t) * 3) + id.size() + path.size() + main.size();
+			char* message = new (std::align_val_t(sizeof(BoltIPCMessageToClient))) char[message_size];
+			*(BoltIPCMessageToClient*)message = {.message_type = IPC_MSG_STARTPLUGINS, .items = 1};
+			size_t pos = sizeof(BoltIPCMessageToClient);
+			*(uint32_t*)(message + pos) = id.size();
+			pos += sizeof(uint32_t);
+			*(uint32_t*)(message + pos) = path.size();
+			pos += sizeof(uint32_t);
+			*(uint32_t*)(message + pos) = main.size();
+			pos += sizeof(uint32_t);
+			memcpy(message + pos, id.data(), id.size());
+			pos += id.size();
+			memcpy(message + pos, path.data(), path.size());
+			pos += path.size();
+			memcpy(message + pos, main.data(), main.size());
+			_bolt_ipc_send(g.fd, message, message_size);
+			delete[] message;
+			break;
+		}
+	}
+	this->game_clients_lock.unlock();
+}
+
 void Browser::Client::OnWindowCreated(CefRefPtr<CefWindow> window) {
 	// used only for dummy IPC window; real browsers have their own OnWindowCreated override
 	this->ipc_window = window;
