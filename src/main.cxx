@@ -16,6 +16,10 @@
 #include <sys/stat.h>
 #endif
 
+#if defined(__APPLE__)
+#include "include/wrapper/cef_library_loader.h"
+#endif
+
 #if defined(CEF_X11)
 #include <X11/Xlib.h>
 int XErrorHandlerImpl(Display* display, XErrorEvent* event) {
@@ -310,6 +314,25 @@ bool LockXdgDirectories(std::filesystem::path& config_dir, std::filesystem::path
 	} else {
 		return true;
 	}
+}
+#endif
+
+#if defined(__APPLE__)
+int main(int argc, char* argv[]) {
+	// Dynamically load the CEF framework library.
+	CefScopedLibraryLoader library_loader;
+	if (!library_loader.LoadInMain())
+		return 1;
+
+	// Provide CEF with command-line arguments.
+	CefMainArgs main_args(argc, argv);
+	Browser::App cef_app_;
+	CefRefPtr<Browser::App> cef_app = &cef_app_;
+
+	return BoltRunBrowserProcess(main_args, cef_app);
+}
+bool LockXdgDirectories(std::filesystem::path& config_dir, std::filesystem::path& data_dir) {
+	return true;
 }
 #endif
 
