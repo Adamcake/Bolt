@@ -15,31 +15,6 @@
 #define LOG(...)
 #endif
 
-const char* lua_test_plugin =
-"local bolt = require(\"bolt\")"                                "\n"
-"local surface = bolt.createsurface(64, 64)"                    "\n"
-"local t = bolt.time()"                                         "\n"
-"local function callback2d (batch)"                             "\n"
-"  --if batch:isminimap() then print(\"minimap render 2d\") end""\n"
-"end"                                                           "\n"
-"local function callbackminimap (render)"                       "\n"
-"  --print(\"minimap \", render:angle(), render:scale(), render:position())\n"
-"end"                                                           "\n"
-"local function callbackswapbuffers (s)"                        "\n"
-"  local t2 = bolt.time() - t"                                  "\n"
-"  local x = math.cos(t2 / 250000) * 120"                       "\n"
-"  local y = math.sin(t2 / 250000) * 120"                       "\n"
-"  local r = math.sin(t2 / 300000)"                             "\n"
-"  local g = math.sin(t2 / 310000)"                             "\n"
-"  local b = math.sin(t2 / 320000)"                             "\n"
-"  surface:clear(r, g, b, 0.8)"                                 "\n"
-"  surface:drawtoscreen(0,0,64,64,910+x,454+y,100,100)"         "\n"
-"end"                                                           "\n"
-"bolt.setcallback2d(callback2d)"                                "\n"
-"bolt.setcallbackswapbuffers(callbackswapbuffers)"              "\n"
-"bolt.setcallbackminimap(callbackminimap)"                      "\n"
-;
-
 unsigned int gl_width;
 unsigned int gl_height;
 
@@ -1094,7 +1069,6 @@ void _bolt_gl_onMakeCurrent(void* context) {
         egl_main_context_makecurrent_pending = 0;
         _bolt_gl_init();
         _bolt_plugin_init(_bolt_gl_plugin_surface_init, _bolt_gl_plugin_surface_destroy);
-        _bolt_plugin_add(lua_test_plugin);
     }
 }
 

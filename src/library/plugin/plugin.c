@@ -23,7 +23,6 @@ const char* RENDER3D_META_REGISTRYNAME = "batch3dindex";
 const char* MINIMAP_META_REGISTRYNAME = "minimapindex";
 const char* SWAPBUFFERS_META_REGISTRYNAME = "swapbuffersindex";
 const char* SURFACE_META_REGISTRYNAME = "surfaceindex";
-uint64_t next_plugin_id = 1;
 
 void (*surface_init)(struct SurfaceFunctions*, unsigned int, unsigned int);
 void (*surface_destroy)(void*);
@@ -53,7 +52,7 @@ void _bolt_plugin_handle_##APINAME(struct STRUCTNAME* e) { \
     int key_index = lua_gettop(state); \
     lua_pushnil(state); \
     while (lua_next(state, key_index) != 0) { \
-        if (!lua_isnumber(state, -2)) { \
+        if (!lua_isstring(state, -2)) { \
             lua_pop(state, 1); \
             continue; \
         } \
@@ -65,7 +64,7 @@ void _bolt_plugin_handle_##APINAME(struct STRUCTNAME* e) { \
         } \
         lua_pushvalue(state, userdata_index); \
         if (lua_pcall(state, 1, 0, 0)) { \
-            const lua_Integer plugin_id = lua_tonumber(state, -3); \
+            const char* plugin_id = lua_tostring(state, -3); \
             const char* e = lua_tolstring(state, -1, 0); \
             printf("plugin callback %s error: %s\n", #APINAME, e); \
             lua_pop(state, 2); \
@@ -239,6 +238,22 @@ void _bolt_plugin_handle_messages() {
     while (_bolt_ipc_poll(fd)) {
         if (_bolt_ipc_receive(fd, &message, sizeof(message)) != 0) break;
         switch (message.message_type) {
+            case IPC_MSG_STARTPLUGINS: {
+                uint32_t id_len, path_len, main_len;
+                _bolt_ipc_receive(fd, &id_len, sizeof(uint32_t));
+                _bolt_ipc_receive(fd, &path_len, sizeof(uint32_t));
+                _bolt_ipc_receive(fd, &main_len, sizeof(uint32_t));
+                void* id = lua_newuserdata(state, id_len);
+                void* path = lua_newuserdata(state, path_len + main_len + 2);
+                _bolt_ipc_receive(fd, id, id_len);
+                _bolt_ipc_receive(fd, path, path_len);
+                ((char*)path)[path_len] = '/';
+                _bolt_ipc_receive(fd, path + path_len + 1, main_len);
+                ((char*)path)[path_len + main_len + 1] = '\0';
+                _bolt_plugin_add(path, id, id_len);
+                lua_pop(state, 2);
+                break;
+            }
             default:
                 printf("unknown message type %u\n", message.message_type);
                 break;
@@ -246,21 +261,19 @@ void _bolt_plugin_handle_messages() {
     }
 }
 
-uint64_t _bolt_plugin_add(const char* lua) {
+uint8_t _bolt_plugin_add(const char* path, const char* id, size_t id_len) {
     // load the user-provided string as a lua function, putting that function on the stack
-    if (luaL_loadstring(state, lua)) {
+    if (luaL_loadfile(state, path)) {
         const char* e = lua_tolstring(state, -1, 0);
         printf("plugin load error: %s\n", e);
         lua_pop(state, 1);
         return 0;
     }
 
-    // create a new env for this plugin, and store it as registry["bolt"][i] where `i` is a unique ID
-    const uint64_t plugin_id = next_plugin_id;
-    next_plugin_id += 1;
+    // create a new env for this plugin, and store it as registry["bolt"]["i"] where `i` is the unique ID
     lua_newtable(state);
     lua_getfield(state, LUA_REGISTRYINDEX, BOLT_REGISTRYNAME);
-    lua_pushinteger(state, plugin_id);
+    lua_pushlstring(state, id, id_len);
     lua_pushvalue(state, -3);
     lua_settable(state, -3);
     lua_pop(state, 1);
@@ -280,16 +293,16 @@ uint64_t _bolt_plugin_add(const char* lua) {
         const char* e = lua_tolstring(state, -1, 0);
         printf("plugin startup error: %s\n", e);
         lua_pop(state, 1);
-        _bolt_plugin_stop(plugin_id);
-        return 0;
+        _bolt_plugin_stop(id);
+        return 1;
     } else {
-        return plugin_id;
+        return 0;
     }
 }
 
-void _bolt_plugin_stop(uint64_t id) {
+void _bolt_plugin_stop(const char* id) {
     lua_getfield(state, LUA_REGISTRYINDEX, BOLT_REGISTRYNAME);
-    lua_pushinteger(state, id);
+    lua_pushstring(state, id);
     lua_pushnil(state);
     lua_settable(state, -3);
     lua_pop(state, 1);

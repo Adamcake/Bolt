@@ -158,11 +158,11 @@ void _bolt_plugin_handle_messages();
 /// The `lua` param will be loaded and executed in a fresh environment, then event callbacks will be
 /// sent to it until it is destroyed by the plugin being stopped.
 ///
-/// Returns a unique plugin ID on success or 0 on failure.
-uint64_t _bolt_plugin_add(const char* lua);
+/// Returns 0 on success or 1 on failure.
+uint8_t _bolt_plugin_add(const char* path, const char* id, size_t id_len);
 
-/// Stops a plugin via its plugin ID, returned from `_bolt_plugin_add`.
-void _bolt_plugin_stop(uint64_t);
+/// Stops a plugin via its unique ID, as passed to `_bolt_plugin_add`.
+void _bolt_plugin_stop(const char*);
 
 /// Sends a SwapBuffers event to all plugins.
 void _bolt_plugin_handle_swapbuffers(struct SwapBuffersEvent*);
