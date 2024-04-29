@@ -158,4 +158,5 @@ export interface PluginConfig {
 	name?: string;
 	version?: string;
 	description?: string;
+	main?: string;
 }

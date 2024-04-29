@@ -5,6 +5,7 @@
 	import { getNewClientListPromise, savePluginConfig } from '../functions';
 	import { type PluginConfig } from '../interfaces';
 	import { clientListPromise, hasBoltPlugins, pluginList, platform } from '../store';
+	import { msg } from '../main';
 
 	// props
 	export let showPluginMenu: boolean;
@@ -41,13 +42,14 @@
 
 	// new plugin handler
 	const unnamedPluginName = '(unnamed)';
+	const unnamedClientName = '(new character)';
 	const handleNewPlugin = (folderPath: string, configPath: string) => {
 		getPluginConfigPromise(folderPath)
 			.then((plugin: PluginConfig) => {
 				do {
-					selectedManagementPlugin = crypto.randomUUID();
-				} while (Object.keys(get(pluginList)).includes(selectedManagementPlugin));
-				$pluginList[selectedManagementPlugin] = {
+					selectedPlugin = crypto.randomUUID();
+				} while (Object.keys(get(pluginList)).includes(selectedPlugin));
+				$pluginList[selectedPlugin] = {
 					name: plugin.name ?? unnamedPluginName,
 					path: folderPath
 				};
@@ -87,6 +89,27 @@
 
 	// get connected client list
 	clientListPromise.set(getNewClientListPromise());
+	$: $clientListPromise.then((x) => {
+		if (!x.some((x) => x.uid === selectedClientId)) {
+			isClientSelected = false;
+		}
+	});
+
+	// function to start a plugin
+	const startPlugin = (client: string, id: string, path: string, main: string) => {
+		var xml = new XMLHttpRequest();
+		xml.onreadystatechange = () => {
+			if (xml.readyState == 4) {
+				msg(`Start-plugin status: ${xml.statusText.trim()}`);
+			}
+		};
+		xml.open(
+			'GET',
+			'/start-plugin?'.concat(new URLSearchParams({ client, id, path, main }).toString()),
+			true
+		);
+		xml.send();
+	};
 
 	// hide plugin menu on 'escape'
 	const tryExit = () => {
@@ -102,8 +125,12 @@
 	addEventListener('keydown', keyPressed);
 
 	// plugin management interface - currently-selected plugin
-	var selectedManagementPlugin: string;
-	$: managementPluginPromise = getPluginConfigPromiseFromID(selectedManagementPlugin);
+	var selectedPlugin: string;
+	$: managementPluginPromise = getPluginConfigPromiseFromID(selectedPlugin);
+
+	// connected clients list
+	var isClientSelected: boolean = false;
+	var selectedClientId: string;
 
 	let pluginConfigDirty: boolean = false;
 	onDestroy(() => {
@@ -127,8 +154,10 @@
 		<div
 			class="left-0 float-left h-full w-[min(180px,_50%)] overflow-hidden border-r-2 border-slate-300 pt-2 dark:border-slate-800">
 			<button
-				class="mx-auto mb-2 w-[95%] rounded-lg bg-blue-500 p-2 font-bold text-black duration-200 hover:opacity-75"
-				on:click={() => {}}>
+				class="mx-auto mb-2 w-[95%] rounded-lg border-2 {isClientSelected
+					? 'border-blue-500 text-black dark:text-white'
+					: 'border-black bg-blue-500 text-black'} p-2 font-bold hover:opacity-75"
+				on:click={() => (isClientSelected = false)}>
 				Manage Plugins
 			</button>
 			<hr class="p-1 dark:border-slate-700" />
@@ -142,8 +171,15 @@
 				{:else}
 					{#each clients as client}
 						<button
-							class="m-1 h-[28px] w-[95%] rounded-lg border-2 border-blue-500 duration-200 hover:opacity-75">
-							{client.identity || '(unnamed)'}
+							on:click={() => {
+								selectedClientId = client.uid;
+								isClientSelected = true;
+							}}
+							class="m-1 h-[28px] w-[95%] rounded-lg border-2 {isClientSelected &&
+							selectedClientId === client.uid
+								? 'border-black bg-blue-500 text-black'
+								: 'border-blue-500 text-black dark:text-white'} hover:opacity-75">
+							{client.identity || unnamedClientName}
 						</button>
 						<br />
 					{/each}
@@ -155,55 +191,89 @@
 		<div class="h-full pt-10">
 			{#if hasBoltPlugins}
 				<select
-					bind:value={selectedManagementPlugin}
+					bind:value={selectedPlugin}
 					class="mx-auto mb-4 w-[min(280px,_45%)] cursor-pointer rounded-lg border-2 border-slate-300 bg-inherit p-2 text-inherit duration-200 hover:opacity-75 dark:border-slate-800">
 					{#each Object.entries($pluginList) as [id, plugin]}
 						<option class="dark:bg-slate-900" value={id}
 							>{plugin.name ?? unnamedPluginName}</option>
 					{/each}
 				</select>
-				<button
-					class="aspect-square w-8 rounded-lg border-2 border-blue-500 text-[20px] font-bold duration-200 enabled:hover:opacity-75 disabled:border-gray-500"
-					on:click={jsonFilePicker}
-					disabled={disableButtons}>
-					+
-				</button>
-				<br />
-				{#if Object.entries($pluginList).length !== 0}
-					{#if Object.keys(get(pluginList)).includes(selectedManagementPlugin) && managementPluginPromise !== null}
-						{#await managementPluginPromise}
-							<p>loading...</p>
-						{:then plugin}
-							<p class="pb-4 text-xl font-bold">{plugin.name ?? unnamedPluginName}</p>
-							<p class={plugin.description ? null : 'italic'}>
-								{plugin.description ?? 'no description'}
-							</p>
-							<br>
+				{#if !isClientSelected}
+					<button
+						class="aspect-square w-8 rounded-lg border-2 border-blue-500 text-[20px] font-bold duration-200 enabled:hover:opacity-75 disabled:border-gray-500"
+						on:click={jsonFilePicker}
+						disabled={disableButtons}>
+						+
+					</button>
+					<br />
+					{#if Object.entries($pluginList).length !== 0}
+						{#if Object.keys(get(pluginList)).includes(selectedPlugin) && managementPluginPromise !== null}
+							{#await managementPluginPromise}
+								<p>loading...</p>
+							{:then plugin}
+								<p class="pb-4 text-xl font-bold">
+									{plugin.name ?? unnamedPluginName}
+								</p>
+								<p class={plugin.description ? null : 'italic'}>
+									{plugin.description ?? 'no description'}
+								</p>
+								<br />
+							{:catch}
+								<p>error</p>
+								<br />
+							{/await}
 							<button
 								class="mx-auto mb-1 w-[min(144px,_25%)] rounded-lg p-2 font-bold text-black duration-200 enabled:bg-rose-500 enabled:hover:opacity-75 disabled:bg-gray-500"
 								on:click={() => {
 									managementPluginPromise = null;
 									pluginConfigDirty = true;
 									let list = get(pluginList);
-									delete list[selectedManagementPlugin];
+									delete list[selectedPlugin];
 									pluginList.set(list);
 								}}>
 								Remove
 							</button>
 							<button
 								class="mx-auto mb-1 w-[min(144px,_25%)] rounded-lg p-2 font-bold text-black duration-200 enabled:bg-blue-500 enabled:hover:opacity-75 disabled:bg-gray-500"
-								on:click={() => managementPluginPromise = getPluginConfigPromiseFromID(selectedManagementPlugin)}>
+								on:click={() =>
+									(managementPluginPromise =
+										getPluginConfigPromiseFromID(selectedPlugin))}>
 								Reload
 							</button>
-						{:catch}
-							<p>error</p>
-						{/await}
+						{/if}
+					{:else}
+						<p>
+							You have no plugins installed. Click the + button and select a plugin's
+							bolt.json file to add it.
+						</p>
 					{/if}
 				{:else}
-					<p>
-						You have no plugins installed. Click the + button and select a plugin's
-						bolt.json file to add it.
-					</p>
+					<br />
+					{#await managementPluginPromise}
+						<p>loading...</p>
+					{:then plugin}
+						{#if plugin && plugin.main && Object.keys($pluginList).includes(selectedPlugin)}
+							{#if $pluginList[selectedPlugin].path}
+								<button
+									class="mx-auto mb-1 w-auto rounded-lg bg-emerald-500 p-2 font-bold text-black duration-200 hover:opacity-75"
+									on:click={() =>
+										startPlugin(
+											selectedClientId,
+											selectedPlugin,
+											$pluginList[selectedPlugin].path ?? '',
+											plugin.main ?? ''
+										)}>
+									Start {plugin.name}
+								</button>
+							{:else}
+								<p>can't start plugin: no path is configured</p>
+							{/if}
+						{:else}
+							<p>can't start plugin: does not appear to be configured</p>
+						{/if}
+					{:catch}
+						<p>error</p>
+					{/await}
 				{/if}
 			{:else}
 				<p>error</p>
