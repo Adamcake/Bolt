@@ -309,11 +309,11 @@ void Browser::Client::IPCHandleClientListUpdate() {
 
 void Browser::Client::IPCHandleClosed(int fd) {
 	std::lock_guard<std::mutex> _(this->game_clients_lock);
-	auto it = std::remove_if(this->game_clients.begin(), this->game_clients.end(), [fd](const GameClient& g) { return g.fd == fd; });
-	for (auto i = it; i != this->game_clients.end(); i += 1) {
-		delete[] i->identity;
+	auto it = std::find_if(this->game_clients.begin(), this->game_clients.end(), [fd](const GameClient& g) { return g.fd == fd; });
+	if (it != this->game_clients.end()) {
+		delete[] it->identity;
+		this->game_clients.erase(it);
 	}
-	this->game_clients.erase(it, this->game_clients.end());
 }
 
 bool Browser::Client::IPCHandleMessage(int fd) {
