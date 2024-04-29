@@ -8,173 +8,74 @@
 #include <fcntl.h>
 #include <filesystem>
 #include <fmt/core.h>
+#include <functional>
 #include <spawn.h>
 
-extern char **environ;
-
-// standard set of JX_ environment/query parameters, for use in an env_params list
-#define JX_ENV_PARAMS \
-	{.should_set = false, .prepend_env_key = true, .env_key = "JX_ACCESS_TOKEN=", .key = "jx_access_token"}, \
-	{.should_set = false, .prepend_env_key = true, .env_key = "JX_REFRESH_TOKEN=", .key = "jx_refresh_token"}, \
-	{.should_set = false, .prepend_env_key = true, .env_key = "JX_SESSION_ID=", .key = "jx_session_id"}, \
-	{.should_set = false, .prepend_env_key = true, .env_key = "JX_CHARACTER_ID=", .key = "jx_character_id"}, \
-	{.should_set = false, .prepend_env_key = true, .env_key = "JX_DISPLAY_NAME=", .key = "jx_display_name"}
-
-// iterates the key-value pairs in an HTTP query, performing ACTION on them
-#define ITERATE_QUERY(ACTION, QUERY) { \
-	size_t cursor = 0; \
-	while (true) { \
-		const std::string::size_type next_eq = QUERY.find_first_of('=', cursor); \
-		const std::string::size_type next_amp = QUERY.find_first_of('&', cursor); \
-		if (next_eq == std::string::npos) break; \
-		if (next_eq >= next_amp) { \
-			cursor = next_amp + 1; \
-			continue; \
-		} \
-		const std::string_view key(QUERY.begin() + cursor, QUERY.begin() + next_eq); \
-		const auto value_end = next_amp == std::string::npos ? QUERY.end() : QUERY.begin() + next_amp; \
-		const CefString value = std::string(std::string_view(QUERY.begin() + next_eq + 1,  value_end)); \
-		ACTION \
-		if (next_amp == std::string::npos) break; \
-		cursor = next_amp + 1; \
-	} \
-}
-
-// calls SpawnProcess using the given argv and an envp calculated from the given env_params,
-// then attempts to save the related hash file, and finally returns an appropriate HTTP response
-#define SPAWN_FROM_PARAMS_AND_RETURN(ARGV, ENV_PARAMS, HASH_PARAM, HASH_PATH, CWD_PATH) { \
-	char** e; \
-	for (e = environ; *e; e += 1); \
-	size_t env_count = e - environ; \
-	const size_t env_param_count = sizeof(ENV_PARAMS) / sizeof(ENV_PARAMS[0]); \
-	char** env = new char*[env_count + env_param_count + 1]; \
-	size_t i; \
-	for (i = 0; i < env_count; i += 1) { \
-		bool use_default = true; \
-		for (EnvQueryParam& param: ENV_PARAMS) { \
-			if (param.should_set && strncmp(environ[i], param.env_key.data(), param.env_key.size()) == 0) { \
-				param.should_set = false; \
-				use_default = false; \
-				if (param.allow_append) { \
-					param.value = std::string(param.env_key) + std::string(environ[i] + param.env_key.size()) + ' ' + (param.value.data() + param.env_key.size()); \
-				} \
-				env[i] = param.value.data(); \
-				break; \
-			} \
-		} \
-		if (use_default) { \
-			env[i] = environ[i]; \
-		} \
-	} \
-	for (EnvQueryParam& param: ENV_PARAMS) { \
-		if (param.should_set) { \
-			env[i] = param.value.data(); \
-			i += 1; \
-		} \
-	} \
-	env[i] = nullptr; \
-	pid_t pid; \
-	int r = SpawnProcess(ARGV, env, &pid, CWD_PATH); \
-	delete[] env; \
-	if (r == 0) { \
-		fmt::print("[B] Successfully spawned game process with pid {}\n", pid); \
-		if (HASH_PARAM.should_set) { \
-			size_t written = 0; \
-			int file = open(HASH_PATH, O_WRONLY | O_CREAT | O_TRUNC, 0644); \
-			if (file == -1) { \
-				const char* data = "OK, but unable to save hash file\n"; \
-				return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain"); \
-			} \
-			while (written < HASH_PARAM.value.size()) { \
-				written += write(file, HASH_PARAM.value.c_str() + written, HASH_PARAM.value.size() - written); \
-			} \
-			close(file); \
-		} \
-		const char* data = "OK\n"; \
-		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain"); \
-	} else { \
-		fmt::print("[B] Error from fork(): {}\n", r); \
-		const char* data = "Error spawning process\n"; \
-		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 500, "text/plain"); \
-	} \
-}
-
-const std::string_view env_key_runtime_dir = "XDG_RUNTIME_DIR=";
-#define SETUP_TEMP_DIR(TEMP_DIR) { \
-	const char* tmpdir_prefix = "bolt-runelite-"; \
-	const char* runtime_dir = getenv("XDG_RUNTIME_DIR"); \
-	char path_buf[PATH_MAX]; \
-	if (runtime_dir) snprintf(path_buf, sizeof(path_buf), "%s/%sXXXXXX", runtime_dir, tmpdir_prefix); \
-	else snprintf(path_buf, sizeof(path_buf), "/tmp/%sXXXXXX", tmpdir_prefix); \
-	char* dtemp = mkdtemp(path_buf); \
-	if (!dtemp) { \
-		const char* data = "Couldn't create temp directory (is XDG_RUNTIME_DIR set?)\n"; \
-		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain"); \
-	} \
-	TEMP_DIR = std::filesystem::canonical(dtemp); \
-	fmt::print("[B] runelite temp_dir: {}\n", TEMP_DIR.c_str()); \
-	if (TEMP_DIR.has_parent_path()) { \
-		for (const auto& entry: std::filesystem::directory_iterator(TEMP_DIR.parent_path())) { \
-			const std::filesystem::path path = entry.path(); \
-			snprintf(path_buf, sizeof(path_buf), "%s/%s", TEMP_DIR.c_str(), path.filename().c_str()); \
-			int _ = symlink(path.c_str(), path_buf); \
-		} \
-	} \
-}
-
-// spawns a process using fork/exec, the given argc and argv, and the target specified at argv[0]
-int SpawnProcess(char** argv, char** envp, pid_t* pid, const char* cwd) {
-	*pid = fork();
-	if (*pid == 0) {
-		setpgrp();
-		if (cwd && chdir(cwd)) {
-			fmt::print("[B] new process was unable to chdir: {}\n", errno);
-			exit(1);
-		}
-		close(STDIN_FILENO);
-		execve(argv[0], argv, envp);
-	}
-	return *pid > 0 ? 0 : *pid;
-}
-
-struct EnvQueryParam {
-	bool should_set = false;    // is this present in the query?
-	bool prepend_env_key;       // prepend this->env_key to the output value (if not overriding by append)?
-	bool allow_override = true; // allow replacement of a variable that's already in the env?
-	bool allow_append = false;  // allow appending to a variable that's already in the env?
-	std::string_view env_key;   // used only if prepend_env_key is true
-	std::string_view key;       // query param, if applicable
-	std::string value;          // output value
-
-	// Compares `key` to `key_name`, setting `out` to `prepend`+`value` and setting `should_set` to `true` if
-	// they match, or altering nothing otherwise (including `should_set`).
-	void CheckAndUpdate(std::string_view key, CefString value) {
-		if ((!this->should_set || this->allow_override) && this->key == key) {
-			this->should_set = true;
-			this->value.clear();
-			if (this->prepend_env_key) {
-				this->value = this->env_key;
-			}
-			this->value += CefURIDecode(value, true, static_cast<cef_uri_unescape_rule_t>(0b1111)).ToString();
+// see #34 for why this function exists and why it can't be run between fork-exec or just run `env`.
+// true on success, false on failure, out is undefined on failure, you know the drill.
+// java_home should be the result of getenv("JAVA_HOME") and therefore is allowed to be null
+bool FindJava(const char* java_home, std::string& out) {
+	if (java_home) {
+		std::filesystem::path java(java_home);
+		java.append("bin");
+		java.append("java");
+		if (std::filesystem::exists(java)) {
+			out = java.string();
+			return true;
 		}
 	}
-};
+	const char* path = getenv("PATH");
+	while (true) {
+		const char* next_colon = strchr(path, ':');
+		const bool is_last = next_colon == nullptr;
+		std::string_view path_item = is_last ? std::string_view(path) : std::string_view(path, (size_t)(next_colon - path));
+		std::filesystem::path java(path_item);
+		java.append("java");
+		if (std::filesystem::exists(java)) {
+			out = java.string();
+			return true;
+		}
+		if (is_last) break;
+		path = next_colon + 1;
+	}
+	return false;
+}
+
+void ParseQuery(std::string_view query, std::function<void(const std::string_view&, const std::string_view&)> callback) {
+	size_t pos = 0;
+	while (true) {
+		const size_t next_and = query.find('&', pos);
+		const size_t next_eq = query.find('=', pos);
+		if (next_eq == std::string_view::npos) break;
+		else if (next_and != std::string_view::npos && next_eq > next_and) {
+			pos = next_and + 1;
+			continue;
+		}
+		const bool is_last = next_and == std::string_view::npos;
+		const auto end = is_last ? query.end() : query.begin() + next_and;
+		const std::string_view key(query.begin() + pos, query.begin() + next_eq);
+		const std::string_view val(query.begin() + next_eq + 1, end);
+		callback(key, val);
+		if (is_last) break;
+		pos = next_and + 1;
+	}
+}
+const cef_uri_unescape_rule_t pqrule = (cef_uri_unescape_rule_t)(UU_SPACES | UU_PATH_SEPARATORS | UU_URL_SPECIAL_CHARS_EXCEPT_PATH_SEPARATORS | UU_REPLACE_PLUS_WITH_SPACE);
+#define PQCHECK(KEY) if (key == #KEY) { has_##KEY = true; KEY = CefURIDecode(std::string(val), true, pqrule).ToString(); return; }
 
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<CefRequest> request, std::string_view query) {
-	// strings that I don't want to be searchable, which also need to be mutable for passing to env functions
+	/* strings that I don't want to be searchable, which also need to be mutable for passing to env functions */
+	// PULSE_PROP_OVERRIDE=
 	char env_pulse_prop_override[] = {
-		80, 85, 76, 83, 69, 95, 80, 82, 79, 80, 95, 79, 86, 69, 82, 82, 73, 68,
-		69, 61, 97, 112, 112, 108, 105, 99, 97, 116, 105, 111, 110, 46, 110,
+		97, 112, 112, 108, 105, 99, 97, 116, 105, 111, 110, 46, 110,
 		97, 109, 101, 61, 39, 82, 117, 110, 101, 83, 99, 97, 112, 101, 39, 32,
 		97, 112, 112, 108, 105, 99, 97, 116, 105, 111, 110, 46, 105, 99, 111, 110,
 		95, 110, 97, 109, 101, 61, 39, 114, 117, 110, 101, 115, 99, 97, 112, 101,
 		39, 32, 109, 101, 100, 105, 97, 46, 114, 111, 108, 101, 61, 39, 103, 97,
 		109, 101, 39, 0
 	};
-	char env_wmclass[] = {
-		83, 68, 76, 95, 86, 73, 68, 69, 79, 95, 88, 49, 49, 95, 87, 77, 67,
-		76, 65, 83, 83, 61, 82, 117, 110, 101, 83, 99, 97, 112, 101, 0
-	};
+	// SDL_VIDEO_X11_WMCLASS=
+	char env_wmclass[] = {82, 117, 110, 101, 83, 99, 97, 112, 101, 0};
 	constexpr char tar_xz_inner_path[] = {
 		46, 47, 117, 115, 114, 47, 115, 104, 97, 114, 101, 47, 103, 97, 109, 101,
 		115, 47, 114, 117, 110, 101, 115, 99, 97, 112, 101, 45, 108, 97, 117,
@@ -184,32 +85,30 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<C
 
 	const CefRefPtr<CefPostData> post_data = request->GetPostData();
 
-	// calculate HOME env strings - we redirect the game's HOME into our data dir
-	const char* home_ = "HOME=";
-	const std::string env_home = home_ + this->data_dir.string();
-	const std::string_view env_key_home = std::string_view(env_home.begin(), env_home.begin() + strlen(home_));
+	// get local mutable copy of HOME env string - we redirect the game's HOME into our data dir
+	const std::string env_home = this->data_dir.string();
 
-	// array of structures for keeping track of which environment variables we want to set and have already set
-	EnvQueryParam hash_param = {.should_set = false, .key = "hash"};
-	EnvQueryParam config_uri_param = {.should_set = false, .key = "config_uri"};
-	EnvQueryParam env_params[] = {
-		JX_ENV_PARAMS,
-		{.should_set = true, .prepend_env_key = false, .allow_override = false, .env_key = env_key_home, .value = env_home},
-		{.should_set = true, .prepend_env_key = false, .allow_override = false, .env_key = "PULSE_PROP_OVERRIDE=", .value = env_pulse_prop_override},
-		{.should_set = true, .prepend_env_key = false, .allow_override = false, .env_key = "SDL_VIDEO_X11_WMCLASS=", .value = env_wmclass},
-	};
-	
-	// loop through and parse the query string from the HTTP request we intercepted
-	ITERATE_QUERY({
-		for (EnvQueryParam& param: env_params) {
-			param.CheckAndUpdate(key, value);
-		}
-		hash_param.CheckAndUpdate(key, value);
-		config_uri_param.CheckAndUpdate(key, value);
-	}, query)
+	// parse query
+	std::string hash;
+	bool has_hash = false;
+	std::string config_uri;
+	bool has_config_uri = false;
+	std::string jx_session_id;
+	bool has_jx_session_id = false;
+	std::string jx_character_id;
+	bool has_jx_character_id = false;
+	std::string jx_display_name;
+	bool has_jx_display_name = false;
+	ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
+		PQCHECK(hash)
+		PQCHECK(config_uri)
+		PQCHECK(jx_session_id)
+		PQCHECK(jx_character_id)
+		PQCHECK(jx_display_name)
+	});
 
 	// if there was a "hash" in the query string, we need to save the new game exe and the new hash
-	if (hash_param.should_set) {
+	if (has_hash) {
 		if (post_data == nullptr || post_data->GetElementCount() != 1) {
 			// hash param must be accompanied by POST data containing the file it's a hash of,
 			// so hash but no POST is a bad request
@@ -355,56 +254,79 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<C
 	char arg_configuri[] = "--configURI";
 	char* argv[] = {
 		path_str.data(),
-		config_uri_param.should_set ? arg_configuri : nullptr,
-		config_uri_param.should_set ? config_uri_param.value.data() : nullptr,
+		has_config_uri ? arg_configuri : nullptr,
+		has_config_uri ? config_uri.data() : nullptr,
 		nullptr,
 	};
 
-	SPAWN_FROM_PARAMS_AND_RETURN(argv, env_params, hash_param, this->rs3_hash_path.c_str(), this->data_dir.c_str())
+	pid_t pid = fork();
+	if (pid == 0) {
+		setpgrp();
+		if (chdir(this->data_dir.c_str())) {
+			fmt::print("[B] new process was unable to chdir: {}\n", errno);
+			exit(1);
+		}
+		close(STDIN_FILENO);
+		setenv("HOME", env_home.data(), true);
+		setenv("PULSE_PROP_OVERRIDE", env_pulse_prop_override, false);
+		setenv("SDL_VIDEO_X11_WMCLASS", env_wmclass, false);
+		if (has_jx_session_id) setenv("JX_SESSION_ID", jx_session_id.data(), true);
+		if (has_jx_character_id) setenv("JX_CHARACTER_ID", jx_character_id.data(), true);
+		if (has_jx_display_name) setenv("JX_DISPLAY_NAME", jx_display_name.data(), true);
+		execv(*argv, argv);
+	}
+	fmt::print("[B] Successfully spawned game process with pid {}\n", pid);
+	if (has_hash) {
+		size_t written = 0;
+		int file = open(this->rs3_hash_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+		if (file == -1) {
+			const char* data = "OK, but unable to save hash file\n";
+			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
+		}
+		while (written < hash.size()) {
+			written += write(file, hash.c_str() + written, hash.size() - written);
+		}
+		close(file);
+	}
+	const char* data = "OK\n";
+	return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
 }
 
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRefPtr<CefRequest> request, std::string_view query, bool configure) {
 	const CefRefPtr<CefPostData> post_data = request->GetPostData();
 
+	// value to override Java's user.home property with
 	const std::string user_home = this->data_dir.string();
-	const char* home_ = "HOME=";
-	const std::string env_home = home_ + user_home;
-	const std::string_view env_key_home = std::string_view(env_home.begin(), env_home.begin() + strlen(home_));
 
-	// set up a temp directory just for this run
-	std::filesystem::path temp_dir;
-	SETUP_TEMP_DIR(temp_dir)
-
-	// array of structures for keeping track of which environment variables we want to set and have already set
-	EnvQueryParam rl_path_param = {.should_set = false, .key = "jar_path"};
-	EnvQueryParam id_param = {.should_set = false, .key = "id"};
-	EnvQueryParam rich_presence_param = {.should_set = false, .key = "flatpak_rich_presence"};
-	EnvQueryParam env_params[] = {
-		JX_ENV_PARAMS,
-		{.should_set = true, .prepend_env_key = false, .allow_override = false, .env_key = env_key_home, .value = env_home},
-		{.should_set = true, .prepend_env_key = false, .allow_override = false, .env_key = env_key_runtime_dir, .value = std::string(env_key_runtime_dir) + temp_dir.c_str()},
-	};
-
-	// loop through and parse the query string from the HTTP request we intercepted
-	ITERATE_QUERY({
-		for (EnvQueryParam& param: env_params) {
-			param.CheckAndUpdate(key, value);
-		}
-		id_param.CheckAndUpdate(key, value);
-		rl_path_param.CheckAndUpdate(key, value);
-		rich_presence_param.CheckAndUpdate(key, value);
-	}, query)
+	// parse query
+	std::string rl_path;
+	bool has_rl_path = false;
+	std::string id;
+	bool has_id = false;
+	std::string jx_session_id;
+	bool has_jx_session_id = false;
+	std::string jx_character_id;
+	bool has_jx_character_id = false;
+	std::string jx_display_name;
+	bool has_jx_display_name = false;
+	ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
+		PQCHECK(rl_path)
+		PQCHECK(id)
+		PQCHECK(jx_session_id)
+		PQCHECK(jx_character_id)
+		PQCHECK(jx_display_name)
+	});
 
 	// path to runelite.jar will either be a user-provided one or one in our data folder,
 	// which we may need to overwrite with a new user-provided file
 	std::filesystem::path jar_path;
-	if (rl_path_param.should_set) {
-		jar_path = rl_path_param.value;
+	if (has_rl_path) {
+		jar_path.assign(rl_path);
 	} else {
 		jar_path = this->runelite_path;
 
 		// if there was an "id" in the query string, we need to save the new jar and hash
-		if (id_param.should_set) {
+		if (has_id) {
 			if (post_data == nullptr || post_data->GetElementCount() != 1) {
 				// hash param must be accompanied by POST data containing the file it's a hash of,
 				// so hash but no POST is a bad request
@@ -434,37 +356,19 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 		}
 	}
 
-	// symlink discord-ipc for rich presence, if the user has opted into it
-	if (rich_presence_param.should_set) {
-		std::filesystem::path discord_ipc = temp_dir;
-		discord_ipc.append("discord-ipc-0");
-		if (symlink("../app/com.discordapp.Discord/discord-ipc-0", discord_ipc.c_str())) {
-			fmt::print("[B] note: unable to create symlink to discord-ipc-0 at {}\n", discord_ipc.c_str());
-		}
-	}
-
-	// set up argv for the new process
-	const char* java_home = getenv("JAVA_HOME");
-	std::string java_home_str;
-	if (java_home) {
-		java_home_str = std::string(java_home) + "/bin/java";
-		if (!std::filesystem::exists(java_home_str)) {
-			char data [PATH_MAX];
-			snprintf(data, PATH_MAX, "JAVA_HOME environment variable is malformed or incorrect. Expected to find file at %s/bin/java\n", java_home);
-			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
-		}
+	std::string java;
+	if (!FindJava(getenv("JAVA_HOME"), java)) {
+		const char* data = "Couldn't find Java: JAVA_HOME is either unset or does not point to a Java binary, "
+						   "and no binary named \"java\" exists in PATH.\n";
+		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 500, "text/plain");
 	}
 	std::string arg_home = "-Duser.home=" + user_home;
 	std::string arg_jvm_argument_home = "-J" + arg_home;
 	std::string path_str = jar_path.string();
-	size_t argv_offset = java_home ? 1 : 0;
-	char arg_env[] = "/usr/bin/env";
-	char arg_java[] = "java";
 	char arg_jar[] = "-jar";
 	char arg_configure[] = "--configure";
 	char* argv[] = {
-		arg_env,
-		java_home ? java_home_str.data() : arg_java,
+		java.data(),
 		arg_home.data(),
 		arg_jar,
 		path_str.data(),
@@ -473,36 +377,59 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 		nullptr,
 	};
 
-	SPAWN_FROM_PARAMS_AND_RETURN(argv + argv_offset, env_params, id_param, this->runelite_id_path.c_str(), this->data_dir.c_str())
+	pid_t pid = fork();
+	if (pid == 0) {
+		setpgrp();
+		if (chdir(this->data_dir.c_str())) {
+			fmt::print("[B] new process was unable to chdir: {}\n", errno);
+			exit(1);
+		}
+		close(STDIN_FILENO);
+		setenv("HOME", user_home.data(), true);
+		if (has_jx_session_id) setenv("JX_SESSION_ID", jx_session_id.data(), true);
+		if (has_jx_character_id) setenv("JX_CHARACTER_ID", jx_character_id.data(), true);
+		if (has_jx_display_name) setenv("JX_DISPLAY_NAME", jx_display_name.data(), true);
+		execv(*argv, argv);
+	}
+
+	fmt::print("[B] Successfully spawned game process with pid {}\n", pid);
+	if (has_id) {
+		size_t written = 0;
+		int file = open(this->runelite_id_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+		if (file == -1) {
+			const char* data = "OK, but unable to save id file\n";
+			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
+		}
+		while (written < id.size()) {
+			written += write(file, id.c_str() + written, id.size() - written);
+		}
+		close(file);
+	}
+	const char* data = "OK\n";
+	return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
 }
 
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<CefRequest> request, std::string_view query) {
 	const CefRefPtr<CefPostData> post_data = request->GetPostData();
 
+	const std::string user_home = this->data_dir.string();
 	const char* java_home = getenv("JAVA_HOME");
 	if (!java_home) {
+		// the only reason this is necessary is the lines where we symlink the /lib and /conf directories
+		// into our fake java.home, not sure we can do anything about that
 		const char* data = "JAVA_HOME environment variable is required to run HDOS\n";
 		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
 	}
 
-	std::filesystem::path temp_dir;
-	SETUP_TEMP_DIR(temp_dir)
-
-	const std::string user_home = this->data_dir.string();
-	const char* home_ = "HOME=";
-	const std::string env_home = home_ + user_home;
-	const std::string_view env_key_home = std::string_view(env_home.begin(), env_home.begin() + strlen(home_));
-
 	const char* env_key_user_home = "BOLT_ARG_HOME=";
 	std::string arg_user_home = "-Duser.home=" + user_home;
+	std::string arg_app_user_home = "-Dapp.user.home=" + user_home;
 
-	const char* env_key_java_path = "BOLT_JAVA_PATH=";
-	std::string java_path_str = std::string(java_home) + "/bin/java";
-	
-	if (!std::filesystem::exists(java_path_str)) {
-		char data [PATH_MAX];
-		snprintf(data, PATH_MAX, "JAVA_HOME environment variable is malformed or incorrect. Expected to find file at %s/bin/java\n", java_home);
-		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+	std::string java;
+	if (!FindJava(java_home, java)) {
+		const char* data = "Couldn't find Java: JAVA_HOME is either unset or does not point to a Java binary, "
+						   "and no binary named \"java\" exists in PATH.\n";
+		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 500, "text/plain");
 	}
 
 	std::filesystem::path java_proxy_bin_path = std::filesystem::current_path();
@@ -530,27 +457,24 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<
 		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 500, "text/plain");
 	}
 
-	// array of structures for keeping track of which environment variables we want to set and have already set
-	EnvQueryParam version_param = {.should_set = false, .key = "version"};
-	EnvQueryParam rich_presence_param = {.should_set = false, .key = "flatpak_rich_presence"};
-	EnvQueryParam env_params[] = {
-		JX_ENV_PARAMS,
-		{.should_set = true, .prepend_env_key = false, .allow_override = false, .env_key = env_key_home, .value = env_home},
-		{.should_set = true, .prepend_env_key = false, .allow_override = false, .env_key = env_key_user_home, .value = env_key_user_home + arg_user_home},
-		{.should_set = true, .prepend_env_key = false, .allow_override = false, .env_key = env_key_java_path, .value = env_key_java_path + java_path_str},
-	};
-
-	// loop through and parse the query string from the HTTP request we intercepted
-	ITERATE_QUERY({
-		for (EnvQueryParam& param: env_params) {
-			param.CheckAndUpdate(key, value);
-		}
-		version_param.CheckAndUpdate(key, value);
-		rich_presence_param.CheckAndUpdate(key, value);
-	}, query)
+	// parse query
+	std::string version;
+	bool has_version = false;
+	std::string jx_session_id;
+	bool has_jx_session_id = false;
+	std::string jx_character_id;
+	bool has_jx_character_id = false;
+	std::string jx_display_name;
+	bool has_jx_display_name = false;
+	ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
+		PQCHECK(version)
+		PQCHECK(jx_session_id)
+		PQCHECK(jx_character_id)
+		PQCHECK(jx_display_name)
+	});
 
 	// if there was a "version" in the query string, we need to save the new jar and hash
-	if (version_param.should_set) {
+	if (has_version) {
 		if (post_data == nullptr || post_data->GetElementCount() != 1) {
 			// hash param must be accompanied by POST data containing the file it's a hash of,
 			// so hash but no POST is a bad request
@@ -579,40 +503,59 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<
 		delete[] jar;
 	}
 
-	// symlink discord-ipc for rich presence, if the user has opted into it
-	if (rich_presence_param.should_set) {
-		std::filesystem::path discord_ipc = temp_dir;
-		discord_ipc.append("discord-ipc-0");
-		if (symlink("../app/com.discordapp.Discord/discord-ipc-0", discord_ipc.c_str())) {
-			fmt::print("[B] note: unable to create symlink to discord-ipc-0 at {}\n", discord_ipc.c_str());
-		}
-	}
-
 	// set up argv for the new process
 	std::string path_str = this->hdos_path.string();
 	char arg_jar[] = "-jar";
 	std::string arg_java_home = "-Djava.home=" + java_proxy_data_dir_path.string();
 	char* argv[] = {
-		java_path_str.data(),
+		java.data(),
 		arg_user_home.data(),
+		arg_app_user_home.data(),
 		arg_java_home.data(),
 		arg_jar,
 		path_str.data(),
 		nullptr,
 	};
 
-	SPAWN_FROM_PARAMS_AND_RETURN(argv, env_params, version_param, this->hdos_version_path.c_str(), this->data_dir.c_str())
+	pid_t pid = fork();
+	if (pid == 0) {
+		setpgrp();
+		if (chdir(this->data_dir.c_str())) {
+			fmt::print("[B] new process was unable to chdir: {}\n", errno);
+			exit(1);
+		}
+		close(STDIN_FILENO);
+		setenv("HOME", user_home.data(), true);
+		setenv("BOLT_JAVA_PATH", java.data(), true);
+		if (has_jx_session_id) setenv("JX_SESSION_ID", jx_session_id.data(), true);
+		if (has_jx_character_id) setenv("JX_CHARACTER_ID", jx_character_id.data(), true);
+		if (has_jx_display_name) setenv("JX_DISPLAY_NAME", jx_display_name.data(), true);
+		execv(*argv, argv);
+	}
+
+	fmt::print("[B] Successfully spawned game process with pid {}\n", pid);
+	if (has_version) {
+		size_t written = 0;
+		int file = open(this->hdos_version_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+		if (file == -1) {
+			const char* data = "OK, but unable to save version file\n";
+			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
+		}
+		while (written < version.size()) {
+			written += write(file, version.c_str() + written, version.size() - written);
+		}
+		close(file);
+	}
+	const char* data = "OK\n";
+	return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
 }
 
 void Browser::Launcher::OpenExternalUrl(char* url) const {
 	char arg_env[] = "/usr/bin/env";
 	char arg_xdg_open[] = "xdg-open";
 	char* argv[] { arg_env, arg_xdg_open, url, nullptr };
-	pid_t pid;
-	int r = SpawnProcess(argv, environ, &pid, NULL);
-	if (r != 0) {
-		fmt::print("[B] Error in OpenExternalUrl from fork(): {}\n", strerror(r));
-	}
+	pid_t pid = fork();
+	if (pid == 0) execv(arg_env, argv);
 }
 
 int Browser::Launcher::BrowseData() const {
@@ -620,10 +563,7 @@ int Browser::Launcher::BrowseData() const {
 	char arg_xdg_open[] = "xdg-open";
 	std::string dir = this->data_dir;
 	char* argv[] { arg_env, arg_xdg_open, dir.data(), nullptr };
-	pid_t pid;
-	int r = SpawnProcess(argv, environ, &pid, NULL);
-	if (r != 0) {
-		fmt::print("[B] Error in BrowseData from fork(): {}\n", strerror(r));
-	}
-	return r;
+	pid_t pid = fork();
+	if (pid == 0) execv(arg_env, argv);
+	return pid;
 }
