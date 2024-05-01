@@ -57,6 +57,7 @@ export interface Bolt {
 // load on start and save on exit
 export interface Config {
 	use_dark_theme?: boolean;
+	rs_plugin_loader?: boolean;
 	rs_config_uri?: string;
 	flatpak_rich_presence?: boolean;
 	runelite_use_custom_jar?: boolean;

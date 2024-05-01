@@ -481,6 +481,7 @@ export function launchRS3Linux(
 		if (jx_session_id) params.jx_session_id = jx_session_id;
 		if (jx_character_id) params.jx_character_id = jx_character_id;
 		if (jx_display_name) params.jx_display_name = jx_display_name;
+		if (configSub.rs_plugin_loader) params.plugin_loader = '1';
 		if (configSub.rs_config_uri) {
 			params.config_uri = configSub.rs_config_uri;
 		} else {
