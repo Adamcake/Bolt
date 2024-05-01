@@ -46,6 +46,7 @@ The following tasks are achieved by making web requests to `https://bolt-interna
     -   `jx_...`: see "JX Variables" section
     -   `hash`: a hash of a newer version of the game client to install. If set, there must also be POST data containing the downloaded contents of the .deb file. The .deb will be extracted, saved and launched. If all of that is successful, `rs3_linux_installed_hash` will be updated with the new hash.
     -   `config_uri`: a string to pass as the `--configURI` command-line argument. If absent, none will be passed.
+    -   `plugin_loader`: a boolean indicating whether the game should be launched with the Bolt plugin loader. If built without the plugin library feature, this param will be silently ignored.
 -   `/launch-runelite-jar`: launches RuneLite from a JAR file. May have the following query params:
     -   `jx_...`: see "JX Variables" section
     -   `id`: an ID of a newer game version of the JAR to install (see `runelite_installed_id` above for where this ID is obtained.) If set, there must also be POST data containing the downloaded contents of the JAR file. The JAR will be saved and launched. If successful, `runelite_installed_id` will be updated with the new ID.
