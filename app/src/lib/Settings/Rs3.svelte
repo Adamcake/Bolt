@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { bolt, config, isConfigDirty } from '../../store';
+	import { bolt, config, isConfigDirty, hasBoltPlugins } from '../../store';
 
 	let configUriDiv: HTMLDivElement;
 	let configUriAddress: HTMLTextAreaElement;
@@ -37,6 +37,18 @@
 </script>
 
 <div id="rs3_options" class="col-span-3 p-5 pt-10">
+	{#if hasBoltPlugins}
+		<div class="mx-auto p-2">
+			<label for="enable_plugins">Enable Bolt plugin loader: </label>
+			<input
+				type="checkbox"
+				name="enable_plugins"
+				id="enable_plugins"
+				bind:checked={$config.rs_plugin_loader}
+				on:change={() => isConfigDirty.set(true)}
+				class="ml-2" />
+		</div>
+	{/if}
 	<div class="mx-auto p-2">
 		<label for="use_custom_uri">Use custom config URI: </label>
 		<input

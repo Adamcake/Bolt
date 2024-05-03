@@ -38,7 +38,7 @@ void Browser::Window::Refresh() const {
 
 void Browser::Window::OnWindowCreated(CefRefPtr<CefWindow> window) {
 	fmt::print("[B] OnWindowCreated {} this={}\n", window->GetID(), reinterpret_cast<uintptr_t>(this));
-	this->client->OnWindowCreated(window);
+	this->client->OnBoltWindowCreated(window);
 	this->window = std::move(window);
 	this->window->AddChildView(this->browser_view);
 	if (this->details.center_on_open) {
@@ -228,4 +228,8 @@ void Browser::Window::ShowDevTools() {
 	CefWindowInfo window_info; // ignored, because this is a BrowserView
 	CefBrowserSettings browser_settings;
 	browser_host->ShowDevTools(window_info, browser_host->GetClient(), browser_settings, CefPoint());
+}
+
+void Browser::Window::SendMessage(CefString str) {
+	this->browser->GetMainFrame()->SendProcessMessage(PID_RENDERER, CefProcessMessage::Create(str));
 }

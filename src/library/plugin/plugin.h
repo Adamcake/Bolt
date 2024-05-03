@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 struct RenderBatch2D;
+struct Plugin;
 
 /// Struct containing "vtable" callback information for RenderBatch2D's list of vertices.
 /// Unless stated otherwise, functions will be called with three params: the index, the specified
@@ -145,15 +146,24 @@ uint8_t _bolt_plugin_is_inited();
 /// Close the plugin library.
 void _bolt_plugin_close();
 
+/// Opens the IPC channel. (OS-specific)
+void _bolt_plugin_ipc_init(int*);
+
+/// Closes the IPC channel. (OS-specific)
+void _bolt_plugin_ipc_close(int);
+
+/// Handle all incoming IPC messages.
+void _bolt_plugin_handle_messages();
+
 /// Creates a new instance of a plugin with its own Lua environment (lua_setfenv).
 /// The `lua` param will be loaded and executed in a fresh environment, then event callbacks will be
 /// sent to it until it is destroyed by the plugin being stopped.
 ///
-/// Returns a unique plugin ID on success or 0 on failure.
-uint64_t _bolt_plugin_add(const char* lua);
+/// Returns 0 on success or 1 on failure.
+uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin);
 
-/// Stops a plugin via its plugin ID, returned from `_bolt_plugin_add`.
-void _bolt_plugin_stop(uint64_t);
+/// Stops a plugin via its unique ID, as passed to `_bolt_plugin_add`.
+void _bolt_plugin_stop(char* id, uint32_t id_length);
 
 /// Sends a SwapBuffers event to all plugins.
 void _bolt_plugin_handle_swapbuffers(struct SwapBuffersEvent*);

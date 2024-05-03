@@ -24,15 +24,15 @@ constexpr std::string_view URI = "index.html?platform=mac";
 
 CefRefPtr<CefResourceRequestHandler> SaveFileFromPost(CefRefPtr<CefRequest>, const std::filesystem::path::value_type*);
 
-struct JarFilePicker: public CefRunFileDialogCallback, Browser::ResourceHandler {
-	JarFilePicker(CefRefPtr<CefBrowser> browser): callback(nullptr), browser_host(browser->GetHost()), ResourceHandler("text/plain") { }
+struct FilePicker: public CefRunFileDialogCallback, Browser::ResourceHandler {
+	FilePicker(CefRefPtr<CefBrowser> browser, std::vector<CefString> accept_filters):
+		accept_filters(accept_filters), callback(nullptr), browser_host(browser->GetHost()), ResourceHandler("text/plain") { }
 
 	bool Open(CefRefPtr<CefRequest> request, bool& handle_request, CefRefPtr<CefCallback> callback) override {
 		this->callback = callback;
 		CefString title = "Select a JAR file...";
 		CefString default_file_path = "";
-		std::vector<CefString> accept_filters = { ".jar" };
-		this->browser_host->RunFileDialog(FILE_DIALOG_OPEN, title, "", accept_filters, this);
+		this->browser_host->RunFileDialog(FILE_DIALOG_OPEN, title, "", this->accept_filters, this);
 		this->browser_host = nullptr;
 		handle_request = false;
 		return true;
@@ -63,11 +63,12 @@ struct JarFilePicker: public CefRunFileDialogCallback, Browser::ResourceHandler 
 	}
 
 	private:
+		std::vector<CefString> accept_filters;
 		CefRefPtr<CefCallback> callback;
 		std::string data_;
 		CefRefPtr<CefBrowserHost> browser_host;
-		IMPLEMENT_REFCOUNTING(JarFilePicker);
-		DISALLOW_COPY_AND_ASSIGN(JarFilePicker);
+		IMPLEMENT_REFCOUNTING(FilePicker);
+		DISALLOW_COPY_AND_ASSIGN(FilePicker);
 };
 
 Browser::Launcher::Launcher(
@@ -101,6 +102,11 @@ Browser::Launcher::Launcher(
 
 	this->hdos_version_path = data_dir;
 	this->hdos_version_path.append("hdos_version.bin");
+
+#if defined(BOLT_PLUGINS)
+	this->plugin_config_path = config_dir;
+	this->plugin_config_path.append("plugins.json");
+#endif
 
 	CefString url = this->BuildURL();
 	this->Init(client, details, url, show_devtools);
@@ -212,12 +218,6 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 	if (domain == "bolt-internal") {
 		disable_default_handling = true;
 
-		if (path == "/close") {
-			frame->SendProcessMessage(PID_RENDERER, CefProcessMessage::Create("__bolt_close"));
-			const char* data = "OK\n";
-			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
-		}
-
 		// instruction to launch RS3 .deb
 		if (path == "/launch-rs3-deb") {
 			return this->LaunchRs3Deb(request, query);
@@ -246,6 +246,117 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 		// instruction to save user credentials to disk
 		if (path == "/save-credentials") {
 			return SaveFileFromPost(request, this->creds_path.c_str());
+		}
+
+		// instruction to save plugin config to disk
+		if (path == "/save-plugin-config") {
+#if defined(BOLT_PLUGINS)
+			return SaveFileFromPost(request, this->plugin_config_path.c_str());
+#else
+			const char* data = "Not supported\n";
+			return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+#endif
+		}
+
+		// request for list of connected game clients
+		if (path == "/list-game-clients") {
+#if defined(BOLT_PLUGINS)
+			return this->client->ListGameClients();
+#else
+			const char* data = "Not supported\n";
+			return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+#endif
+		}
+
+		// request for the contents of a JSON file - doesn't actually validate the contents
+		if (path == "/read-json-file") {
+#if defined(BOLT_PLUGINS)
+			if (!query.starts_with("path=") || !query.ends_with(".json") || query.find('&') != std::string_view::npos) {
+				const char* data = "Bad request\n";
+				return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+			}
+			std::ifstream file(CefURIDecode(std::string(query.substr(5, -1)), true, (cef_uri_unescape_rule_t)(UU_SPACES | UU_PATH_SEPARATORS | UU_REPLACE_PLUS_WITH_SPACE)).ToString(), std::ios::in | std::ios::binary);
+			if (!file.fail()) {
+				std::stringstream ss;
+				ss << file.rdbuf();
+				std::string str = ss.str();
+				file.close();
+				return new Browser::ResourceHandler(str, 200, "application/json");
+			} else {
+				const char* data = "Not found\n";
+				return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 404, "text/plain");
+			}
+#else
+			const char* data = "Not supported\n";
+			return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+#endif
+		}
+
+		// request to send a message to a game client to start a plugin
+		if (path == "/start-plugin") {
+#if defined(BOLT_PLUGINS)
+				std::string_view id;
+				bool has_id = false;
+				std::string_view path;
+				bool has_path  = false;
+				std::string_view main;
+				bool has_main  = false;
+				std::string_view client;
+				bool has_client  = false;
+				size_t pos = 0;
+				while (true) {
+					size_t next_and = query.find('&', pos);
+					size_t next_eq = query.find('=', pos);
+					if (next_eq == std::string_view::npos) break;
+					else if (next_and != std::string_view::npos && next_eq > next_and) {
+						pos = next_and + 1;
+						continue;
+					}
+					bool is_last = next_and == std::string_view::npos;
+					auto end = is_last ? query.end() : query.begin() + next_and;
+					std::string_view key(query.begin() + pos, query.begin() + next_eq);
+					std::string_view val(query.begin() + next_eq + 1, end);
+					if (key == "id") {
+						has_id = true;
+						id = val;
+					} else if (key == "path") {
+						has_path = true;
+						path = val;
+					} else if (key == "main") {
+						has_main = true;
+						main = val;
+					} else if (key == "client") {
+						has_client = true;
+						client = val;
+					}
+					if (is_last) break;
+					pos = next_and + 1;
+				}
+				if (!has_id || !has_path || !has_main || !has_client) {
+					const char* data = "Bad request\n";
+					return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+				}
+				uint64_t client_id = 0;
+				for (auto it = client.begin(); it != client.end(); it += 1) {
+					if (*it < '0' || *it > '9') {
+						const char* data = "Bad request\n";
+						return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+					}
+					client_id = (client_id * 10) + (*it - '0');
+				}
+				const cef_uri_unescape_rule_t rule = (cef_uri_unescape_rule_t)(UU_SPACES | UU_PATH_SEPARATORS | UU_REPLACE_PLUS_WITH_SPACE);
+				this->client->StartPlugin(
+					client_id,
+					CefURIDecode(std::string(id), true, rule).ToString(),
+					CefURIDecode(std::string(path), true, rule).ToString(),
+					CefURIDecode(std::string(main), true, rule).ToString()
+				);
+				const char* data = "OK\n";
+				return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
+#else
+				const char* data = "Not supported\n";
+				return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+#endif
 		}
 
 		// instruction to try to open an external URL in the user's browser
@@ -280,7 +391,12 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 
 		// instruction to open a file picker for .jar files
 		if (path == "/jar-file-picker") {
-			return new JarFilePicker(browser);
+			return new FilePicker(browser, {".jar"});
+		}
+		
+		// instruction to open a file picker for .json files
+		if (path == "/json-file-picker") {
+			return new FilePicker(browser, {".json"});
 		}
 
 		// respond using internal hashmap of filenames
@@ -340,6 +456,20 @@ CefString Browser::Launcher::BuildURL() const {
 		url << "&config=" << config_str;
 		config_file.close();
 	}
+
+#if defined(BOLT_PLUGINS)
+	std::ifstream plugin_file(this->plugin_config_path.c_str(), std::ios::in | std::ios::binary);
+	std::string plugins_str;
+	if (!plugin_file.fail()) {
+		std::stringstream ss;
+		ss << plugin_file.rdbuf();
+		plugins_str = CefURIEncode(CefString(ss.str()), true).ToString();
+		url << "&plugins=" << plugins_str;
+		plugin_file.close();
+	} else {
+		url << "&plugins=%7B%7D";
+	}
+#endif
 
 	return url.str();
 }

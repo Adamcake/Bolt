@@ -3,15 +3,6 @@
 
 #include <fmt/core.h>
 
-/*
-Any attempt to leverage the render process has resulted in a display of the truly staggering incompetence with
-which Chromium was developed. It is just about unusable. Despite CefRenderProcessHandler being the official way
-to do interop, Most CEF-based applications do interop by web requests that they can intercept in the browser
-process, and having tried to do it this way, I now understand why that is. Consider this your only warning:
-DO NOT try to use CefRenderProcessHandler for anything; every single one of its methods is BROKEN BEYOND BELIEF.
-Your time is valuable, don't waste it here.
-*/
-
 Browser::App::App(): browser_process_handler(nullptr) {
 	
 }
@@ -85,12 +76,27 @@ void Browser::App::OnUncaughtException(
 
 bool Browser::App::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefProcessId, CefRefPtr<CefProcessMessage> message) {
 	CefString name = message->GetName();
-
-	if (name == "__bolt_close" || name == "__bolt_refresh") {
+	if (name == "__bolt_refresh" || name == "__bolt_new_client" || name == "__bolt_no_more_clients" || name == "__bolt_open_launcher") {
 		frame->SendProcessMessage(PID_BROWSER, message);
 		return true;
 	}
-
+	if (name == "__bolt_client_list_update") {
+		fmt::print("[R] handling client_list_update\n");
+		CefRefPtr<CefV8Context> context = frame->GetV8Context();
+		context->Enter();
+		CefRefPtr<CefV8Value> post_message = context->GetGlobal()->GetValue("postMessage");
+		if (post_message->IsFunction()) {
+			// equivalent to: `window.postMessage({type: 'gameClientListUpdate'}, '*')`
+			CefRefPtr<CefV8Value> dict = CefV8Value::CreateObject(nullptr, nullptr);
+			dict->SetValue("type", CefV8Value::CreateString("gameClientListUpdate"), V8_PROPERTY_ATTRIBUTE_READONLY);
+			CefV8ValueList value_list = {dict, CefV8Value::CreateString("*")};
+			post_message->ExecuteFunctionWithContext(context, nullptr, value_list);
+		} else {
+			fmt::print("[R] warning: window.postMessage is not a function, {} will be ignored\n", name.ToString());
+		}
+		context->Exit();
+		return true;
+	}
 	return false;
 }
 

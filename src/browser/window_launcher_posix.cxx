@@ -99,12 +99,22 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<C
 	bool has_jx_character_id = false;
 	std::string jx_display_name;
 	bool has_jx_display_name = false;
+#if defined(BOLT_PLUGINS)
+	bool plugin_loader = false;
+#endif
 	ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
 		PQCHECK(hash)
 		PQCHECK(config_uri)
 		PQCHECK(jx_session_id)
 		PQCHECK(jx_character_id)
 		PQCHECK(jx_display_name)
+
+#if defined(BOLT_PLUGINS)
+		// no reason to URIDecode this
+		if (key == "plugin_loader" && val == "1") {
+			plugin_loader = true;
+		}
+#endif
 	});
 
 	// if there was a "hash" in the query string, we need to save the new game exe and the new hash
@@ -273,6 +283,11 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<C
 		if (has_jx_session_id) setenv("JX_SESSION_ID", jx_session_id.data(), true);
 		if (has_jx_character_id) setenv("JX_CHARACTER_ID", jx_character_id.data(), true);
 		if (has_jx_display_name) setenv("JX_DISPLAY_NAME", jx_display_name.data(), true);
+#if defined(BOLT_PLUGINS)
+		if (plugin_loader) {
+			setenv("LD_PRELOAD", "lib" BOLT_LIB_NAME ".so", true);
+		}
+#endif
 		execv(*argv, argv);
 	}
 	fmt::print("[B] Successfully spawned game process with pid {}\n", pid);

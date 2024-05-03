@@ -5,6 +5,7 @@ import {
 	type Account,
 	type Auth,
 	type Character,
+	type GameClient,
 	unwrap
 } from './interfaces';
 import {
@@ -21,7 +22,10 @@ import {
 	accountList,
 	config,
 	credentials,
+	hasBoltPlugins,
+	pluginList,
 	hdosInstalledVersion,
+	internalUrl,
 	isConfigDirty,
 	messageList,
 	pendingGameAuth,
@@ -87,10 +91,18 @@ export function loginClicked() {
 export function urlSearchParams(): void {
 	const query = new URLSearchParams(window.location.search);
 	platform.set(query.get('platform'));
-	isFlathub = query.get('flathub') != '0';
+	isFlathub = query.get('flathub') === '1';
 	rs3InstalledHash.set(query.get('rs3_linux_installed_hash'));
 	runeLiteInstalledId.set(query.get('runelite_installed_id'));
 	hdosInstalledVersion.set(query.get('hdos_installed_version'));
+	const queryPlugins: string | null = query.get('plugins');
+	if (queryPlugins !== null) {
+		hasBoltPlugins.set(true);
+		pluginList.set(JSON.parse(queryPlugins));
+	} else {
+		hasBoltPlugins.set(false);
+	}
+
 	const creds = query.get('credentials');
 	if (creds) {
 		try {
@@ -469,6 +481,7 @@ export function launchRS3Linux(
 		if (jx_session_id) params.jx_session_id = jx_session_id;
 		if (jx_character_id) params.jx_character_id = jx_character_id;
 		if (jx_display_name) params.jx_display_name = jx_display_name;
+		if (configSub.rs_plugin_loader) params.plugin_loader = '1';
 		if (configSub.rs_config_uri) {
 			params.config_uri = configSub.rs_config_uri;
 		} else {
@@ -763,4 +776,42 @@ export function saveConfig() {
 		const json = JSON.stringify(object, null, 4);
 		xml.send(json);
 	}
+}
+
+export function getNewClientListPromise(): Promise<GameClient[]> {
+	return new Promise((resolve, reject) => {
+		const xml = new XMLHttpRequest();
+		const url = get(internalUrl).concat('/list-game-clients');
+		xml.open('GET', url, true);
+		xml.onreadystatechange = () => {
+			if (xml.readyState == 4) {
+				if (
+					xml.status == 200 &&
+					xml.getResponseHeader('content-type') === 'application/json'
+				) {
+					const dict = JSON.parse(xml.responseText);
+					resolve(
+						Object.keys(dict).map(
+							(uid) => <GameClient>{ uid, identity: dict[uid].identity || null }
+						)
+					);
+				} else {
+					reject(`error (${xml.responseText})`);
+				}
+			}
+		};
+		xml.send();
+	});
+}
+
+export function savePluginConfig(): void {
+	const xml = new XMLHttpRequest();
+	xml.open('POST', '/save-plugin-config', true);
+	xml.setRequestHeader('Content-Type', 'application/json');
+	xml.onreadystatechange = () => {
+		if (xml.readyState == 4) {
+			msg(`Save-plugin-config status: ${xml.responseText.trim()}`);
+		}
+	};
+	xml.send(JSON.stringify(get(pluginList)));
 }

@@ -57,6 +57,7 @@ export interface Bolt {
 // load on start and save on exit
 export interface Config {
 	use_dark_theme?: boolean;
+	rs_plugin_loader?: boolean;
 	rs_config_uri?: string;
 	flatpak_rich_presence?: boolean;
 	runelite_use_custom_jar?: boolean;
@@ -139,4 +140,24 @@ export interface SelectedPlay {
 	credentials?: Credentials;
 	game?: Game;
 	client?: Client;
+}
+
+// connected game client for plugin management purposes
+export interface GameClient {
+	uid: string;
+	identity?: string;
+}
+
+// rs3 plugin configured in plugins.json
+export interface PluginMeta {
+	path?: string;
+	name?: string;
+}
+
+// rs3 plugin config, from the plugin's bolt.json
+export interface PluginConfig {
+	name?: string;
+	version?: string;
+	description?: string;
+	main?: string;
 }

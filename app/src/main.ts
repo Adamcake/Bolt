@@ -2,10 +2,12 @@ import './assets/output.css';
 import App from './App.svelte';
 import {
 	messageList,
+	clientListPromise,
 	config,
 	platform,
 	internalUrl,
 	credentials,
+	hasBoltPlugins,
 	isConfigDirty,
 	pendingOauth,
 	pendingGameAuth,
@@ -16,6 +18,7 @@ import {
 } from './store';
 import { get, type Unsubscriber } from 'svelte/store';
 import {
+	getNewClientListPromise,
 	parseCredentials,
 	handleLogin,
 	saveAllCreds,
@@ -47,6 +50,8 @@ export let platformSub: string;
 unsubscribers.push(platform.subscribe((data) => (platformSub = data as string)));
 export let credentialsSub: Map<string, Credentials>;
 unsubscribers.push(credentials.subscribe((data) => (credentialsSub = data)));
+export let hasBoltPluginsSub: boolean;
+unsubscribers.push(hasBoltPlugins.subscribe((data) => (hasBoltPluginsSub = data ?? false)));
 export let pendingOauthSub: Auth;
 unsubscribers.push(pendingOauth.subscribe((data) => (pendingOauthSub = <Auth>data)));
 export let pendingGameAuthSub: Array<Auth>;
@@ -132,9 +137,6 @@ function start(): void {
 					xml.send(post_data);
 				}
 				break;
-			case 'initAuth':
-				msg(`message: init auth: ${event.data.auth_method}`);
-				break;
 			case 'externalUrl':
 				xml.onreadystatechange = () => {
 					if (xml.readyState == 4) {
@@ -200,6 +202,9 @@ function start(): void {
 					xml.setRequestHeader('Accept', 'application/json');
 					xml.send(`{"idToken": "${event.data.id_token}"}`);
 				}
+				break;
+			case 'gameClientListUpdate':
+				clientListPromise.set(getNewClientListPromise());
 				break;
 			default:
 				msg('Unknown message type: '.concat(event.data.type));

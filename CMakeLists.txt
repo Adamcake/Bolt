@@ -165,11 +165,19 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CEF_ROOT}/cmake")
 find_package(CEF REQUIRED)
 add_subdirectory(${CEF_LIBCEF_DLL_WRAPPER_PATH} libcef_dll_wrapper)
 
-# select an implementation for OS-specific behaviour of launcher window
+# select implementations for OS-specific behaviour
 if(WIN32)
     set(WINDOW_LAUNCHER_OS_SPECIFIC src/browser/window_launcher_win.cxx)
+    set(CLIENT_OS_SPECIFIC src/browser/client_win.cxx)
+    if(NOT BOLT_SKIP_LIBRARIES)
+        #library/ipc_win.c? actually windows appears to support AF_UNIX sockets already?
+    endif()
 else()
     set(WINDOW_LAUNCHER_OS_SPECIFIC src/browser/window_launcher_posix.cxx)
+    set(CLIENT_OS_SPECIFIC src/browser/client_posix.cxx)
+    if(NOT BOLT_SKIP_LIBRARIES)
+        set(LIB_IPC_OS_SPECIFIC src/library/ipc_posix.c)
+    endif()
 endif()
 
 # compile an auto-generator, then use it to auto-generate a C++ file containing icon data
@@ -184,7 +192,7 @@ add_custom_command(
 
 # compile the generator for embedded launcher file contents
 if(NOT BOLT_DEV_LAUNCHER_DIRECTORY)
-    add_executable(html_gen html/generator.cxx src/mime.cxx)
+    add_executable(html_gen app/generator.cxx src/mime.cxx)
     set_target_properties(html_gen PROPERTIES CXX_STANDARD 20 CXX_EXTENSIONS OFF)
     file(GLOB_RECURSE BOLT_HTML_FILE_LIST FOLLOW_SYMLINKS LIST_DIRECTORIES false CONFIGURE_DEPENDS "${BOLT_HTML_DIR}/*")
     add_custom_command(
@@ -198,8 +206,9 @@ endif()
 # This line needs to be updated manually with any new/deleted object files; cmake discourages GLOBbing source files
 add_executable(bolt
     modules/fmt/src/format.cc src/main.cxx src/browser.cxx src/browser/app.cxx src/browser/client.cxx
-    src/browser/resource_handler.cxx src/browser/window_launcher.cxx ${WINDOW_LAUNCHER_OS_SPECIFIC}
-    src/mime.cxx src/file_manager/directory.cxx client_cmake_gen.cxx ${BOLT_FILE_MANAGER_LAUNCHER_GEN}
+    ${CLIENT_OS_SPECIFIC} src/browser/resource_handler.cxx src/browser/window_launcher.cxx
+    ${WINDOW_LAUNCHER_OS_SPECIFIC} src/mime.cxx src/file_manager/directory.cxx client_cmake_gen.cxx
+    ${LIB_IPC_OS_SPECIFIC} ${BOLT_FILE_MANAGER_LAUNCHER_GEN}
 )
 
 # Various build properties
@@ -250,16 +259,6 @@ if(NOT WIN32)
     install(TARGETS java-proxy DESTINATION ${BOLT_CEF_INSTALLDIR}/bolt-launcher)
 endif()
 
-# Bolt uses GTK on all platforms, but it must specifically use gtk3
-# to avoid symbols conflicting with CEF's GTK usage on Unix platforms
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(GTK3 REQUIRED gtk+-3.0)
-target_include_directories(bolt PUBLIC ${GTK3_INCLUDE_DIRS})
-target_link_libraries(bolt PUBLIC ${GTK3_LIBRARIES})
-if(MSVC)
-    target_link_directories(bolt PUBLIC ${GTK3_LIBRARY_DIRS})
-endif()
-
 # Install commands for target dir layout - as per https://bitbucket.org/chromiumembedded/cef/wiki/Tutorial.md
 if(APPLE)
     # TODO: mac support
@@ -268,15 +267,17 @@ else()
     install(DIRECTORY "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/" "${CEF_ROOT}/Resources/" DESTINATION ${BOLT_CEF_INSTALLDIR}/bolt-launcher USE_SOURCE_PERMISSIONS)
 endif()
 
-# Build helper libraries
+# Build plugin library
 if(NOT BOLT_SKIP_LIBRARIES)
     # todo: anything other than linux
     if(UNIX AND NOT APPLE)
-        add_library(${BOLT_PLUGIN_LIB_NAME} SHARED src/library/so/main.c src/library/plugin.c src/library/gl.c src/library/rwlock_posix.c modules/hashmap/hashmap.c)
+        add_library(${BOLT_PLUGIN_LIB_NAME} SHARED src/library/so/main.c src/library/plugin/plugin.c src/library/gl.c
+        src/library/rwlock/rwlock_posix.c src/library/ipc_posix.c src/library/plugin/plugin_posix.c modules/hashmap/hashmap.c)
         install(TARGETS ${BOLT_PLUGIN_LIB_NAME} DESTINATION "${BOLT_LIBDIR}")
     endif()
     target_include_directories(${BOLT_PLUGIN_LIB_NAME} PUBLIC "${CEF_ROOT}" "${BOLT_LUAJIT_INCLUDE_DIR}" modules/fmt/include)
     target_link_libraries(${BOLT_PLUGIN_LIB_NAME} luajit-5.1)
+    target_compile_definitions(bolt PUBLIC BOLT_PLUGINS=1)
     target_compile_definitions(bolt PUBLIC BOLT_LIB_NAME="${BOLT_PLUGIN_LIB_NAME}")
 endif()
 

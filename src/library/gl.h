@@ -5,7 +5,7 @@
 #include <stdlib.h>
 
 #include "../../modules/hashmap/hashmap.h"
-#include "rwlock.h"
+#include "rwlock/rwlock.h"
 struct hashmap;
 struct SurfaceFunctions;
 
