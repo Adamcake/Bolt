@@ -2,6 +2,7 @@
 
 #include "../ipc.h"
 #include "plugin_api.h"
+#include "../../hashmap/hashmap.h"
 
 #include <lua.h>
 #include <lauxlib.h>
@@ -14,76 +15,97 @@
 #define API_VERSION_MINOR 0
 
 #define API_ADD(FUNC) lua_pushstring(state, #FUNC);lua_pushcfunction(state, api_##FUNC);lua_settable(state, -3);
-#define API_ADD_SUB(FUNC, SUB) lua_pushstring(state, #FUNC);lua_pushcfunction(state, api_##SUB##_##FUNC);lua_settable(state, -3);
-#define API_ADD_SUB_ALIAS(FUNC, ALIAS, SUB) lua_pushstring(state, #ALIAS);lua_pushcfunction(state, api_##SUB##_##FUNC);lua_settable(state, -3);
+#define API_ADD_SUB(STATE, FUNC, SUB) lua_pushstring(STATE, #FUNC);lua_pushcfunction(STATE, api_##SUB##_##FUNC);lua_settable(STATE, -3);
+#define API_ADD_SUB_ALIAS(STATE, FUNC, ALIAS, SUB) lua_pushstring(STATE, #ALIAS);lua_pushcfunction(STATE, api_##SUB##_##FUNC);lua_settable(STATE, -3);
 
-const char* BOLT_REGISTRYNAME = "bolt";
-const char* BATCH2D_META_REGISTRYNAME = "batch2dindex";
-const char* RENDER3D_META_REGISTRYNAME = "batch3dindex";
-const char* MINIMAP_META_REGISTRYNAME = "minimapindex";
-const char* SWAPBUFFERS_META_REGISTRYNAME = "swapbuffersindex";
-const char* SURFACE_META_REGISTRYNAME = "surfaceindex";
+const char* PLUGIN_REGISTRYNAME = "plugin";
+const char* BATCH2D_META_REGISTRYNAME = "batch2dmeta";
+const char* RENDER3D_META_REGISTRYNAME = "render3dmeta";
+const char* MINIMAP_META_REGISTRYNAME = "minimapmeta";
+const char* SWAPBUFFERS_META_REGISTRYNAME = "swapbuffersmeta";
+const char* SURFACE_META_REGISTRYNAME = "surfacemeta";
+const char* SWAPBUFFERS_CB_REGISTRYNAME = "swapbufferscb";
+const char* BATCH2D_CB_REGISTRYNAME = "batch2dcb";
+const char* RENDER3D_CB_REGISTRYNAME = "render3dcb";
+const char* MINIMAP_CB_REGISTRYNAME = "minimapcb";
 
 void (*surface_init)(struct SurfaceFunctions*, unsigned int, unsigned int);
 void (*surface_destroy)(void*);
 
-enum {
-    ENV_CALLBACK_SWAPBUFFERS,
-    ENV_CALLBACK_2D,
-    ENV_CALLBACK_3D,
-    ENV_CALLBACK_MINIMAP,
-};
-
+static bool inited = false;
 static int _bolt_api_init(lua_State* state);
 
 int fd = 0;
 
-lua_State* state = NULL;
+// a currently-running plugin.
+// note strings are not null terminated, and "path" must always be converted to use '/' as path-separators
+// and must always end with a trailing separator.
+struct Plugin {
+    lua_State* state;
+    char* id;
+    char* path;
+    uint32_t id_length;
+    uint32_t path_length;
+};
+
+void _bolt_plugin_free(struct Plugin* const* plugin) {
+    lua_close((*plugin)->state);
+    free((*plugin)->id);
+    free(*plugin);
+}
+
+static int _bolt_plugin_map_compare(const void* a, const void* b, void* udata) {
+    const struct Plugin* p1 = *(const struct Plugin* const*)a;
+    const struct Plugin* p2 = *(const struct Plugin* const*)b;
+    if (p1->id_length != p2->id_length) return p1->id_length;
+    return strncmp(p1->id, p2->id, p1->id_length);
+}
+
+static uint64_t _bolt_plugin_map_hash(const void* item, uint64_t seed0, uint64_t seed1) {
+    const struct Plugin* p = *(const struct Plugin* const*)item;
+    return hashmap_sip(p->id, p->id_length, seed0, seed1);
+}
+
+struct hashmap* plugins;
 
 // macro for defining callback functions "_bolt_plugin_handle_*" and "api_setcallback*"
-// e.g. DEFINE_CALLBACK(swapbuffers, SWAPBUFFERS_META_REGISTRYNAME, SwapBuffersEvent, ENV_CALLBACK_SWAPBUFFERS)
-#define DEFINE_CALLBACK(APINAME, META_REGNAME, STRUCTNAME, ENUMNAME) \
+// e.g. DEFINE_CALLBACK(swapbuffers, SWAPBUFFERS, SwapBuffersEvent)
+#define DEFINE_CALLBACK(APINAME, REGNAME, STRUCTNAME) \
 void _bolt_plugin_handle_##APINAME(struct STRUCTNAME* e) { \
-    lua_pushlightuserdata(state, e); \
-    lua_getfield(state, LUA_REGISTRYINDEX, META_REGNAME); \
-    lua_setmetatable(state, -2); \
-    int userdata_index = lua_gettop(state); \
-    lua_getfield(state, LUA_REGISTRYINDEX, BOLT_REGISTRYNAME); \
-    int key_index = lua_gettop(state); \
-    lua_pushnil(state); \
-    while (lua_next(state, key_index) != 0) { \
-        if (!lua_isstring(state, -2)) { \
-            lua_pop(state, 1); \
+    size_t iter = 0; \
+    void* item; \
+    while (hashmap_iter(plugins, &iter, &item)) { \
+        struct Plugin* plugin = *(struct Plugin* const*)item; \
+        lua_pushlightuserdata(plugin->state, e); /*stack: userdata*/ \
+        lua_getfield(plugin->state, LUA_REGISTRYINDEX, REGNAME##_META_REGISTRYNAME); /*stack: userdata, metatable*/ \
+        lua_setmetatable(plugin->state, -2); /*stack: userdata*/ \
+        lua_pushlstring(plugin->state, REGNAME##_CB_REGISTRYNAME, strlen(REGNAME##_CB_REGISTRYNAME)); /*stack: userdata, enumname*/ \
+        lua_gettable(plugin->state, LUA_REGISTRYINDEX); /*stack: userdata, callback*/ \
+        if (!lua_isfunction(plugin->state, -1)) { \
+            lua_pop(plugin->state, 2); \
             continue; \
         } \
-        lua_pushnumber(state, ENUMNAME); \
-        lua_gettable(state, -2); \
-        if (!lua_isfunction(state, -1)) { \
-            lua_pop(state, 2); \
-            continue; \
-        } \
-        lua_pushvalue(state, userdata_index); \
-        if (lua_pcall(state, 1, 0, 0)) { \
-            const char* plugin_id = lua_tostring(state, -3); \
-            const char* e = lua_tolstring(state, -1, 0); \
-            printf("plugin callback %s error: %s\n", #APINAME, e); \
-            lua_pop(state, 2); \
-            _bolt_plugin_stop(plugin_id); \
+        lua_pushvalue(plugin->state, -2); /*stack: userdata, callback, userdata*/ \
+        if (lua_pcall(plugin->state, 1, 0, 0)) { /*stack: userdata, ?error*/ \
+            const char* e = lua_tolstring(plugin->state, -1, 0); \
+            printf("plugin callback " #APINAME " error: %s\n", e); \
+            lua_pop(plugin->state, 2); /*stack: (empty)*/ \
+            _bolt_plugin_stop(plugin->id, plugin->id_length); \
+            break; \
         } else { \
-            lua_pop(state, 1); \
+            lua_pop(plugin->state, 1); /*stack: (empty)*/ \
         } \
     } \
-    lua_pop(state, 2); \
 } \
-static int api_setcallback##APINAME(lua_State *state) { \
-    _bolt_check_argc(state, 1, "setcallback"#APINAME); \
-    lua_pushinteger(state, ENUMNAME); \
+static int api_setcallback##APINAME(lua_State* state) { \
+    _bolt_check_argc(state, 1, "setcallback" #APINAME); \
+    lua_pushlstring(state, REGNAME##_CB_REGISTRYNAME, strlen(REGNAME##_CB_REGISTRYNAME)); \
     if (lua_isfunction(state, 1)) { \
         lua_pushvalue(state, 1); \
     } else { \
         lua_pushnil(state); \
     } \
-    lua_settable(state, LUA_GLOBALSINDEX); \
+    lua_settable(state, LUA_REGISTRYINDEX); \
     return 0; \
 }
 
@@ -106,112 +128,12 @@ void _bolt_plugin_init(void (*_surface_init)(struct SurfaceFunctions*, unsigned 
 
     surface_init = _surface_init;
     surface_destroy = _surface_destroy;
-    state = luaL_newstate();
-
-    // Open just the specific libraries plugins are allowed to have
-    lua_pushcfunction(state, luaopen_base);
-    lua_call(state, 0, 0);
-    lua_pushcfunction(state, luaopen_package);
-    lua_call(state, 0, 0);
-    lua_pushcfunction(state, luaopen_string);
-    lua_call(state, 0, 0);
-    lua_pushcfunction(state, luaopen_table);
-    lua_call(state, 0, 0);
-    lua_pushcfunction(state, luaopen_math);
-    lua_call(state, 0, 0);
-
-    // create the metatable for all RenderBatch2D objects
-    lua_pushstring(state, BATCH2D_META_REGISTRYNAME);
-    lua_newtable(state);
-    lua_pushstring(state, "__index");
-    lua_createtable(state, 0, 12);
-    API_ADD_SUB(vertexcount, batch2d)
-    API_ADD_SUB(verticesperimage, batch2d)
-    API_ADD_SUB(isminimap, batch2d)
-    API_ADD_SUB(targetsize, batch2d)
-    API_ADD_SUB(vertexxy, batch2d)
-    API_ADD_SUB(vertexatlasxy, batch2d)
-    API_ADD_SUB(vertexatlaswh, batch2d)
-    API_ADD_SUB(vertexuv, batch2d)
-    API_ADD_SUB(vertexcolour, batch2d)
-    API_ADD_SUB(textureid, batch2d)
-    API_ADD_SUB(texturesize, batch2d)
-    API_ADD_SUB(texturecompare, batch2d)
-    API_ADD_SUB(texturedata, batch2d)
-    API_ADD_SUB_ALIAS(vertexcolour, vertexcolor, batch2d)
-    lua_settable(state, -3);
-    lua_settable(state, LUA_REGISTRYINDEX);
-
-    // create the metatable for all Render3D objects
-    lua_pushstring(state, RENDER3D_META_REGISTRYNAME);
-    lua_newtable(state);
-    lua_pushstring(state, "__index");
-    lua_createtable(state, 0, 13);
-    API_ADD_SUB(vertexcount, render3d)
-    API_ADD_SUB(vertexxyz, render3d)
-    API_ADD_SUB(vertexmeta, render3d)
-    API_ADD_SUB(atlasxywh, render3d)
-    API_ADD_SUB(vertexuv, render3d)
-    API_ADD_SUB(vertexcolour, render3d)
-    API_ADD_SUB(textureid, render3d)
-    API_ADD_SUB(texturesize, render3d)
-    API_ADD_SUB(texturecompare, render3d)
-    API_ADD_SUB(texturedata, render3d)
-    API_ADD_SUB(toworldspace, render3d)
-    API_ADD_SUB(toscreenspace, render3d)
-    API_ADD_SUB(worldposition, render3d)
-    API_ADD_SUB_ALIAS(vertexcolour, vertexcolor, render3d)
-    lua_settable(state, -3);
-    lua_settable(state, LUA_REGISTRYINDEX);
-
-    // create the metatable for all RenderMinimap objects
-    lua_pushstring(state, MINIMAP_META_REGISTRYNAME);
-    lua_newtable(state);
-    lua_pushstring(state, "__index");
-    lua_createtable(state, 0, 3);
-    API_ADD_SUB(angle, minimap)
-    API_ADD_SUB(scale, minimap)
-    API_ADD_SUB(position, minimap)
-    lua_settable(state, -3);
-    lua_settable(state, LUA_REGISTRYINDEX);
-
-    // create the metatable for all SwapBuffers objects
-    lua_pushstring(state, SWAPBUFFERS_META_REGISTRYNAME);
-    lua_newtable(state);
-    lua_pushstring(state, "__index");
-    lua_createtable(state, 0, 0);
-    lua_settable(state, -3);
-    lua_settable(state, LUA_REGISTRYINDEX);
-
-    // create the metatable for all Surface objects
-    lua_pushstring(state, SURFACE_META_REGISTRYNAME);
-    lua_newtable(state);
-    lua_pushstring(state, "__index");
-    lua_createtable(state, 0, 2);
-    API_ADD_SUB(clear, surface)
-    API_ADD_SUB(drawtoscreen, surface)
-    lua_settable(state, -3);
-    lua_pushstring(state, "__gc");
-    lua_pushcfunction(state, surface_gc);
-    lua_settable(state, -3);
-    lua_settable(state, LUA_REGISTRYINDEX);
-
-    // create registry["bolt"] as an empty table
-    lua_pushstring(state, BOLT_REGISTRYNAME);
-    lua_newtable(state);
-    lua_settable(state, LUA_REGISTRYINDEX);
-
-    // load Bolt API into package.preload, so that `require("bolt")` will find it
-    lua_getfield(state, LUA_GLOBALSINDEX, "package");
-    lua_getfield(state, -1, "preload");
-    lua_pushstring(state, BOLT_REGISTRYNAME);
-    lua_pushcfunction(state, _bolt_api_init);
-    lua_settable(state, -3);
-    lua_pop(state, 2);
+    plugins = hashmap_new(sizeof(struct Plugin*), 8, 0, 0, _bolt_plugin_map_hash, _bolt_plugin_map_compare, NULL, NULL);
+    inited = 1;
 }
 
 static int _bolt_api_init(lua_State* state) {
-    lua_createtable(state, 0, 5);
+    lua_createtable(state, 0, 8);
     API_ADD(apiversion)
     API_ADD(checkversion)
     API_ADD(time)
@@ -224,13 +146,19 @@ static int _bolt_api_init(lua_State* state) {
 }
 
 uint8_t _bolt_plugin_is_inited() {
-    return state ? 1 : 0;
+    return inited;
 }
 
 void _bolt_plugin_close() {
-    lua_close(state);
-    state = NULL;
     _bolt_plugin_ipc_close(fd);
+    size_t iter = 0;
+    void* item;
+    while (hashmap_iter(plugins, &iter, &item)) {
+        struct Plugin** plugin = item;
+        _bolt_plugin_free(plugin);
+    }
+    hashmap_free(plugins);
+    inited = 0;
 }
 
 void _bolt_plugin_handle_messages() {
@@ -239,19 +167,30 @@ void _bolt_plugin_handle_messages() {
         if (_bolt_ipc_receive(fd, &message, sizeof(message)) != 0) break;
         switch (message.message_type) {
             case IPC_MSG_STARTPLUGINS: {
-                uint32_t id_len, path_len, main_len;
-                _bolt_ipc_receive(fd, &id_len, sizeof(uint32_t));
-                _bolt_ipc_receive(fd, &path_len, sizeof(uint32_t));
-                _bolt_ipc_receive(fd, &main_len, sizeof(uint32_t));
-                void* id = lua_newuserdata(state, id_len);
-                void* path = lua_newuserdata(state, path_len + main_len + 2);
-                _bolt_ipc_receive(fd, id, id_len);
-                _bolt_ipc_receive(fd, path, path_len);
-                ((char*)path)[path_len] = '/';
-                _bolt_ipc_receive(fd, path + path_len + 1, main_len);
-                ((char*)path)[path_len + main_len + 1] = '\0';
-                _bolt_plugin_add(path, id, id_len);
-                lua_pop(state, 2);
+                // note: incoming messages are sanitised by the UI, by replacing `\` with `/` and
+                // making sure to leave a trailing slash, when initiating this type of message
+                // (see PluginMenu.svelte)
+                for (size_t i = 0; i < message.items; i += 1) {
+                    struct Plugin* plugin = malloc(sizeof(struct Plugin));
+                    plugin->state = luaL_newstate();
+                    uint32_t main_length;
+                    _bolt_ipc_receive(fd, &plugin->id_length, sizeof(uint32_t));
+                    _bolt_ipc_receive(fd, &plugin->path_length, sizeof(uint32_t));
+                    _bolt_ipc_receive(fd, &main_length, sizeof(uint32_t));
+                    plugin->id = malloc(plugin->id_length);
+                    plugin->path = malloc(plugin->path_length);
+                    _bolt_ipc_receive(fd, plugin->id, plugin->id_length);
+                    _bolt_ipc_receive(fd, plugin->path, plugin->path_length);
+                    char* full_path = lua_newuserdata(plugin->state, plugin->path_length + main_length + 1);
+                    memcpy(full_path, plugin->path, plugin->path_length);
+                    _bolt_ipc_receive(fd, full_path + plugin->path_length, main_length);
+                    full_path[plugin->path_length + main_length] = '\0';
+                    if (_bolt_plugin_add(full_path, plugin)) {
+                        lua_pop(plugin->state, 1);
+                    } else {
+                        _bolt_plugin_free(&plugin);
+                    }
+                }
                 break;
             }
             default:
@@ -261,51 +200,143 @@ void _bolt_plugin_handle_messages() {
     }
 }
 
-uint8_t _bolt_plugin_add(const char* path, const char* id, size_t id_len) {
+uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     // load the user-provided string as a lua function, putting that function on the stack
-    if (luaL_loadfile(state, path)) {
-        const char* e = lua_tolstring(state, -1, 0);
+    if (luaL_loadfile(plugin->state, path)) {
+        const char* e = lua_tolstring(plugin->state, -1, 0);
         printf("plugin load error: %s\n", e);
-        lua_pop(state, 1);
+        lua_pop(plugin->state, 1);
         return 0;
     }
 
-    // create a new env for this plugin, and store it as registry["bolt"]["i"] where `i` is the unique ID
-    lua_newtable(state);
-    lua_getfield(state, LUA_REGISTRYINDEX, BOLT_REGISTRYNAME);
-    lua_pushlstring(state, id, id_len);
-    lua_pushvalue(state, -3);
-    lua_settable(state, -3);
-    lua_pop(state, 1);
+    // put this into our list of plugins (important to do this before lua_pcall)
+    struct Plugin* const* old_plugin = hashmap_set(plugins, &plugin);
+    if (hashmap_oom(plugins)) {
+        printf("plugin load error: out of memory\n");
+        _bolt_plugin_free(&plugin);
+        return 0;
+    }
+    if (old_plugin) {
+        // a plugin with this id was already running and we just overwrote it, so make sure not to leak the memory
+        _bolt_plugin_free(old_plugin);
+    }
 
-    // allow the new env access to the outer env via __index
-    lua_newtable(state);
-    lua_pushstring(state, "__index");
-    lua_pushvalue(state, LUA_GLOBALSINDEX);
-    lua_settable(state, -3);
-    lua_setmetatable(state, -2);
+    // add the struct pointer to the registry
+    lua_pushlstring(plugin->state, PLUGIN_REGISTRYNAME, strlen(PLUGIN_REGISTRYNAME));
+    lua_pushlightuserdata(plugin->state, plugin);
+    lua_settable(plugin->state, LUA_REGISTRYINDEX);
 
-    // set the env of the function created by `lua_loadstring` to this new env we just made
-    lua_setfenv(state, -2);
+    // Open just the specific libraries plugins are allowed to have
+    lua_pushcfunction(plugin->state, luaopen_base);
+    lua_call(plugin->state, 0, 0);
+    lua_pushcfunction(plugin->state, luaopen_package);
+    lua_call(plugin->state, 0, 0);
+    lua_pushcfunction(plugin->state, luaopen_string);
+    lua_call(plugin->state, 0, 0);
+    lua_pushcfunction(plugin->state, luaopen_table);
+    lua_call(plugin->state, 0, 0);
+    lua_pushcfunction(plugin->state, luaopen_math);
+    lua_call(plugin->state, 0, 0);
+
+    // load Bolt API into package.preload, so that `require("bolt")` will find it
+    lua_getfield(plugin->state, LUA_GLOBALSINDEX, "package");
+    lua_getfield(plugin->state, -1, "preload");
+    lua_pushstring(plugin->state, "bolt");
+    lua_pushcfunction(plugin->state, _bolt_api_init);
+    lua_settable(plugin->state, -3);
+    lua_pop(plugin->state, 2);
+
+    // create the metatable for all RenderBatch2D objects
+    lua_pushstring(plugin->state, BATCH2D_META_REGISTRYNAME);
+    lua_newtable(plugin->state);
+    lua_pushstring(plugin->state, "__index");
+    lua_createtable(plugin->state, 0, 12);
+    API_ADD_SUB(plugin->state, vertexcount, batch2d)
+    API_ADD_SUB(plugin->state, verticesperimage, batch2d)
+    API_ADD_SUB(plugin->state, isminimap, batch2d)
+    API_ADD_SUB(plugin->state, targetsize, batch2d)
+    API_ADD_SUB(plugin->state, vertexxy, batch2d)
+    API_ADD_SUB(plugin->state, vertexatlasxy, batch2d)
+    API_ADD_SUB(plugin->state, vertexatlaswh, batch2d)
+    API_ADD_SUB(plugin->state, vertexuv, batch2d)
+    API_ADD_SUB(plugin->state, vertexcolour, batch2d)
+    API_ADD_SUB(plugin->state, textureid, batch2d)
+    API_ADD_SUB(plugin->state, texturesize, batch2d)
+    API_ADD_SUB(plugin->state, texturecompare, batch2d)
+    API_ADD_SUB(plugin->state, texturedata, batch2d)
+    API_ADD_SUB_ALIAS(plugin->state, vertexcolour, vertexcolor, batch2d)
+    lua_settable(plugin->state, -3);
+    lua_settable(plugin->state, LUA_REGISTRYINDEX);
+
+    // create the metatable for all Render3D objects
+    lua_pushstring(plugin->state, RENDER3D_META_REGISTRYNAME);
+    lua_newtable(plugin->state);
+    lua_pushstring(plugin->state, "__index");
+    lua_createtable(plugin->state, 0, 13);
+    API_ADD_SUB(plugin->state, vertexcount, render3d)
+    API_ADD_SUB(plugin->state, vertexxyz, render3d)
+    API_ADD_SUB(plugin->state, vertexmeta, render3d)
+    API_ADD_SUB(plugin->state, atlasxywh, render3d)
+    API_ADD_SUB(plugin->state, vertexuv, render3d)
+    API_ADD_SUB(plugin->state, vertexcolour, render3d)
+    API_ADD_SUB(plugin->state, textureid, render3d)
+    API_ADD_SUB(plugin->state, texturesize, render3d)
+    API_ADD_SUB(plugin->state, texturecompare, render3d)
+    API_ADD_SUB(plugin->state, texturedata, render3d)
+    API_ADD_SUB(plugin->state, toworldspace, render3d)
+    API_ADD_SUB(plugin->state, toscreenspace, render3d)
+    API_ADD_SUB(plugin->state, worldposition, render3d)
+    API_ADD_SUB_ALIAS(plugin->state, vertexcolour, vertexcolor, render3d)
+    lua_settable(plugin->state, -3);
+    lua_settable(plugin->state, LUA_REGISTRYINDEX);
+
+    // create the metatable for all RenderMinimap objects
+    lua_pushstring(plugin->state, MINIMAP_META_REGISTRYNAME);
+    lua_newtable(plugin->state);
+    lua_pushstring(plugin->state, "__index");
+    lua_createtable(plugin->state, 0, 3);
+    API_ADD_SUB(plugin->state, angle, minimap)
+    API_ADD_SUB(plugin->state, scale, minimap)
+    API_ADD_SUB(plugin->state, position, minimap)
+    lua_settable(plugin->state, -3);
+    lua_settable(plugin->state, LUA_REGISTRYINDEX);
+
+    // create the metatable for all SwapBuffers objects
+    lua_pushstring(plugin->state, SWAPBUFFERS_META_REGISTRYNAME);
+    lua_newtable(plugin->state);
+    lua_pushstring(plugin->state, "__index");
+    lua_createtable(plugin->state, 0, 0);
+    lua_settable(plugin->state, -3);
+    lua_settable(plugin->state, LUA_REGISTRYINDEX);
+
+    // create the metatable for all Surface objects
+    lua_pushstring(plugin->state, SURFACE_META_REGISTRYNAME);
+    lua_newtable(plugin->state);
+    lua_pushstring(plugin->state, "__index");
+    lua_createtable(plugin->state, 0, 2);
+    API_ADD_SUB(plugin->state, clear, surface)
+    API_ADD_SUB(plugin->state, drawtoscreen, surface)
+    lua_settable(plugin->state, -3);
+    lua_pushstring(plugin->state, "__gc");
+    lua_pushcfunction(plugin->state, surface_gc);
+    lua_settable(plugin->state, -3);
+    lua_settable(plugin->state, LUA_REGISTRYINDEX);
 
     // attempt to run the function
-    if (lua_pcall(state, 0, 0, 0)) {
-        const char* e = lua_tolstring(state, -1, 0);
+    if (lua_pcall(plugin->state, 0, 0, 0)) {
+        const char* e = lua_tolstring(plugin->state, -1, 0);
         printf("plugin startup error: %s\n", e);
-        lua_pop(state, 1);
-        _bolt_plugin_stop(id);
-        return 1;
-    } else {
+        lua_pop(plugin->state, 1);
+        hashmap_delete(plugins, &plugin);
         return 0;
+    } else {
+        return 1;
     }
 }
 
-void _bolt_plugin_stop(const char* id) {
-    lua_getfield(state, LUA_REGISTRYINDEX, BOLT_REGISTRYNAME);
-    lua_pushstring(state, id);
-    lua_pushnil(state);
-    lua_settable(state, -3);
-    lua_pop(state, 1);
+void _bolt_plugin_stop(char* id, uint32_t id_length) {
+    struct Plugin* const* plugin = hashmap_delete(plugins, &(struct Plugin){.id = id, .id_length = id_length});
+    _bolt_plugin_free(plugin);
 }
 
 // Calls `error()` if arg count is incorrect
@@ -319,10 +350,10 @@ static void _bolt_check_argc(lua_State* state, int expected_argc, const char* fu
     }
 }
 
-DEFINE_CALLBACK(swapbuffers, SWAPBUFFERS_META_REGISTRYNAME, SwapBuffersEvent, ENV_CALLBACK_SWAPBUFFERS)
-DEFINE_CALLBACK(2d, BATCH2D_META_REGISTRYNAME, RenderBatch2D, ENV_CALLBACK_2D)
-DEFINE_CALLBACK(3d, RENDER3D_META_REGISTRYNAME, Render3D, ENV_CALLBACK_3D)
-DEFINE_CALLBACK(minimap, MINIMAP_META_REGISTRYNAME, RenderMinimapEvent, ENV_CALLBACK_MINIMAP)
+DEFINE_CALLBACK(swapbuffers, SWAPBUFFERS, SwapBuffersEvent)
+DEFINE_CALLBACK(2d, BATCH2D, RenderBatch2D)
+DEFINE_CALLBACK(3d, RENDER3D, Render3D)
+DEFINE_CALLBACK(minimap, MINIMAP, RenderMinimapEvent)
 
 static int api_apiversion(lua_State* state) {
     _bolt_check_argc(state, 0, "apiversion");

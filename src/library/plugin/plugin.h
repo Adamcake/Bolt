@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 struct RenderBatch2D;
+struct Plugin;
 
 /// Struct containing "vtable" callback information for RenderBatch2D's list of vertices.
 /// Unless stated otherwise, functions will be called with three params: the index, the specified
@@ -159,10 +160,10 @@ void _bolt_plugin_handle_messages();
 /// sent to it until it is destroyed by the plugin being stopped.
 ///
 /// Returns 0 on success or 1 on failure.
-uint8_t _bolt_plugin_add(const char* path, const char* id, size_t id_len);
+uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin);
 
 /// Stops a plugin via its unique ID, as passed to `_bolt_plugin_add`.
-void _bolt_plugin_stop(const char*);
+void _bolt_plugin_stop(char* id, uint32_t id_length);
 
 /// Sends a SwapBuffers event to all plugins.
 void _bolt_plugin_handle_swapbuffers(struct SwapBuffersEvent*);
