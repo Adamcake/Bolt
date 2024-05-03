@@ -246,6 +246,22 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     PUSHSTRING(plugin->state, "bolt");
     lua_pushcfunction(plugin->state, _bolt_api_init);
     lua_settable(plugin->state, -3);
+    // now set package.path to the plugin's root path
+    char* search_path = lua_newuserdata(plugin->state, plugin->path_length + 5);
+    memcpy(search_path, plugin->path, plugin->path_length);
+    memcpy(&search_path[plugin->path_length], "?.lua", 5);
+    PUSHSTRING(plugin->state, "path");
+    lua_pushlstring(plugin->state, search_path, plugin->path_length + 5);
+    lua_settable(plugin->state, -5);
+    lua_pop(plugin->state, 2);
+    // finally, restrict package.loaders by removing the module searcher and all-in-one searcher,
+    // because these can load .dll and .so files which are a huge security concern, and also
+    // because stupid people will make windows-only plugins with it and I'm not dealing with that
+    lua_getfield(plugin->state, -1, "loaders");
+    lua_pushnil(plugin->state);
+    lua_pushnil(plugin->state);
+    lua_rawseti(plugin->state, -3, 3);
+    lua_rawseti(plugin->state, -2, 4);
     lua_pop(plugin->state, 2);
 
     // create the metatable for all RenderBatch2D objects
