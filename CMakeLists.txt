@@ -165,6 +165,10 @@ if(NOT WIN32)
         "    <content_attribute id=\"social-info\">moderate</content_attribute>"
         "    <content_attribute id=\"money-purchasing\">mild</content_attribute>"
         "</content_rating>"
+        "<branding>"
+        "    <color type=\"primary\" scheme_preference=\"light\">#e9ecf0</color>"
+        "    <color type=\"primary\" scheme_preference=\"dark\">#415980</color>"
+        "</branding>"
         "</component>"
         ""
     )
