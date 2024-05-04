@@ -44,6 +44,7 @@ void Browser::Window::OnWindowCreated(CefRefPtr<CefWindow> window) {
 	if (this->details.center_on_open) {
 		this->window->CenterWindow(CefSize(this->details.preferred_width, this->details.preferred_height));
 	}
+	this->window->SetTitle("Bolt Launcher");
 	this->window->Show();
 }
 
