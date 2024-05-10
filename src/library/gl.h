@@ -74,7 +74,9 @@ struct GLLibFunctions {
     void (*Flush)();
     void (*GenTextures)(uint32_t, unsigned int*);
     uint32_t (*GetError)();
+    void (*TexParameteri)(uint32_t, uint32_t, int);
     void (*TexSubImage2D)(uint32_t, int, int, int, unsigned int, unsigned int, uint32_t, uint32_t, const void*);
+    void (*Viewport)(int, int, unsigned int, unsigned int);
 };
 
 /* consts used from libgl */
@@ -94,6 +96,11 @@ struct GLLibFunctions {
 #define GL_MAP_READ_BIT 1
 #define GL_MAP_WRITE_BIT 2
 #define GL_MAP_FLUSH_EXPLICIT_BIT 16
+#define GL_TEXTURE_MAG_FILTER 10240
+#define GL_TEXTURE_MIN_FILTER 10241
+#define GL_TEXTURE_WRAP_S 10242
+#define GL_TEXTURE_WRAP_T 10243
+#define GL_CLAMP_TO_EDGE 33071
 #define GL_COMPRESSED_RGB_S3TC_DXT1_EXT 33776
 #define GL_COMPRESSED_RGBA_S3TC_DXT1_EXT 33777
 #define GL_COMPRESSED_RGBA_S3TC_DXT3_EXT 33778
@@ -224,6 +231,10 @@ struct GLContext {
     uint8_t deferred_destroy;
     uint8_t is_shared_owner;
     uint8_t need_3d_tex;
+    int viewport_x;
+    int viewport_y;
+    unsigned int viewport_w;
+    unsigned int viewport_h;
 };
 
 void _bolt_gl_close();
@@ -274,6 +285,9 @@ void _bolt_gl_onDeleteTextures(unsigned int, const unsigned int*);
 
 /// Call this in response to glClear, which needs to be hooked from libgl.
 void _bolt_gl_onClear(uint32_t);
+
+/// Call this in response to glViewport, which needs to be hooked from libgl.
+void _bolt_gl_onViewport(int, int, unsigned int, unsigned int);
 
 /* plugin library interop stuff */
 
@@ -326,9 +340,10 @@ void _bolt_gl_plugin_texture_size(void* userdata, size_t* out);
 uint8_t _bolt_gl_plugin_texture_compare(void* userdata, size_t x, size_t y, size_t len, const unsigned char* data);
 uint8_t* _bolt_gl_plugin_texture_data(void* userdata, size_t x, size_t y);
 
-void _bolt_gl_plugin_surface_init(struct SurfaceFunctions* out, unsigned int width, unsigned int height);
+void _bolt_gl_plugin_surface_init(struct SurfaceFunctions* out, unsigned int width, unsigned int height, const void* data);
 void _bolt_gl_plugin_surface_destroy(void* userdata);
 void _bolt_gl_plugin_surface_clear(void* userdata, double r, double g, double b, double a);
 void _bolt_gl_plugin_surface_drawtoscreen(void* userdata, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh);
+void _bolt_gl_plugin_surface_drawtosurface(void* userdata, void* target, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh);
 
 #endif

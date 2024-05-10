@@ -192,8 +192,12 @@ void _bolt_init_libgl(unsigned long addr, const Elf32_Word* gnu_hash_table, cons
     if (sym) libgl.GenTextures = sym->st_value + libgl_addr;
     sym = _bolt_lookup_symbol("glGetError", gnu_hash_table, hash_table, string_table, symbol_table);
     if (sym) libgl.GetError = sym->st_value + libgl_addr;
+    sym = _bolt_lookup_symbol("glTexParameteri", gnu_hash_table, hash_table, string_table, symbol_table);
+    if (sym) libgl.TexParameteri = sym->st_value + libgl_addr;
     sym = _bolt_lookup_symbol("glTexSubImage2D", gnu_hash_table, hash_table, string_table, symbol_table);
     if (sym) libgl.TexSubImage2D = sym->st_value + libgl_addr;
+    sym = _bolt_lookup_symbol("glViewport", gnu_hash_table, hash_table, string_table, symbol_table);
+    if (sym) libgl.Viewport = sym->st_value + libgl_addr;
 }
 
 void _bolt_init_libxcb(unsigned long addr, const Elf32_Word* gnu_hash_table, const ElfW(Word)* hash_table, const char* string_table, const ElfW(Sym)* symbol_table) {
@@ -306,6 +310,13 @@ void glClear(uint32_t mask) {
     libgl.Clear(mask);
     _bolt_gl_onClear(mask);
     LOG("glClear end\n");
+}
+
+void glViewport(int x, int y, unsigned int width, unsigned int height) {
+    LOG("glViewport\n");
+    libgl.Viewport(x, y, width, height);
+    _bolt_gl_onViewport(x, y, width, height);
+    LOG("glViewport end\n");
 }
 
 void* eglGetProcAddress(const char* name) {
@@ -508,7 +519,9 @@ void* dlopen(const char* filename, int flags) {
             libgl.Flush = real_dlsym(ret, "glFlush");
             libgl.GenTextures = real_dlsym(ret, "glGenTextures");
             libgl.GetError = real_dlsym(ret, "glGetError");
+            libgl.TexParameteri = real_dlsym(ret, "glTexParameteri");
             libgl.TexSubImage2D = real_dlsym(ret, "glTexSubImage2D");
+            libgl.Viewport = real_dlsym(ret, "glViewport");
         }
         if (!libxcb_addr && !strcmp(filename, libxcb_name)) {
             libxcb_addr = ret;

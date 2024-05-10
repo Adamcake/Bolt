@@ -75,9 +75,35 @@ static int api_time(lua_State*);
 /// A surface can be drawn onto with the rendering functions and can be overlaid onto the screen
 /// by calling `surface:drawtoscreen()` during a swapbuffers callback.
 ///
+/// Surface widths and heights should always be integral powers of 2. GPUs often can't handle other
+/// values correctly which will result in unexpected behaviour.
+///
 /// All of the member functions of surface objects can be found in this file, prefixed with
 /// "api_surface_".
 static int api_createsurface(lua_State*);
+
+/// [-3, +1, -]
+/// Creates a surface with the given width, height, and RGBA data (string). See `createsurface`
+/// documentation for more information on surfaces.
+///
+/// There are four bytes in an RGBA pixel, so the number of bytes in the string is expected to be
+/// 4 * width * height.If the given RGBA data is not sufficient to fill the whole surface, it will
+/// be padded with zeroes. If too much RGBA data is provided the excess will be unused.
+static int api_createsurfacefromrgba(lua_State*);
+
+/// [-1, +1, e]
+/// Creates a surface from the PNG file at the given path. See `createsurface` documentation for
+/// more information on surfaces.
+///
+/// The path will be interpreted similarly to require(), i.e. relative to the plugin's root
+/// directory, using '.' as file separators, and must not include the ".png" extension (this is
+/// appended automatically). This function will call `error()` if the file does not exist or is
+/// inaccessible for any reason.
+///
+/// As with `createsurface`, the width and height of your PNG file should be integral powers of 2.
+///
+/// Loading PNG files is slow, so use this function sparingly.
+static int api_createsurfacefrompng(lua_State*);
 
 /// [-1, +0, -]
 /// Sets a callback function for SwapBuffers events, overwriting the previous callback, if any.
@@ -274,6 +300,12 @@ static int api_surface_clear(lua_State*);
 ///
 /// Paramaters are source X,Y,W,H followed by destination X,Y,W,H, all in pixels.
 static int api_surface_drawtoscreen(lua_State*);
+
+/// [-10, +0, -]
+/// Draws a section of the surface directly onto a section of another surface.
+///
+/// Paramaters are target surface, then source X,Y,W,H, then destination X,Y,W,H, all in pixels.
+static int api_surface_drawtosurface(lua_State*);
 
 /// [-1, +1, -]
 /// Returns the number of vertices in a 3D render object (i.e. a model).

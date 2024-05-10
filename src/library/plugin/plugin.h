@@ -107,6 +107,10 @@ struct SurfaceFunctions {
     /// Draws a rectangle from the surface, indicated by sx,sy,sw,sh, to a rectangle on the backbuffer,
     /// indicated by dx,dy,dw,dh. All values are in pixels.
     void (*draw_to_screen)(void* userdata, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh);
+
+    /// Draws a rectangle from the surface, indicated by sx,sy,sw,sh, to a rectangle on the target surface,
+    /// indicated by dx,dy,dw,dh. All values are in pixels.
+    void (*draw_to_surface)(void* userdata, void* target, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh);
 };
 
 struct RenderBatch2D {
@@ -137,7 +141,7 @@ struct SwapBuffersEvent {};
 
 /// Init the plugin library. Call _bolt_plugin_close at the end of execution, and don't double-init.
 /// Must be provided an init function and destroy function for surfaces.
-void _bolt_plugin_init(void (*)(struct SurfaceFunctions*, unsigned int, unsigned int), void (*)(void*));
+void _bolt_plugin_init(void (*)(struct SurfaceFunctions*, unsigned int, unsigned int, const void*), void (*)(void*));
 
 /// Returns true if the plugin library is initialised (i.e. init has been called more recently than
 /// close), otherwise false.

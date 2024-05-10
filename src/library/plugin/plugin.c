@@ -3,6 +3,7 @@
 #include "../ipc.h"
 #include "plugin_api.h"
 #include "../../hashmap/hashmap.h"
+#include "../../../modules/spng/spng/spng.h"
 
 #include <lua.h>
 #include <lauxlib.h>
@@ -31,7 +32,7 @@
 #define RENDER3D_CB_REGISTRYNAME "render3dcb"
 #define MINIMAP_CB_REGISTRYNAME "minimapcb"
 
-void (*surface_init)(struct SurfaceFunctions*, unsigned int, unsigned int);
+void (*surface_init)(struct SurfaceFunctions*, unsigned int, unsigned int, const void*);
 void (*surface_destroy)(void*);
 
 static bool inited = false;
@@ -117,7 +118,7 @@ static int surface_gc(lua_State* state) {
     return 0;
 }
 
-void _bolt_plugin_init(void (*_surface_init)(struct SurfaceFunctions*, unsigned int, unsigned int), void (*_surface_destroy)(void*)) {
+void _bolt_plugin_init(void (*_surface_init)(struct SurfaceFunctions*, unsigned int, unsigned int, const void*), void (*_surface_destroy)(void*)) {
     _bolt_plugin_ipc_init(&fd);
 
     const char* display_name = getenv("JX_DISPLAY_NAME");
@@ -135,7 +136,7 @@ void _bolt_plugin_init(void (*_surface_init)(struct SurfaceFunctions*, unsigned 
 }
 
 static int _bolt_api_init(lua_State* state) {
-    lua_createtable(state, 0, 8);
+    lua_createtable(state, 0, 10);
     API_ADD(apiversion)
     API_ADD(checkversion)
     API_ADD(time)
@@ -144,6 +145,8 @@ static int _bolt_api_init(lua_State* state) {
     API_ADD(setcallbackminimap)
     API_ADD(setcallbackswapbuffers)
     API_ADD(createsurface)
+    API_ADD(createsurfacefromrgba)
+    API_ADD(createsurfacefrompng)
     return 1;
 }
 
@@ -224,7 +227,7 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     }
 
     // add the struct pointer to the registry
-    lua_pushlstring(plugin->state, PLUGIN_REGISTRYNAME, sizeof(PLUGIN_REGISTRYNAME) - sizeof(char));
+    PUSHSTRING(plugin->state, PLUGIN_REGISTRYNAME);
     lua_pushlightuserdata(plugin->state, plugin);
     lua_settable(plugin->state, LUA_REGISTRYINDEX);
 
@@ -331,9 +334,10 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     PUSHSTRING(plugin->state, SURFACE_META_REGISTRYNAME);
     lua_newtable(plugin->state);
     PUSHSTRING(plugin->state, "__index");
-    lua_createtable(plugin->state, 0, 2);
+    lua_createtable(plugin->state, 0, 3);
     API_ADD_SUB(plugin->state, clear, surface)
     API_ADD_SUB(plugin->state, drawtoscreen, surface)
+    API_ADD_SUB(plugin->state, drawtosurface, surface)
     lua_settable(plugin->state, -3);
     PUSHSTRING(plugin->state, "__gc");
     lua_pushcfunction(plugin->state, surface_gc);
@@ -409,10 +413,89 @@ static int api_createsurface(lua_State* state) {
     const lua_Integer w = lua_tointeger(state, 1);
     const lua_Integer h = lua_tointeger(state, 2);
     struct SurfaceFunctions* functions = lua_newuserdata(state, sizeof(struct SurfaceFunctions));
-    surface_init(functions, w, h);
+    surface_init(functions, w, h, NULL);
     lua_getfield(state, LUA_REGISTRYINDEX, SURFACE_META_REGISTRYNAME);
     lua_setmetatable(state, -2);
     return 1;
+}
+
+static int api_createsurfacefromrgba(lua_State* state) {
+    _bolt_check_argc(state, 3, "createsurfacefromrgba");
+    const lua_Integer w = lua_tointeger(state, 1);
+    const lua_Integer h = lua_tointeger(state, 2);
+    const size_t req_length = w * h * 4;
+    size_t length;
+    const void* rgba = lua_tolstring(state, 3, &length);
+    struct SurfaceFunctions* functions = lua_newuserdata(state, sizeof(struct SurfaceFunctions));
+    if (length >= req_length) {
+        surface_init(functions, w, h, rgba);
+    } else {
+        void* ud = lua_newuserdata(state, req_length);
+        memcpy(ud, rgba, length);
+        memset(ud + length, 0, req_length - length);
+        surface_init(functions, w, h, ud);
+        lua_pop(state, 1);
+    }
+    lua_getfield(state, LUA_REGISTRYINDEX, SURFACE_META_REGISTRYNAME);
+    lua_setmetatable(state, -2);
+    return 1;
+}
+
+static int api_createsurfacefrompng(lua_State* state) {
+    _bolt_check_argc(state, 1, "createsurfacefrompng");
+    const char extension[] = ".png";
+    size_t rgba_size, path_length;
+    const char* path = lua_tolstring(state, 1, &path_length);
+    lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME);
+    const struct Plugin* plugin = lua_touserdata(state, -1);
+    const size_t full_path_length = plugin->path_length + path_length + sizeof(extension);
+    char* full_path = lua_newuserdata(state, full_path_length);
+    memcpy(full_path, plugin->path, plugin->path_length);
+    memcpy(full_path + plugin->path_length, path, path_length + 1);
+    for (char* c = full_path + plugin->path_length; *c; c += 1) {
+        if (*c == '.') *c = '/';
+    }
+    memcpy(full_path + plugin->path_length + path_length, extension, sizeof(extension));
+    FILE* f = fopen(full_path, "rb");
+    if (!f) {
+        char error_buffer[65536];
+        SNPUSHSTRING(state, error_buffer, "createsurfacefrompng: error opening file '%s'", (char*)full_path);
+        lua_error(state);
+    }
+    fseek(f, 0, SEEK_END);
+    const long png_size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    void* png = lua_newuserdata(state, png_size);
+    if (fread(png, 1, png_size, f) < png_size) {
+        char error_buffer[65536];
+        fclose(f);
+        SNPUSHSTRING(state, error_buffer, "createsurfacefrompng: error reading file '%s'", (char*)full_path);
+        lua_error(state);
+    }
+    fclose(f);
+
+#define CALL_SPNG(FUNC, ...) err = FUNC(__VA_ARGS__); if(err){char b[65536];free(rgba);SNPUSHSTRING(state,b,"createsurfacefrompng: error decoding file '%s': " #FUNC " returned %i",(char*)full_path,err);lua_error(state);}
+    void* rgba = NULL;
+    int err;
+    spng_ctx* spng = spng_ctx_new(0);
+    CALL_SPNG(spng_set_png_buffer, spng, png, png_size);
+    struct spng_ihdr ihdr;
+    CALL_SPNG(spng_get_ihdr, spng, &ihdr)
+    CALL_SPNG(spng_decoded_image_size, spng, SPNG_FMT_RGBA8, &rgba_size)
+    rgba = malloc(rgba_size);
+    CALL_SPNG(spng_decode_image, spng, rgba, rgba_size, SPNG_FMT_RGBA8, 0)
+    spng_ctx_free(spng);
+    lua_pop(state, 3);
+#undef CALL_SPNG
+
+    lua_pushinteger(state, ihdr.width);
+    lua_pushinteger(state, ihdr.height);
+    struct SurfaceFunctions* functions = lua_newuserdata(state, sizeof(struct SurfaceFunctions));
+    surface_init(functions, ihdr.width, ihdr.height, rgba);
+    lua_getfield(state, LUA_REGISTRYINDEX, SURFACE_META_REGISTRYNAME);
+    lua_setmetatable(state, -2);
+    free(rgba);
+    return 3;
 }
 
 static int api_batch2d_vertexcount(lua_State* state) {
@@ -610,6 +693,22 @@ static int api_surface_drawtoscreen(lua_State* state) {
     const int dw = lua_tointeger(state, 8);
     const int dh = lua_tointeger(state, 9);
     functions->draw_to_screen(functions->userdata, sx, sy, sw, sh, dx, dy, dw, dh);
+    return 0;
+}
+
+static int api_surface_drawtosurface(lua_State* state) {
+    _bolt_check_argc(state, 10, "surface_drawtosurface");
+    const struct SurfaceFunctions* functions = lua_touserdata(state, 1);
+    const struct SurfaceFunctions* target = lua_touserdata(state, 2);
+    const int sx = lua_tointeger(state, 3);
+    const int sy = lua_tointeger(state, 4);
+    const int sw = lua_tointeger(state, 5);
+    const int sh = lua_tointeger(state, 6);
+    const int dx = lua_tointeger(state, 7);
+    const int dy = lua_tointeger(state, 8);
+    const int dw = lua_tointeger(state, 9);
+    const int dh = lua_tointeger(state, 10);
+    functions->draw_to_surface(functions->userdata, target->userdata, sx, sy, sw, sh, dx, dy, dw, dh);
     return 0;
 }
 

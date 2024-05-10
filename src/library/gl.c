@@ -25,16 +25,22 @@ uint8_t egl_main_context_makecurrent_pending = 0;
 
 struct GLProcFunctions gl = {0};
 const struct GLLibFunctions* lgl = NULL;
-unsigned int program_direct;
-int program_direct_sampler;
-int program_direct_d_xywh;
-int program_direct_s_xywh;
-int program_direct_src_wh_dest_wh;
+unsigned int program_direct_screen;
+int program_direct_screen_sampler;
+int program_direct_screen_d_xywh;
+int program_direct_screen_s_xywh;
+int program_direct_screen_src_wh_dest_wh;
+unsigned int program_direct_surface;
+int program_direct_surface_sampler;
+int program_direct_surface_d_xywh;
+int program_direct_surface_s_xywh;
+int program_direct_surface_src_wh_dest_wh;
 unsigned int program_direct_vao;
 unsigned int buffer_vertices_square;
 
-// "direct" program is basically a blit but with transparency
-const char* program_direct_vs = "#version 330 core\n"
+// "direct" program is basically a blit but with transparency.
+// there are different vertex shaders for targeting the screen vs targeting a surface.
+const char* program_direct_screen_vs = "#version 330 core\n"
 "layout (location = 0) in vec2 aPos;"
 "out vec2 vPos;"
 "uniform ivec4 d_xywh;"
@@ -43,9 +49,18 @@ const char* program_direct_vs = "#version 330 core\n"
   "vPos = aPos;"
   "gl_Position = vec4(((((aPos * d_xywh.pq) + d_xywh.st) * vec2(2.0, 2.0) / src_wh_dest_wh.pq) - vec2(1.0, 1.0)) * vec2(1.0, -1.0), 0.0, 1.0);"
 "}";
+const char* program_direct_surface_vs = "#version 330 core\n"
+"layout (location = 0) in vec2 aPos;"
+"out vec2 vPos;"
+"uniform ivec4 d_xywh;"
+"uniform ivec4 src_wh_dest_wh;"
+"void main() {"
+  "vPos = aPos;"
+  "gl_Position = vec4(((((aPos * d_xywh.pq) + d_xywh.st) * vec2(2.0, 2.0) / src_wh_dest_wh.pq) - vec2(1.0, 1.0)), 0.0, 1.0);"
+"}";
 const char* program_direct_fs = "#version 330 core\n"
 "in vec2 vPos;"
-"out vec4 col;"
+"layout (location = 0) out vec4 col;"
 "uniform sampler2D tex;"
 "uniform ivec4 s_xywh;"
 "uniform ivec4 src_wh_dest_wh;"
@@ -435,37 +450,55 @@ void _bolt_gl_load(void* (*GetProcAddress)(const char*)) {
 }
 
 void _bolt_gl_init() {
-    gl.GenVertexArrays(1, &program_direct_vao);
-    gl.BindVertexArray(program_direct_vao);
-    unsigned int direct_vs = gl.CreateShader(GL_VERTEX_SHADER);
-    gl.ShaderSource(direct_vs, 1, &program_direct_vs, NULL);
-    gl.CompileShader(direct_vs);
+    unsigned int direct_screen_vs = gl.CreateShader(GL_VERTEX_SHADER);
+    gl.ShaderSource(direct_screen_vs, 1, &program_direct_screen_vs, NULL);
+    gl.CompileShader(direct_screen_vs);
+
+    unsigned int direct_surface_vs = gl.CreateShader(GL_VERTEX_SHADER);
+    gl.ShaderSource(direct_surface_vs, 1, &program_direct_surface_vs, NULL);
+    gl.CompileShader(direct_surface_vs);
+
     unsigned int direct_fs = gl.CreateShader(GL_FRAGMENT_SHADER);
     gl.ShaderSource(direct_fs, 1, &program_direct_fs, NULL);
     gl.CompileShader(direct_fs);
-    program_direct = gl.CreateProgram();
-    gl.AttachShader(program_direct, direct_vs);
-    gl.AttachShader(program_direct, direct_fs);
-    gl.LinkProgram(program_direct);
-    program_direct_sampler = gl.GetUniformLocation(program_direct, "tex");
-    program_direct_d_xywh = gl.GetUniformLocation(program_direct, "d_xywh");
-    program_direct_s_xywh = gl.GetUniformLocation(program_direct, "s_xywh");
-    program_direct_src_wh_dest_wh = gl.GetUniformLocation(program_direct, "src_wh_dest_wh");
+
+    program_direct_screen = gl.CreateProgram();
+    gl.AttachShader(program_direct_screen, direct_screen_vs);
+    gl.AttachShader(program_direct_screen, direct_fs);
+    gl.LinkProgram(program_direct_screen);
+    program_direct_screen_sampler = gl.GetUniformLocation(program_direct_screen, "tex");
+    program_direct_screen_d_xywh = gl.GetUniformLocation(program_direct_screen, "d_xywh");
+    program_direct_screen_s_xywh = gl.GetUniformLocation(program_direct_screen, "s_xywh");
+    program_direct_screen_src_wh_dest_wh = gl.GetUniformLocation(program_direct_screen, "src_wh_dest_wh");
+
+    program_direct_surface = gl.CreateProgram();
+    gl.AttachShader(program_direct_surface, direct_surface_vs);
+    gl.AttachShader(program_direct_surface, direct_fs);
+    gl.LinkProgram(program_direct_surface);
+    program_direct_surface_sampler = gl.GetUniformLocation(program_direct_surface, "tex");
+    program_direct_surface_d_xywh = gl.GetUniformLocation(program_direct_surface, "d_xywh");
+    program_direct_surface_s_xywh = gl.GetUniformLocation(program_direct_surface, "s_xywh");
+    program_direct_surface_src_wh_dest_wh = gl.GetUniformLocation(program_direct_surface, "src_wh_dest_wh");
+
+    gl.DeleteShader(direct_screen_vs);
+    gl.DeleteShader(direct_surface_vs);
+    gl.DeleteShader(direct_fs);
+
+    gl.GenVertexArrays(1, &program_direct_vao);
+    gl.BindVertexArray(program_direct_vao);
     gl.GenBuffers(1, &buffer_vertices_square);
     gl.BindBuffer(GL_ARRAY_BUFFER, buffer_vertices_square);
     const float square[] = {0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f};
     gl.BufferData(GL_ARRAY_BUFFER, sizeof(float) * 8, square, GL_STATIC_DRAW);
-    gl.DeleteShader(direct_vs);
-    gl.DeleteShader(direct_fs);
     gl.EnableVertexAttribArray(0);
     gl.VertexAttribPointer(0, 2, GL_FLOAT, 0, 2 * sizeof(float), NULL);
-    gl.BindBuffer(GL_ARRAY_BUFFER, 0);
     gl.BindVertexArray(0);
 }
 
 void _bolt_gl_close() {
     gl.DeleteBuffers(1, &buffer_vertices_square);
-    gl.DeleteProgram(program_direct);
+    gl.DeleteProgram(program_direct_screen);
+    gl.DeleteProgram(program_direct_surface);
     gl.DeleteVertexArrays(1, &program_direct_vao);
     _bolt_destroy_context((void*)egl_main_context);
 }
@@ -1324,15 +1357,13 @@ void _bolt_gl_onBindTexture(uint32_t target, unsigned int texture) {
 
 void _bolt_gl_onTexSubImage2D(uint32_t target, int level, int xoffset, int yoffset, unsigned int width, unsigned int height, uint32_t format, uint32_t type, const void* pixels) {
     struct GLContext* c = _bolt_context();
-    if (level == 0 && format == GL_RGBA) {
-        if (target == GL_TEXTURE_2D && format == GL_RGBA) {
-            struct GLTexture2D* tex = c->texture_units[c->active_texture];
-            if (tex && !(xoffset < 0 || yoffset < 0 || xoffset + width > tex->width || yoffset + height > tex->height)) {
-                for (unsigned int y = 0; y < height; y += 1) {
-                    unsigned char* dest_ptr = tex->data + ((tex->width * (y + yoffset)) + xoffset) * 4;
-                    const void* src_ptr = pixels + (width * y * 4);
-                    memcpy(dest_ptr, src_ptr, width * 4);
-                }
+    if (target == GL_TEXTURE_2D && level == 0 && format == GL_RGBA) {
+        struct GLTexture2D* tex = c->texture_units[c->active_texture];
+        if (tex && !(xoffset < 0 || yoffset < 0 || xoffset + width > tex->width || yoffset + height > tex->height)) {
+            for (unsigned int y = 0; y < height; y += 1) {
+                unsigned char* dest_ptr = tex->data + ((tex->width * (y + yoffset)) + xoffset) * 4;
+                const void* src_ptr = pixels + (width * y * 4);
+                memcpy(dest_ptr, src_ptr, width * 4);
             }
         }
     }
@@ -1360,6 +1391,14 @@ void _bolt_gl_onClear(uint32_t mask) {
             tex->is_minimap_tex_big = 0;
         }
     }
+}
+
+void _bolt_gl_onViewport(int x, int y, unsigned int width, unsigned int height) {
+    struct GLContext* c = _bolt_context();
+    c->viewport_x = x;
+    c->viewport_y = y;
+    c->viewport_w = width;
+    c->viewport_h = height;
 }
 
 void _bolt_gl_plugin_drawelements_vertex2d_xy(size_t index, void* userdata, int32_t* out) {
@@ -1531,7 +1570,7 @@ uint8_t* _bolt_gl_plugin_texture_data(void* userdata, size_t x, size_t y) {
     return tex->data + (tex->width * y * 4) + (x * 4);
 }
 
-void _bolt_gl_plugin_surface_init(struct SurfaceFunctions* functions, unsigned int width, unsigned int height) {
+void _bolt_gl_plugin_surface_init(struct SurfaceFunctions* functions, unsigned int width, unsigned int height, const void* data) {
     struct PluginSurfaceUserdata* userdata = malloc(sizeof(struct PluginSurfaceUserdata));
     struct GLContext* c = _bolt_context();
 
@@ -1540,14 +1579,23 @@ void _bolt_gl_plugin_surface_init(struct SurfaceFunctions* functions, unsigned i
     gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, userdata->framebuffer);
     lgl->BindTexture(GL_TEXTURE_2D, userdata->renderbuffer);
     gl.TexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, width, height);
+    lgl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    lgl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    lgl->TexParameteri(GL_TEXTURE_2D,  GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    lgl->TexParameteri(GL_TEXTURE_2D,  GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     gl.FramebufferTexture(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, userdata->renderbuffer, 0);
-    lgl->ClearColor(0.0, 0.0, 0.0, 0.0);
-    lgl->Clear(GL_COLOR_BUFFER_BIT);
+    if (data) {
+        lgl->TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, data);
+    } else {
+        lgl->ClearColor(0.0, 0.0, 0.0, 0.0);
+        lgl->Clear(GL_COLOR_BUFFER_BIT);
+    }
     userdata->width = width;
     userdata->height = height;
     functions->userdata = userdata;
     functions->clear = _bolt_gl_plugin_surface_clear;
     functions->draw_to_screen = _bolt_gl_plugin_surface_drawtoscreen;
+    functions->draw_to_surface = _bolt_gl_plugin_surface_drawtosurface;
 
     const struct GLTexture2D* original_tex = c->texture_units[c->active_texture];
     lgl->BindTexture(GL_TEXTURE_2D, original_tex ? original_tex->id : 0);
@@ -1575,16 +1623,42 @@ void _bolt_gl_plugin_surface_drawtoscreen(void* _userdata, int sx, int sy, int s
     struct PluginSurfaceUserdata* userdata = _userdata;
     struct GLContext* c = _bolt_context();
 
-    gl.UseProgram(program_direct);
+    gl.UseProgram(program_direct_screen);
     lgl->BindTexture(GL_TEXTURE_2D, userdata->renderbuffer);
     gl.BindVertexArray(program_direct_vao);
     gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-    gl.Uniform1i(program_direct_sampler, c->active_texture);
-    gl.Uniform4i(program_direct_d_xywh, dx, dy, dw, dh);
-    gl.Uniform4i(program_direct_s_xywh, sx, sy, sw, sh);
-    gl.Uniform4i(program_direct_src_wh_dest_wh, userdata->width, userdata->height, gl_width, gl_height);
+    gl.Uniform1i(program_direct_screen_sampler, c->active_texture);
+    gl.Uniform4i(program_direct_screen_d_xywh, dx, dy, dw, dh);
+    gl.Uniform4i(program_direct_screen_s_xywh, sx, sy, sw, sh);
+    gl.Uniform4i(program_direct_screen_src_wh_dest_wh, userdata->width, userdata->height, gl_width, gl_height);
+    lgl->Viewport(0, 0, gl_width, gl_height);
     lgl->DrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
+    lgl->Viewport(c->viewport_x, c->viewport_y, c->viewport_w, c->viewport_h);
+    const struct GLTexture2D* original_tex = c->texture_units[c->active_texture];
+    lgl->BindTexture(GL_TEXTURE_2D, original_tex ? original_tex->id : 0);
+    gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, c->current_draw_framebuffer);
+    gl.BindVertexArray(c->bound_vao->id);
+    gl.UseProgram(c->bound_program ? c->bound_program->id : 0);
+}
+
+void _bolt_gl_plugin_surface_drawtosurface(void* _userdata, void* _target, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh) {
+    struct PluginSurfaceUserdata* userdata = _userdata;
+    struct PluginSurfaceUserdata* target = _target;
+    struct GLContext* c = _bolt_context();
+
+    gl.UseProgram(program_direct_surface);
+    lgl->BindTexture(GL_TEXTURE_2D, userdata->renderbuffer);
+    gl.BindVertexArray(program_direct_vao);
+    gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, target->framebuffer);
+    gl.Uniform1i(program_direct_surface_sampler, c->active_texture);
+    gl.Uniform4i(program_direct_surface_d_xywh, dx, dy, dw, dh);
+    gl.Uniform4i(program_direct_surface_s_xywh, sx, sy, sw, sh);
+    gl.Uniform4i(program_direct_surface_src_wh_dest_wh, userdata->width, userdata->height, target->width, target->height);
+    lgl->Viewport(0, 0, target->width, target->height);
+    lgl->DrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+    lgl->Viewport(c->viewport_x, c->viewport_y, c->viewport_w, c->viewport_h);
     const struct GLTexture2D* original_tex = c->texture_units[c->active_texture];
     lgl->BindTexture(GL_TEXTURE_2D, original_tex ? original_tex->id : 0);
     gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, c->current_draw_framebuffer);
