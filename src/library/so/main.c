@@ -22,46 +22,46 @@
 #endif
 
 // note: this is currently always triggered by single-threaded dlopen calls so no locking necessary
-uint8_t inited = 0;
+static uint8_t inited = 0;
 #define INIT() if (!inited) _bolt_init_functions();
 
-pthread_mutex_t egl_lock;
+static pthread_mutex_t egl_lock;
 
-xcb_window_t main_window_xcb = 0;
-uint32_t main_window_width = 0;
-uint32_t main_window_height = 0;
+static xcb_window_t main_window_xcb = 0;
+static uint32_t main_window_width = 0;
+static uint32_t main_window_height = 0;
 
-const char* libc_name = "libc.so.6";
-const char* libegl_name = "libEGL.so.1";
-const char* libgl_name = "libGL.so.1";
-const char* libxcb_name = "libxcb.so.1";
+static const char* libc_name = "libc.so.6";
+static const char* libegl_name = "libEGL.so.1";
+static const char* libgl_name = "libGL.so.1";
+static const char* libxcb_name = "libxcb.so.1";
 
-void* libc_addr = 0;
-void* libegl_addr = 0;
-void* libgl_addr = 0;
-void* libxcb_addr = 0;
+static void* libc_addr = 0;
+static void* libegl_addr = 0;
+static void* libgl_addr = 0;
+static void* libxcb_addr = 0;
 
-void* (*real_dlopen)(const char*, int) = NULL;
-void* (*real_dlsym)(void*, const char*) = NULL;
-void* (*real_dlvsym)(void*, const char*, const char*) = NULL;
-int (*real_dlclose)(void*) = NULL;
+static void* (*real_dlopen)(const char*, int) = NULL;
+static void* (*real_dlsym)(void*, const char*) = NULL;
+static void* (*real_dlvsym)(void*, const char*, const char*) = NULL;
+static int (*real_dlclose)(void*) = NULL;
 
-void* (*real_eglGetProcAddress)(const char*) = NULL;
-unsigned int (*real_eglSwapBuffers)(void*, void*) = NULL;
-unsigned int (*real_eglMakeCurrent)(void*, void*, void*, void*) = NULL;
-unsigned int (*real_eglDestroyContext)(void*, void*) = NULL;
-unsigned int (*real_eglInitialize)(void*, void*, void*) = NULL;
-void* (*real_eglCreateContext)(void*, void*, void*, const void*) = NULL;
-unsigned int (*real_eglTerminate)(void*) = NULL;
+static void* (*real_eglGetProcAddress)(const char*) = NULL;
+static unsigned int (*real_eglSwapBuffers)(void*, void*) = NULL;
+static unsigned int (*real_eglMakeCurrent)(void*, void*, void*, void*) = NULL;
+static unsigned int (*real_eglDestroyContext)(void*, void*) = NULL;
+static unsigned int (*real_eglInitialize)(void*, void*, void*) = NULL;
+static void* (*real_eglCreateContext)(void*, void*, void*, const void*) = NULL;
+static unsigned int (*real_eglTerminate)(void*) = NULL;
 
-xcb_generic_event_t* (*real_xcb_poll_for_event)(xcb_connection_t*) = NULL;
-xcb_generic_event_t* (*real_xcb_poll_for_queued_event)(xcb_connection_t*) = NULL;
-xcb_generic_event_t* (*real_xcb_wait_for_event)(xcb_connection_t*) = NULL;
-xcb_get_geometry_reply_t* (*real_xcb_get_geometry_reply)(xcb_connection_t*, xcb_get_geometry_cookie_t, xcb_generic_error_t**) = NULL;
+static xcb_generic_event_t* (*real_xcb_poll_for_event)(xcb_connection_t*) = NULL;
+static xcb_generic_event_t* (*real_xcb_poll_for_queued_event)(xcb_connection_t*) = NULL;
+static xcb_generic_event_t* (*real_xcb_wait_for_event)(xcb_connection_t*) = NULL;
+static xcb_get_geometry_reply_t* (*real_xcb_get_geometry_reply)(xcb_connection_t*, xcb_get_geometry_cookie_t, xcb_generic_error_t**) = NULL;
 
-struct GLLibFunctions libgl = {0};
+static struct GLLibFunctions libgl = {0};
 
-ElfW(Word) _bolt_hash_elf(const char* name) {
+static ElfW(Word) _bolt_hash_elf(const char* name) {
 	ElfW(Word) tmp, hash = 0;
 	const unsigned char* uname = (const unsigned char*)name;
 	int c;
@@ -77,7 +77,7 @@ ElfW(Word) _bolt_hash_elf(const char* name) {
 	return hash;
 }
 
-Elf32_Word _bolt_hash_gnu(const char* name) {
+static Elf32_Word _bolt_hash_gnu(const char* name) {
 	Elf32_Word hash = 5381;
 	const unsigned char* uname = (const unsigned char*) name;
 	int c;
@@ -89,7 +89,7 @@ Elf32_Word _bolt_hash_gnu(const char* name) {
 
 // Note: it'd be possible to one-pass all the symbols in the module instead of seeking them one-at-a-time,
 // but I'm pretty sure the DT hash lookup mechanisms make the one-at-a-time method faster for this use-case.
-const ElfW(Sym)* _bolt_lookup_symbol(const char* symbol_name, const Elf32_Word* gnu_hash_table, const ElfW(Word)* hash_table, const char* string_table, const ElfW(Sym)* symbol_table) {
+static const ElfW(Sym)* _bolt_lookup_symbol(const char* symbol_name, const Elf32_Word* gnu_hash_table, const ElfW(Word)* hash_table, const char* string_table, const ElfW(Sym)* symbol_table) {
     if (gnu_hash_table && gnu_hash_table[0] != 0) {
         const Elf32_Word nbuckets = gnu_hash_table[0];
         const Elf32_Word symbias = gnu_hash_table[1];
@@ -142,7 +142,7 @@ const ElfW(Sym)* _bolt_lookup_symbol(const char* symbol_name, const Elf32_Word* 
     return NULL;
 }
 
-void _bolt_init_libc(unsigned long addr, const Elf32_Word* gnu_hash_table, const ElfW(Word)* hash_table, const char* string_table, const ElfW(Sym)* symbol_table) {
+static void _bolt_init_libc(unsigned long addr, const Elf32_Word* gnu_hash_table, const ElfW(Word)* hash_table, const char* string_table, const ElfW(Sym)* symbol_table) {
     libc_addr = (void*)addr;
     const ElfW(Sym)* sym = _bolt_lookup_symbol("dlopen", gnu_hash_table, hash_table, string_table, symbol_table);
     if (sym) real_dlopen = sym->st_value + libc_addr;
@@ -154,7 +154,7 @@ void _bolt_init_libc(unsigned long addr, const Elf32_Word* gnu_hash_table, const
     if (sym) real_dlclose = sym->st_value + libc_addr;
 }
 
-void _bolt_init_libegl(unsigned long addr, const Elf32_Word* gnu_hash_table, const ElfW(Word)* hash_table, const char* string_table, const ElfW(Sym)* symbol_table) {
+static void _bolt_init_libegl(unsigned long addr, const Elf32_Word* gnu_hash_table, const ElfW(Word)* hash_table, const char* string_table, const ElfW(Sym)* symbol_table) {
     libegl_addr = (void*)addr;
     const ElfW(Sym)* sym = _bolt_lookup_symbol("eglGetProcAddress", gnu_hash_table, hash_table, string_table, symbol_table);
     if (sym) real_eglGetProcAddress = sym->st_value + libegl_addr;
@@ -172,7 +172,7 @@ void _bolt_init_libegl(unsigned long addr, const Elf32_Word* gnu_hash_table, con
     if (sym) real_eglTerminate = sym->st_value + libegl_addr;
 }
 
-void _bolt_init_libgl(unsigned long addr, const Elf32_Word* gnu_hash_table, const ElfW(Word)* hash_table, const char* string_table, const ElfW(Sym)* symbol_table) {
+static void _bolt_init_libgl(unsigned long addr, const Elf32_Word* gnu_hash_table, const ElfW(Word)* hash_table, const char* string_table, const ElfW(Sym)* symbol_table) {
     libgl_addr = (void*)addr;
     const ElfW(Sym)* sym = _bolt_lookup_symbol("glBindTexture", gnu_hash_table, hash_table, string_table, symbol_table);
     if (sym) libgl.BindTexture = sym->st_value + libgl_addr;
@@ -200,7 +200,7 @@ void _bolt_init_libgl(unsigned long addr, const Elf32_Word* gnu_hash_table, cons
     if (sym) libgl.Viewport = sym->st_value + libgl_addr;
 }
 
-void _bolt_init_libxcb(unsigned long addr, const Elf32_Word* gnu_hash_table, const ElfW(Word)* hash_table, const char* string_table, const ElfW(Sym)* symbol_table) {
+static void _bolt_init_libxcb(unsigned long addr, const Elf32_Word* gnu_hash_table, const ElfW(Word)* hash_table, const char* string_table, const ElfW(Sym)* symbol_table) {
     libxcb_addr = (void*)addr;
     const ElfW(Sym)* sym = _bolt_lookup_symbol("xcb_poll_for_event", gnu_hash_table, hash_table, string_table, symbol_table);
     if (sym) real_xcb_poll_for_event = sym->st_value + libxcb_addr;
@@ -212,7 +212,7 @@ void _bolt_init_libxcb(unsigned long addr, const Elf32_Word* gnu_hash_table, con
     if (sym) real_xcb_get_geometry_reply = sym->st_value + libxcb_addr;
 }
 
-int _bolt_dl_iterate_callback(struct dl_phdr_info* info, size_t size, void* args) {
+static int _bolt_dl_iterate_callback(struct dl_phdr_info* info, size_t size, void* args) {
     const size_t name_len = strlen(info->dlpi_name);
     const size_t libc_name_len = strlen(libc_name);
     const size_t libegl_name_len = strlen(libegl_name);
@@ -257,7 +257,7 @@ int _bolt_dl_iterate_callback(struct dl_phdr_info* info, size_t size, void* args
 	return 0;
 }
 
-void _bolt_init_functions() {
+static void _bolt_init_functions() {
     pthread_mutex_init(&egl_lock, NULL);
     dl_iterate_phdr(_bolt_dl_iterate_callback, NULL);
     inited = 1;
@@ -390,7 +390,7 @@ unsigned int eglTerminate(void* display) {
 }
 
 // returns true if the event should be passed on to the window, false if not
-uint8_t _bolt_handle_xcb_event(xcb_connection_t* c, const xcb_generic_event_t* const e) {
+static uint8_t _bolt_handle_xcb_event(xcb_connection_t* c, const xcb_generic_event_t* const e) {
     if (!e) return true;
     if (!main_window_xcb) {
         if (e->response_type == XCB_MAP_NOTIFY) {
@@ -459,7 +459,7 @@ void* dlsym(void*, const char*);
 void* dlvsym(void*, const char*, const char*);
 int dlclose(void*);
 
-void* _bolt_dl_lookup(void* handle, const char* symbol) {
+static void* _bolt_dl_lookup(void* handle, const char* symbol) {
     if (!handle) return NULL;
     if (handle == libc_addr) {
         if (strcmp(symbol, "dlopen") == 0) return dlopen;

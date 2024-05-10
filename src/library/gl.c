@@ -15,32 +15,32 @@
 #define LOG(...)
 #endif
 
-unsigned int gl_width;
-unsigned int gl_height;
+static unsigned int gl_width;
+static unsigned int gl_height;
 
-size_t egl_init_count = 0;
-uintptr_t egl_main_context = 0;
-uint8_t egl_main_context_destroy_pending = 0;
-uint8_t egl_main_context_makecurrent_pending = 0;
+static size_t egl_init_count = 0;
+static uintptr_t egl_main_context = 0;
+static uint8_t egl_main_context_destroy_pending = 0;
+static uint8_t egl_main_context_makecurrent_pending = 0;
 
-struct GLProcFunctions gl = {0};
-const struct GLLibFunctions* lgl = NULL;
-unsigned int program_direct_screen;
-int program_direct_screen_sampler;
-int program_direct_screen_d_xywh;
-int program_direct_screen_s_xywh;
-int program_direct_screen_src_wh_dest_wh;
-unsigned int program_direct_surface;
-int program_direct_surface_sampler;
-int program_direct_surface_d_xywh;
-int program_direct_surface_s_xywh;
-int program_direct_surface_src_wh_dest_wh;
-unsigned int program_direct_vao;
-unsigned int buffer_vertices_square;
+static struct GLProcFunctions gl = {0};
+static const struct GLLibFunctions* lgl = NULL;
+static unsigned int program_direct_screen;
+static int program_direct_screen_sampler;
+static int program_direct_screen_d_xywh;
+static int program_direct_screen_s_xywh;
+static int program_direct_screen_src_wh_dest_wh;
+static unsigned int program_direct_surface;
+static int program_direct_surface_sampler;
+static int program_direct_surface_d_xywh;
+static int program_direct_surface_s_xywh;
+static int program_direct_surface_src_wh_dest_wh;
+static unsigned int program_direct_vao;
+static unsigned int buffer_vertices_square;
 
 // "direct" program is basically a blit but with transparency.
 // there are different vertex shaders for targeting the screen vs targeting a surface.
-const char* program_direct_screen_vs = "#version 330 core\n"
+static const char* program_direct_screen_vs = "#version 330 core\n"
 "layout (location = 0) in vec2 aPos;"
 "out vec2 vPos;"
 "uniform ivec4 d_xywh;"
@@ -49,7 +49,7 @@ const char* program_direct_screen_vs = "#version 330 core\n"
   "vPos = aPos;"
   "gl_Position = vec4(((((aPos * d_xywh.pq) + d_xywh.st) * vec2(2.0, 2.0) / src_wh_dest_wh.pq) - vec2(1.0, 1.0)) * vec2(1.0, -1.0), 0.0, 1.0);"
 "}";
-const char* program_direct_surface_vs = "#version 330 core\n"
+static const char* program_direct_surface_vs = "#version 330 core\n"
 "layout (location = 0) in vec2 aPos;"
 "out vec2 vPos;"
 "uniform ivec4 d_xywh;"
@@ -58,7 +58,7 @@ const char* program_direct_surface_vs = "#version 330 core\n"
   "vPos = aPos;"
   "gl_Position = vec4(((((aPos * d_xywh.pq) + d_xywh.st) * vec2(2.0, 2.0) / src_wh_dest_wh.pq) - vec2(1.0, 1.0)), 0.0, 1.0);"
 "}";
-const char* program_direct_fs = "#version 330 core\n"
+static const char* program_direct_fs = "#version 330 core\n"
 "in vec2 vPos;"
 "layout (location = 0) out vec4 col;"
 "uniform sampler2D tex;"
@@ -68,12 +68,12 @@ const char* program_direct_fs = "#version 330 core\n"
   "col = texture(tex, ((vPos * s_xywh.pq) + s_xywh.st) / src_wh_dest_wh.st);"
 "}";
 
-struct GLProgram* _bolt_context_get_program(struct GLContext*, unsigned int);
-struct GLArrayBuffer* _bolt_context_get_buffer(struct GLContext*, unsigned int);
-struct GLTexture2D* _bolt_context_get_texture(struct GLContext*, unsigned int);
-struct GLVertexArray* _bolt_context_get_vao(struct GLContext*, unsigned int);
-void _bolt_glcontext_init(struct GLContext*, void*, void*);
-void _bolt_glcontext_free(struct GLContext*);
+static struct GLProgram* _bolt_context_get_program(struct GLContext*, unsigned int);
+static struct GLArrayBuffer* _bolt_context_get_buffer(struct GLContext*, unsigned int);
+static struct GLTexture2D* _bolt_context_get_texture(struct GLContext*, unsigned int);
+static struct GLVertexArray* _bolt_context_get_vao(struct GLContext*, unsigned int);
+static void _bolt_glcontext_init(struct GLContext*, void*, void*);
+static void _bolt_glcontext_free(struct GLContext*);
 
 #define MAX_TEXTURE_UNITS 4096 // would be nice if there was a way to query this at runtime, but it would be awkward to set up
 #define BUFFER_LIST_CAPACITY 256 * 256
@@ -82,7 +82,7 @@ void _bolt_glcontext_free(struct GLContext*);
 #define VAO_LIST_CAPACITY 256 * 256
 #define CONTEXTS_CAPACITY 64 // not growable so we just have to hard-code a number and hope it's enough forever
 #define GAME_MINIMAP_BIG_SIZE 2048
-struct GLContext contexts[CONTEXTS_CAPACITY];
+static struct GLContext contexts[CONTEXTS_CAPACITY];
 _Thread_local struct GLContext* current_context = NULL;
 
 struct PluginSurfaceUserdata {
@@ -249,26 +249,26 @@ uint8_t _bolt_get_attr_binding_int(struct GLContext* c, const struct GLAttrBindi
     return 1;
 }
 
-int _bolt_hashmap_compare(const void* a, const void* b, void* udata) {
+static int _bolt_hashmap_compare(const void* a, const void* b, void* udata) {
     return (**(unsigned int**)a) - (**(unsigned int**)b);
 }
 
-uint64_t _bolt_hashmap_hash(const void* item, uint64_t seed0, uint64_t seed1) {
+static uint64_t _bolt_hashmap_hash(const void* item, uint64_t seed0, uint64_t seed1) {
     const unsigned int* const* const id = item;
     return hashmap_sip(*id, sizeof(unsigned int), seed0, seed1);
 }
 
-void _bolt_hashmap_init(struct HashMap* map, size_t cap) {
+static void _bolt_hashmap_init(struct HashMap* map, size_t cap) {
     _bolt_rwlock_init(&map->rwlock);
     map->map = hashmap_new(sizeof(void*), cap, 0, 0, _bolt_hashmap_hash, _bolt_hashmap_compare, NULL, NULL);
 }
 
-void _bolt_hashmap_destroy(struct HashMap* map) {
+static void _bolt_hashmap_destroy(struct HashMap* map) {
     _bolt_rwlock_destroy(&map->rwlock);
     hashmap_free(map->map);
 }
 
-void _bolt_glcontext_init(struct GLContext* context, void* egl_context, void* egl_shared) {
+static void _bolt_glcontext_init(struct GLContext* context, void* egl_context, void* egl_shared) {
     struct GLContext* shared = NULL;
     if (egl_shared) {
         for (size_t i = 0; i < CONTEXTS_CAPACITY; i += 1) {
@@ -304,7 +304,7 @@ void _bolt_glcontext_init(struct GLContext* context, void* egl_context, void* eg
     }
 }
 
-void _bolt_glcontext_free(struct GLContext* context) {
+static void _bolt_glcontext_free(struct GLContext* context) {
     free(context->texture_units);
     if (context->is_shared_owner) {
         _bolt_hashmap_destroy(context->programs);
@@ -332,7 +332,7 @@ uint32_t _bolt_binding_for_buffer(uint32_t target) {
     }
 }
 
-struct GLProgram* _bolt_context_get_program(struct GLContext* c, unsigned int index) {
+static struct GLProgram* _bolt_context_get_program(struct GLContext* c, unsigned int index) {
     struct HashMap* map = c->programs;
     const unsigned int* index_ptr = &index;
     _bolt_rwlock_lock_read(&map->rwlock);
@@ -342,7 +342,7 @@ struct GLProgram* _bolt_context_get_program(struct GLContext* c, unsigned int in
     return ret;
 }
 
-struct GLArrayBuffer* _bolt_context_get_buffer(struct GLContext* c, unsigned int index) {
+static struct GLArrayBuffer* _bolt_context_get_buffer(struct GLContext* c, unsigned int index) {
     struct HashMap* map = c->buffers;
     const unsigned int* index_ptr = &index;
     _bolt_rwlock_lock_read(&map->rwlock);
@@ -352,7 +352,7 @@ struct GLArrayBuffer* _bolt_context_get_buffer(struct GLContext* c, unsigned int
     return ret;
 }
 
-struct GLTexture2D* _bolt_context_get_texture(struct GLContext* c, unsigned int index) {
+static struct GLTexture2D* _bolt_context_get_texture(struct GLContext* c, unsigned int index) {
     struct HashMap* map = c->textures;
     const unsigned int* index_ptr = &index;
     _bolt_rwlock_lock_read(&map->rwlock);
@@ -362,7 +362,7 @@ struct GLTexture2D* _bolt_context_get_texture(struct GLContext* c, unsigned int 
     return ret;
 }
 
-struct GLVertexArray* _bolt_context_get_vao(struct GLContext* c, unsigned int index) {
+static struct GLVertexArray* _bolt_context_get_vao(struct GLContext* c, unsigned int index) {
     struct HashMap* map = c->vaos;
     const unsigned int* index_ptr = &index;
     _bolt_rwlock_lock_read(&map->rwlock);
@@ -372,7 +372,7 @@ struct GLVertexArray* _bolt_context_get_vao(struct GLContext* c, unsigned int in
     return ret;
 }
 
-void _bolt_unpack_rgb565(uint16_t packed, uint8_t out[3]) {
+static void _bolt_unpack_rgb565(uint16_t packed, uint8_t out[3]) {
     out[0] = (packed >> 11) & 0b00011111;
     out[0] = (out[0] << 3) | (out[0] >> 2);
     out[1] = (packed >> 5) & 0b00111111;
@@ -386,7 +386,7 @@ void _bolt_unpack_rgb565(uint16_t packed, uint8_t out[3]) {
 // `lut6 = [round(pow(((x << 2) | (x >> 4)) / 255.0, 2.2) * 255.0) for x in range(64)]`
 //const uint8_t lut5[] = {0, 0, 1, 1, 3, 5, 7, 9, 13, 17, 21, 26, 32, 38, 44, 51, 60, 68, 77, 87, 98, 109, 120, 132, 146, 159, 173, 188, 205, 221, 238, 255};
 //const uint8_t lut6[] = {0, 0, 0, 0, 1, 1, 1, 2, 3, 3, 4, 5, 6, 8, 9, 11, 13, 14, 16, 18, 20, 23, 25, 28, 30, 33, 36, 39, 43, 46, 49, 53, 58, 62, 66, 70, 75, 79, 84, 89, 94, 99, 105, 110, 116, 121, 127, 133, 141, 148, 154, 161, 168, 175, 182, 190, 197, 205, 213, 221, 229, 238, 246, 255};
-void _bolt_unpack_srgb565(uint16_t packed, uint8_t out[3]) {
+static void _bolt_unpack_srgb565(uint16_t packed, uint8_t out[3]) {
     // game seems to be giving us RGBA and telling us it's SRGB, so for now, just don't convert it
     _bolt_unpack_rgb565(packed, out);
     //out[0] = lut5[(packed >> 11) & 0b00011111];
@@ -1401,7 +1401,7 @@ void _bolt_gl_onViewport(int x, int y, unsigned int width, unsigned int height) 
     c->viewport_h = height;
 }
 
-void _bolt_gl_plugin_drawelements_vertex2d_xy(size_t index, void* userdata, int32_t* out) {
+static void _bolt_gl_plugin_drawelements_vertex2d_xy(size_t index, void* userdata, int32_t* out) {
     struct GLPluginDrawElementsVertex2DUserData* data = userdata;
     if (!_bolt_get_attr_binding_int(data->c, data->position, data->indices[index], 2, out)) {
         float pos[2];
@@ -1411,7 +1411,7 @@ void _bolt_gl_plugin_drawelements_vertex2d_xy(size_t index, void* userdata, int3
     }
 }
 
-void _bolt_gl_plugin_drawelements_vertex2d_atlas_xy(size_t index, void* userdata, int32_t* out) {
+static void _bolt_gl_plugin_drawelements_vertex2d_atlas_xy(size_t index, void* userdata, int32_t* out) {
     struct GLPluginDrawElementsVertex2DUserData* data = userdata;
     float xy[2];
     _bolt_get_attr_binding(data->c, data->atlas_min, data->indices[index], 2, xy);
@@ -1419,7 +1419,7 @@ void _bolt_gl_plugin_drawelements_vertex2d_atlas_xy(size_t index, void* userdata
     out[1] = (int32_t)roundf(xy[1] * data->atlas->height);
 }
 
-void _bolt_gl_plugin_drawelements_vertex2d_atlas_wh(size_t index, void* userdata, int32_t* out) {
+static void _bolt_gl_plugin_drawelements_vertex2d_atlas_wh(size_t index, void* userdata, int32_t* out) {
     struct GLPluginDrawElementsVertex2DUserData* data = userdata;
     float wh[2];
     _bolt_get_attr_binding(data->c, data->atlas_size, data->indices[index], 2, wh);
@@ -1428,7 +1428,7 @@ void _bolt_gl_plugin_drawelements_vertex2d_atlas_wh(size_t index, void* userdata
     out[1] = -(int32_t)roundf(wh[1] * data->atlas->height);
 }
 
-void _bolt_gl_plugin_drawelements_vertex2d_uv(size_t index, void* userdata, double* out) {
+static void _bolt_gl_plugin_drawelements_vertex2d_uv(size_t index, void* userdata, double* out) {
     struct GLPluginDrawElementsVertex2DUserData* data = userdata;
     float uv[2];
     _bolt_get_attr_binding(data->c, data->tex_uv, data->indices[index], 2, uv);
@@ -1436,7 +1436,7 @@ void _bolt_gl_plugin_drawelements_vertex2d_uv(size_t index, void* userdata, doub
     out[1] = (double)uv[1];
 }
 
-void _bolt_gl_plugin_drawelements_vertex2d_colour(size_t index, void* userdata, double* out) {
+static void _bolt_gl_plugin_drawelements_vertex2d_colour(size_t index, void* userdata, double* out) {
     struct GLPluginDrawElementsVertex2DUserData* data = userdata;
     float colour[4];
     _bolt_get_attr_binding(data->c, data->colour, data->indices[index], 4, colour);
@@ -1447,7 +1447,7 @@ void _bolt_gl_plugin_drawelements_vertex2d_colour(size_t index, void* userdata, 
     out[3] = (double)colour[0];
 }
 
-void _bolt_gl_plugin_drawelements_vertex3d_xyz(size_t index, void* userdata, int32_t* out) {
+static void _bolt_gl_plugin_drawelements_vertex3d_xyz(size_t index, void* userdata, int32_t* out) {
     struct GLPluginDrawElementsVertex3DUserData* data = userdata;
     if (!_bolt_get_attr_binding_int(data->c, data->xyz_bone, data->indices[index], 3, out)) {
         float pos[3];
@@ -1458,14 +1458,14 @@ void _bolt_gl_plugin_drawelements_vertex3d_xyz(size_t index, void* userdata, int
     }
 }
 
-size_t _bolt_gl_plugin_drawelements_vertex3d_atlas_meta(size_t index, void* userdata) {
+static size_t _bolt_gl_plugin_drawelements_vertex3d_atlas_meta(size_t index, void* userdata) {
     struct GLPluginDrawElementsVertex3DUserData* data = userdata;
     int material_xy[2];
     _bolt_get_attr_binding_int(data->c, data->xy_xz, data->indices[index], 2, material_xy);
     return ((size_t)material_xy[1] << 16) | (size_t)material_xy[0];
 }
 
-void _bolt_gl_plugin_drawelements_vertex3d_meta_xywh(size_t meta, void* userdata, int32_t* out) {
+static void _bolt_gl_plugin_drawelements_vertex3d_meta_xywh(size_t meta, void* userdata, int32_t* out) {
     struct GLPluginDrawElementsVertex3DUserData* data = userdata;
     size_t slot_x = meta & 0xFF;
     size_t slot_y = meta >> 16;
@@ -1478,7 +1478,7 @@ void _bolt_gl_plugin_drawelements_vertex3d_meta_xywh(size_t meta, void* userdata
     out[3] = out[2];
 }
 
-void _bolt_gl_plugin_drawelements_vertex3d_uv(size_t index, void* userdata, double* out) {
+static void _bolt_gl_plugin_drawelements_vertex3d_uv(size_t index, void* userdata, double* out) {
     struct GLPluginDrawElementsVertex3DUserData* data = userdata;
     float uv[2];
     _bolt_get_attr_binding(data->c, data->tex_uv, data->indices[index], 2, uv);
@@ -1486,7 +1486,7 @@ void _bolt_gl_plugin_drawelements_vertex3d_uv(size_t index, void* userdata, doub
     out[1] = (double)uv[1];
 }
 
-void _bolt_gl_plugin_drawelements_vertex3d_colour(size_t index, void* userdata, double* out) {
+static void _bolt_gl_plugin_drawelements_vertex3d_colour(size_t index, void* userdata, double* out) {
     struct GLPluginDrawElementsVertex3DUserData* data = userdata;
     float colour[4];
     _bolt_get_attr_binding(data->c, data->colour, data->indices[index], 4, colour);
@@ -1497,7 +1497,7 @@ void _bolt_gl_plugin_drawelements_vertex3d_colour(size_t index, void* userdata, 
     out[3] = (double)colour[0];
 }
 
-void _bolt_gl_plugin_matrix3d_toworldspace(int x, int y, int z, void* userdata, double* out) {
+static void _bolt_gl_plugin_matrix3d_toworldspace(int x, int y, int z, void* userdata, double* out) {
     const struct GLPlugin3DMatrixUserData* data = userdata;
     const double dx = (double)x;
     const double dy = (double)y;
@@ -1512,7 +1512,7 @@ void _bolt_gl_plugin_matrix3d_toworldspace(int x, int y, int z, void* userdata, 
     out[2] = outz / homogenous;
 }
 
-void _bolt_gl_plugin_matrix3d_toscreenspace(int x, int y, int z, void* userdata, double* out) {
+static void _bolt_gl_plugin_matrix3d_toscreenspace(int x, int y, int z, void* userdata, double* out) {
     const struct GLContext* c = _bolt_context();
     struct GLPlugin3DMatrixUserData* data = userdata;
     const double dx = (double)x;
@@ -1531,7 +1531,7 @@ void _bolt_gl_plugin_matrix3d_toscreenspace(int x, int y, int z, void* userdata,
     out[1] = (((-outy / homogenous) + 1.0) * c->game_view_h / 2.0) + (double)c->game_view_y;
 }
 
-void _bolt_gl_plugin_matrix3d_worldpos(void* userdata, double* out) {
+static void _bolt_gl_plugin_matrix3d_worldpos(void* userdata, double* out) {
     struct GLPlugin3DMatrixUserData* data = userdata;
     const float* mmx = data->model_matrix;
     out[0] = (double)data->model_matrix[12];
@@ -1539,18 +1539,18 @@ void _bolt_gl_plugin_matrix3d_worldpos(void* userdata, double* out) {
     out[2] = (double)data->model_matrix[14];
 }
 
-size_t _bolt_gl_plugin_texture_id(void* userdata) {
+static size_t _bolt_gl_plugin_texture_id(void* userdata) {
     const struct GLPluginTextureUserData* data = userdata;
     return data->tex->id;
 }
 
-void _bolt_gl_plugin_texture_size(void* userdata, size_t* out) {
+static void _bolt_gl_plugin_texture_size(void* userdata, size_t* out) {
     const struct GLPluginTextureUserData* data = userdata;
     out[0] = data->tex->width;
     out[1] = data->tex->height;
 }
 
-uint8_t _bolt_gl_plugin_texture_compare(void* userdata, size_t x, size_t y, size_t len, const unsigned char* data) {
+static uint8_t _bolt_gl_plugin_texture_compare(void* userdata, size_t x, size_t y, size_t len, const unsigned char* data) {
     const struct GLPluginTextureUserData* data_ = userdata;
     const struct GLTexture2D* tex = data_->tex;
     const size_t start_offset = (tex->width * y * 4) + (x * 4);
@@ -1564,13 +1564,13 @@ uint8_t _bolt_gl_plugin_texture_compare(void* userdata, size_t x, size_t y, size
     return !memcmp(tex->data + start_offset, data, len);
 }
 
-uint8_t* _bolt_gl_plugin_texture_data(void* userdata, size_t x, size_t y) {
+static uint8_t* _bolt_gl_plugin_texture_data(void* userdata, size_t x, size_t y) {
     const struct GLPluginTextureUserData* data = userdata;
     const struct GLTexture2D* tex = data->tex;
     return tex->data + (tex->width * y * 4) + (x * 4);
 }
 
-void _bolt_gl_plugin_surface_init(struct SurfaceFunctions* functions, unsigned int width, unsigned int height, const void* data) {
+static void _bolt_gl_plugin_surface_init(struct SurfaceFunctions* functions, unsigned int width, unsigned int height, const void* data) {
     struct PluginSurfaceUserdata* userdata = malloc(sizeof(struct PluginSurfaceUserdata));
     struct GLContext* c = _bolt_context();
 
@@ -1602,14 +1602,14 @@ void _bolt_gl_plugin_surface_init(struct SurfaceFunctions* functions, unsigned i
     gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, c->current_draw_framebuffer);
 }
 
-void _bolt_gl_plugin_surface_destroy(void* _userdata) {
+static void _bolt_gl_plugin_surface_destroy(void* _userdata) {
     struct PluginSurfaceUserdata* userdata = _userdata;
     gl.DeleteFramebuffers(1, &userdata->framebuffer);
     lgl->DeleteTextures(1, &userdata->renderbuffer);
     free(userdata);
 }
 
-void _bolt_gl_plugin_surface_clear(void* _userdata, double r, double g, double b, double a) {
+static void _bolt_gl_plugin_surface_clear(void* _userdata, double r, double g, double b, double a) {
     lgl->GetError();
     struct PluginSurfaceUserdata* userdata = _userdata;
     struct GLContext* c = _bolt_context();
@@ -1619,7 +1619,7 @@ void _bolt_gl_plugin_surface_clear(void* _userdata, double r, double g, double b
     gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, c->current_draw_framebuffer);
 }
 
-void _bolt_gl_plugin_surface_drawtoscreen(void* _userdata, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh) {
+static void _bolt_gl_plugin_surface_drawtoscreen(void* _userdata, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh) {
     struct PluginSurfaceUserdata* userdata = _userdata;
     struct GLContext* c = _bolt_context();
 
@@ -1642,7 +1642,7 @@ void _bolt_gl_plugin_surface_drawtoscreen(void* _userdata, int sx, int sy, int s
     gl.UseProgram(c->bound_program ? c->bound_program->id : 0);
 }
 
-void _bolt_gl_plugin_surface_drawtosurface(void* _userdata, void* _target, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh) {
+static void _bolt_gl_plugin_surface_drawtosurface(void* _userdata, void* _target, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh) {
     struct PluginSurfaceUserdata* userdata = _userdata;
     struct PluginSurfaceUserdata* target = _target;
     struct GLContext* c = _bolt_context();

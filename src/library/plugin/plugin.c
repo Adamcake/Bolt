@@ -32,13 +32,13 @@
 #define RENDER3D_CB_REGISTRYNAME "render3dcb"
 #define MINIMAP_CB_REGISTRYNAME "minimapcb"
 
-void (*surface_init)(struct SurfaceFunctions*, unsigned int, unsigned int, const void*);
-void (*surface_destroy)(void*);
+static void (*surface_init)(struct SurfaceFunctions*, unsigned int, unsigned int, const void*);
+static void (*surface_destroy)(void*);
 
 static bool inited = false;
 static int _bolt_api_init(lua_State* state);
 
-int fd = 0;
+static int fd = 0;
 
 // a currently-running plugin.
 // note strings are not null terminated, and "path" must always be converted to use '/' as path-separators
@@ -69,7 +69,7 @@ static uint64_t _bolt_plugin_map_hash(const void* item, uint64_t seed0, uint64_t
     return hashmap_sip(p->id, p->id_length, seed0, seed1);
 }
 
-struct hashmap* plugins;
+static struct hashmap* plugins;
 
 // macro for defining callback functions "_bolt_plugin_handle_*" and "api_setcallback*"
 // e.g. DEFINE_CALLBACK(swapbuffers, SWAPBUFFERS, SwapBuffersEvent)
