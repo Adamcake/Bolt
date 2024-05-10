@@ -7,3 +7,6 @@
 [submodule "modules/hashmap"]
 	path = modules/hashmap
 	url = https://github.com/tidwall/hashmap.c.git
+[submodule "modules/spng"]
+	path = modules/spng
+	url = https://github.com/randy408/libspng.git
