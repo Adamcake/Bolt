@@ -106,8 +106,9 @@ static int api_createsurface(lua_State*);
 /// documentation for more information on surfaces.
 ///
 /// There are four bytes in an RGBA pixel, so the number of bytes in the string is expected to be
-/// 4 * width * height.If the given RGBA data is not sufficient to fill the whole surface, it will
-/// be padded with zeroes. If too much RGBA data is provided the excess will be unused.
+/// 4 * width * height. If fewer bytes than that are provided, the data will be padded with zeroes.
+/// If too many bytes are provided, the excess data will be unused. The data will be interpreted in
+/// row-major order with the first pixel being in the top-left.
 static int api_createsurfacefromrgba(lua_State*);
 
 /// [-1, +1, e]
