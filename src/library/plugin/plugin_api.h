@@ -68,6 +68,25 @@ static int api_checkversion(lua_State*);
 /// must be taken if a plugin wishes to support 32-bit CPUs while using this function.
 static int api_time(lua_State*);
 
+/// [-0, +6, -]
+/// Returns six integers: the current calendar year, month (1-12), day (1-31), hour (0-23), minute
+/// (0-59), and second (0-60*), in game-time (i.e. UTC). The time is based on the user's system
+/// clock but the result will be converted to game-time. There is no way to get the user's timezone
+/// information via Bolt.
+///
+/// (*seconds value can be 60 in the case of a leap-second)
+///
+/// Do not try to use this function for precision timing. Use time() instead.
+static int api_datetime(lua_State*);
+
+/// [-0, +1, -]
+/// Returns an integer representing the current weekday in to game-time (i.e. UTC). A value
+/// of 1 represents Sunday, 2 represents Monday, 3 represents Tuesday, and so on.
+///
+/// This function is based on the user's system clock but the result will be converted to
+/// game-time. There is no query to get the user's timezone information via Bolt.
+static int api_weekday(lua_State*);
+
 /// [-2, +1, -]
 /// Creates a surface with the given width and height, and returns it as a userdata object. The
 /// surface will initially be fully transparent.

@@ -5,6 +5,7 @@
 #include "../../hashmap/hashmap.h"
 #include "../../../modules/spng/spng/spng.h"
 
+#include <bits/time.h>
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
@@ -136,10 +137,12 @@ void _bolt_plugin_init(void (*_surface_init)(struct SurfaceFunctions*, unsigned 
 }
 
 static int _bolt_api_init(lua_State* state) {
-    lua_createtable(state, 0, 10);
+    lua_createtable(state, 0, 12);
     API_ADD(apiversion)
     API_ADD(checkversion)
     API_ADD(time)
+    API_ADD(datetime)
+    API_ADD(weekday)
     API_ADD(setcallback2d)
     API_ADD(setcallback3d)
     API_ADD(setcallbackminimap)
@@ -405,6 +408,27 @@ static int api_time(lua_State* state) {
     clock_gettime(CLOCK_MONOTONIC, &s);
     const uint64_t microseconds = (s.tv_sec * 1000000) + (s.tv_nsec / 1000);
     lua_pushinteger(state, microseconds);
+    return 1;
+}
+
+static int api_datetime(lua_State* state) {
+    _bolt_check_argc(state, 0, "datetime");
+    const time_t t = time(NULL);
+    const struct tm* time = gmtime(&t);
+    lua_pushinteger(state, time->tm_year + 1900);
+    lua_pushinteger(state, time->tm_mon + 1);
+    lua_pushinteger(state, time->tm_mday);
+    lua_pushinteger(state, time->tm_hour);
+    lua_pushinteger(state, time->tm_min);
+    lua_pushinteger(state, time->tm_sec);
+    return 6;
+}
+
+static int api_weekday(lua_State* state) {
+    _bolt_check_argc(state, 0, "weekday");
+    const time_t t = time(NULL);
+    const struct tm* time = gmtime(&t);
+    lua_pushinteger(state, time->tm_wday + 1);
     return 1;
 }
 
