@@ -84,7 +84,7 @@ static int api_datetime(lua_State*);
 /// of 1 represents Sunday, 2 represents Monday, 3 represents Tuesday, and so on.
 ///
 /// This function is based on the user's system clock but the result will be converted to
-/// game-time. There is no query to get the user's timezone information via Bolt.
+/// game-time. There is no way to get the user's timezone information via Bolt.
 static int api_weekday(lua_State*);
 
 /// [-2, +1, -]
