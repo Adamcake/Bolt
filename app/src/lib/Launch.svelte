@@ -87,6 +87,10 @@
 					$config.selected_characters.get($selectedPlay.account.userId)
 				) {
 					characterSelect.selectedIndex = i;
+					const key: string = <string>(
+						characterSelect[characterSelect.selectedIndex].getAttribute('data-id')
+					);
+					$selectedPlay.character = $selectedPlay.account.characters.get(key);
 				}
 			}
 		}
