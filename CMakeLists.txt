@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21) # Minimum CEF requirement, but building with the latest cmake is strongly recommended
-project(Bolt VERSION 0.8 LANGUAGES C CXX)
+project(Bolt VERSION 0.9 LANGUAGES C CXX)
 
 # e.g. becomes "libbolt-plugin.so" on linux
 set(BOLT_PLUGIN_LIB_NAME "bolt-plugin")
@@ -68,6 +68,19 @@ if(NOT WIN32)
         "    </screenshot>"
         "</screenshots>"
         "<releases>"
+        "    <release version=\"0.9.0\" date=\"2024-05-12\">"
+        "        <url type=\"details\">https://github.com/Adamcake/Bolt/releases/tag/0.9.0</url>"
+        "        <description>"
+        "            <p>New UI</p>"
+        "            <ul>"
+        "                <li>Added a fancy new UI</li>"
+        "                <li>Removed tray icon - Bolt process will now stop itself when it's no longer needed</li>"
+        "                <li>Added descriptive error messages for Java not being installed when it's needed</li>"
+        "                <li>Improved handling of XDG directories, including avoiding a widely-experienced issue with Pulseaudio</li>"
+        "                <li>Removed RuneLite's \"flatpak rich presence\" setting - to continue using rich presence, see https://wiki.archlinux.org/title/Discord#Enabling_rich_presence_on_Flatpak</li>"
+        "            </ul>"
+        "        </description>"
+        "    </release>"
         "    <release version=\"0.8.0\" date=\"2024-02-05\">"
         "        <url type=\"details\">https://github.com/Adamcake/Bolt/releases/tag/0.8.0</url>"
         "        <description>"
