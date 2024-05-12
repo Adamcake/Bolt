@@ -129,6 +129,7 @@
 		{:else if $selectedPlay.game == Game.rs3}
 			<button
 				disabled={!get(hasBoltPlugins)}
+				title={get(hasBoltPlugins) ? null : 'Coming soon...'}
 				class="mx-auto mb-2 w-52 rounded-lg p-2 font-bold text-black duration-200 enabled:bg-blue-500 enabled:hover:opacity-75 disabled:bg-gray-500"
 				on:click={() => {
 					showPluginMenu = get(hasBoltPlugins) ?? false;
