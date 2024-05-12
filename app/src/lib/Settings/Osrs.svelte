@@ -8,7 +8,6 @@
 	let customJarFile: HTMLTextAreaElement;
 	let customJarFileButton: HTMLButtonElement;
 	let useJar: HTMLInputElement;
-	let flatpakPresence: HTMLInputElement;
 	let flatpakDiv: HTMLDivElement;
 
 	// enables the ability to select a custom jar
@@ -26,11 +25,6 @@
 			$config.runelite_custom_jar = '';
 			$config.runelite_use_custom_jar = false;
 		}
-		$isConfigDirty = true;
-	}
-
-	function toggleRichPresence(): void {
-		$config.flatpak_rich_presence = flatpakPresence!.checked;
 		$isConfigDirty = true;
 	}
 
@@ -78,8 +72,6 @@
 
 	// load config into the menus
 	onMount(() => {
-		flatpakPresence.checked = <boolean>$config.flatpak_rich_presence;
-
 		useJar.checked = <boolean>$config.runelite_use_custom_jar;
 		if (useJar.checked && $config.runelite_custom_jar) {
 			customJarDiv.classList.remove('opacity-25');
@@ -107,21 +99,6 @@
 			Configure RuneLite
 		</div>
 	</button>
-	<div
-		id="flatpak_div"
-		class="mx-auto border-t-2 border-slate-300 p-2 py-5 dark:border-slate-800"
-		bind:this={flatpakDiv}>
-		<label for="flatpak_rich_presence">Expose rich presence to Flatpak Discord: </label>
-		<input
-			type="checkbox"
-			name="flatpak_rich_presence"
-			id="flatpak_rich_presence"
-			class="ml-2"
-			bind:this={flatpakPresence}
-			on:change={() => {
-				toggleRichPresence();
-			}} />
-	</div>
 	<div class="mx-auto border-t-2 border-slate-300 p-2 pt-5 dark:border-slate-800">
 		<label for="use_custom_jar">Use custom RuneLite JAR: </label>
 		<input
