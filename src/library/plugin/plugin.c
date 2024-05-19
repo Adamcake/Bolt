@@ -537,7 +537,7 @@ static int api_batch2d_verticesperimage(lua_State* state) {
 }
 
 static int api_batch2d_isminimap(lua_State* state) {
-    _bolt_check_argc(state, 1, "batch2d_verticesperimage");
+    _bolt_check_argc(state, 1, "batch2d_isminimap");
     struct RenderBatch2D* batch = lua_touserdata(state, 1);
     lua_pushboolean(state, batch->is_minimap);
     return 1;
