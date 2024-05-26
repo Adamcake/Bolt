@@ -360,7 +360,9 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
 }
 
 void _bolt_plugin_stop(char* id, uint32_t id_length) {
-    struct Plugin* const* plugin = hashmap_delete(plugins, &(struct Plugin){.id = id, .id_length = id_length});
+    struct Plugin p = {.id = id, .id_length = id_length};
+    struct Plugin* pp = &p;
+    struct Plugin* const* plugin = hashmap_delete(plugins, &pp);
     _bolt_plugin_free(plugin);
 }
 
