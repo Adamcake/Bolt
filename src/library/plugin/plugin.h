@@ -4,6 +4,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "../rwlock/rwlock.h"
+
 struct RenderBatch2D;
 struct Plugin;
 
@@ -113,6 +115,28 @@ struct SurfaceFunctions {
     void (*draw_to_surface)(void* userdata, void* target, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh);
 };
 
+/// Struct containing functions initiated by plugin code, which must be set on startup, as opposed to
+/// being set when a callback object is created like with other vtable structs.
+struct PluginManagedFunctions {
+    void (*surface_init)(struct SurfaceFunctions*, unsigned int, unsigned int, const void*);
+    void (*surface_destroy)(void*);
+};
+
+struct EmbeddedWindow {
+    uint64_t id;
+    struct SurfaceFunctions surface_functions;
+    RWLock lock; // applies to everything below this
+    int x;
+    int y;
+    int width;
+    int height;
+};
+
+struct WindowInfo {
+    RWLock lock;
+    struct hashmap* map;
+};
+
 struct RenderBatch2D {
     uint32_t screen_width;
     uint32_t screen_height;
@@ -139,12 +163,19 @@ struct RenderMinimapEvent {
 
 struct SwapBuffersEvent {};
 
+/// Setup the plugin library. Must be called (and return) before using any other plugin library functions,
+/// including init and is_inited. This function does not have a "close" reciprocal, as it's expected
+/// that this will be called immediately at startup and remain for the entire duration of the process.
+void _bolt_plugin_on_startup();
+
 /// Init the plugin library. Call _bolt_plugin_close at the end of execution, and don't double-init.
-/// Must be provided an init function and destroy function for surfaces.
-void _bolt_plugin_init(void (*)(struct SurfaceFunctions*, unsigned int, unsigned int, const void*), void (*)(void*));
+/// Must be provided with a fully-populated PluginManagedFunctions struct for backend-specific functions
+/// from plugin code. The contents are copied so they do not need to remain in scope after this function ends.
+void _bolt_plugin_init(const struct PluginManagedFunctions*);
 
 /// Returns true if the plugin library is initialised (i.e. init has been called more recently than
-/// close), otherwise false.
+/// close), otherwise false. This function is not thread-safe, since in a multi-threaded context,
+/// the returned value could be invalidated immediately by another thread calling plugin_init.
 uint8_t _bolt_plugin_is_inited();
 
 /// Close the plugin library.
@@ -155,6 +186,9 @@ void _bolt_plugin_ipc_init(int*);
 
 /// Closes the IPC channel. (OS-specific)
 void _bolt_plugin_ipc_close(int);
+
+/// Gets a reference to the global WindowInfo struct
+struct WindowInfo* _bolt_plugin_windowinfo();
 
 /// Handle all incoming IPC messages.
 void _bolt_plugin_handle_messages();

@@ -1,7 +1,7 @@
 #include "plugin.h"
 
-#include "../ipc.h"
 #include "plugin_api.h"
+#include "../ipc.h"
 #include "../../hashmap/hashmap.h"
 #include "../../../modules/spng/spng/spng.h"
 
@@ -28,13 +28,16 @@
 #define MINIMAP_META_REGISTRYNAME "minimapmeta"
 #define SWAPBUFFERS_META_REGISTRYNAME "swapbuffersmeta"
 #define SURFACE_META_REGISTRYNAME "surfacemeta"
+#define WINDOW_META_REGISTRYNAME "windowmeta"
 #define SWAPBUFFERS_CB_REGISTRYNAME "swapbufferscb"
 #define BATCH2D_CB_REGISTRYNAME "batch2dcb"
 #define RENDER3D_CB_REGISTRYNAME "render3dcb"
 #define MINIMAP_CB_REGISTRYNAME "minimapcb"
 
-static void (*surface_init)(struct SurfaceFunctions*, unsigned int, unsigned int, const void*);
-static void (*surface_destroy)(void*);
+static struct PluginManagedFunctions managed_functions;
+
+static uint64_t next_window_id;
+static struct WindowInfo windows;
 
 static bool inited = false;
 static int _bolt_api_init(lua_State* state);
@@ -56,6 +59,14 @@ void _bolt_plugin_free(struct Plugin* const* plugin) {
     lua_close((*plugin)->state);
     free((*plugin)->id);
     free(*plugin);
+}
+
+static int _bolt_window_map_compare(const void* a, const void* b, void* udata) {
+    return **(uint64_t**)a != **(uint64_t**)b;
+}
+
+static uint64_t _bolt_window_map_hash(const void* item, uint64_t seed0, uint64_t seed1) {
+    return hashmap_sip(*(uint64_t**)item, sizeof(uint64_t), seed0, seed1);
 }
 
 static int _bolt_plugin_map_compare(const void* a, const void* b, void* udata) {
@@ -115,11 +126,26 @@ static int api_setcallback##APINAME(lua_State* state) { \
 
 static int surface_gc(lua_State* state) {
     const struct SurfaceFunctions* functions = lua_touserdata(state, 1);
-    surface_destroy(functions->userdata);
+    managed_functions.surface_destroy(functions->userdata);
     return 0;
 }
 
-void _bolt_plugin_init(void (*_surface_init)(struct SurfaceFunctions*, unsigned int, unsigned int, const void*), void (*_surface_destroy)(void*)) {
+static int window_gc(lua_State* state) {
+    _bolt_rwlock_lock_write(&windows.lock);
+    struct EmbeddedWindow* window = lua_touserdata(state, 1);
+    _bolt_rwlock_destroy(&window->lock);
+    hashmap_delete(windows.map, &window);
+    _bolt_rwlock_unlock_write(&windows.lock);
+    managed_functions.surface_destroy(window->surface_functions.userdata);
+    return 0;
+}
+
+void _bolt_plugin_on_startup() {
+    windows.map = hashmap_new(sizeof(struct EmbeddedWindow*), 8, 0, 0, _bolt_window_map_hash, _bolt_window_map_compare, NULL, NULL);
+    _bolt_rwlock_init(&windows.lock);
+}
+
+void _bolt_plugin_init(const struct PluginManagedFunctions* functions) {
     _bolt_plugin_ipc_init(&fd);
 
     const char* display_name = getenv("JX_DISPLAY_NAME");
@@ -130,14 +156,16 @@ void _bolt_plugin_init(void (*_surface_init)(struct SurfaceFunctions*, unsigned 
         _bolt_ipc_send(fd, display_name, name_len);
     }
 
-    surface_init = _surface_init;
-    surface_destroy = _surface_destroy;
+    managed_functions = *functions;
+    _bolt_rwlock_lock_write(&windows.lock);
+    next_window_id = 1;
     plugins = hashmap_new(sizeof(struct Plugin*), 8, 0, 0, _bolt_plugin_map_hash, _bolt_plugin_map_compare, NULL, NULL);
     inited = 1;
+    _bolt_rwlock_unlock_write(&windows.lock);
 }
 
 static int _bolt_api_init(lua_State* state) {
-    lua_createtable(state, 0, 12);
+    lua_createtable(state, 0, 13);
     API_ADD(apiversion)
     API_ADD(checkversion)
     API_ADD(time)
@@ -150,6 +178,7 @@ static int _bolt_api_init(lua_State* state) {
     API_ADD(createsurface)
     API_ADD(createsurfacefromrgba)
     API_ADD(createsurfacefrompng)
+    API_ADD(createwindow)
     return 1;
 }
 
@@ -165,8 +194,14 @@ void _bolt_plugin_close() {
         struct Plugin** plugin = item;
         _bolt_plugin_free(plugin);
     }
+    _bolt_rwlock_lock_write(&windows.lock);
     hashmap_free(plugins);
     inited = 0;
+    _bolt_rwlock_unlock_write(&windows.lock);
+}
+
+struct WindowInfo* _bolt_plugin_windowinfo() {
+    return &windows;
 }
 
 void _bolt_plugin_handle_messages() {
@@ -337,13 +372,26 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     PUSHSTRING(plugin->state, SURFACE_META_REGISTRYNAME);
     lua_newtable(plugin->state);
     PUSHSTRING(plugin->state, "__index");
-    lua_createtable(plugin->state, 0, 3);
+    lua_createtable(plugin->state, 0, 4);
     API_ADD_SUB(plugin->state, clear, surface)
     API_ADD_SUB(plugin->state, drawtoscreen, surface)
     API_ADD_SUB(plugin->state, drawtosurface, surface)
+    API_ADD_SUB(plugin->state, drawtowindow, surface)
     lua_settable(plugin->state, -3);
     PUSHSTRING(plugin->state, "__gc");
     lua_pushcfunction(plugin->state, surface_gc);
+    lua_settable(plugin->state, -3);
+    lua_settable(plugin->state, LUA_REGISTRYINDEX);
+
+    // create the metatable for all Window objects
+    PUSHSTRING(plugin->state, WINDOW_META_REGISTRYNAME);
+    lua_newtable(plugin->state);
+    PUSHSTRING(plugin->state, "__index");
+    lua_createtable(plugin->state, 0, 1);
+    API_ADD_SUB(plugin->state, clear, window)
+    lua_settable(plugin->state, -3);
+    PUSHSTRING(plugin->state, "__gc");
+    lua_pushcfunction(plugin->state, window_gc);
     lua_settable(plugin->state, -3);
     lua_settable(plugin->state, LUA_REGISTRYINDEX);
 
@@ -439,7 +487,7 @@ static int api_createsurface(lua_State* state) {
     const lua_Integer w = lua_tointeger(state, 1);
     const lua_Integer h = lua_tointeger(state, 2);
     struct SurfaceFunctions* functions = lua_newuserdata(state, sizeof(struct SurfaceFunctions));
-    surface_init(functions, w, h, NULL);
+    managed_functions.surface_init(functions, w, h, NULL);
     lua_getfield(state, LUA_REGISTRYINDEX, SURFACE_META_REGISTRYNAME);
     lua_setmetatable(state, -2);
     return 1;
@@ -454,12 +502,12 @@ static int api_createsurfacefromrgba(lua_State* state) {
     const void* rgba = lua_tolstring(state, 3, &length);
     struct SurfaceFunctions* functions = lua_newuserdata(state, sizeof(struct SurfaceFunctions));
     if (length >= req_length) {
-        surface_init(functions, w, h, rgba);
+        managed_functions.surface_init(functions, w, h, rgba);
     } else {
         void* ud = lua_newuserdata(state, req_length);
         memcpy(ud, rgba, length);
         memset(ud + length, 0, req_length - length);
-        surface_init(functions, w, h, ud);
+        managed_functions.surface_init(functions, w, h, ud);
         lua_pop(state, 1);
     }
     lua_getfield(state, LUA_REGISTRYINDEX, SURFACE_META_REGISTRYNAME);
@@ -517,11 +565,30 @@ static int api_createsurfacefrompng(lua_State* state) {
     lua_pushinteger(state, ihdr.width);
     lua_pushinteger(state, ihdr.height);
     struct SurfaceFunctions* functions = lua_newuserdata(state, sizeof(struct SurfaceFunctions));
-    surface_init(functions, ihdr.width, ihdr.height, rgba);
+    managed_functions.surface_init(functions, ihdr.width, ihdr.height, rgba);
     lua_getfield(state, LUA_REGISTRYINDEX, SURFACE_META_REGISTRYNAME);
     lua_setmetatable(state, -2);
     free(rgba);
     return 3;
+}
+
+static int api_createwindow(lua_State* state) {
+    _bolt_check_argc(state, 4, "createwindow");
+    _bolt_rwlock_lock_write(&windows.lock);
+    struct EmbeddedWindow* window = lua_newuserdata(state, sizeof(struct EmbeddedWindow));
+    window->id = next_window_id;
+    _bolt_rwlock_init(&window->lock);
+    window->x = lua_tointeger(state, 1);
+    window->y = lua_tointeger(state, 2);
+    window->width = lua_tointeger(state, 3);
+    window->height = lua_tointeger(state, 4);
+    managed_functions.surface_init(&window->surface_functions, window->width, window->height, NULL);
+    lua_getfield(state, LUA_REGISTRYINDEX, WINDOW_META_REGISTRYNAME);
+    lua_setmetatable(state, -2);
+    next_window_id += 1;
+    hashmap_set(windows.map, &window);
+    _bolt_rwlock_unlock_write(&windows.lock);
+    return 1;
 }
 
 static int api_batch2d_vertexcount(lua_State* state) {
@@ -735,6 +802,56 @@ static int api_surface_drawtosurface(lua_State* state) {
     const int dw = lua_tointeger(state, 9);
     const int dh = lua_tointeger(state, 10);
     functions->draw_to_surface(functions->userdata, target->userdata, sx, sy, sw, sh, dx, dy, dw, dh);
+    return 0;
+}
+
+static int api_surface_drawtowindow(lua_State* state) {
+    _bolt_check_argc(state, 10, "surface_drawtowindow");
+    const struct SurfaceFunctions* functions = lua_touserdata(state, 1);
+    const struct EmbeddedWindow* target = lua_touserdata(state, 2);
+    const int sx = lua_tointeger(state, 3);
+    const int sy = lua_tointeger(state, 4);
+    const int sw = lua_tointeger(state, 5);
+    const int sh = lua_tointeger(state, 6);
+    const int dx = lua_tointeger(state, 7);
+    const int dy = lua_tointeger(state, 8);
+    const int dw = lua_tointeger(state, 9);
+    const int dh = lua_tointeger(state, 10);
+    functions->draw_to_surface(functions->userdata, target->surface_functions.userdata, sx, sy, sw, sh, dx, dy, dw, dh);
+    return 0;
+}
+
+static int api_window_clear(lua_State* state) {
+    char error_buffer[256];
+    const int argc = lua_gettop(state);
+    switch (argc) {
+        case 1: {
+            const struct EmbeddedWindow* window = lua_touserdata(state, 1);
+            window->surface_functions.clear(window->surface_functions.userdata, 0.0, 0.0, 0.0, 0.0);
+            break;
+        }
+        case 4: {
+            const struct EmbeddedWindow* window = lua_touserdata(state, 1);
+            const double r = lua_tonumber(state, 2);
+            const double g = lua_tonumber(state, 3);
+            const double b = lua_tonumber(state, 4);
+            window->surface_functions.clear(window->surface_functions.userdata, r, g, b, 1.0);
+            break;
+        }
+        case 5: {
+            const struct EmbeddedWindow* window = lua_touserdata(state, 1);
+            const double r = lua_tonumber(state, 2);
+            const double g = lua_tonumber(state, 3);
+            const double b = lua_tonumber(state, 4);
+            const double a = lua_tonumber(state, 5);
+            window->surface_functions.clear(window->surface_functions.userdata, r, g, b, a);
+            break;
+        }
+        default: {
+            SNPUSHSTRING(state, error_buffer, "incorrect argument count to 'window_clear': expected 1, 4, or 5, but got %i", argc);
+            lua_error(state);
+        }
+    }
     return 0;
 }
 

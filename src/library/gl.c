@@ -394,6 +394,26 @@ static void _bolt_unpack_srgb565(uint16_t packed, uint8_t out[3]) {
     //out[2] = lut5[packed & 0b00011111];
 }
 
+// note this function binds GL_DRAW_FRAMEBUFFER and GL_TEXTURE_2D (for the current active texture unit)
+// so you'll have to restore the prior values yourself if you need to leave the opengl state unchanged
+static void _bolt_gl_surface_init_buffers(struct PluginSurfaceUserdata* userdata) {
+    gl.GenFramebuffers(1, &userdata->framebuffer);
+    lgl->GenTextures(1, &userdata->renderbuffer);
+    gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, userdata->framebuffer);
+    lgl->BindTexture(GL_TEXTURE_2D, userdata->renderbuffer);
+    gl.TexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, userdata->width, userdata->height);
+    lgl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    lgl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    lgl->TexParameteri(GL_TEXTURE_2D,  GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    lgl->TexParameteri(GL_TEXTURE_2D,  GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    gl.FramebufferTexture(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, userdata->renderbuffer, 0);
+}
+
+static void _bolt_gl_surface_destroy_buffers(struct PluginSurfaceUserdata* userdata) {
+    gl.DeleteFramebuffers(1, &userdata->framebuffer);
+    lgl->DeleteTextures(1, &userdata->renderbuffer);
+}
+
 void _bolt_gl_load(void* (*GetProcAddress)(const char*)) {
 #define INIT_GL_FUNC(NAME) gl.NAME = GetProcAddress("gl"#NAME);
     INIT_GL_FUNC(ActiveTexture)
@@ -1065,6 +1085,42 @@ void _bolt_gl_onSwapBuffers(uint32_t window_width, uint32_t window_height) {
         struct SwapBuffersEvent event;
         _bolt_plugin_handle_swapbuffers(&event);
         _bolt_plugin_handle_messages();
+        struct WindowInfo* windows = _bolt_plugin_windowinfo();
+        _bolt_rwlock_lock_read(&windows->lock);
+        size_t iter = 0;
+        void* item;
+        while (hashmap_iter(windows->map, &iter, &item)) {
+            struct EmbeddedWindow* window = *(struct EmbeddedWindow**)item;
+            _bolt_rwlock_lock_write(&window->lock);
+            bool did_resize = false;
+            if (window->width > window_width) {
+                window->width = window_width;
+                did_resize = true;
+            }
+            if (window->height > window_height) {
+                window->height = window_height;
+                did_resize = true;
+            }
+            if (window->x < 0) window->x = 0;
+            if (window->y < 0) window->y = 0;
+            if (window->x + window->width > window_width) window->x = window_width - window->width;
+            if (window->y + window->height > window_height) window->y = window_height - window->height;
+            if (did_resize) {
+                struct PluginSurfaceUserdata* ud = window->surface_functions.userdata;
+                _bolt_gl_surface_destroy_buffers(ud);
+                ud->width = window->width;
+                ud->height = window->height;
+                _bolt_gl_surface_init_buffers(ud);
+                lgl->ClearColor(0.0, 0.0, 0.0, 0.0);
+                lgl->Clear(GL_COLOR_BUFFER_BIT);
+            }
+            _bolt_rwlock_unlock_write(&window->lock);
+            // TODO: send a resize event to the plugin
+            _bolt_rwlock_lock_read(&window->lock);
+            window->surface_functions.draw_to_screen(window->surface_functions.userdata, 0, 0, window->width, window->height, window->x, window->y, window->width, window->height);
+            _bolt_rwlock_unlock_read(&window->lock);
+        }
+        _bolt_rwlock_unlock_read(&windows->lock);
     }
 }
 
@@ -1101,7 +1157,11 @@ void _bolt_gl_onMakeCurrent(void* context) {
     if (egl_main_context_makecurrent_pending && (uintptr_t)context == egl_main_context) {
         egl_main_context_makecurrent_pending = 0;
         _bolt_gl_init();
-        _bolt_plugin_init(_bolt_gl_plugin_surface_init, _bolt_gl_plugin_surface_destroy);
+        const struct PluginManagedFunctions functions = {
+            .surface_init = _bolt_gl_plugin_surface_init,
+            .surface_destroy = _bolt_gl_plugin_surface_destroy,
+        };
+        _bolt_plugin_init(&functions);
     }
 }
 
@@ -1573,25 +1633,15 @@ static uint8_t* _bolt_gl_plugin_texture_data(void* userdata, size_t x, size_t y)
 static void _bolt_gl_plugin_surface_init(struct SurfaceFunctions* functions, unsigned int width, unsigned int height, const void* data) {
     struct PluginSurfaceUserdata* userdata = malloc(sizeof(struct PluginSurfaceUserdata));
     struct GLContext* c = _bolt_context();
-
-    gl.GenFramebuffers(1, &userdata->framebuffer);
-    lgl->GenTextures(1, &userdata->renderbuffer);
-    gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, userdata->framebuffer);
-    lgl->BindTexture(GL_TEXTURE_2D, userdata->renderbuffer);
-    gl.TexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, width, height);
-    lgl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    lgl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    lgl->TexParameteri(GL_TEXTURE_2D,  GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    lgl->TexParameteri(GL_TEXTURE_2D,  GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    gl.FramebufferTexture(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, userdata->renderbuffer, 0);
+    userdata->width = width;
+    userdata->height = height;
+    _bolt_gl_surface_init_buffers(userdata);
     if (data) {
         lgl->TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, data);
     } else {
         lgl->ClearColor(0.0, 0.0, 0.0, 0.0);
         lgl->Clear(GL_COLOR_BUFFER_BIT);
     }
-    userdata->width = width;
-    userdata->height = height;
     functions->userdata = userdata;
     functions->clear = _bolt_gl_plugin_surface_clear;
     functions->draw_to_screen = _bolt_gl_plugin_surface_drawtoscreen;
@@ -1604,8 +1654,7 @@ static void _bolt_gl_plugin_surface_init(struct SurfaceFunctions* functions, uns
 
 static void _bolt_gl_plugin_surface_destroy(void* _userdata) {
     struct PluginSurfaceUserdata* userdata = _userdata;
-    gl.DeleteFramebuffers(1, &userdata->framebuffer);
-    lgl->DeleteTextures(1, &userdata->renderbuffer);
+    _bolt_gl_surface_destroy_buffers(userdata);
     free(userdata);
 }
 

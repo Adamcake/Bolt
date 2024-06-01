@@ -125,6 +125,16 @@ static int api_createsurfacefromrgba(lua_State*);
 /// Loading PNG files is slow, so use this function sparingly.
 static int api_createsurfacefrompng(lua_State*);
 
+/// [-4, +1, -]
+/// Creates an embedded window with the given initial values for x, y, width, height. The x and y
+/// relate to the top-left corner of the window. An embedded window's top, left, bottom and right
+/// are always clamped to the window size. Embedded windows can capture mouse and keyboard events,
+/// and can be drawn to like a surface, although there's no way to draw from a window to elsewhere.
+///
+/// All of the member functions of window objects can be found in this file, prefixed with
+/// "api_window_".
+static int api_createwindow(lua_State*);
+
 /// [-1, +0, -]
 /// Sets a callback function for SwapBuffers events, overwriting the previous callback, if any.
 /// Passing a non-function (ideally `nil`) will restore the default setting, which is to have no
@@ -326,6 +336,17 @@ static int api_surface_drawtoscreen(lua_State*);
 ///
 /// Paramaters are target surface, then source X,Y,W,H, then destination X,Y,W,H, all in pixels.
 static int api_surface_drawtosurface(lua_State*);
+
+/// [-10, +0, -]
+/// Draws a section of the surface directly onto a section of a window object.
+///
+/// Paramaters are target window, then source X,Y,W,H, then destination X,Y,W,H, all in pixels.
+static int api_surface_drawtowindow(lua_State*);
+
+/// [-(1|4|5), +0, -]
+/// Deletes any previous contents of the window and sets it to contain a single colour and alpha.
+/// See surface_clear for usage.
+static int api_window_clear(lua_State*);
 
 /// [-1, +1, -]
 /// Returns the number of vertices in a 3D render object (i.e. a model).

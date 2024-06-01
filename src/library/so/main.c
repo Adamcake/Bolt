@@ -10,6 +10,8 @@
 
 #include "x.h"
 #include "../gl.h"
+#include "../plugin/plugin.h"
+#include "../../hashmap/hashmap.h"
 
 // comment or uncomment this to enable verbose logging of hooks in this file
 //#define VERBOSE
@@ -30,6 +32,13 @@ static pthread_mutex_t egl_lock;
 static xcb_window_t main_window_xcb = 0;
 static uint32_t main_window_width = 0;
 static uint32_t main_window_height = 0;
+
+/* whether the mouse is REALLY in the client vs. whether the client thinks it is */
+static uint8_t xcb_mousein_real = 0;
+static uint8_t xcb_mousein_fake = 0;
+
+/* 0 indicates no window */
+static uint64_t grabbed_window_id = 0;
 
 static const char* libc_name = "libc.so.6";
 static const char* libegl_name = "libEGL.so.1";
@@ -258,6 +267,7 @@ static int _bolt_dl_iterate_callback(struct dl_phdr_info* info, size_t size, voi
 }
 
 static void _bolt_init_functions() {
+    _bolt_plugin_on_startup();
     pthread_mutex_init(&egl_lock, NULL);
     dl_iterate_phdr(_bolt_dl_iterate_callback, NULL);
     inited = 1;
@@ -389,8 +399,45 @@ unsigned int eglTerminate(void* display) {
     return 1;
 }
 
+static uint8_t _bolt_point_in_rect(int16_t x, int16_t y, int rx, int ry, int rw, int rh) {
+    return rx <= x && rx + rw > x && ry <= y && ry + rh > y;
+}
+
+// called by handle_xcb_event
+// policy is as follows: if the target window is NOT main_window, do not interfere at all.
+// if the target window IS main_window, the event can be swallowed if it's above a window or we're
+// currently in a drag action, otherwise the event may also mutate into an enter or leave event.
+static uint8_t _bolt_handle_xcb_motion_event(xcb_window_t win, int16_t x, int16_t y, xcb_generic_event_t* e) {
+    if (win != main_window_xcb) return true;
+    struct WindowInfo* windows = _bolt_plugin_windowinfo();
+    uint8_t ret = true;
+    _bolt_rwlock_lock_read(&windows->lock);
+    size_t iter = 0;
+    void* item;
+    while (ret && hashmap_iter(windows->map, &iter, &item)) {
+        struct EmbeddedWindow** window = item;
+        _bolt_rwlock_lock_read(&(*window)->lock);
+        if (_bolt_point_in_rect(x, y, (*window)->x, (*window)->y, (*window)->width, (*window)->height)) {
+            ret = false;
+        }
+        _bolt_rwlock_unlock_read(&(*window)->lock);
+    }
+    _bolt_rwlock_unlock_read(&windows->lock);
+    if (ret != xcb_mousein_fake) {
+        xcb_mousein_fake = ret;
+        ret = true;
+        // mutate the event - note that motion_notify, enter_notify and exit_notify have the exact
+        // same memory layout, except for the last two bytes, so this is a fairly easy mutation
+        xcb_enter_notify_event_t* event = (xcb_enter_notify_event_t*)e;
+        event->response_type = ret ? XCB_ENTER_NOTIFY : XCB_LEAVE_NOTIFY;
+        event->same_screen_focus = event->mode;
+        event->mode = 0;
+    }
+    return ret;
+}
+
 // returns true if the event should be passed on to the window, false if not
-static uint8_t _bolt_handle_xcb_event(xcb_connection_t* c, const xcb_generic_event_t* const e) {
+static uint8_t _bolt_handle_xcb_event(xcb_connection_t* c, xcb_generic_event_t* e) {
     if (!e) return true;
     if (!main_window_xcb) {
         if (e->response_type == XCB_MAP_NOTIFY) {
@@ -401,8 +448,136 @@ static uint8_t _bolt_handle_xcb_event(xcb_connection_t* c, const xcb_generic_eve
         return true;
     }
 
-    switch (e->response_type) {
-        // todo: handle mouse and keyboard events for main window
+    // comments here are based on what event masks the game normally sets on each window
+    const uint8_t response_type = e->response_type & 0b01111111;
+    switch (response_type) {
+        case XCB_GE_GENERIC: {
+            const xcb_ge_generic_event_t* const event = (const xcb_ge_generic_event_t* const)e;
+            if (event->extension != XINPUTEXTENSION) break;
+            switch (event->event_type) {
+                case XCB_INPUT_MOTION: { // when mouse moves (not drag) inside the game window
+                    xcb_input_motion_event_t* event = (xcb_input_motion_event_t*)e;
+                    return _bolt_handle_xcb_motion_event(event->event, event->event_x >> 16, event->event_y >> 16, e);
+                }
+                case XCB_INPUT_RAW_MOTION: // when mouse moves (not drag) anywhere globally on the PC
+                case XCB_INPUT_RAW_BUTTON_PRESS: // when pressing a mouse button anywhere globally on the PC
+                case XCB_INPUT_RAW_BUTTON_RELEASE: // when releasing a mouse button anywhere globally on the PC
+                    break;
+                default:
+                    printf("unknown xinput event %u\n", event->event_type);
+                    break;
+            }
+            break;
+        }
+        case XCB_BUTTON_PRESS: { // when pressing a mouse button that's received by the game window
+            xcb_button_release_event_t* event = (xcb_button_release_event_t*)e;
+            if (event->event != main_window_xcb) return true;
+            struct WindowInfo* windows = _bolt_plugin_windowinfo();
+            uint8_t ret = true;
+            _bolt_rwlock_lock_read(&windows->lock);
+            size_t iter = 0;
+            void* item;
+            while (hashmap_iter(windows->map, &iter, &item)) {
+                struct EmbeddedWindow** window = item;
+                _bolt_rwlock_lock_read(&(*window)->lock);
+                if (_bolt_point_in_rect(event->event_x, event->event_y, (*window)->x, (*window)->y, (*window)->width, (*window)->height)) {
+                    grabbed_window_id = (*window)->id;
+                    ret = false;
+                }
+                _bolt_rwlock_unlock_read(&(*window)->lock);
+            }
+            _bolt_rwlock_unlock_read(&windows->lock);
+            return ret;
+        }
+        case XCB_BUTTON_RELEASE: { // when releasing a mouse button, for which the press was received by the game window
+            xcb_button_release_event_t* event = (xcb_button_release_event_t*)e;
+            if (event->event != main_window_xcb) return true;
+            struct WindowInfo* windows = _bolt_plugin_windowinfo();
+            uint8_t on_any_window = false;
+            _bolt_rwlock_lock_read(&windows->lock);
+            size_t iter = 0;
+            void* item;
+            while (hashmap_iter(windows->map, &iter, &item)) {
+                struct EmbeddedWindow** window = item;
+                _bolt_rwlock_lock_read(&(*window)->lock);
+                if (_bolt_point_in_rect(event->event_x, event->event_y, (*window)->x, (*window)->y, (*window)->width, (*window)->height)) {
+                    on_any_window = true;
+                }
+                _bolt_rwlock_unlock_read(&(*window)->lock);
+            }
+            _bolt_rwlock_unlock_read(&windows->lock);
+            grabbed_window_id = 0;
+            if (!xcb_mousein_fake) {
+                if (on_any_window) {
+                    return false;
+                } else {
+                    xcb_mousein_fake = true;
+                    event->response_type = XCB_ENTER_NOTIFY;
+                    event->state = 2;
+                    event->pad0 = event->same_screen; // actually sets same_screen_focus
+                    event->same_screen = 0; // actually sets pad0
+                    return true;
+                }
+            } else {
+                if (on_any_window) {
+                    // would be nice to send_event here with XCB_LEAVE_NOTIFY mode=2
+                }
+                return true;
+            }
+        }
+        case XCB_MOTION_NOTIFY: { // when mouse moves while dragging from inside the game window
+            xcb_motion_notify_event_t* event = (xcb_motion_notify_event_t*)e;
+            if (event->event != main_window_xcb) return true;
+            return xcb_mousein_fake;
+        }
+        case XCB_KEY_PRESS: // when a keyboard key is pressed while the game window is focused
+        case XCB_KEY_RELEASE: // when a keyboard key is released while the game window is focused
+            break;
+        case XCB_ENTER_NOTIFY: { // when the mouse pointer moves inside the game view
+            xcb_enter_notify_event_t* event = (xcb_enter_notify_event_t*)e;
+            if (event->event != main_window_xcb) return true;
+            xcb_mousein_real = true;
+            struct WindowInfo* windows = _bolt_plugin_windowinfo();
+            uint8_t ret = true;
+            _bolt_rwlock_lock_read(&windows->lock);
+            size_t iter = 0;
+            void* item;
+            while (hashmap_iter(windows->map, &iter, &item)) {
+                struct EmbeddedWindow** window = item;
+                _bolt_rwlock_lock_read(&(*window)->lock);
+                if (_bolt_point_in_rect(event->event_x, event->event_y, (*window)->x, (*window)->y, (*window)->width, (*window)->height)) {
+                    ret = false;
+                }
+                _bolt_rwlock_unlock_read(&(*window)->lock);
+            }
+            _bolt_rwlock_unlock_read(&windows->lock);
+            if (ret) xcb_mousein_fake = true;
+            return ret;
+        }
+        case XCB_LEAVE_NOTIFY: { // when the mouse pointer moves out of the game view
+            xcb_leave_notify_event_t* event = (xcb_leave_notify_event_t*)e;
+            if (event->event != main_window_xcb) return true;
+            const uint8_t ret = xcb_mousein_fake;
+            xcb_mousein_real = false;
+            xcb_mousein_fake = false;
+            return ret;
+        }
+        case XCB_FOCUS_IN: // when the game window gains focus
+        case XCB_FOCUS_OUT: // when the game window loses focus
+        case XCB_KEYMAP_NOTIFY:
+        case XCB_EXPOSE:
+        case XCB_VISIBILITY_NOTIFY:
+        case XCB_MAP_NOTIFY:
+        case XCB_UNMAP_NOTIFY:
+        case XCB_REPARENT_NOTIFY:
+        case XCB_DESTROY_NOTIFY:
+        case XCB_CONFIGURE_NOTIFY:
+        case XCB_PROPERTY_NOTIFY:
+        case XCB_CLIENT_MESSAGE:
+            break;
+        default:
+            printf("unknown xcb event %u\n", response_type);
+            break;
     }
     return true;
 }
