@@ -1,4 +1,3 @@
-import './assets/output.css';
 import App from './App.svelte';
 import {
 	messageList,

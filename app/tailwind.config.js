@@ -1,11 +1,9 @@
-/** eslint-env node */
 /** @type {import('tailwindcss').Config} */
-
-module.exports = {
-	content: ['./src/**/*.{html,js,ts,svelte}'],
+export default {
+	content: ['./index.html', './src/**/*.{svelte,js,ts,jsx,tsx}'],
 	theme: {
 		extend: {}
 	},
-	plugins: [],
-	darkMode: 'selector'
+	darkMode: 'selector',
+	plugins: []
 };
