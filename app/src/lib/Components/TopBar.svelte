@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { loginClicked } from '../functions';
-	import { Game } from '../interfaces';
-	import { config, isConfigDirty, selectedPlay } from '../store';
-	import Account from './Account.svelte';
+	import { loginClicked } from '$lib/functions';
+	import { Game } from '$lib/interfaces';
+	import { config, isConfigDirty, selectedPlay } from '$lib/store';
+	import Account from '$lib/Components/Account.svelte';
 
 	// prop
 	export let showSettings: boolean;
@@ -60,14 +60,16 @@
 </script>
 
 <div
-	class="fixed top-0 flex h-16 w-screen border-b-2 border-slate-300 bg-slate-100 duration-200 dark:border-slate-800 dark:bg-slate-900">
+	class="fixed top-0 flex h-16 w-screen border-b-2 border-slate-300 bg-slate-100 duration-200 dark:border-slate-800 dark:bg-slate-900"
+>
 	<div class="m-3 ml-9 font-bold">
 		<button
 			class="mx-1 w-20 rounded-lg border-2 border-blue-500 p-2 duration-200 hover:opacity-75"
 			bind:this={rs3Button}
 			on:click={() => {
 				toggle_game(Game.rs3);
-			}}>
+			}}
+		>
 			RS3
 		</button>
 		<button
@@ -75,21 +77,24 @@
 			bind:this={osrsButton}
 			on:click={() => {
 				toggle_game(Game.osrs);
-			}}>
+			}}
+		>
 			OSRS
 		</button>
 	</div>
 	<div class="ml-auto flex">
 		<button
 			class="my-3 h-10 w-10 rounded-full bg-blue-500 p-2 duration-200 hover:rotate-45 hover:opacity-75"
-			on:click={() => change_theme()}>
+			on:click={() => change_theme()}
+		>
 			<img src="svgs/lightbulb-solid.svg" class="h-6 w-6" alt="Change Theme" />
 		</button>
 		<button
 			class="m-3 h-10 w-10 rounded-full bg-blue-500 p-2 duration-200 hover:rotate-45 hover:opacity-75"
 			on:click={() => {
 				showSettings = true;
-			}}>
+			}}
+		>
 			<img src="svgs/gear-solid.svg" class="h-6 w-6" alt="Settings" />
 		</button>
 		<button
@@ -101,7 +106,8 @@
 			on:mouseleave={() => {
 				hoverAccountButton = false;
 			}}
-			on:click={() => toggle_account()}>
+			on:click={() => toggle_account()}
+		>
 			{#if $selectedPlay.account}
 				{$selectedPlay.account?.displayName}
 			{:else}

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { bolt, config, isConfigDirty, hasBoltPlugins } from '../../store';
+	import { bolt, config, isConfigDirty, hasBoltPlugins } from '$lib/store';
 
 	let configUriDiv: HTMLDivElement;
 	let configUriAddress: HTMLTextAreaElement;
@@ -46,7 +46,8 @@
 				id="enable_plugins"
 				bind:checked={$config.rs_plugin_loader}
 				on:change={() => isConfigDirty.set(true)}
-				class="ml-2" />
+				class="ml-2"
+			/>
 		</div>
 	{/if}
 	<div class="mx-auto p-2">
@@ -59,7 +60,8 @@
 			on:change={() => {
 				toggleUriDiv();
 			}}
-			class="ml-2" />
+			class="ml-2"
+		/>
 	</div>
 	<div id="config_uri_div" class="mx-auto p-2 opacity-25" bind:this={configUriDiv}>
 		<textarea
@@ -71,7 +73,8 @@
 				uriAddressChanged();
 			}}
 			bind:this={configUriAddress}
-			class="rounded border-2 border-slate-300 bg-slate-100 text-slate-950 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50">
+			class="rounded border-2 border-slate-300 bg-slate-100 text-slate-950 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50"
+		>
 		</textarea>
 	</div>
 </div>

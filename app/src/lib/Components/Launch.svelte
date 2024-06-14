@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { afterUpdate, onMount } from 'svelte';
 	import { get } from 'svelte/store';
-	import { launchHdos, launchRS3Linux, launchRuneLite } from '../functions';
-	import { Client, Game } from '../interfaces';
-	import { msg } from '../main';
-	import { config, hasBoltPlugins, isConfigDirty, selectedPlay } from '../store';
+	import { launchHdos, launchRS3Linux, launchRuneLite } from '$lib/functions';
+	import { Client, Game } from '$lib/interfaces';
+	import { msg } from '@/main';
+	import { config, hasBoltPlugins, isConfigDirty, selectedPlay } from '$lib/store';
 
 	export let showPluginMenu = false;
 
@@ -77,10 +77,7 @@
 		if ($selectedPlay.game == Game.osrs && $selectedPlay.client) {
 			clientSelect.selectedIndex = $selectedPlay.client;
 		}
-		if (
-			$selectedPlay.account &&
-			$config.selected_characters?.has($selectedPlay.account.userId)
-		) {
+		if ($selectedPlay.account && $config.selected_characters?.has($selectedPlay.account.userId)) {
 			for (let i = 0; i < characterSelect.options.length; i++) {
 				if (
 					characterSelect[i].getAttribute('data-id') ==
@@ -108,10 +105,12 @@
 	<img
 		src="svgs/rocket-solid.svg"
 		alt="Launch icon"
-		class="mx-auto mb-5 w-24 rounded-3xl bg-gradient-to-br from-rose-500 to-violet-500 p-5" />
+		class="mx-auto mb-5 w-24 rounded-3xl bg-gradient-to-br from-rose-500 to-violet-500 p-5"
+	/>
 	<button
 		class="mx-auto mb-2 w-52 rounded-lg bg-emerald-500 p-2 font-bold text-black duration-200 hover:opacity-75"
-		on:click={play_clicked}>
+		on:click={play_clicked}
+	>
 		Play
 	</button>
 	<div class="mx-auto my-2">
@@ -122,7 +121,8 @@
 				id="game_client_select"
 				class="mx-auto w-52 cursor-pointer rounded-lg border-2 border-slate-300 bg-inherit p-2 text-inherit duration-200 hover:opacity-75 dark:border-slate-800"
 				bind:this={clientSelect}
-				on:change={clientChanged}>
+				on:change={clientChanged}
+			>
 				<option data-id={Client.runeLite} class="dark:bg-slate-900">RuneLite</option>
 				<option data-id={Client.hdos} class="dark:bg-slate-900">HDOS</option>
 			</select>
@@ -133,7 +133,8 @@
 				class="mx-auto mb-2 w-52 rounded-lg p-2 font-bold text-black duration-200 enabled:bg-blue-500 enabled:hover:opacity-75 disabled:bg-gray-500"
 				on:click={() => {
 					showPluginMenu = get(hasBoltPlugins) ?? false;
-				}}>
+				}}
+			>
 				Plugin menu
 			</button>
 		{/if}
@@ -145,7 +146,8 @@
 			id="character_select"
 			class="mx-auto w-52 cursor-pointer rounded-lg border-2 border-slate-300 bg-inherit p-2 text-inherit duration-200 hover:opacity-75 dark:border-slate-800"
 			bind:this={characterSelect}
-			on:change={() => characterChanged()}>
+			on:change={() => characterChanged()}
+		>
 			{#if $selectedPlay.account}
 				{#each $selectedPlay.account.characters as character}
 					<option data-id={character[1].accountId} class="dark:bg-slate-900">

@@ -7,13 +7,12 @@
 </script>
 
 <div>
-	<div class="absolute left-0 top-0 z-10 h-screen w-screen backdrop-blur-sm backdrop-filter">
-	</div>
+	<div class="absolute left-0 top-0 z-10 h-screen w-screen backdrop-blur-sm backdrop-filter"></div>
 	<div
 		class="absolute left-0 top-0 z-10 h-screen w-screen bg-black opacity-75"
 		role="none"
 		on:click={() => {
 			dispatch('click');
-		}}>
-	</div>
+		}}
+	></div>
 </div>

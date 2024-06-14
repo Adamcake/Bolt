@@ -12,7 +12,7 @@ import {
 	configDefaults,
 	Game,
 	Client
-} from './interfaces';
+} from '$lib/interfaces';
 
 // readable stores. known at starup
 export const internalUrl: Readable<string> = readable('https://bolt-internal');

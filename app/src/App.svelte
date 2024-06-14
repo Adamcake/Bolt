@@ -1,13 +1,13 @@
 <script lang="ts">
-	import TopBar from './lib/TopBar.svelte';
-	import Disclaimer from './lib/Disclaimer.svelte';
-	import Settings from './lib/Settings.svelte';
-	import Messages from './lib/Messages.svelte';
-	import Launch from './lib/Launch.svelte';
-	import Auth from './lib/Auth.svelte';
-	import PluginMenu from './lib/PluginMenu.svelte';
-	import { urlSearchParams } from './functions';
-	import { showDisclaimer } from './store';
+	import TopBar from '$lib/Components/TopBar.svelte';
+	import Disclaimer from '$lib/Components/Disclaimer.svelte';
+	import Settings from '$lib/Components/Settings.svelte';
+	import Messages from '$lib/Components/Messages.svelte';
+	import Launch from '$lib/Components/Launch.svelte';
+	import Auth from '$lib/Components/Auth.svelte';
+	import PluginMenu from '$lib/Components/PluginMenu.svelte';
+	import { urlSearchParams } from '$lib/functions';
+	import { showDisclaimer } from '$lib/store';
 
 	let showSettings: boolean = false;
 	let showPluginMenu: boolean = false;
