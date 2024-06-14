@@ -4,10 +4,10 @@
 	"version": "0.0.0",
 	"type": "module",
 	"scripts": {
-		"dev": "vite",
+		"dev": "vite build --watch --mode development",
+		"watch": "vite build --watch --mode development",
 		"build": "vite build",
 		"minify": "vite build --minify",
-		"watch": "vite build --watch",
 		"preview": "vite preview",
 		"check": "svelte-check --tsconfig ./tsconfig.json",
 		"test": "vitest",
