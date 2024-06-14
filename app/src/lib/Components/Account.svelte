@@ -1,9 +1,14 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
 	import { msg, err, boltSub } from '@/main';
-	import { accountList, config, credentials, isConfigDirty, selectedPlay } from '$lib/store';
-	import type { Credentials } from '$lib/interfaces';
-	import { checkRenewCreds, loginClicked, revokeOauthCreds, saveAllCreds } from '$lib/functions';
+	import { accountList, config, credentials, isConfigDirty, selectedPlay } from '$lib/Util/store';
+	import type { Credentials } from '$lib/Util/interfaces';
+	import {
+		checkRenewCreds,
+		loginClicked,
+		revokeOauthCreds,
+		saveAllCreds
+	} from '$lib/Util/functions';
 
 	// props
 	export let showAccountDropdown: boolean;

@@ -6,8 +6,8 @@
 	import Launch from '$lib/Components/Launch.svelte';
 	import Auth from '$lib/Components/Auth.svelte';
 	import PluginMenu from '$lib/Components/PluginMenu.svelte';
-	import { urlSearchParams } from '$lib/functions';
-	import { showDisclaimer } from '$lib/store';
+	import { urlSearchParams } from '$lib/Util/functions';
+	import { showDisclaimer } from '$lib/Util/store';
 
 	let showSettings: boolean = false;
 	let showPluginMenu: boolean = false;

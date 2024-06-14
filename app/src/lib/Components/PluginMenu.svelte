@@ -2,9 +2,9 @@
 	import { get } from 'svelte/store';
 	import { onDestroy } from 'svelte';
 	import Backdrop from '$lib/Components/Backdrop.svelte';
-	import { getNewClientListPromise, savePluginConfig } from '$lib/functions';
-	import { type PluginConfig } from '$lib/interfaces';
-	import { clientListPromise, hasBoltPlugins, pluginList, platform } from '$lib/store';
+	import { getNewClientListPromise, savePluginConfig } from '$lib/Util/functions';
+	import { type PluginConfig } from '$lib/Util/interfaces';
+	import { clientListPromise, hasBoltPlugins, pluginList, platform } from '$lib/Util/store';
 	import { msg } from '@/main';
 
 	// props

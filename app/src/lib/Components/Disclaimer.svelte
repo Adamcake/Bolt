@@ -1,6 +1,6 @@
 <script lang="ts">
 	import Backdrop from '$lib/Components/Backdrop.svelte';
-	import { showDisclaimer } from '$lib/store';
+	import { showDisclaimer } from '$lib/Util/store';
 
 	// atob encodings created from btoa; for disclaimer text
 	const firstText: string = atob(

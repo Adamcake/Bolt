@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { config, isConfigDirty, platform, selectedPlay } from '$lib/store';
-	import { launchRuneLiteConfigure } from '$lib/functions';
+	import { config, isConfigDirty, platform, selectedPlay } from '$lib/Util/store';
+	import { launchRuneLiteConfigure } from '$lib/Util/functions';
 	import { msg } from '@/main';
 
 	let customJarDiv: HTMLDivElement;

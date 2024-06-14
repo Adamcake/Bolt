@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { messageList } from '$lib/store';
+	import { messageList } from '$lib/Util/store';
 </script>
 
 <div

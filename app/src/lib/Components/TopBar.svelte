@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { loginClicked } from '$lib/functions';
-	import { Game } from '$lib/interfaces';
-	import { config, isConfigDirty, selectedPlay } from '$lib/store';
+	import { loginClicked } from '$lib/Util/functions';
+	import { Game } from '$lib/Util/interfaces';
+	import { config, isConfigDirty, selectedPlay } from '$lib/Util/store';
 	import Account from '$lib/Components/Account.svelte';
 
 	// prop

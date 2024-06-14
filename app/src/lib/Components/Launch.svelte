@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { afterUpdate, onMount } from 'svelte';
 	import { get } from 'svelte/store';
-	import { launchHdos, launchRS3Linux, launchRuneLite } from '$lib/functions';
-	import { Client, Game } from '$lib/interfaces';
+	import { launchHdos, launchRS3Linux, launchRuneLite } from '$lib/Util/functions';
+	import { Client, Game } from '$lib/Util/interfaces';
 	import { msg } from '@/main';
-	import { config, hasBoltPlugins, isConfigDirty, selectedPlay } from '$lib/store';
+	import { config, hasBoltPlugins, isConfigDirty, selectedPlay } from '$lib/Util/store';
 
 	export let showPluginMenu = false;
 

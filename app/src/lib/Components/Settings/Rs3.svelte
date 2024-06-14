@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { bolt, config, isConfigDirty, hasBoltPlugins } from '$lib/store';
+	import { bolt, config, isConfigDirty, hasBoltPlugins } from '$lib/Util/store';
 
 	let configUriDiv: HTMLDivElement;
 	let configUriAddress: HTMLTextAreaElement;

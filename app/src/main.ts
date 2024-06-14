@@ -14,7 +14,7 @@ import {
 	accountList,
 	selectedPlay,
 	showDisclaimer
-} from '$lib/store';
+} from '$lib/Util/store';
 import { get, type Unsubscriber } from 'svelte/store';
 import {
 	getNewClientListPromise,
@@ -26,7 +26,7 @@ import {
 	loadTheme as loadTheme,
 	saveConfig,
 	removePendingGameAuth
-} from '$lib/functions';
+} from '$lib/Util/functions';
 import type {
 	Bolt,
 	Account,
@@ -35,8 +35,8 @@ import type {
 	Credentials,
 	Message,
 	SelectedPlay
-} from '$lib/interfaces';
-import { unwrap } from '$lib/interfaces';
+} from '$lib/Util/interfaces';
+import { unwrap } from '$lib/Util/interfaces';
 
 const app = new App({
 	target: document.getElementById('app')!

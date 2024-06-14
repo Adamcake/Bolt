@@ -7,7 +7,7 @@ import {
 	type Character,
 	type GameClient,
 	unwrap
-} from '$lib/interfaces';
+} from '$lib/Util/interfaces';
 import {
 	boltSub,
 	configSub,
@@ -35,7 +35,7 @@ import {
 	rs3InstalledHash,
 	runeLiteInstalledId,
 	selectedPlay
-} from '$lib/store';
+} from '$lib/Util/store';
 
 // deprecated?
 // const rs3_basic_auth = 'Basic Y29tX2phZ2V4X2F1dGhfZGVza3RvcF9yczpwdWJsaWM=';
