@@ -40,7 +40,7 @@ import {
 // deprecated?
 // const rs3_basic_auth = 'Basic Y29tX2phZ2V4X2F1dGhfZGVza3RvcF9yczpwdWJsaWM=';
 // const osrs_basic_auth = 'Basic Y29tX2phZ2V4X2F1dGhfZGVza3RvcF9vc3JzOnB1YmxpYw==';
-let isFlathub: boolean = false;
+//let isFlathub: boolean = false;
 
 // after config is loaded, check which theme (light/dark) the user prefers
 export function loadTheme() {
@@ -91,7 +91,7 @@ export function loginClicked() {
 export function urlSearchParams(): void {
 	const query = new URLSearchParams(window.location.search);
 	platform.set(query.get('platform'));
-	isFlathub = query.get('flathub') === '1';
+	//isFlathub = query.get('flathub') === '1';
 	rs3InstalledHash.set(query.get('rs3_linux_installed_hash'));
 	runeLiteInstalledId.set(query.get('runelite_installed_id'));
 	hdosInstalledVersion.set(query.get('hdos_installed_version'));

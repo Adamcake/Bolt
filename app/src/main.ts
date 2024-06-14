@@ -276,8 +276,8 @@ export function err(str: string, doThrow: boolean) {
 	}
 }
 
-declare const s: any;
-bolt.set(<Bolt>s());
+declare const s: () => Bolt;
+bolt.set(s());
 
 onload = () => start();
 onunload = () => {

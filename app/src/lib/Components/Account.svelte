@@ -109,7 +109,7 @@
 	// checks the config and updates the selected_play and select
 	onMount(() => {
 		let index: number = 0;
-		$accountList.forEach((value, _key) => {
+		$accountList.forEach((value) => {
 			if (value.displayName == $selectedPlay.account?.displayName) {
 				accountSelect.selectedIndex = index;
 			}
