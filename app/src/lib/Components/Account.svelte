@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
-	import { msg, err, boltSub } from '@/main';
+	import { boltSub } from '@/main';
 	import { accountList, config, credentials, isConfigDirty, selectedPlay } from '$lib/Util/store';
 	import type { Credentials } from '$lib/Util/interfaces';
 	import {
@@ -9,6 +9,7 @@
 		revokeOauthCreds,
 		saveAllCreds
 	} from '$lib/Util/functions';
+	import { logger } from '$lib/Util/Logger';
 
 	// props
 	export let showAccountDropdown: boolean;
@@ -36,7 +37,7 @@
 	// upate selected_play and account_list when logout is clicked
 	function logoutClicked(): void {
 		if (accountSelect.options.length == 0) {
-			msg('Logout unsuccessful: no account selected');
+			logger.info('Logout unsuccessful: no account selected');
 			return;
 		}
 
@@ -65,17 +66,17 @@
 			if (x === null) {
 				revokeOauthCreds(creds!.access_token, revokeUrl, clientId).then((res: unknown) => {
 					if (res === 200) {
-						msg('Successful logout');
+						logger.info('Successful logout');
 						removeLogin(<Credentials>creds);
 					} else {
-						err(`Logout unsuccessful: status ${res}`, false);
+						logger.error(`Logout unsuccessful: status ${res}`);
 					}
 				});
 			} else if (x === 400 || x === 401) {
-				msg('Logout unsuccessful: credentials are invalid, so discarding them anyway');
+				logger.info('Logout unsuccessful: credentials are invalid, so discarding them anyway');
 				if (creds) removeLogin(creds);
 			} else {
-				err('Logout unsuccessful: unable to verify credentials due to a network error', false);
+				logger.error('Logout unsuccessful: unable to verify credentials due to a network error');
 			}
 		});
 	}

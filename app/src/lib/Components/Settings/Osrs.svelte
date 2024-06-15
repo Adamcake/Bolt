@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { config, isConfigDirty, platform, selectedPlay } from '$lib/Util/store';
 	import { launchRuneLiteConfigure } from '$lib/Util/functions';
-	import { msg } from '@/main';
+	import { logger } from '$lib/Util/Logger';
 
 	let customJarDiv: HTMLDivElement;
 	let customJarFile: HTMLTextAreaElement;
@@ -60,7 +60,7 @@
 	// gets relevant data from selected_play store
 	function launchConfigure(): void {
 		if (!$selectedPlay.account || !$selectedPlay.character) {
-			msg('Please log in to configure RuneLite');
+			logger.info('Please log in to configure RuneLite');
 			return;
 		}
 		launchRuneLiteConfigure(

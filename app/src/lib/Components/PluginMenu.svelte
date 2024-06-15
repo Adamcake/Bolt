@@ -5,7 +5,7 @@
 	import { getNewClientListPromise, savePluginConfig } from '$lib/Util/functions';
 	import { type PluginConfig } from '$lib/Util/interfaces';
 	import { clientListPromise, hasBoltPlugins, pluginList, platform } from '$lib/Util/store';
-	import { msg } from '@/main';
+	import { logger } from '$lib/Util/Logger';
 
 	// props
 	export let showPluginMenu: boolean;
@@ -94,7 +94,7 @@
 		var xml = new XMLHttpRequest();
 		xml.onreadystatechange = () => {
 			if (xml.readyState == 4) {
-				msg(`Start-plugin status: ${xml.statusText.trim()}`);
+				logger.info(`Start-plugin status: ${xml.statusText.trim()}`);
 			}
 		};
 		xml.open(

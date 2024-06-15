@@ -1,6 +1,5 @@
 import { readable, writable, type Readable, type Writable } from 'svelte/store';
 import {
-	type Message,
 	type Credentials,
 	type Config,
 	type Auth,
@@ -28,7 +27,6 @@ export const credentials: Writable<Map<string, Credentials>> = writable(new Map(
 export const hasBoltPlugins: Writable<boolean> = writable(false);
 export const pluginList: Writable<{ [key: string]: PluginMeta }> = writable();
 export const clientListPromise: Writable<Promise<GameClient[]>> = writable();
-export const messageList: Writable<Array<Message>> = writable([]);
 export const pendingOauth: Writable<Auth | null> = writable({});
 export const pendingGameAuth: Writable<Array<Auth>> = writable([]);
 export const rs3InstalledHash: Writable<string | null> = writable('');

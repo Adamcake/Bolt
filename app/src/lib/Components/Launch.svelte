@@ -3,8 +3,8 @@
 	import { get } from 'svelte/store';
 	import { launchHdos, launchRS3Linux, launchRuneLite } from '$lib/Util/functions';
 	import { Client, Game } from '$lib/Util/interfaces';
-	import { msg } from '@/main';
 	import { config, hasBoltPlugins, isConfigDirty, selectedPlay } from '$lib/Util/store';
+	import { logger } from '$lib/Util/Logger';
 
 	export let showPluginMenu = false;
 
@@ -44,7 +44,7 @@
 	// calls the appropriate launch functions
 	function play_clicked(): void {
 		if (!$selectedPlay.account || !$selectedPlay.character) {
-			msg('Please log in to launch a client');
+			logger.info('Please log in to launch a client');
 			return;
 		}
 		switch ($selectedPlay.game) {

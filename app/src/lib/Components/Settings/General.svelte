@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { msg } from '@/main';
+	import { logger } from '$lib/Util/Logger';
 
 	// opens local data on disk
 	function openDataDir(): void {
@@ -7,7 +7,7 @@
 		xml.open('GET', '/browse-data');
 		xml.onreadystatechange = () => {
 			if (xml.readyState == 4) {
-				msg(`Browse status: '${xml.responseText.trim()}'`);
+				logger.info(`Browse status: '${xml.responseText.trim()}'`);
 			}
 		};
 		xml.send();

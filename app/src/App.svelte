@@ -2,16 +2,19 @@
 	import TopBar from '$lib/Components/TopBar.svelte';
 	import Disclaimer from '$lib/Components/Disclaimer.svelte';
 	import Settings from '$lib/Components/Settings.svelte';
-	import Messages from '$lib/Components/Messages.svelte';
 	import Launch from '$lib/Components/Launch.svelte';
 	import Auth from '$lib/Components/Auth.svelte';
 	import PluginMenu from '$lib/Components/PluginMenu.svelte';
 	import { urlSearchParams } from '$lib/Util/functions';
 	import { showDisclaimer } from '$lib/Util/store';
+	import LogView from '$lib/Components/LogView.svelte';
+	import { logger } from '$lib/Util/Logger';
 
 	let showSettings: boolean = false;
 	let showPluginMenu: boolean = false;
 	let authorizing: boolean = false;
+
+	const logs = logger.logs;
 
 	urlSearchParams();
 
@@ -64,6 +67,6 @@
 			<Launch bind:showPluginMenu></Launch>
 			<div></div>
 		</div>
-		<Messages></Messages>
+		<LogView logs={$logs} />
 	{/if}
 </main>

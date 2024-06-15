@@ -12,8 +12,6 @@ import {
 	boltSub,
 	configSub,
 	credentialsSub,
-	err,
-	msg,
 	pendingGameAuthSub,
 	pendingOauthSub,
 	selectedPlaySub
@@ -27,7 +25,6 @@ import {
 	hdosInstalledVersion,
 	internalUrl,
 	isConfigDirty,
-	messageList,
 	pendingGameAuth,
 	pendingOauth,
 	platform,
@@ -36,6 +33,7 @@ import {
 	runeLiteInstalledId,
 	selectedPlay
 } from '$lib/Util/store';
+import { logger } from '$lib/Util/Logger';
 
 // deprecated?
 // const rs3_basic_auth = 'Basic Y29tX2phZ2V4X2F1dGhfZGVza3RvcF9yczpwdWJsaWM=';
@@ -115,7 +113,7 @@ export function urlSearchParams(): void {
 				});
 			});
 		} catch (error: unknown) {
-			err(`Couldn't parse credentials file: ${error}`, false);
+			logger.error(`Couldn't parse credentials file: ${error}`);
 		}
 	}
 	const conf = query.get('config');
@@ -135,7 +133,7 @@ export function urlSearchParams(): void {
 				return data;
 			});
 		} catch (error: unknown) {
-			err(`Couldn't parse config file: ${error}`, false);
+			logger.error(`Couldn't parse config file: ${error}`);
 		}
 	}
 }
@@ -196,13 +194,13 @@ export function parseCredentials(str: string): Result<Credentials> {
 	const sections = oauthCreds.id_token.split('.');
 	if (sections.length !== 3) {
 		const errMsg: string = `Malformed id_token: ${sections.length} sections, expected 3`;
-		err(errMsg, false);
+		logger.error(errMsg);
 		return { ok: false, error: new Error(errMsg) };
 	}
 	const header = JSON.parse(atob(sections[0]));
 	if (header.typ !== 'JWT') {
 		const errMsg: string = `Bad id_token header: typ ${header.typ}, expected JWT`;
-		err(errMsg, false);
+		logger.error(errMsg);
 		return { ok: false, error: new Error(errMsg) };
 	}
 	const payload = JSON.parse(atob(sections[1]));
@@ -296,7 +294,7 @@ export async function handleNewSessionId(
 								suffix: accountInfo.suffix,
 								characters: new Map()
 							};
-							msg(`Successfully added login for ${account.displayName}`);
+							logger.info(`Successfully added login for ${account.displayName}`);
 							JSON.parse(xml.response).forEach((acc: Character) => {
 								account.characters.set(acc.accountId, {
 									accountId: acc.accountId,
@@ -307,12 +305,12 @@ export async function handleNewSessionId(
 							addNewAccount(account);
 							resolve(true);
 						} else {
-							err(`Error getting account info: ${accountInfo}`, false);
+							logger.error(`Error getting account info: ${accountInfo}`);
 							resolve(false);
 						}
 					});
 				} else {
-					err(`Error: from ${accountsUrl}: ${xml.status}: ${xml.response}`, false);
+					logger.error(`Error: from ${accountsUrl}: ${xml.status}: ${xml.response}`);
 					resolve(false);
 				}
 			}
@@ -366,7 +364,7 @@ async function handleStandardLogin(win: Window | null, creds: Credentials) {
 		return false;
 	} else {
 		if (!creds.session_id) {
-			err('Rejecting stored credentials with missing session_id', false);
+			logger.error('Rejecting stored credentials with missing session_id');
 			return false;
 		}
 
@@ -450,7 +448,7 @@ export async function saveAllCreds() {
 	xml.setRequestHeader('Content-Type', 'application/json');
 	xml.onreadystatechange = () => {
 		if (xml.readyState == 4) {
-			msg(`Save-credentials status: ${xml.responseText.trim()}`);
+			logger.info(`Save-credentials status: ${xml.responseText.trim()}`);
 		}
 	};
 
@@ -490,7 +488,7 @@ export function launchRS3Linux(
 		xml.open('POST', '/launch-rs3-deb?'.concat(new URLSearchParams(params).toString()), true);
 		xml.onreadystatechange = () => {
 			if (xml.readyState == 4) {
-				msg(`Game launch status: '${xml.responseText.trim()}'`);
+				logger.info(`Game launch status: '${xml.responseText.trim()}'`);
 				if (xml.status == 200 && hash) {
 					rs3InstalledHash.set(<string>hash);
 				}
@@ -511,21 +509,19 @@ export function launchRS3Linux(
 				})
 			);
 			if (!lines.Filename || !lines.Size) {
-				err(`Could not parse package data from URL: ${url}`, false);
+				logger.error(`Could not parse package data from URL: ${url}`);
 				launch();
 				return;
 			}
 			if (lines.SHA256 !== get(rs3InstalledHash)) {
-				msg('Downloading RS3 client...');
+				logger.info('Downloading RS3 client...');
 				const exeXml = new XMLHttpRequest();
 				exeXml.open('GET', contentUrl.concat(lines.Filename), true);
 				exeXml.responseType = 'arraybuffer';
 				exeXml.onprogress = (e) => {
 					if (e.loaded) {
-						messageList.update((data) => {
-							data[0].text = `Downloading RS3 client... ${(Math.round((1000.0 * e.loaded) / e.total) / 10.0).toFixed(1)}%`;
-							return data;
-						});
+						const progress = (Math.round((1000.0 * e.loaded) / e.total) / 10.0).toFixed(1);
+						logger.info(`Downloading RS3 client... ${progress}%`);
 					}
 				};
 				exeXml.onreadystatechange = () => {
@@ -534,18 +530,18 @@ export function launchRS3Linux(
 					}
 				};
 				exeXml.onerror = () => {
-					err(`Error downloading game client: from ${url}: non-http error`, false);
+					logger.error(`Error downloading game client: from ${url}: non-http error`);
 					launch();
 				};
 				exeXml.send();
 			} else {
-				msg('Latest client is already installed');
+				logger.info('Latest client is already installed');
 				launch();
 			}
 		}
 	};
 	xml.onerror = () => {
-		err(`Error: from ${url}: non-http error`, false);
+		logger.error(`Error: from ${url}: non-http error`);
 		launch();
 	};
 	xml.send();
@@ -575,7 +571,7 @@ function launchRuneLiteInner(
 		xml.open(jar ? 'POST' : 'GET', launchPath.concat(new URLSearchParams(params).toString()), true);
 		xml.onreadystatechange = () => {
 			if (xml.readyState == 4) {
-				msg(`Game launch status: '${xml.responseText.trim()}'`);
+				logger.info(`Game launch status: '${xml.responseText.trim()}'`);
 				if (xml.status == 200 && id) {
 					runeLiteInstalledId.set(<string>id);
 				}
@@ -600,7 +596,7 @@ function launchRuneLiteInner(
 					.flat()
 					.find((x: Record<string, string>) => x.name.toLowerCase() == 'runelite.jar');
 				if (runelite.id != get(runeLiteInstalledId)) {
-					msg('Downloading RuneLite...');
+					logger.info('Downloading RuneLite...');
 					const xmlRl = new XMLHttpRequest();
 					xmlRl.open('GET', runelite.browser_download_url, true);
 					xmlRl.responseType = 'arraybuffer';
@@ -609,28 +605,25 @@ function launchRuneLiteInner(
 							if (xmlRl.status == 200) {
 								launch(runelite.id, xmlRl.response);
 							} else {
-								err(
-									`Error downloading from ${runelite.url}: ${xmlRl.status}: ${xmlRl.responseText}`,
-									false
+								logger.error(
+									`Error downloading from ${runelite.url}: ${xmlRl.status}: ${xmlRl.responseText}`
 								);
 							}
 						}
 					};
 					xmlRl.onprogress = (e) => {
 						if (e.loaded && e.lengthComputable) {
-							messageList.update((data) => {
-								data[0].text = `Downloading RuneLite... ${(Math.round((1000.0 * e.loaded) / e.total) / 10.0).toFixed(1)}%`;
-								return data;
-							});
+							const progress = (Math.round((1000.0 * e.loaded) / e.total) / 10.0).toFixed(1);
+							logger.info(`Downloading RuneLite... ${progress}`);
 						}
 					};
 					xmlRl.send();
 				} else {
-					msg('Latest JAR is already installed');
+					logger.info('Latest JAR is already installed');
 					launch();
 				}
 			} else {
-				err(`Error from ${url}: ${xml.status}: ${xml.responseText}`, false);
+				logger.error(`Error from ${url}: ${xml.status}: ${xml.responseText}`);
 			}
 		}
 	};
@@ -671,7 +664,7 @@ export function launchHdos(
 		xml.open('POST', '/launch-hdos-jar?'.concat(new URLSearchParams(params).toString()), true);
 		xml.onreadystatechange = () => {
 			if (xml.readyState == 4) {
-				msg(`Game launch status: '${xml.responseText.trim()}'`);
+				logger.info(`Game launch status: '${xml.responseText.trim()}'`);
 				if (xml.status == 200 && version) {
 					hdosInstalledVersion.set(version);
 				}
@@ -693,7 +686,7 @@ export function launchHdos(
 					const latestVersion = versionRegex[1];
 					if (latestVersion !== get(hdosInstalledVersion)) {
 						const jarUrl = `https://cdn.hdos.dev/launcher/v${latestVersion}/hdos-launcher.jar`;
-						msg('Downloading HDOS...');
+						logger.info('Downloading HDOS...');
 						const xmlHdos = new XMLHttpRequest();
 						xmlHdos.open('GET', jarUrl, true);
 						xmlHdos.responseType = 'arraybuffer';
@@ -706,32 +699,29 @@ export function launchHdos(
 										.map((x: Record<string, string>) => x.assets)
 										.flat()
 										.find((x: Record<string, string>) => x.name.toLowerCase() == 'runelite.jar');
-									err(
-										`Error downloading from ${runelite.url}: ${xmlHdos.status}: ${xmlHdos.responseText}`,
-										false
+									logger.error(
+										`Error downloading from ${runelite.url}: ${xmlHdos.status}: ${xmlHdos.responseText}`
 									);
 								}
 							}
 						};
 						xmlHdos.onprogress = (e) => {
 							if (e.loaded && e.lengthComputable) {
-								messageList.update((data) => {
-									data[0].text = `Downloading HDOS... ${(Math.round((1000.0 * e.loaded) / e.total) / 10.0).toFixed(1)}%`;
-									return data;
-								});
+								const progress = (Math.round((1000.0 * e.loaded) / e.total) / 10.0).toFixed(1);
+								logger.info(`Downloading HDOS... ${progress}%`);
 							}
 						};
 						xmlHdos.send();
 					} else {
-						msg('Latest JAR is already installed');
+						logger.info('Latest JAR is already installed');
 						launch();
 					}
 				} else {
-					msg("Couldn't parse latest launcher version");
+					logger.info("Couldn't parse latest launcher version");
 					launch();
 				}
 			} else {
-				err(`Error from ${url}: ${xml.status}: ${xml.responseText}`, false);
+				logger.error(`Error from ${url}: ${xml.status}: ${xml.responseText}`);
 			}
 		}
 	};
@@ -747,7 +737,7 @@ export function saveConfig() {
 		xml.open('POST', '/save-config', true);
 		xml.onreadystatechange = () => {
 			if (xml.readyState == 4) {
-				msg(`Save config status: '${xml.responseText.trim()}'`);
+				logger.info(`Save config status: '${xml.responseText.trim()}'`);
 				if (xml.status == 200) {
 					isConfigDirty.set(false);
 				}
@@ -800,7 +790,7 @@ export function savePluginConfig(): void {
 	xml.setRequestHeader('Content-Type', 'application/json');
 	xml.onreadystatechange = () => {
 		if (xml.readyState == 4) {
-			msg(`Save-plugin-config status: ${xml.responseText.trim()}`);
+			logger.info(`Save-plugin-config status: ${xml.responseText.trim()}`);
 		}
 	};
 	xml.send(JSON.stringify(get(pluginList)));
