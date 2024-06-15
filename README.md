@@ -52,7 +52,7 @@ OPTIONAL: build the frontend. Bolt's html frontend is already committed to this 
 - `cd app/`
 - `npm install -g bun` (needs root access on Linux)
 - `bun install`
-- `bunx tailwindcss -o src/assets/output.css --minify && bun run minify`
+- `bun run build`
 - `cd ..`
 
 Now you can start building. Open a command window or terminal in the root directory of this repository, then follow the build instructions for your platform.

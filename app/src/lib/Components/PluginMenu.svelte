@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { get } from 'svelte/store';
 	import { onDestroy } from 'svelte';
-	import Backdrop from './Backdrop.svelte';
-	import { getNewClientListPromise, savePluginConfig } from '../functions';
-	import { type PluginConfig } from '../interfaces';
-	import { clientListPromise, hasBoltPlugins, pluginList, platform } from '../store';
-	import { msg } from '../main';
+	import Backdrop from '$lib/Components/Backdrop.svelte';
+	import { getNewClientListPromise, savePluginConfig } from '$lib/Util/functions';
+	import { type PluginConfig } from '$lib/Util/interfaces';
+	import { clientListPromise, hasBoltPlugins, pluginList, platform } from '$lib/Util/store';
+	import { msg } from '@/main';
 
 	// props
 	export let showPluginMenu: boolean;
@@ -23,11 +23,7 @@
 					}
 				}
 			};
-			xml.open(
-				'GET',
-				'/read-json-file?'.concat(new URLSearchParams({ path }).toString()),
-				true
-			);
+			xml.open('GET', '/read-json-file?'.concat(new URLSearchParams({ path }).toString()), true);
 			xml.send();
 		});
 	};
@@ -71,9 +67,7 @@
 				// if the user closes the file picker without selecting a file, status here is 204
 				if (xml.status == 200) {
 					const path: string =
-						get(platform) === 'windows'
-							? xml.responseText.replaceAll('\\', '/')
-							: xml.responseText;
+						get(platform) === 'windows' ? xml.responseText.replaceAll('\\', '/') : xml.responseText;
 					if (path.endsWith('/bolt.json')) {
 						const subpath: string = path.substring(0, path.length - 9);
 						handleNewPlugin(subpath, path);
@@ -145,19 +139,23 @@
 <div>
 	<Backdrop on:click={tryExit}></Backdrop>
 	<div
-		class="absolute left-[5%] top-[5%] z-20 h-[90%] w-[90%] rounded-lg bg-slate-100 text-center shadow-lg dark:bg-slate-900">
+		class="absolute left-[5%] top-[5%] z-20 h-[90%] w-[90%] rounded-lg bg-slate-100 text-center shadow-lg dark:bg-slate-900"
+	>
 		<button
 			class="absolute right-3 top-3 rounded-full bg-rose-500 p-[2px] shadow-lg duration-200 hover:rotate-90 hover:opacity-75"
-			on:click={tryExit}>
+			on:click={tryExit}
+		>
 			<img src="svgs/xmark-solid.svg" class="h-5 w-5" alt="Close" />
 		</button>
 		<div
-			class="left-0 float-left h-full w-[min(180px,_50%)] overflow-hidden border-r-2 border-slate-300 pt-2 dark:border-slate-800">
+			class="left-0 float-left h-full w-[min(180px,_50%)] overflow-hidden border-r-2 border-slate-300 pt-2 dark:border-slate-800"
+		>
 			<button
 				class="mx-auto mb-2 w-[95%] rounded-lg border-2 {isClientSelected
 					? 'border-blue-500 text-black dark:text-white'
 					: 'border-black bg-blue-500 text-black'} p-2 font-bold hover:opacity-75"
-				on:click={() => (isClientSelected = false)}>
+				on:click={() => (isClientSelected = false)}
+			>
 				Manage Plugins
 			</button>
 			<hr class="p-1 dark:border-slate-700" />
@@ -165,9 +163,7 @@
 				<p>loading...</p>
 			{:then clients}
 				{#if clients.length == 0}
-					<p>
-						(start an RS3 game client with plugins enabled and it will be listed here.)
-					</p>
+					<p>(start an RS3 game client with plugins enabled and it will be listed here.)</p>
 				{:else}
 					{#each clients as client}
 						<button
@@ -178,7 +174,8 @@
 							class="m-1 h-[28px] w-[95%] rounded-lg border-2 {isClientSelected &&
 							selectedClientId === client.uid
 								? 'border-black bg-blue-500 text-black'
-								: 'border-blue-500 text-black dark:text-white'} hover:opacity-75">
+								: 'border-blue-500 text-black dark:text-white'} hover:opacity-75"
+						>
 							{client.identity || unnamedClientName}
 						</button>
 						<br />
@@ -192,17 +189,18 @@
 			{#if hasBoltPlugins}
 				<select
 					bind:value={selectedPlugin}
-					class="mx-auto mb-4 w-[min(280px,_45%)] cursor-pointer rounded-lg border-2 border-slate-300 bg-inherit p-2 text-inherit duration-200 hover:opacity-75 dark:border-slate-800">
+					class="mx-auto mb-4 w-[min(280px,_45%)] cursor-pointer rounded-lg border-2 border-slate-300 bg-inherit p-2 text-inherit duration-200 hover:opacity-75 dark:border-slate-800"
+				>
 					{#each Object.entries($pluginList) as [id, plugin]}
-						<option class="dark:bg-slate-900" value={id}
-							>{plugin.name ?? unnamedPluginName}</option>
+						<option class="dark:bg-slate-900" value={id}>{plugin.name ?? unnamedPluginName}</option>
 					{/each}
 				</select>
 				{#if !isClientSelected}
 					<button
 						class="aspect-square w-8 rounded-lg border-2 border-blue-500 text-[20px] font-bold duration-200 enabled:hover:opacity-75 disabled:border-gray-500"
 						on:click={jsonFilePicker}
-						disabled={disableButtons}>
+						disabled={disableButtons}
+					>
 						+
 					</button>
 					<br />
@@ -230,21 +228,22 @@
 									let list = get(pluginList);
 									delete list[selectedPlugin];
 									pluginList.set(list);
-								}}>
+								}}
+							>
 								Remove
 							</button>
 							<button
 								class="mx-auto mb-1 w-[min(144px,_25%)] rounded-lg p-2 font-bold text-black duration-200 enabled:bg-blue-500 enabled:hover:opacity-75 disabled:bg-gray-500"
 								on:click={() =>
-									(managementPluginPromise =
-										getPluginConfigPromiseFromID(selectedPlugin))}>
+									(managementPluginPromise = getPluginConfigPromiseFromID(selectedPlugin))}
+							>
 								Reload
 							</button>
 						{/if}
 					{:else}
 						<p>
-							You have no plugins installed. Click the + button and select a plugin's
-							bolt.json file to add it.
+							You have no plugins installed. Click the + button and select a plugin's bolt.json file
+							to add it.
 						</p>
 					{/if}
 				{:else}
@@ -262,7 +261,8 @@
 											selectedPlugin,
 											$pluginList[selectedPlugin].path ?? '',
 											plugin.main ?? ''
-										)}>
+										)}
+								>
 									Start {plugin.name}
 								</button>
 							{:else}

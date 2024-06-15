@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { config, isConfigDirty, platform, selectedPlay } from '../../store';
-	import { launchRuneLiteConfigure } from '../../functions';
-	import { msg } from '../../main';
+	import { config, isConfigDirty, platform, selectedPlay } from '$lib/Util/store';
+	import { launchRuneLiteConfigure } from '$lib/Util/functions';
+	import { msg } from '@/main';
 
 	let customJarDiv: HTMLDivElement;
 	let customJarFile: HTMLTextAreaElement;
@@ -95,7 +95,8 @@
 			<img
 				src="svgs/wrench-solid.svg"
 				alt="Configure RuneLite"
-				class="mr-2 h-7 w-7 rounded-lg bg-pink-500 p-1" />
+				class="mr-2 h-7 w-7 rounded-lg bg-pink-500 p-1"
+			/>
 			Configure RuneLite
 		</div>
 	</button>
@@ -109,7 +110,8 @@
 			on:change={() => {
 				toggleJarDiv();
 			}}
-			class="ml-2" />
+			class="ml-2"
+		/>
 	</div>
 	<div id="custom_jar_div" class="mx-auto p-2 opacity-25" bind:this={customJarDiv}>
 		<textarea
@@ -130,7 +132,9 @@
 			class="mt-1 rounded-lg border-2 border-blue-500 p-1 duration-200 hover:opacity-75"
 			on:click={() => {
 				selectFile();
-			}}>
-			Select File</button>
+			}}
+		>
+			Select File</button
+		>
 	</div>
 </div>

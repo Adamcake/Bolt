@@ -1,5 +1,4 @@
-import './assets/output.css';
-import App from './App.svelte';
+import App from '@/App.svelte';
 import {
 	messageList,
 	clientListPromise,
@@ -15,7 +14,7 @@ import {
 	accountList,
 	selectedPlay,
 	showDisclaimer
-} from './store';
+} from '$lib/Util/store';
 import { get, type Unsubscriber } from 'svelte/store';
 import {
 	getNewClientListPromise,
@@ -27,9 +26,17 @@ import {
 	loadTheme as loadTheme,
 	saveConfig,
 	removePendingGameAuth
-} from './functions';
-import type { Bolt, Account, Auth, Config, Credentials, Message, SelectedPlay } from './interfaces';
-import { unwrap } from './interfaces';
+} from '$lib/Util/functions';
+import type {
+	Bolt,
+	Account,
+	Auth,
+	Config,
+	Credentials,
+	Message,
+	SelectedPlay
+} from '$lib/Util/interfaces';
+import { unwrap } from '$lib/Util/interfaces';
 
 const app = new App({
 	target: document.getElementById('app')!
@@ -123,10 +130,7 @@ function start(): void {
 									pending!.win!.close();
 								}
 							} else {
-								err(
-									`Error: from ${exchangeUrl}: ${xml.status}: ${xml.response}`,
-									false
-								);
+								err(`Error: from ${exchangeUrl}: ${xml.status}: ${xml.response}`, false);
 								pending!.win!.close();
 							}
 						}
@@ -180,20 +184,14 @@ function start(): void {
 								).then((x) => {
 									if (x) {
 										credentials.update((data) => {
-											data.set(
-												<string>pending?.creds?.sub,
-												<Credentials>pending!.creds
-											);
+											data.set(<string>pending?.creds?.sub, <Credentials>pending!.creds);
 											return data;
 										});
 										saveAllCreds();
 									}
 								});
 							} else {
-								err(
-									`Error: from ${sessionsUrl}: ${xml.status}: ${xml.response}`,
-									false
-								);
+								err(`Error: from ${sessionsUrl}: ${xml.status}: ${xml.response}`, false);
 							}
 						}
 					};
@@ -278,8 +276,8 @@ export function err(str: string, doThrow: boolean) {
 	}
 }
 
-declare const s: any;
-bolt.set(<Bolt>s());
+declare const s: () => Bolt;
+bolt.set(s());
 
 onload = () => start();
 onunload = () => {

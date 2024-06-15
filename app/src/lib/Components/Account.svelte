@@ -1,9 +1,14 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
-	import { msg, err, boltSub } from '../main';
-	import { accountList, config, credentials, isConfigDirty, selectedPlay } from '../store';
-	import type { Credentials } from '../interfaces';
-	import { checkRenewCreds, loginClicked, revokeOauthCreds, saveAllCreds } from '../functions';
+	import { msg, err, boltSub } from '@/main';
+	import { accountList, config, credentials, isConfigDirty, selectedPlay } from '$lib/Util/store';
+	import type { Credentials } from '$lib/Util/interfaces';
+	import {
+		checkRenewCreds,
+		loginClicked,
+		revokeOauthCreds,
+		saveAllCreds
+	} from '$lib/Util/functions';
 
 	// props
 	export let showAccountDropdown: boolean;
@@ -70,10 +75,7 @@
 				msg('Logout unsuccessful: credentials are invalid, so discarding them anyway');
 				if (creds) removeLogin(creds);
 			} else {
-				err(
-					'Logout unsuccessful: unable to verify credentials due to a network error',
-					false
-				);
+				err('Logout unsuccessful: unable to verify credentials due to a network error', false);
 			}
 		});
 	}
@@ -88,9 +90,7 @@
 	function accountChanged(): void {
 		isConfigDirty.set(true);
 
-		const key: string = <string>(
-			accountSelect[accountSelect.selectedIndex].getAttribute('data-id')
-		);
+		const key: string = <string>accountSelect[accountSelect.selectedIndex].getAttribute('data-id');
 		$selectedPlay.account = $accountList.get(key);
 		$config.selected_account = key;
 		$selectedPlay.credentials = $credentials.get(<string>$selectedPlay.account?.userId);
@@ -114,7 +114,7 @@
 	// checks the config and updates the selected_play and select
 	onMount(() => {
 		let index: number = 0;
-		$accountList.forEach((value, _key) => {
+		$accountList.forEach((value) => {
 			if (value.displayName == $selectedPlay.account?.displayName) {
 				accountSelect.selectedIndex = index;
 			}
@@ -138,7 +138,8 @@
 	}}
 	on:mouseleave={() => {
 		mousedOver = false;
-	}}>
+	}}
+>
 	<select
 		name="account_select"
 		id="account_select"
@@ -146,10 +147,11 @@
 		bind:this={accountSelect}
 		on:change={() => {
 			accountChanged();
-		}}>
+		}}
+	>
 		{#each $accountList as account}
-			<option data-id={account[1].userId} class="dark:bg-slate-900"
-				>{account[1].displayName}</option>
+			<option data-id={account[1].userId} class="dark:bg-slate-900">{account[1].displayName}</option
+			>
 		{/each}
 	</select>
 	<div class="mt-5 flex">
@@ -157,14 +159,16 @@
 			class="mx-auto mr-2 rounded-lg bg-blue-500 p-2 font-bold text-black duration-200 hover:opacity-75"
 			on:click={() => {
 				loginClicked();
-			}}>
+			}}
+		>
 			Log In
 		</button>
 		<button
 			class="mx-auto rounded-lg border-2 border-blue-500 p-2 font-bold duration-200 hover:opacity-75"
 			on:click={() => {
 				logoutClicked();
-			}}>
+			}}
+		>
 			Log Out
 		</button>
 	</div>

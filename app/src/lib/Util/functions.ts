@@ -7,7 +7,7 @@ import {
 	type Character,
 	type GameClient,
 	unwrap
-} from './interfaces';
+} from '$lib/Util/interfaces';
 import {
 	boltSub,
 	configSub,
@@ -17,7 +17,7 @@ import {
 	pendingGameAuthSub,
 	pendingOauthSub,
 	selectedPlaySub
-} from './main';
+} from '@/main';
 import {
 	accountList,
 	config,
@@ -35,12 +35,12 @@ import {
 	rs3InstalledHash,
 	runeLiteInstalledId,
 	selectedPlay
-} from './store';
+} from '$lib/Util/store';
 
 // deprecated?
 // const rs3_basic_auth = 'Basic Y29tX2phZ2V4X2F1dGhfZGVza3RvcF9yczpwdWJsaWM=';
 // const osrs_basic_auth = 'Basic Y29tX2phZ2V4X2F1dGhfZGVza3RvcF9vc3JzOnB1YmxpYw==';
-let isFlathub: boolean = false;
+//let isFlathub: boolean = false;
 
 // after config is loaded, check which theme (light/dark) the user prefers
 export function loadTheme() {
@@ -91,7 +91,7 @@ export function loginClicked() {
 export function urlSearchParams(): void {
 	const query = new URLSearchParams(window.location.search);
 	platform.set(query.get('platform'));
-	isFlathub = query.get('flathub') === '1';
+	//isFlathub = query.get('flathub') === '1';
 	rs3InstalledHash.set(query.get('rs3_linux_installed_hash'));
 	runeLiteInstalledId.set(query.get('runelite_installed_id'));
 	hdosInstalledVersion.set(query.get('hdos_installed_version'));
@@ -572,11 +572,7 @@ function launchRuneLiteInner(
 		if (jx_character_id) params.jx_character_id = jx_character_id;
 		if (jx_display_name) params.jx_display_name = jx_display_name;
 		if (configSub.flatpak_rich_presence) params.flatpak_rich_presence = '';
-		xml.open(
-			jar ? 'POST' : 'GET',
-			launchPath.concat(new URLSearchParams(params).toString()),
-			true
-		);
+		xml.open(jar ? 'POST' : 'GET', launchPath.concat(new URLSearchParams(params).toString()), true);
 		xml.onreadystatechange = () => {
 			if (xml.readyState == 4) {
 				msg(`Game launch status: '${xml.responseText.trim()}'`);
@@ -709,10 +705,7 @@ export function launchHdos(
 									const runelite = JSON.parse(xml.responseText)
 										.map((x: Record<string, string>) => x.assets)
 										.flat()
-										.find(
-											(x: Record<string, string>) =>
-												x.name.toLowerCase() == 'runelite.jar'
-										);
+										.find((x: Record<string, string>) => x.name.toLowerCase() == 'runelite.jar');
 									err(
 										`Error downloading from ${runelite.url}: ${xmlHdos.status}: ${xmlHdos.responseText}`,
 										false
@@ -785,10 +778,7 @@ export function getNewClientListPromise(): Promise<GameClient[]> {
 		xml.open('GET', url, true);
 		xml.onreadystatechange = () => {
 			if (xml.readyState == 4) {
-				if (
-					xml.status == 200 &&
-					xml.getResponseHeader('content-type') === 'application/json'
-				) {
+				if (xml.status == 200 && xml.getResponseHeader('content-type') === 'application/json') {
 					const dict = JSON.parse(xml.responseText);
 					resolve(
 						Object.keys(dict).map(

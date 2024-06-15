@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { msg } from '../../main';
+	import { msg } from '@/main';
 
 	// opens local data on disk
 	function openDataDir(): void {
@@ -20,12 +20,14 @@
 		class="p-2 hover:opacity-75"
 		on:click={() => {
 			openDataDir();
-		}}>
+		}}
+	>
 		<div class="flex">
 			<img
 				src="svgs/database-solid.svg"
 				alt="Browse app data"
-				class="mr-2 h-7 w-7 rounded-lg bg-violet-500 p-1" />
+				class="mr-2 h-7 w-7 rounded-lg bg-violet-500 p-1"
+			/>
 			Browse App Data
 		</div>
 	</button>
