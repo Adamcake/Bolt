@@ -4,10 +4,9 @@
 	import { Game } from '$lib/Util/interfaces';
 	import { config, isConfigDirty, selectedPlay } from '$lib/Util/store';
 	import Account from '$lib/Components/Account.svelte';
+	import SettingsModal from '$lib/Components/SettingsModal.svelte';
 
-	// prop
-	export let showSettings: boolean;
-
+	let settingsModal: SettingsModal;
 	let showAccountDropdown: boolean = false;
 	let hoverAccountButton: boolean = false;
 	let rs3Button: HTMLButtonElement;
@@ -59,6 +58,8 @@
 	});
 </script>
 
+<SettingsModal bind:this={settingsModal}></SettingsModal>
+
 <div
 	class="fixed top-0 flex h-16 w-screen border-b-2 border-slate-300 bg-slate-100 duration-200 dark:border-slate-800 dark:bg-slate-900"
 >
@@ -91,9 +92,7 @@
 		</button>
 		<button
 			class="m-3 h-10 w-10 rounded-full bg-blue-500 p-2 duration-200 hover:rotate-45 hover:opacity-75"
-			on:click={() => {
-				showSettings = true;
-			}}
+			on:click={() => settingsModal.open()}
 		>
 			<img src="svgs/gear-solid.svg" class="h-6 w-6" alt="Settings" />
 		</button>
