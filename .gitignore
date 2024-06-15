@@ -1,4 +1,4 @@
 .cache
-.vscode
+.vscode/settings.json
 DawnCache
 GPUCache
