@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onDestroy, onMount } from 'svelte';
+	import { onMount } from 'svelte';
 	import { boltSub } from '@/main';
 	import { accountList, config, credentials, isConfigDirty, selectedPlay } from '$lib/Util/store';
 	import type { Credentials } from '$lib/Util/interfaces';
@@ -11,28 +11,13 @@
 	} from '$lib/Util/functions';
 	import { logger } from '$lib/Util/Logger';
 
-	// props
-	export let showAccountDropdown: boolean;
-	export let hoverAccountButton: boolean;
-
 	// values gather from s()
 	const sOrigin = atob(boltSub.origin);
 	const clientId = atob(boltSub.clientid);
 	const exchangeUrl = sOrigin.concat('/oauth2/token');
 	const revokeUrl = sOrigin.concat('/oauth2/revoke');
 
-	let mousedOver: boolean = false;
 	let accountSelect: HTMLSelectElement;
-
-	// callback function for 'mousedown' events
-	// closes the dropdown, unless they press the button that triggers it
-	function checkClickOutside(evt: MouseEvent): void {
-		if (hoverAccountButton) return;
-
-		if (evt.button === 0 && showAccountDropdown && !mousedOver) {
-			showAccountDropdown = false;
-		}
-	}
 
 	// upate selected_play and account_list when logout is clicked
 	function logoutClicked(): void {
@@ -109,9 +94,6 @@
 		}
 	}
 
-	// check if user clicks outside of the dropdown,
-	addEventListener('mousedown', checkClickOutside);
-
 	// checks the config and updates the selected_play and select
 	onMount(() => {
 		let index: number = 0;
@@ -124,53 +106,36 @@
 
 		$selectedPlay.credentials = $credentials.get(<string>$selectedPlay.account?.userId);
 	});
-
-	// When the component is removed, delete the event listener also
-	onDestroy(() => {
-		removeEventListener('mousedown', checkClickOutside);
-	});
 </script>
 
-<div
-	class="z-10 w-48 rounded-lg border-2 border-slate-300 bg-slate-100 p-3 shadow dark:border-slate-800 dark:bg-slate-900"
-	role="none"
-	on:mouseenter={() => {
-		mousedOver = true;
-	}}
-	on:mouseleave={() => {
-		mousedOver = false;
+<select
+	name="account_select"
+	id="account_select"
+	class="w-full cursor-pointer rounded-lg border-2 border-inherit bg-inherit p-2 text-center"
+	bind:this={accountSelect}
+	on:change={() => {
+		accountChanged();
 	}}
 >
-	<select
-		name="account_select"
-		id="account_select"
-		class="w-full cursor-pointer rounded-lg border-2 border-inherit bg-inherit p-2 text-center"
-		bind:this={accountSelect}
-		on:change={() => {
-			accountChanged();
+	{#each $accountList as account}
+		<option data-id={account[1].userId} class="dark:bg-slate-900">{account[1].displayName}</option>
+	{/each}
+</select>
+<div class="mt-5 flex">
+	<button
+		class="mx-auto mr-2 rounded-lg bg-blue-500 p-2 font-bold text-black duration-200 hover:opacity-75"
+		on:click={() => {
+			loginClicked();
 		}}
 	>
-		{#each $accountList as account}
-			<option data-id={account[1].userId} class="dark:bg-slate-900">{account[1].displayName}</option
-			>
-		{/each}
-	</select>
-	<div class="mt-5 flex">
-		<button
-			class="mx-auto mr-2 rounded-lg bg-blue-500 p-2 font-bold text-black duration-200 hover:opacity-75"
-			on:click={() => {
-				loginClicked();
-			}}
-		>
-			Log In
-		</button>
-		<button
-			class="mx-auto rounded-lg border-2 border-blue-500 p-2 font-bold duration-200 hover:opacity-75"
-			on:click={() => {
-				logoutClicked();
-			}}
-		>
-			Log Out
-		</button>
-	</div>
+		Log In
+	</button>
+	<button
+		class="mx-auto rounded-lg border-2 border-blue-500 p-2 font-bold duration-200 hover:opacity-75"
+		on:click={() => {
+			logoutClicked();
+		}}
+	>
+		Log Out
+	</button>
 </div>
