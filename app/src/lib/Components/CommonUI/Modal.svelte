@@ -28,7 +28,7 @@
 		if (canSelfClose) dialog.close();
 	}}
 	class:backdrop:cursor-pointer={canSelfClose}
-	class="backdrop max-h-[90%] max-w-[90%] overflow-auto rounded-xl bg-slate-100 p-3 text-inherit {className}"
+	class="{className} backdrop max-h-[90%] max-w-[90%] overflow-auto rounded-xl p-3 text-inherit focus-visible:outline-none"
 >
 	{#if canSelfClose}
 		<button
