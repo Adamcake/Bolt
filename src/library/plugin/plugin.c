@@ -23,6 +23,7 @@
 #define API_ADD_SUB_ALIAS(STATE, FUNC, ALIAS, SUB) PUSHSTRING(STATE, #ALIAS);lua_pushcfunction(STATE, api_##SUB##_##FUNC);lua_settable(STATE, -3);
 
 #define PLUGIN_REGISTRYNAME "plugin"
+#define WINDOWS_REGISTRYNAME "windows"
 #define BATCH2D_META_REGISTRYNAME "batch2dmeta"
 #define RENDER3D_META_REGISTRYNAME "render3dmeta"
 #define MINIMAP_META_REGISTRYNAME "minimapmeta"
@@ -33,6 +34,11 @@
 #define BATCH2D_CB_REGISTRYNAME "batch2dcb"
 #define RENDER3D_CB_REGISTRYNAME "render3dcb"
 #define MINIMAP_CB_REGISTRYNAME "minimapcb"
+
+enum {
+    WINDOW_ONRESIZE,
+    WINDOW_EVENT_ENUM_SIZE, // last member of enum
+};
 
 static struct PluginManagedFunctions managed_functions;
 
@@ -124,6 +130,26 @@ static int api_setcallback##APINAME(lua_State* state) { \
     return 0; \
 }
 
+// macro for defining function "api_window_on*"
+// e.g. DEFINE_WINDOWEVENT(resize, RESIZE)
+#define DEFINE_WINDOWEVENT(APINAME, REGNAME) \
+static int api_window_on##APINAME(lua_State* state) { \
+    _bolt_check_argc(state, 2, "window_on"#APINAME); \
+    const struct EmbeddedWindow* window = lua_touserdata(state, 1); \
+    lua_getfield(state, LUA_REGISTRYINDEX, WINDOWS_REGISTRYNAME); /*stack: window table*/ \
+    lua_pushinteger(state, window->id); /*stack: window table, window id*/ \
+    lua_gettable(state, -2); /*stack: window table, event table*/ \
+    lua_pushinteger(state, WINDOW_ON##REGNAME); /*stack: window table, event table, event id*/ \
+    if (lua_isfunction(state, 2)) { \
+        lua_pushvalue(state, 2); \
+    } else { \
+        lua_pushnil(state); \
+    } /*stack: window table, event table, event id, value*/ \
+    lua_settable(state, -3); /*stack: window table, event table*/ \
+    lua_pop(state, 2); /*stack: (empty)*/ \
+    return 0; \
+}
+
 static int surface_gc(lua_State* state) {
     const struct SurfaceFunctions* functions = lua_touserdata(state, 1);
     managed_functions.surface_destroy(functions->userdata);
@@ -131,11 +157,21 @@ static int surface_gc(lua_State* state) {
 }
 
 static int window_gc(lua_State* state) {
-    _bolt_rwlock_lock_write(&windows.lock);
     struct EmbeddedWindow* window = lua_touserdata(state, 1);
+
+    // destroy the public hashmap entry and clean up the struct itself
+    _bolt_rwlock_lock_write(&windows.lock);
     _bolt_rwlock_destroy(&window->lock);
     hashmap_delete(windows.map, &window);
     _bolt_rwlock_unlock_write(&windows.lock);
+
+    // destroy the plugin registry entry
+    lua_getfield(state, LUA_REGISTRYINDEX, WINDOWS_REGISTRYNAME);
+    lua_pushinteger(state, window->id);
+    lua_pushnil(state);
+    lua_settable(state, -3);
+    lua_pop(state, 1);
+
     managed_functions.surface_destroy(window->surface_functions.userdata);
     return 0;
 }
@@ -305,11 +341,16 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     lua_rawseti(plugin->state, -2, 4);
     lua_pop(plugin->state, 2);
 
+    // create window table (empty)
+    PUSHSTRING(plugin->state, WINDOWS_REGISTRYNAME);
+    lua_newtable(plugin->state);
+    lua_settable(plugin->state, LUA_REGISTRYINDEX);
+
     // create the metatable for all RenderBatch2D objects
     PUSHSTRING(plugin->state, BATCH2D_META_REGISTRYNAME);
     lua_newtable(plugin->state);
     PUSHSTRING(plugin->state, "__index");
-    lua_createtable(plugin->state, 0, 12);
+    lua_createtable(plugin->state, 0, 14);
     API_ADD_SUB(plugin->state, vertexcount, batch2d)
     API_ADD_SUB(plugin->state, verticesperimage, batch2d)
     API_ADD_SUB(plugin->state, isminimap, batch2d)
@@ -387,8 +428,11 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     PUSHSTRING(plugin->state, WINDOW_META_REGISTRYNAME);
     lua_newtable(plugin->state);
     PUSHSTRING(plugin->state, "__index");
-    lua_createtable(plugin->state, 0, 1);
+    lua_createtable(plugin->state, 0, 4);
+    API_ADD_SUB(plugin->state, id, window)
+    API_ADD_SUB(plugin->state, size, window)
     API_ADD_SUB(plugin->state, clear, window)
+    API_ADD_SUB(plugin->state, onresize, window)
     lua_settable(plugin->state, -3);
     PUSHSTRING(plugin->state, "__gc");
     lua_pushcfunction(plugin->state, window_gc);
@@ -428,6 +472,33 @@ DEFINE_CALLBACK(swapbuffers, SWAPBUFFERS, SwapBuffersEvent)
 DEFINE_CALLBACK(2d, BATCH2D, RenderBatch2D)
 DEFINE_CALLBACK(3d, RENDER3D, Render3D)
 DEFINE_CALLBACK(minimap, MINIMAP, RenderMinimapEvent)
+DEFINE_WINDOWEVENT(resize, RESIZE)
+
+void _bolt_plugin_window_onresize(struct EmbeddedWindow* window, int width, int height) {
+    lua_State* state = window->plugin;
+    lua_getfield(state, LUA_REGISTRYINDEX, WINDOWS_REGISTRYNAME); /*stack: window table*/
+    lua_pushinteger(state, window->id); /*stack: window table, window id*/
+    lua_gettable(state, -2); /*stack: window table, event table*/
+    lua_pushinteger(state, WINDOW_ONRESIZE); /*stack: window table, event table, event id*/
+    lua_gettable(state, -2); /*stack: window table, event table, function or nil*/
+    if (lua_isfunction(state, -1)) {
+        lua_pushlightuserdata(state, window); /*stack: window table, event table, function, window*/
+        lua_pushinteger(state, width); /*stack: window table, event table, function, window, width*/
+        lua_pushinteger(state, height); /*stack: window table, event table, function, window, width, height*/
+        if (lua_pcall(state, 3, 0, 0)) { /*stack: window table, event table, ?error*/
+            const char* e = lua_tolstring(state, -1, 0);
+            printf("plugin window onresize error: %s\n", e);
+            lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME); /*stack: window table, event table, error, plugin*/
+            const struct Plugin* plugin = lua_touserdata(state, -1);
+            lua_pop(state, 4); /*stack: (empty)*/
+            _bolt_plugin_stop(plugin->id, plugin->id_length);
+        } else {
+            lua_pop(state, 2); /*stack: (empty)*/
+        }
+    } else {
+        lua_pop(state, 3);
+    }
+}
 
 static int api_apiversion(lua_State* state) {
     _bolt_check_argc(state, 0, "apiversion");
@@ -574,18 +645,30 @@ static int api_createsurfacefrompng(lua_State* state) {
 
 static int api_createwindow(lua_State* state) {
     _bolt_check_argc(state, 4, "createwindow");
-    _bolt_rwlock_lock_write(&windows.lock);
+    
+    // push a window onto the stack as the return value, then initialise it
     struct EmbeddedWindow* window = lua_newuserdata(state, sizeof(struct EmbeddedWindow));
     window->id = next_window_id;
+    window->plugin = state;
     _bolt_rwlock_init(&window->lock);
-    window->x = lua_tointeger(state, 1);
-    window->y = lua_tointeger(state, 2);
-    window->width = lua_tointeger(state, 3);
-    window->height = lua_tointeger(state, 4);
-    managed_functions.surface_init(&window->surface_functions, window->width, window->height, NULL);
+    window->metadata.x = lua_tointeger(state, 1);
+    window->metadata.y = lua_tointeger(state, 2);
+    window->metadata.width = lua_tointeger(state, 3);
+    window->metadata.height = lua_tointeger(state, 4);
+    managed_functions.surface_init(&window->surface_functions, window->metadata.width, window->metadata.height, NULL);
     lua_getfield(state, LUA_REGISTRYINDEX, WINDOW_META_REGISTRYNAME);
     lua_setmetatable(state, -2);
     next_window_id += 1;
+
+    // create an empty event table in the registry for this window
+    lua_getfield(state, LUA_REGISTRYINDEX, WINDOWS_REGISTRYNAME);
+    lua_pushinteger(state, window->id);
+    lua_createtable(state, WINDOW_EVENT_ENUM_SIZE, 0);
+    lua_settable(state, -3);
+    lua_pop(state, 1);
+
+    // set this window in the hashmap, which is accessible by backends
+    _bolt_rwlock_lock_write(&windows.lock);
     hashmap_set(windows.map, &window);
     _bolt_rwlock_unlock_write(&windows.lock);
     return 1;
@@ -853,6 +936,23 @@ static int api_window_clear(lua_State* state) {
         }
     }
     return 0;
+}
+
+static int api_window_id(lua_State* state) {
+    _bolt_check_argc(state, 1, "window_id");
+    const struct EmbeddedWindow* window = lua_touserdata(state, 1);
+    lua_pushinteger(state, window->id);
+    return 1;
+}
+
+static int api_window_size(lua_State* state) {
+    _bolt_check_argc(state, 1, "window_size");
+    struct EmbeddedWindow* window = lua_touserdata(state, 1);
+    _bolt_rwlock_lock_read(&window->lock);
+    lua_pushinteger(state, window->metadata.width);
+    lua_pushinteger(state, window->metadata.height);
+    _bolt_rwlock_unlock_read(&window->lock);
+    return 2;
 }
 
 static int api_render3d_vertexcount(lua_State* state) {

@@ -1080,7 +1080,6 @@ void* _bolt_gl_GetProcAddress(const char* name) {
 void _bolt_gl_onSwapBuffers(uint32_t window_width, uint32_t window_height) {
     gl_width = window_width;
     gl_height = window_height;
-    struct GLContext* c = _bolt_context();
     if (_bolt_plugin_is_inited()) {
         struct SwapBuffersEvent event;
         _bolt_plugin_handle_swapbuffers(&event);
@@ -1092,33 +1091,50 @@ void _bolt_gl_onSwapBuffers(uint32_t window_width, uint32_t window_height) {
         while (hashmap_iter(windows->map, &iter, &item)) {
             struct EmbeddedWindow* window = *(struct EmbeddedWindow**)item;
             _bolt_rwlock_lock_write(&window->lock);
+            struct EmbeddedWindowMetadata metadata = window->metadata;
+            bool did_change = false;
             bool did_resize = false;
-            if (window->width > window_width) {
-                window->width = window_width;
+            if (metadata.width > window_width) {
+                metadata.width = window_width;
                 did_resize = true;
+                did_change = true;
             }
-            if (window->height > window_height) {
-                window->height = window_height;
+            if (metadata.height > window_height) {
+                metadata.height = window_height;
                 did_resize = true;
+                did_change = true;
             }
-            if (window->x < 0) window->x = 0;
-            if (window->y < 0) window->y = 0;
-            if (window->x + window->width > window_width) window->x = window_width - window->width;
-            if (window->y + window->height > window_height) window->y = window_height - window->height;
+            if (metadata.x < 0) {
+                metadata.x = 0;
+                did_change = true;
+            }
+            if (metadata.y < 0) {
+                metadata.y = 0;
+                did_change = true;
+            }
+            if (metadata.x + metadata.width > window_width) {
+                metadata.x = window_width - metadata.width;
+                did_change = true;
+            }
+            if (metadata.y + metadata.height > window_height) {
+                metadata.y = window_height - metadata.height;
+                did_change = true;
+            }
+            if (did_change) {
+                window->metadata = metadata;
+            }
+            _bolt_rwlock_unlock_write(&window->lock);
             if (did_resize) {
                 struct PluginSurfaceUserdata* ud = window->surface_functions.userdata;
                 _bolt_gl_surface_destroy_buffers(ud);
-                ud->width = window->width;
-                ud->height = window->height;
+                ud->width = metadata.width;
+                ud->height = metadata.height;
                 _bolt_gl_surface_init_buffers(ud);
                 lgl->ClearColor(0.0, 0.0, 0.0, 0.0);
                 lgl->Clear(GL_COLOR_BUFFER_BIT);
+                _bolt_plugin_window_onresize(window, metadata.width, metadata.height);
             }
-            _bolt_rwlock_unlock_write(&window->lock);
-            // TODO: send a resize event to the plugin
-            _bolt_rwlock_lock_read(&window->lock);
-            window->surface_functions.draw_to_screen(window->surface_functions.userdata, 0, 0, window->width, window->height, window->x, window->y, window->width, window->height);
-            _bolt_rwlock_unlock_read(&window->lock);
+            window->surface_functions.draw_to_screen(window->surface_functions.userdata, 0, 0, metadata.width, metadata.height, metadata.x, metadata.y, metadata.width, metadata.height);
         }
         _bolt_rwlock_unlock_read(&windows->lock);
     }

@@ -8,6 +8,7 @@
 
 struct RenderBatch2D;
 struct Plugin;
+struct lua_State;
 
 /// Struct containing "vtable" callback information for RenderBatch2D's list of vertices.
 /// Unless stated otherwise, functions will be called with three params: the index, the specified
@@ -122,14 +123,19 @@ struct PluginManagedFunctions {
     void (*surface_destroy)(void*);
 };
 
-struct EmbeddedWindow {
-    uint64_t id;
-    struct SurfaceFunctions surface_functions;
-    RWLock lock; // applies to everything below this
+struct EmbeddedWindowMetadata {
     int x;
     int y;
     int width;
     int height;
+};
+
+struct EmbeddedWindow {
+    uint64_t id;
+    struct SurfaceFunctions surface_functions;
+    struct lua_State* plugin;
+    RWLock lock; // applies to the metadata
+    struct EmbeddedWindowMetadata metadata;
 };
 
 struct WindowInfo {
@@ -214,5 +220,8 @@ void _bolt_plugin_handle_3d(struct Render3D*);
 
 /// Sends a RenderMinimap to all plugins.
 void _bolt_plugin_handle_minimap(struct RenderMinimapEvent*);
+
+/// Calls the window's handler for resize events.
+void _bolt_plugin_window_onresize(struct EmbeddedWindow*, int, int);
 
 #endif

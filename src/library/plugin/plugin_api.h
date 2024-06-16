@@ -343,10 +343,27 @@ static int api_surface_drawtosurface(lua_State*);
 /// Paramaters are target window, then source X,Y,W,H, then destination X,Y,W,H, all in pixels.
 static int api_surface_drawtowindow(lua_State*);
 
+/// [-1, +1, -]
+/// Returns the unique ID of this window (an integer).
+static int api_window_id(lua_State*);
+
+/// [-1, +2, -]
+/// Returns the width and height of the window.
+static int api_window_size(lua_State*);
+
 /// [-(1|4|5), +0, -]
 /// Deletes any previous contents of the window and sets it to contain a single colour and alpha.
 /// See surface_clear for usage.
 static int api_window_clear(lua_State*);
+
+/// [-2, +0, -]
+/// Sets an event handler for this window for resize events. If the value is a function, it will be
+/// called with the following parameters: window, width, height. If the value is not a function, it
+/// will not be called, and therefore the plugin will not be notified of resize events.
+///
+/// Resizing a window clears the contents to be transparent, so plugins must redraw the whole
+/// window contents in response to a resize event (or any time before it next gets drawn).
+static int api_window_onresize(lua_State*);
 
 /// [-1, +1, -]
 /// Returns the number of vertices in a 3D render object (i.e. a model).

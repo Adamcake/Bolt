@@ -417,7 +417,7 @@ static uint8_t _bolt_handle_xcb_motion_event(xcb_window_t win, int16_t x, int16_
     while (ret && hashmap_iter(windows->map, &iter, &item)) {
         struct EmbeddedWindow** window = item;
         _bolt_rwlock_lock_read(&(*window)->lock);
-        if (_bolt_point_in_rect(x, y, (*window)->x, (*window)->y, (*window)->width, (*window)->height)) {
+        if (_bolt_point_in_rect(x, y, (*window)->metadata.x, (*window)->metadata.y, (*window)->metadata.width, (*window)->metadata.height)) {
             ret = false;
         }
         _bolt_rwlock_unlock_read(&(*window)->lock);
@@ -480,7 +480,7 @@ static uint8_t _bolt_handle_xcb_event(xcb_connection_t* c, xcb_generic_event_t* 
             while (hashmap_iter(windows->map, &iter, &item)) {
                 struct EmbeddedWindow** window = item;
                 _bolt_rwlock_lock_read(&(*window)->lock);
-                if (_bolt_point_in_rect(event->event_x, event->event_y, (*window)->x, (*window)->y, (*window)->width, (*window)->height)) {
+                if (_bolt_point_in_rect(event->event_x, event->event_y, (*window)->metadata.x, (*window)->metadata.y, (*window)->metadata.width, (*window)->metadata.height)) {
                     grabbed_window_id = (*window)->id;
                     ret = false;
                 }
@@ -500,7 +500,7 @@ static uint8_t _bolt_handle_xcb_event(xcb_connection_t* c, xcb_generic_event_t* 
             while (hashmap_iter(windows->map, &iter, &item)) {
                 struct EmbeddedWindow** window = item;
                 _bolt_rwlock_lock_read(&(*window)->lock);
-                if (_bolt_point_in_rect(event->event_x, event->event_y, (*window)->x, (*window)->y, (*window)->width, (*window)->height)) {
+                if (_bolt_point_in_rect(event->event_x, event->event_y, (*window)->metadata.x, (*window)->metadata.y, (*window)->metadata.width, (*window)->metadata.height)) {
                     on_any_window = true;
                 }
                 _bolt_rwlock_unlock_read(&(*window)->lock);
@@ -545,7 +545,7 @@ static uint8_t _bolt_handle_xcb_event(xcb_connection_t* c, xcb_generic_event_t* 
             while (hashmap_iter(windows->map, &iter, &item)) {
                 struct EmbeddedWindow** window = item;
                 _bolt_rwlock_lock_read(&(*window)->lock);
-                if (_bolt_point_in_rect(event->event_x, event->event_y, (*window)->x, (*window)->y, (*window)->width, (*window)->height)) {
+                if (_bolt_point_in_rect(event->event_x, event->event_y, (*window)->metadata.x, (*window)->metadata.y, (*window)->metadata.width, (*window)->metadata.height)) {
                     ret = false;
                 }
                 _bolt_rwlock_unlock_read(&(*window)->lock);
