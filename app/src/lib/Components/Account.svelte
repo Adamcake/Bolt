@@ -1,19 +1,15 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { boltSub } from '@/main';
 	import { accountList, config, credentials, isConfigDirty, selectedPlay } from '$lib/Util/store';
-	import type { Credentials } from '$lib/Util/interfaces';
-	import {
-		checkRenewCreds,
-		loginClicked,
-		revokeOauthCreds,
-		saveAllCreds
-	} from '$lib/Util/functions';
+	import { revokeOauthCreds } from '$lib/Util/functions';
 	import { logger } from '$lib/Util/Logger';
+	import { BoltService } from '$lib/Services/BoltService';
+	import { AuthService, type Credentials } from '$lib/Services/AuthService';
+	import { get } from 'svelte/store';
 
 	// values gather from s()
-	const sOrigin = atob(boltSub.origin);
-	const clientId = atob(boltSub.clientid);
+	const sOrigin = BoltService.bolt.origin;
+	const clientId = BoltService.bolt.clientid;
 	const exchangeUrl = sOrigin.concat('/oauth2/token');
 	const revokeUrl = sOrigin.concat('/oauth2/revoke');
 
@@ -47,7 +43,7 @@
 
 		if (!creds) return;
 
-		checkRenewCreds(creds, exchangeUrl, clientId).then((x) => {
+		AuthService.checkRenewCreds(creds, exchangeUrl, clientId).then((x) => {
 			if (x === null) {
 				revokeOauthCreds(creds!.access_token, revokeUrl, clientId).then((res: unknown) => {
 					if (res === 200) {
@@ -69,7 +65,7 @@
 	// clear credentials when logout is clicked
 	function removeLogin(creds: Credentials): void {
 		$credentials.delete(creds.sub);
-		saveAllCreds();
+		BoltService.saveConfig(get(config));
 	}
 
 	// updated active account in selected_play store
@@ -125,7 +121,8 @@
 	<button
 		class="mx-auto mr-2 rounded-lg bg-blue-500 p-2 font-bold text-black duration-200 hover:opacity-75"
 		on:click={() => {
-			loginClicked();
+			const { origin, redirect, clientid } = BoltService.bolt;
+			AuthService.openLoginWindow(origin, redirect, clientid);
 		}}
 	>
 		Log In

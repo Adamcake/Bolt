@@ -1,5 +1,7 @@
 // file for all interfaces, types, and their helper functions
 
+import type { Credentials } from '$lib/Services/AuthService';
+
 // result type, similar to rust's implementation
 // useful if a function may succeed or fail
 export type Result<T, E = Error> = { ok: true; value: T } | { ok: false; error: E };
@@ -44,7 +46,7 @@ export interface Bolt {
 	shield_url: string;
 	content_url: string;
 	default_config_uri: string;
-	games: Array<string>;
+	games: string[];
 }
 
 // load on start and save on exit
@@ -63,19 +65,7 @@ export interface Config {
 }
 
 // if no config is loaded, these defaults are set to ensure the app runs
-export const configDefaults: Pick<
-	Config,
-	| 'use_dark_theme'
-	| 'flatpak_rich_presence'
-	| 'rs_config_uri'
-	| 'runelite_custom_jar'
-	| 'runelite_use_custom_jar'
-	| 'selected_account'
-	| 'selected_characters'
-	| 'selected_game_accounts'
-	| 'selected_game_index'
-	| 'selected_client_index'
-> = {
+export const defaultConfig: Config = {
 	use_dark_theme: true,
 	flatpak_rich_presence: false,
 	rs_config_uri: '',
@@ -102,27 +92,6 @@ export interface Character {
 	accountId: string;
 	displayName: string;
 	userHash: string;
-}
-
-// credential type, passed around often
-export interface Credentials {
-	access_token: string;
-	id_token: string;
-	refresh_token: string;
-	sub: string;
-	login_provider: string; // null
-	expiry: number;
-	session_id: string;
-}
-
-// useful for knowing if auth is current happening
-export interface Auth {
-	state?: string;
-	nonce?: string;
-	creds?: Credentials;
-	win?: Window | null;
-	account_info_promise?: Promise<Account>;
-	verifier?: string;
 }
 
 // this is the referenced object when wanting to launch any client

@@ -1,21 +1,6 @@
 import { get } from 'svelte/store';
-import {
-	type Result,
-	type Credentials,
-	type Account,
-	type Auth,
-	type Character,
-	type GameClient,
-	unwrap
-} from '$lib/Util/interfaces';
-import {
-	boltSub,
-	configSub,
-	credentialsSub,
-	pendingGameAuthSub,
-	pendingOauthSub,
-	selectedPlaySub
-} from '@/main';
+import { type Account, type Character, type GameClient } from '$lib/Util/interfaces';
+import { configSub, credentialsSub, selectedPlaySub } from '@/main';
 import {
 	accountList,
 	config,
@@ -24,9 +9,6 @@ import {
 	pluginList,
 	hdosInstalledVersion,
 	internalUrl,
-	isConfigDirty,
-	pendingGameAuth,
-	pendingOauth,
 	platform,
 	productionClientId,
 	rs3InstalledHash,
@@ -34,6 +16,9 @@ import {
 	selectedPlay
 } from '$lib/Util/store';
 import { logger } from '$lib/Util/Logger';
+import { BoltService } from '$lib/Services/BoltService';
+import { AuthService, type Credentials } from '$lib/Services/AuthService';
+import { StringUtils } from '$lib/Util/StringUtils';
 
 // deprecated?
 // const rs3_basic_auth = 'Basic Y29tX2phZ2V4X2F1dGhfZGVza3RvcF9yczpwdWJsaWM=';
@@ -44,44 +29,6 @@ import { logger } from '$lib/Util/Logger';
 export function loadTheme() {
 	if (configSub.use_dark_theme == false) {
 		document.documentElement.classList.remove('dark');
-	}
-}
-
-// remove an entry by its reference from the pending_game_auth list
-// this function assumes this entry is in the list
-export function removePendingGameAuth(pending: Auth, closeWindow: boolean) {
-	if (closeWindow) {
-		pending.win!.close();
-	}
-	pendingGameAuth.update((data) => {
-		data.splice(pendingGameAuthSub.indexOf(pending), 1);
-		return data;
-	});
-}
-
-// checks if a login window is already open or not, then launches the window with the necessary parameters
-export function loginClicked() {
-	if (pendingOauthSub && pendingOauthSub.win && !pendingOauthSub.win.closed) {
-		pendingOauthSub.win.focus();
-	} else if (
-		(pendingOauthSub && pendingOauthSub.win && pendingOauthSub.win.closed) ||
-		pendingOauthSub
-	) {
-		const state = makeRandomState();
-		const verifier = makeRandomVerifier();
-		makeLoginUrl({
-			origin: atob(boltSub.origin),
-			redirect: atob(boltSub.redirect),
-			authMethod: '',
-			loginType: '',
-			clientid: atob(boltSub.clientid),
-			flow: 'launcher',
-			pkceState: state,
-			pkceCodeVerifier: verifier
-		}).then((url: string) => {
-			const win = window.open(url, '', 'width=480,height=720');
-			pendingOauth.set({ state: state, verifier: verifier, win: win });
-		});
 	}
 }
 
@@ -136,141 +83,6 @@ export function urlSearchParams(): void {
 			logger.error(`Couldn't parse config file: ${error}`);
 		}
 	}
-}
-
-// Checks if `credentials` are about to expire or have already expired,
-// and renews them using the oauth endpoint if so.
-// Does not save credentials but sets credentials_are_dirty as appropriate.
-// Returns null on success or an http status code on failure
-export async function checkRenewCreds(creds: Credentials, url: string, clientId: string) {
-	return new Promise((resolve) => {
-		// only renew if less than 30 seconds left
-		if (creds.expiry - Date.now() < 30000) {
-			const postData = new URLSearchParams({
-				grant_type: 'refresh_token',
-				client_id: clientId,
-				refresh_token: creds.refresh_token
-			});
-			const xml = new XMLHttpRequest();
-			xml.onreadystatechange = () => {
-				if (xml.readyState == 4) {
-					if (xml.status == 200) {
-						const result = parseCredentials(xml.response);
-						const resultCreds = unwrap(result);
-						if (resultCreds) {
-							creds.access_token = resultCreds.access_token;
-							creds.expiry = resultCreds.expiry;
-							creds.id_token = resultCreds.id_token;
-							creds.login_provider = resultCreds.login_provider;
-							creds.refresh_token = resultCreds.refresh_token;
-							if (resultCreds.session_id) creds.session_id = resultCreds.session_id;
-							creds.sub = resultCreds.sub;
-							resolve(null);
-						} else {
-							resolve(0);
-						}
-					} else {
-						resolve(xml.status);
-					}
-				}
-			};
-			xml.onerror = () => {
-				resolve(0);
-			};
-			xml.open('POST', url, true);
-			xml.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-			xml.setRequestHeader('Accept', 'application/json');
-			xml.send(postData);
-		} else {
-			resolve(null);
-		}
-	});
-}
-
-// parses a response from the oauth endpoint
-// returns a Result, it may
-export function parseCredentials(str: string): Result<Credentials> {
-	const oauthCreds = JSON.parse(str);
-	const sections = oauthCreds.id_token.split('.');
-	if (sections.length !== 3) {
-		const errMsg: string = `Malformed id_token: ${sections.length} sections, expected 3`;
-		logger.error(errMsg);
-		return { ok: false, error: new Error(errMsg) };
-	}
-	const header = JSON.parse(atob(sections[0]));
-	if (header.typ !== 'JWT') {
-		const errMsg: string = `Bad id_token header: typ ${header.typ}, expected JWT`;
-		logger.error(errMsg);
-		return { ok: false, error: new Error(errMsg) };
-	}
-	const payload = JSON.parse(atob(sections[1]));
-	return {
-		ok: true,
-		value: {
-			access_token: oauthCreds.access_token,
-			id_token: oauthCreds.id_token,
-			refresh_token: oauthCreds.refresh_token,
-			sub: payload.sub,
-			login_provider: payload.login_provider || null,
-			expiry: Date.now() + oauthCreds.expires_in * 1000,
-			session_id: oauthCreds.session_id
-		}
-	};
-}
-
-// builds the url to be opened in the login window
-// async because crypto.subtle.digest is async for some reason, so remember to `await`
-export async function makeLoginUrl(url: Record<string, string>) {
-	const verifierData = new TextEncoder().encode(url.pkceCodeVerifier);
-	const digested = await crypto.subtle.digest('SHA-256', verifierData);
-	let raw = '';
-	const bytes = new Uint8Array(digested);
-	for (let i = 0; i < bytes.byteLength; i++) {
-		raw += String.fromCharCode(bytes[i]);
-	}
-	const codeChallenge = btoa(raw).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-	return url.origin.concat('/oauth2/auth?').concat(
-		new URLSearchParams({
-			auth_method: url.authMethod,
-			login_type: url.loginType,
-			flow: url.flow,
-			response_type: 'code',
-			client_id: url.clientid,
-			redirect_uri: url.redirect,
-			code_challenge: codeChallenge,
-			code_challenge_method: 'S256',
-			prompt: 'login',
-			scope: 'openid offline gamesso.token.create user.profile.read',
-			state: url.pkceState
-		}).toString()
-	);
-}
-
-// builds a random PKCE verifier string using crypto.getRandomValues
-export function makeRandomVerifier() {
-	const t = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
-	const n = new Uint32Array(43);
-	crypto.getRandomValues(n);
-	return Array.from(n, function (e) {
-		return t[e % t.length];
-	}).join('');
-}
-
-// builds a random PKCE state string using crypto.getRandomValues
-export function makeRandomState() {
-	const t = 0;
-	const r = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
-	const n = r.length - 1;
-
-	const o = crypto.getRandomValues(new Uint8Array(12));
-	return Array.from(o)
-		.map((e) => {
-			return Math.round((e * (n - t)) / 255 + t);
-		})
-		.map((e) => {
-			return r[e];
-		})
-		.join('');
 }
 
 // Handles a new session id as part of the login flow. Can also be called on startup with a
@@ -331,35 +143,30 @@ export async function handleLogin(win: Window | null, creds: Credentials) {
 
 // called when login was successful, but with absent or unrecognised login_provider
 async function handleStandardLogin(win: Window | null, creds: Credentials) {
-	const state = makeRandomState();
+	const state = StringUtils.makeRandomState();
 	const nonce: string = crypto.randomUUID();
-	const location = atob(boltSub.origin)
-		.concat('/oauth2/auth?')
-		.concat(
-			new URLSearchParams({
-				id_token_hint: creds.id_token,
-				nonce: btoa(nonce),
-				prompt: 'consent',
-				redirect_uri: 'http://localhost',
-				response_type: 'id_token code',
-				state: state,
-				client_id: get(productionClientId),
-				scope: 'openid offline'
-			}).toString()
-		);
-	const accountInfoPromise: Promise<Account | number> = getStandardAccountInfo(creds);
+	const location = BoltService.bolt.origin.concat('/oauth2/auth?').concat(
+		new URLSearchParams({
+			id_token_hint: creds.id_token,
+			nonce: btoa(nonce),
+			prompt: 'consent',
+			redirect_uri: 'http://localhost',
+			response_type: 'id_token code',
+			state: state,
+			client_id: get(productionClientId),
+			scope: 'openid offline'
+		}).toString()
+	);
+	const accountInfoPromise: Promise<Account | number> = AuthService.getStandardAccountInfo(creds);
 
 	if (win) {
 		win.location.href = location;
-		pendingGameAuth.update((data) => {
-			data.push({
-				state: state,
-				nonce: nonce,
-				creds: creds,
-				win: win,
-				account_info_promise: <Promise<Account>>accountInfoPromise
-			});
-			return data;
+		AuthService.pendingGameAuth.push({
+			state: state,
+			nonce: nonce,
+			creds: creds,
+			win: win,
+			account_info_promise: <Promise<Account>>accountInfoPromise
 		});
 		return false;
 	} else {
@@ -370,31 +177,10 @@ async function handleStandardLogin(win: Window | null, creds: Credentials) {
 
 		return await handleNewSessionId(
 			creds,
-			atob(boltSub.auth_api).concat('/accounts'),
+			BoltService.bolt.auth_api.concat('/accounts'),
 			<Promise<Account>>accountInfoPromise
 		);
 	}
-}
-
-// makes a request to the account_info endpoint and returns the promise
-// the promise will return either a JSON object on success or a status code on failure
-function getStandardAccountInfo(creds: Credentials): Promise<Account | number> {
-	return new Promise((resolve) => {
-		const url = `${atob(boltSub.api)}/users/${creds.sub}/displayName`;
-		const xml = new XMLHttpRequest();
-		xml.onreadystatechange = () => {
-			if (xml.readyState == 4) {
-				if (xml.status == 200) {
-					resolve(JSON.parse(xml.response));
-				} else {
-					resolve(xml.status);
-				}
-			}
-		};
-		xml.open('GET', url, true);
-		xml.setRequestHeader('Authorization', 'Bearer '.concat(creds.access_token));
-		xml.send();
-	});
 }
 
 // adds an account to the accounts_list store item
@@ -421,7 +207,7 @@ export function addNewAccount(account: Account) {
 	} else if (!selectedPlaySub.account) {
 		updateSelectedPlay();
 	}
-	pendingOauth.set({});
+	AuthService.pendingOauth = null;
 }
 
 // revokes the given oauth tokens, returning an http status code.
@@ -440,37 +226,13 @@ export function revokeOauthCreds(accessToken: string, revokeUrl: string, clientI
 	});
 }
 
-// sends a request to save all credentials to their config file,
-// overwriting the previous file, if any
-export async function saveAllCreds() {
-	const xml = new XMLHttpRequest();
-	xml.open('POST', '/save-credentials', true);
-	xml.setRequestHeader('Content-Type', 'application/json');
-	xml.onreadystatechange = () => {
-		if (xml.readyState == 4) {
-			logger.info(`Save-credentials status: ${xml.responseText.trim()}`);
-		}
-	};
-
-	selectedPlay.update((data) => {
-		data.credentials = credentialsSub.get(<string>selectedPlaySub.account?.userId);
-		return data;
-	});
-
-	const credsList: Array<Credentials> = [];
-	credentialsSub.forEach((value) => {
-		credsList.push(value);
-	});
-	xml.send(JSON.stringify(credsList));
-}
-
 // asynchronously download and launch RS3's official .deb client using the given env variables
 export function launchRS3Linux(
 	jx_session_id: string,
 	jx_character_id: string,
 	jx_display_name: string
 ) {
-	saveConfig();
+	BoltService.saveConfig(get(config));
 
 	const launch = (hash?: unknown, deb?: never) => {
 		const xml = new XMLHttpRequest();
@@ -483,7 +245,7 @@ export function launchRS3Linux(
 		if (configSub.rs_config_uri) {
 			params.config_uri = configSub.rs_config_uri;
 		} else {
-			params.config_uri = atob(boltSub.default_config_uri);
+			params.config_uri = BoltService.bolt.default_config_uri;
 		}
 		xml.open('POST', '/launch-rs3-deb?'.concat(new URLSearchParams(params).toString()), true);
 		xml.onreadystatechange = () => {
@@ -498,7 +260,7 @@ export function launchRS3Linux(
 	};
 
 	const xml = new XMLHttpRequest();
-	const contentUrl = atob(boltSub.content_url);
+	const contentUrl = BoltService.bolt.content_url;
 	const url = contentUrl.concat('dists/trusty/non-free/binary-amd64/Packages');
 	xml.open('GET', url, true);
 	xml.onreadystatechange = () => {
@@ -556,7 +318,7 @@ function launchRuneLiteInner(
 	jx_display_name: string,
 	configure: boolean
 ) {
-	saveConfig();
+	BoltService.saveConfig(get(config));
 	const launchPath = configure ? '/launch-runelite-jar-configure?' : '/launch-runelite-jar?';
 
 	const launch = (id?: unknown, jar?: unknown, jarPath?: unknown) => {
@@ -652,7 +414,7 @@ export function launchHdos(
 	jx_character_id: string,
 	jx_display_name: string
 ) {
-	saveConfig();
+	BoltService.saveConfig(get(config));
 
 	const launch = (version?: string, jar?: string) => {
 		const xml = new XMLHttpRequest();
@@ -726,39 +488,6 @@ export function launchHdos(
 		}
 	};
 	xml.send();
-}
-
-// sends an asynchronous request to save the current user config to disk, if it has changed
-let saveConfigInProgress: boolean = false;
-export function saveConfig() {
-	if (get(isConfigDirty) && !saveConfigInProgress) {
-		saveConfigInProgress = true;
-		const xml = new XMLHttpRequest();
-		xml.open('POST', '/save-config', true);
-		xml.onreadystatechange = () => {
-			if (xml.readyState == 4) {
-				logger.info(`Save config status: '${xml.responseText.trim()}'`);
-				if (xml.status == 200) {
-					isConfigDirty.set(false);
-				}
-				saveConfigInProgress = false;
-			}
-		};
-		xml.setRequestHeader('Content-Type', 'application/json');
-
-		// converting map into something that is compatible for JSON.stringify
-		// maybe the map should be converted into a Record<string, string>
-		// but this has other problems and implications
-		const characters: Record<string, string> = {};
-		configSub.selected_characters?.forEach((value, key) => {
-			characters[key] = value;
-		});
-		const object: Record<string, unknown> = {};
-		Object.assign(object, configSub);
-		object.selected_characters = characters;
-		const json = JSON.stringify(object, null, 4);
-		xml.send(json);
-	}
 }
 
 export function getNewClientListPromise(): Promise<GameClient[]> {

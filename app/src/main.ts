@@ -7,9 +7,6 @@ import {
 	credentials,
 	hasBoltPlugins,
 	isConfigDirty,
-	pendingOauth,
-	pendingGameAuth,
-	bolt,
 	accountList,
 	selectedPlay,
 	showDisclaimer
@@ -17,18 +14,19 @@ import {
 import { get, type Unsubscriber } from 'svelte/store';
 import {
 	getNewClientListPromise,
-	parseCredentials,
 	handleLogin,
-	saveAllCreds,
 	handleNewSessionId,
-	checkRenewCreds,
-	loadTheme as loadTheme,
-	saveConfig,
-	removePendingGameAuth
+	loadTheme as loadTheme
 } from '$lib/Util/functions';
-import type { Bolt, Account, Auth, Config, Credentials, SelectedPlay } from '$lib/Util/interfaces';
+import type { Account, Bolt, Config, SelectedPlay } from '$lib/Util/interfaces';
 import { unwrap } from '$lib/Util/interfaces';
 import { logger } from '$lib/Util/Logger';
+import { BoltService } from '$lib/Services/BoltService';
+import { ParseUtils } from '$lib/Util/ParseUtils';
+import { AuthService, type Auth, type Credentials } from '$lib/Services/AuthService';
+
+declare const s: () => Bolt;
+BoltService.bolt = ParseUtils.decodeBolt(s());
 
 const app = new App({
 	target: document.getElementById('app')!
@@ -41,8 +39,6 @@ const unsubscribers: Array<Unsubscriber> = [];
 
 const internalUrlSub = get(internalUrl);
 
-export let boltSub: Bolt;
-unsubscribers.push(bolt.subscribe((data) => (boltSub = data)));
 export let configSub: Config;
 unsubscribers.push(config.subscribe((data) => (configSub = data)));
 export let platformSub: string;
@@ -51,10 +47,6 @@ export let credentialsSub: Map<string, Credentials>;
 unsubscribers.push(credentials.subscribe((data) => (credentialsSub = data)));
 export let hasBoltPluginsSub: boolean;
 unsubscribers.push(hasBoltPlugins.subscribe((data) => (hasBoltPluginsSub = data ?? false)));
-export let pendingOauthSub: Auth;
-unsubscribers.push(pendingOauth.subscribe((data) => (pendingOauthSub = <Auth>data)));
-export let pendingGameAuthSub: Array<Auth>;
-unsubscribers.push(pendingGameAuth.subscribe((data) => (pendingGameAuthSub = data)));
 export let accountListSub: Map<string, Account>;
 unsubscribers.push(accountList.subscribe((data) => (accountListSub = data)));
 export let selectedPlaySub: SelectedPlay;
@@ -62,9 +54,13 @@ unsubscribers.push(selectedPlay.subscribe((data) => (selectedPlaySub = data)));
 
 // body's onload function
 function start(): void {
-	const sOrigin = atob(boltSub.origin);
-	const clientId = atob(boltSub.clientid);
-	const exchangeUrl = sOrigin.concat('/oauth2/token');
+	const bolt = BoltService.bolt;
+	const origin = bolt.origin;
+	const clientId = bolt.clientid;
+	const origin_2fa = bolt.origin_2fa;
+	const exchangeUrl = origin.concat('/oauth2/token');
+
+	console.log(get(config));
 
 	if (credentialsSub.size == 0) {
 		showDisclaimer.set(true);
@@ -81,29 +77,30 @@ function start(): void {
 		});
 	}
 
-	const allowedOrigins = [internalUrlSub, sOrigin, atob(boltSub.origin_2fa)];
+	const allowedOrigins = [internalUrlSub, origin, origin_2fa];
 	window.addEventListener('message', (event: MessageEvent) => {
 		if (!allowedOrigins.includes(event.origin)) {
 			logger.info(`discarding window message from origin ${event.origin}`);
 			return;
 		}
-		let pending: Auth | undefined = pendingOauthSub;
+		let pending: Auth | undefined | null = AuthService.pendingOauth;
+		console.log(pending);
 		const xml = new XMLHttpRequest();
 		switch (event.data.type) {
 			case 'authCode':
 				if (pending) {
-					pendingOauth.set({});
+					AuthService.pendingOauth = null;
 					const post_data = new URLSearchParams({
 						grant_type: 'authorization_code',
-						client_id: atob(boltSub.clientid),
+						client_id: bolt.clientid,
 						code: event.data.code,
 						code_verifier: <string>pending.verifier,
-						redirect_uri: atob(boltSub.redirect)
+						redirect_uri: bolt.redirect
 					});
 					xml.onreadystatechange = () => {
 						if (xml.readyState == 4) {
 							if (xml.status == 200) {
-								const result = parseCredentials(xml.response);
+								const result = ParseUtils.parseCredentials(xml.response);
 								const creds = unwrap(result);
 								if (creds) {
 									handleLogin(<Window>pending?.win, creds).then((x) => {
@@ -112,7 +109,7 @@ function start(): void {
 												data.set(creds.sub, creds);
 												return data;
 											});
-											saveAllCreds();
+											BoltService.saveConfig(get(config));
 										}
 									});
 								} else {
@@ -141,11 +138,12 @@ function start(): void {
 				xml.send(event.data.url);
 				break;
 			case 'gameSessionServerAuth':
-				pending = pendingGameAuthSub.find((x: Auth) => {
+				pending = AuthService.pendingGameAuth.find((x: Auth) => {
 					return event.data.state == x.state;
 				});
 				if (pending) {
-					removePendingGameAuth(pending, true);
+					pending.win?.close();
+					AuthService.pendingGameAuth.splice(AuthService.pendingGameAuth.indexOf(pending), 1);
 					const sections = event.data.id_token.split('.');
 					if (sections.length !== 3) {
 						logger.error(`Malformed id_token: ${sections.length} sections, expected 3`);
@@ -161,11 +159,11 @@ function start(): void {
 						logger.error('Incorrect nonce in id_token');
 						break;
 					}
-					const sessionsUrl = atob(boltSub.auth_api).concat('/sessions');
+					const sessionsUrl = bolt.auth_api.concat('/sessions');
 					xml.onreadystatechange = () => {
 						if (xml.readyState == 4) {
 							if (xml.status == 200) {
-								const accountsUrl = atob(boltSub.auth_api).concat('/accounts');
+								const accountsUrl = bolt.auth_api.concat('/accounts');
 								pending!.creds!.session_id = JSON.parse(xml.response).sessionId;
 								handleNewSessionId(
 									<Credentials>pending!.creds,
@@ -177,7 +175,7 @@ function start(): void {
 											data.set(<string>pending?.creds?.sub, <Credentials>pending!.creds);
 											return data;
 										});
-										saveAllCreds();
+										BoltService.saveConfig(get(config));
 									}
 								});
 							} else {
@@ -203,14 +201,14 @@ function start(): void {
 	(async () => {
 		if (credentialsSub.size > 0) {
 			credentialsSub.forEach(async (value) => {
-				const result = await checkRenewCreds(value, exchangeUrl, clientId);
+				const result = await AuthService.checkRenewCreds(value, exchangeUrl, clientId);
 				if (result !== null && result !== 0) {
 					logger.error(`Discarding expired login for #${value.sub}`);
 					credentials.update((data) => {
 						data.delete(value.sub);
 						return data;
 					});
-					saveAllCreds();
+					BoltService.saveConfig(get(config));
 				}
 				let checkedCred: Record<string, Credentials | boolean>;
 				if (result === null && (await handleLogin(null, value))) {
@@ -224,7 +222,7 @@ function start(): void {
 						data.set(creds.sub, creds);
 						return data;
 					});
-					saveAllCreds();
+					BoltService.saveConfig(get(config));
 				}
 			});
 		}
@@ -232,13 +230,10 @@ function start(): void {
 	})();
 }
 
-declare const s: () => Bolt;
-bolt.set(s());
-
 onload = () => start();
 onunload = () => {
 	for (const i in unsubscribers) {
 		delete unsubscribers[i];
 	}
-	saveConfig();
+	BoltService.saveConfig(get(config));
 };

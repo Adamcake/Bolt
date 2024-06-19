@@ -3,9 +3,10 @@
 	import { Game } from '$lib/Util/interfaces';
 	import { config, isConfigDirty, selectedPlay } from '$lib/Util/store';
 	import SettingsModal from '$lib/Components/SettingsModal.svelte';
-	import { loginClicked } from '$lib/Util/functions';
 	import Dropdown from '$lib/Components/CommonUI/Dropdown.svelte';
 	import Account from '$lib/Components/Account.svelte';
+	import { BoltService } from '$lib/Services/BoltService';
+	import { AuthService } from '$lib/Services/AuthService';
 
 	let settingsModal: SettingsModal;
 	let rs3Button: HTMLButtonElement;
@@ -99,7 +100,10 @@
 		{:else}
 			<button
 				class="h-11 w-48 rounded-lg border-2 border-slate-300 bg-inherit p-2 text-center font-bold text-black duration-200 hover:opacity-75 dark:border-slate-800 dark:text-slate-50"
-				on:click={loginClicked}
+				on:click={() => {
+					const { origin, redirect, clientid } = BoltService.bolt;
+					AuthService.openLoginWindow(origin, redirect, clientid);
+				}}
 			>
 				Login
 			</button>
