@@ -12,15 +12,6 @@
 	let rs3Button: HTMLButtonElement;
 	let osrsButton: HTMLButtonElement;
 
-	// tailwind can easily change theme by adding or removing 'dark' to the root 'html' element
-	function change_theme(): void {
-		let html: HTMLElement = document.documentElement;
-		if (html.classList.contains('dark')) html.classList.remove('dark');
-		else html.classList.add('dark');
-		$config.use_dark_theme = !$config.use_dark_theme;
-		$isConfigDirty = true;
-	}
-
 	// swaps game visually, will effect all relevant selects
 	function toggle_game(game: Game): void {
 		switch (game) {
@@ -75,7 +66,7 @@
 	<div class="m-2 ml-auto flex gap-2">
 		<button
 			class="h-10 w-10 rounded-full bg-blue-500 text-center duration-200 hover:rotate-45 hover:opacity-75"
-			on:click={() => change_theme()}
+			on:click={() => ($config.use_dark_theme = !$config.use_dark_theme)}
 		>
 			<img src="svgs/lightbulb-solid.svg" class="m-auto h-6 w-6" alt="Change Theme" />
 		</button>

@@ -42,7 +42,6 @@ export class AuthService {
 
 		const state = StringUtils.makeRandomState();
 		const verifier = StringUtils.makeRandomVerifier();
-		console.log('verifier', verifier);
 		const url = await StringUtils.makeLoginUrl({
 			origin,
 			redirect,
@@ -98,7 +97,6 @@ export class AuthService {
 						if (xml.status == 200) {
 							const result = ParseUtils.parseCredentials(xml.response);
 							const resultCreds = unwrap(result);
-							console.log('resultCreds', resultCreds);
 							if (resultCreds) {
 								creds.access_token = resultCreds.access_token;
 								creds.expiry = resultCreds.expiry;

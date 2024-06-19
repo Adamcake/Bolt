@@ -1,24 +1,14 @@
 import App from '@/App.svelte';
 import {
 	clientListPromise,
-	config,
-	platform,
 	internalUrl,
 	credentials,
-	hasBoltPlugins,
 	isConfigDirty,
-	accountList,
-	selectedPlay,
 	showDisclaimer
 } from '$lib/Util/store';
-import { get, type Unsubscriber } from 'svelte/store';
-import {
-	getNewClientListPromise,
-	handleLogin,
-	handleNewSessionId,
-	loadTheme as loadTheme
-} from '$lib/Util/functions';
-import type { Account, Bolt, Config, SelectedPlay } from '$lib/Util/interfaces';
+import { get } from 'svelte/store';
+import { getNewClientListPromise, handleLogin, handleNewSessionId } from '$lib/Util/functions';
+import type { Account, Bolt } from '$lib/Util/interfaces';
 import { unwrap } from '$lib/Util/interfaces';
 import { logger } from '$lib/Util/Logger';
 import { BoltService } from '$lib/Services/BoltService';
@@ -27,64 +17,35 @@ import { AuthService, type Auth, type Credentials } from '$lib/Services/AuthServ
 
 declare const s: () => Bolt;
 BoltService.bolt = ParseUtils.decodeBolt(s());
-
+start();
 const app = new App({
 	target: document.getElementById('app')!
 });
 
 export default app;
 
-// store access, subscribers, and unsubscribers array
-const unsubscribers: Array<Unsubscriber> = [];
+export function start(): void {
+	// TODO: refactor this function and its contents
+	ParseUtils.parseUrlParams(window.location.search);
 
-const internalUrlSub = get(internalUrl);
-
-export let configSub: Config;
-unsubscribers.push(config.subscribe((data) => (configSub = data)));
-export let platformSub: string;
-unsubscribers.push(platform.subscribe((data) => (platformSub = data as string)));
-export let credentialsSub: Map<string, Credentials>;
-unsubscribers.push(credentials.subscribe((data) => (credentialsSub = data)));
-export let hasBoltPluginsSub: boolean;
-unsubscribers.push(hasBoltPlugins.subscribe((data) => (hasBoltPluginsSub = data ?? false)));
-export let accountListSub: Map<string, Account>;
-unsubscribers.push(accountList.subscribe((data) => (accountListSub = data)));
-export let selectedPlaySub: SelectedPlay;
-unsubscribers.push(selectedPlay.subscribe((data) => (selectedPlaySub = data)));
-
-// body's onload function
-function start(): void {
 	const bolt = BoltService.bolt;
 	const origin = bolt.origin;
 	const clientId = bolt.clientid;
 	const origin_2fa = bolt.origin_2fa;
+	const boltUrl = get(internalUrl);
 	const exchangeUrl = origin.concat('/oauth2/token');
 
-	console.log(get(config));
-
-	if (credentialsSub.size == 0) {
+	if (get(credentials).size == 0) {
 		showDisclaimer.set(true);
 	}
 
-	loadTheme();
-
-	// support legacy config name, selected_game_accounts; load it into the new one
-	if (configSub.selected_game_accounts && configSub.selected_game_accounts?.size > 0) {
-		config.update((data) => {
-			data.selected_characters = data.selected_game_accounts;
-			data.selected_game_accounts?.clear();
-			return data;
-		});
-	}
-
-	const allowedOrigins = [internalUrlSub, origin, origin_2fa];
+	const allowedOrigins = [boltUrl, origin, origin_2fa];
 	window.addEventListener('message', (event: MessageEvent) => {
 		if (!allowedOrigins.includes(event.origin)) {
 			logger.info(`discarding window message from origin ${event.origin}`);
 			return;
 		}
 		let pending: Auth | undefined | null = AuthService.pendingOauth;
-		console.log(pending);
 		const xml = new XMLHttpRequest();
 		switch (event.data.type) {
 			case 'authCode':
@@ -109,7 +70,7 @@ function start(): void {
 												data.set(creds.sub, creds);
 												return data;
 											});
-											BoltService.saveConfig(get(config));
+											BoltService.saveAllCreds();
 										}
 									});
 								} else {
@@ -175,7 +136,7 @@ function start(): void {
 											data.set(<string>pending?.creds?.sub, <Credentials>pending!.creds);
 											return data;
 										});
-										BoltService.saveConfig(get(config));
+										BoltService.saveAllCreds();
 									}
 								});
 							} else {
@@ -199,8 +160,8 @@ function start(): void {
 	});
 
 	(async () => {
-		if (credentialsSub.size > 0) {
-			credentialsSub.forEach(async (value) => {
+		if (get(credentials).size > 0) {
+			get(credentials).forEach(async (value) => {
 				const result = await AuthService.checkRenewCreds(value, exchangeUrl, clientId);
 				if (result !== null && result !== 0) {
 					logger.error(`Discarding expired login for #${value.sub}`);
@@ -208,7 +169,7 @@ function start(): void {
 						data.delete(value.sub);
 						return data;
 					});
-					BoltService.saveConfig(get(config));
+					BoltService.saveAllCreds();
 				}
 				let checkedCred: Record<string, Credentials | boolean>;
 				if (result === null && (await handleLogin(null, value))) {
@@ -222,18 +183,10 @@ function start(): void {
 						data.set(creds.sub, creds);
 						return data;
 					});
-					BoltService.saveConfig(get(config));
+					BoltService.saveAllCreds();
 				}
 			});
 		}
 		isConfigDirty.set(false); // overrides all cases where this gets set to "true" due to loading existing config values
 	})();
 }
-
-onload = () => start();
-onunload = () => {
-	for (const i in unsubscribers) {
-		delete unsubscribers[i];
-	}
-	BoltService.saveConfig(get(config));
-};

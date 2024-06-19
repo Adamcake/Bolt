@@ -3,18 +3,17 @@
 	import Launch from '$lib/Components/Launch.svelte';
 	import Auth from '$lib/Components/Auth.svelte';
 	import PluginMenu from '$lib/Components/PluginMenu.svelte';
-	import { urlSearchParams } from '$lib/Util/functions';
 	import LogView from '$lib/Components/LogView.svelte';
 	import { logger } from '$lib/Util/Logger';
-	import { showDisclaimer } from '$lib/Util/store';
+	import { config, showDisclaimer } from '$lib/Util/store';
 	import DisclaimerModal from '$lib/Components/DisclaimerModal.svelte';
+	import { BoltService } from '$lib/Services/BoltService';
 
 	let showPluginMenu: boolean = false;
 	let authorizing: boolean = false;
+	$: darkTheme = $config.use_dark_theme;
 
 	const logs = logger.logs;
-
-	urlSearchParams();
 
 	// called from cxx code in the url, to send message from auth window to main window
 	const parentWindow = window.opener || window.parent;
@@ -46,7 +45,12 @@
 	}
 </script>
 
-<main class="h-full">
+<svelte:window on:beforeunload={() => BoltService.saveConfig($config)} />
+
+<main
+	class:dark={darkTheme}
+	class="fixed top-0 h-screen w-screen bg-slate-100 text-xs text-slate-900 duration-200 sm:text-sm md:text-base dark:bg-slate-900 dark:text-slate-50"
+>
 	{#if authorizing}
 		<Auth></Auth>
 	{:else}

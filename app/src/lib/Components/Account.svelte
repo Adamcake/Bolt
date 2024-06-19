@@ -5,7 +5,6 @@
 	import { logger } from '$lib/Util/Logger';
 	import { BoltService } from '$lib/Services/BoltService';
 	import { AuthService, type Credentials } from '$lib/Services/AuthService';
-	import { get } from 'svelte/store';
 
 	// values gather from s()
 	const sOrigin = BoltService.bolt.origin;
@@ -65,7 +64,7 @@
 	// clear credentials when logout is clicked
 	function removeLogin(creds: Credentials): void {
 		$credentials.delete(creds.sub);
-		BoltService.saveConfig(get(config));
+		BoltService.saveAllCreds();
 	}
 
 	// updated active account in selected_play store

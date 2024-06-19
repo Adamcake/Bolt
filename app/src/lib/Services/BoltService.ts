@@ -1,6 +1,7 @@
+import type { Credentials } from '$lib/Services/AuthService';
 import { logger } from '$lib/Util/Logger';
 import type { Bolt, Config } from '$lib/Util/interfaces';
-import { isConfigDirty } from '$lib/Util/store';
+import { credentials, isConfigDirty } from '$lib/Util/store';
 import { get } from 'svelte/store';
 
 let saveConfigInProgress: boolean = false;
@@ -38,5 +39,30 @@ export class BoltService {
 			const json = JSON.stringify(object, null, 4);
 			xml.send(json);
 		}
+	}
+
+	// sends a request to save all credentials to their config file,
+	// overwriting the previous file, if any
+	static async saveAllCreds() {
+		const xml = new XMLHttpRequest();
+		xml.open('POST', '/save-credentials', true);
+		xml.setRequestHeader('Content-Type', 'application/json');
+		xml.onreadystatechange = () => {
+			if (xml.readyState == 4) {
+				logger.info(`Save-credentials status: ${xml.responseText.trim()}`);
+			}
+		};
+
+		// TODO: figure out why this was here, and how to re-implement it
+		// selectedPlay.update((data) => {
+		// 	data.credentials = credentialsSub.get(<string>selectedPlaySub.account?.userId);
+		// 	return data;
+		// });
+
+		const credsList: Array<Credentials> = [];
+		get(credentials).forEach((value) => {
+			credsList.push(value);
+		});
+		xml.send(JSON.stringify(credsList));
 	}
 }

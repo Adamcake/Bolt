@@ -1,15 +1,12 @@
 import { get } from 'svelte/store';
 import { type Account, type Character, type GameClient } from '$lib/Util/interfaces';
-import { configSub, credentialsSub, selectedPlaySub } from '@/main';
 import {
 	accountList,
 	config,
 	credentials,
-	hasBoltPlugins,
 	pluginList,
 	hdosInstalledVersion,
 	internalUrl,
-	platform,
 	productionClientId,
 	rs3InstalledHash,
 	runeLiteInstalledId,
@@ -24,66 +21,6 @@ import { StringUtils } from '$lib/Util/StringUtils';
 // const rs3_basic_auth = 'Basic Y29tX2phZ2V4X2F1dGhfZGVza3RvcF9yczpwdWJsaWM=';
 // const osrs_basic_auth = 'Basic Y29tX2phZ2V4X2F1dGhfZGVza3RvcF9vc3JzOnB1YmxpYw==';
 //let isFlathub: boolean = false;
-
-// after config is loaded, check which theme (light/dark) the user prefers
-export function loadTheme() {
-	if (configSub.use_dark_theme == false) {
-		document.documentElement.classList.remove('dark');
-	}
-}
-
-// queries the url for relevant information, including credentials and config
-export function urlSearchParams(): void {
-	const query = new URLSearchParams(window.location.search);
-	platform.set(query.get('platform'));
-	//isFlathub = query.get('flathub') === '1';
-	rs3InstalledHash.set(query.get('rs3_linux_installed_hash'));
-	runeLiteInstalledId.set(query.get('runelite_installed_id'));
-	hdosInstalledVersion.set(query.get('hdos_installed_version'));
-	const queryPlugins: string | null = query.get('plugins');
-	if (queryPlugins !== null) {
-		hasBoltPlugins.set(true);
-		pluginList.set(JSON.parse(queryPlugins));
-	} else {
-		hasBoltPlugins.set(false);
-	}
-
-	const creds = query.get('credentials');
-	if (creds) {
-		try {
-			// no need to set credentials_are_dirty here because the contents came directly from the file
-			const credsList: Array<Credentials> = JSON.parse(creds);
-			credsList.forEach((value) => {
-				credentials.update((data) => {
-					data.set(value.sub, value);
-					return data;
-				});
-			});
-		} catch (error: unknown) {
-			logger.error(`Couldn't parse credentials file: ${error}`);
-		}
-	}
-	const conf = query.get('config');
-	if (conf) {
-		try {
-			// as above, no need to set configIsDirty
-			const parsedConf = JSON.parse(conf);
-			config.set(parsedConf);
-			// convert parsed objects into Maps
-			config.update((data) => {
-				if (data.selected_game_accounts) {
-					data.selected_characters = new Map(Object.entries(data.selected_game_accounts));
-					delete data.selected_game_accounts;
-				} else if (data.selected_characters) {
-					data.selected_characters = new Map(Object.entries(data.selected_characters));
-				}
-				return data;
-			});
-		} catch (error: unknown) {
-			logger.error(`Couldn't parse config file: ${error}`);
-		}
-	}
-}
 
 // Handles a new session id as part of the login flow. Can also be called on startup with a
 // persisted session id.
@@ -138,11 +75,6 @@ export async function handleNewSessionId(
 // however it does not save credentials. You should call saveAllCreds after calling this function any number of times.
 // Returns true if the credentials should be treated as valid by the caller immediately after return, or false if not.
 export async function handleLogin(win: Window | null, creds: Credentials) {
-	return await handleStandardLogin(win, creds);
-}
-
-// called when login was successful, but with absent or unrecognised login_provider
-async function handleStandardLogin(win: Window | null, creds: Credentials) {
 	const state = StringUtils.makeRandomState();
 	const nonce: string = crypto.randomUUID();
 	const location = BoltService.bolt.origin.concat('/oauth2/auth?').concat(
@@ -190,7 +122,7 @@ export function addNewAccount(account: Account) {
 			data.account = account;
 			const [firstKey] = account.characters.keys();
 			data.character = account.characters.get(firstKey);
-			if (credentialsSub.size > 0) data.credentials = credentialsSub.get(account.userId);
+			if (get(credentials).size > 0) data.credentials = get(credentials).get(account.userId);
 			return data;
 		});
 	};
@@ -200,11 +132,11 @@ export function addNewAccount(account: Account) {
 		return data;
 	});
 
-	if (selectedPlaySub.account && configSub.selected_account) {
-		if (account.userId == configSub.selected_account) {
+	if (get(selectedPlay).account && get(config).selected_account) {
+		if (account.userId == get(config).selected_account) {
 			updateSelectedPlay();
 		}
-	} else if (!selectedPlaySub.account) {
+	} else if (!get(selectedPlay).account) {
 		updateSelectedPlay();
 	}
 	AuthService.pendingOauth = null;
@@ -237,13 +169,14 @@ export function launchRS3Linux(
 	const launch = (hash?: unknown, deb?: never) => {
 		const xml = new XMLHttpRequest();
 		const params: Record<string, string> = {};
+		const _config = get(config);
 		if (hash) params.hash = <string>hash;
 		if (jx_session_id) params.jx_session_id = jx_session_id;
 		if (jx_character_id) params.jx_character_id = jx_character_id;
 		if (jx_display_name) params.jx_display_name = jx_display_name;
-		if (configSub.rs_plugin_loader) params.plugin_loader = '1';
-		if (configSub.rs_config_uri) {
-			params.config_uri = configSub.rs_config_uri;
+		if (_config.rs_plugin_loader) params.plugin_loader = '1';
+		if (_config.rs_config_uri) {
+			params.config_uri = _config.rs_config_uri;
 		} else {
 			params.config_uri = BoltService.bolt.default_config_uri;
 		}
@@ -329,7 +262,7 @@ function launchRuneLiteInner(
 		if (jx_session_id) params.jx_session_id = jx_session_id;
 		if (jx_character_id) params.jx_character_id = jx_character_id;
 		if (jx_display_name) params.jx_display_name = jx_display_name;
-		if (configSub.flatpak_rich_presence) params.flatpak_rich_presence = '';
+		if (get(config).flatpak_rich_presence) params.flatpak_rich_presence = '';
 		xml.open(jar ? 'POST' : 'GET', launchPath.concat(new URLSearchParams(params).toString()), true);
 		xml.onreadystatechange = () => {
 			if (xml.readyState == 4) {
@@ -342,8 +275,8 @@ function launchRuneLiteInner(
 		xml.send(<string>jar);
 	};
 
-	if (configSub.runelite_use_custom_jar) {
-		launch(null, null, configSub.runelite_custom_jar);
+	if (get(config).runelite_use_custom_jar) {
+		launch(null, null, get(config).runelite_custom_jar);
 		return;
 	}
 
