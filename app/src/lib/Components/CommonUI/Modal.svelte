@@ -24,6 +24,9 @@
 <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
 <dialog
 	bind:this={dialog}
+	on:keydown={(e) => {
+		if (e.key === 'Escape' && !canSelfClose) e.preventDefault();
+	}}
 	on:mousedown|self={() => {
 		if (canSelfClose) dialog.close();
 	}}
