@@ -3,6 +3,7 @@
 
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 // comment or uncomment this to enable verbose logging of hooks in this file
@@ -74,6 +75,30 @@ static struct GLTexture2D* _bolt_context_get_texture(struct GLContext*, unsigned
 static struct GLVertexArray* _bolt_context_get_vao(struct GLContext*, unsigned int);
 static void _bolt_glcontext_init(struct GLContext*, void*, void*);
 static void _bolt_glcontext_free(struct GLContext*);
+
+static void _bolt_gl_plugin_drawelements_vertex2d_xy(size_t index, void* userdata, int32_t* out);
+static void _bolt_gl_plugin_drawelements_vertex2d_atlas_xy(size_t index, void* userdata, int32_t* out);
+static void _bolt_gl_plugin_drawelements_vertex2d_atlas_wh(size_t index, void* userdata, int32_t* out);
+static void _bolt_gl_plugin_drawelements_vertex2d_uv(size_t index, void* userdata, double* out);
+static void _bolt_gl_plugin_drawelements_vertex2d_colour(size_t index, void* userdata, double* out);
+static void _bolt_gl_plugin_drawelements_vertex3d_xyz(size_t index, void* userdata, int32_t* out);
+static size_t _bolt_gl_plugin_drawelements_vertex3d_atlas_meta(size_t index, void* userdata);
+static void _bolt_gl_plugin_drawelements_vertex3d_meta_xywh(size_t meta, void* userdata, int32_t* out);
+static void _bolt_gl_plugin_drawelements_vertex3d_uv(size_t index, void* userdata, double* out);
+static void _bolt_gl_plugin_drawelements_vertex3d_colour(size_t index, void* userdata, double* out);
+static void _bolt_gl_plugin_matrix3d_toworldspace(int x, int y, int z, void* userdata, double* out);
+static void _bolt_gl_plugin_matrix3d_toscreenspace(int x, int y, int z, void* userdata, double* out);
+static void _bolt_gl_plugin_matrix3d_worldpos(void* userdata, double* out);
+static size_t _bolt_gl_plugin_texture_id(void* userdata);
+static void _bolt_gl_plugin_texture_size(void* userdata, size_t* out);
+static uint8_t _bolt_gl_plugin_texture_compare(void* userdata, size_t x, size_t y, size_t len, const unsigned char* data);
+static uint8_t* _bolt_gl_plugin_texture_data(void* userdata, size_t x, size_t y);
+static void _bolt_gl_plugin_surface_init(struct SurfaceFunctions* out, unsigned int width, unsigned int height, const void* data);
+static void _bolt_gl_plugin_surface_destroy(void* userdata);
+static void _bolt_gl_plugin_surface_resize(void* userdata, unsigned int width, unsigned int height);
+static void _bolt_gl_plugin_surface_clear(void* userdata, double r, double g, double b, double a);
+static void _bolt_gl_plugin_surface_drawtoscreen(void* userdata, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh);
+static void _bolt_gl_plugin_surface_drawtosurface(void* userdata, void* target, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh);
 
 #define MAX_TEXTURE_UNITS 4096 // would be nice if there was a way to query this at runtime, but it would be awkward to set up
 #define BUFFER_LIST_CAPACITY 256 * 256

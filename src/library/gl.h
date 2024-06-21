@@ -2,7 +2,6 @@
 #define _BOLT_LIBRARY_GL_H_
 
 #include <stdint.h>
-#include <stdlib.h>
 
 #include "../../modules/hashmap/hashmap.h"
 #include "rwlock/rwlock.h"
@@ -301,11 +300,6 @@ struct GLPluginDrawElementsVertex2DUserData {
     struct GLAttrBinding* tex_uv;
     struct GLAttrBinding* colour;
 };
-static void _bolt_gl_plugin_drawelements_vertex2d_xy(size_t index, void* userdata, int32_t* out);
-static void _bolt_gl_plugin_drawelements_vertex2d_atlas_xy(size_t index, void* userdata, int32_t* out);
-static void _bolt_gl_plugin_drawelements_vertex2d_atlas_wh(size_t index, void* userdata, int32_t* out);
-static void _bolt_gl_plugin_drawelements_vertex2d_uv(size_t index, void* userdata, double* out);
-static void _bolt_gl_plugin_drawelements_vertex2d_colour(size_t index, void* userdata, double* out);
 
 struct GLPluginDrawElementsVertex3DUserData {
     struct GLContext* c;
@@ -318,33 +312,14 @@ struct GLPluginDrawElementsVertex3DUserData {
     struct GLAttrBinding* tex_uv;
     struct GLAttrBinding* colour;
 };
-static void _bolt_gl_plugin_drawelements_vertex3d_xyz(size_t index, void* userdata, int32_t* out);
-static size_t _bolt_gl_plugin_drawelements_vertex3d_atlas_meta(size_t index, void* userdata);
-static void _bolt_gl_plugin_drawelements_vertex3d_meta_xywh(size_t meta, void* userdata, int32_t* out);
-static void _bolt_gl_plugin_drawelements_vertex3d_uv(size_t index, void* userdata, double* out);
-static void _bolt_gl_plugin_drawelements_vertex3d_colour(size_t index, void* userdata, double* out);
 
 struct GLPlugin3DMatrixUserData {
     float model_matrix[16];
     float viewproj_matrix[16];
 };
-static void _bolt_gl_plugin_matrix3d_toworldspace(int x, int y, int z, void* userdata, double* out);
-static void _bolt_gl_plugin_matrix3d_toscreenspace(int x, int y, int z, void* userdata, double* out);
-static void _bolt_gl_plugin_matrix3d_worldpos(void* userdata, double* out);
 
 struct GLPluginTextureUserData {
     struct GLTexture2D* tex;
 };
-static size_t _bolt_gl_plugin_texture_id(void* userdata);
-static void _bolt_gl_plugin_texture_size(void* userdata, size_t* out);
-static uint8_t _bolt_gl_plugin_texture_compare(void* userdata, size_t x, size_t y, size_t len, const unsigned char* data);
-static uint8_t* _bolt_gl_plugin_texture_data(void* userdata, size_t x, size_t y);
-
-static void _bolt_gl_plugin_surface_init(struct SurfaceFunctions* out, unsigned int width, unsigned int height, const void* data);
-static void _bolt_gl_plugin_surface_destroy(void* userdata);
-static void _bolt_gl_plugin_surface_resize(void* userdata, unsigned int width, unsigned int height);
-static void _bolt_gl_plugin_surface_clear(void* userdata, double r, double g, double b, double a);
-static void _bolt_gl_plugin_surface_drawtoscreen(void* userdata, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh);
-static void _bolt_gl_plugin_surface_drawtosurface(void* userdata, void* target, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh);
 
 #endif
