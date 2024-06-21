@@ -365,6 +365,29 @@ static int api_window_clear(lua_State*);
 /// window contents in response to a resize event (or any time before it next gets drawn).
 static int api_window_onresize(lua_State*);
 
+/// [-2, +0, -]
+/// Sets an event handler for this window for mouse motion events. If the value is a function, it
+/// will be called with the following parameters: window, x, y. If the value is not a function, it
+/// will not be called, and therefore the plugin will not be notified of mouse motion events. The x
+/// and y are pixel coordinates relative to the top-left of the window.
+static int api_window_onmousemotion(lua_State*);
+
+/// [-2, +0, -]
+/// Sets an event handler for this window for mouse button events. If the value is a function, it
+/// will be called with the following parameters: window, button, x, y. If the value is not a
+/// function, it will not be called, and therefore the plugin will not be notified of button
+/// events. The button may be 1 (left), 2 (right), or 3 (middle). The x and y are pixel coordinates
+/// relative to the top-left of the window.
+static int api_window_onmousebutton(lua_State*);
+
+/// [-2, +0, -]
+/// Sets an event handler for this window for mouse scroll events. If the value is a function, it
+/// will be called with the following parameters: window, direction. If the value is not a
+/// function, it will not be called, and therefore the plugin will not be notified of mouse scroll
+/// events. "direction" is a boolean value: false represents scrolling down, towards the user, and
+/// true represents scrolling up, away from the user.
+static int api_window_onscroll(lua_State*);
+
 /// [-1, +1, -]
 /// Returns the number of vertices in a 3D render object (i.e. a model).
 static int api_render3d_vertexcount(lua_State*);

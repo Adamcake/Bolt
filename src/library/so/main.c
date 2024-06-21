@@ -414,24 +414,33 @@ static uint8_t _bolt_handle_xcb_motion_event(xcb_window_t win, int16_t x, int16_
     _bolt_rwlock_lock_read(&windows->lock);
     size_t iter = 0;
     void* item;
-    while (ret && hashmap_iter(windows->map, &iter, &item)) {
+    while (hashmap_iter(windows->map, &iter, &item)) {
         struct EmbeddedWindow** window = item;
         _bolt_rwlock_lock_read(&(*window)->lock);
         if (_bolt_point_in_rect(x, y, (*window)->metadata.x, (*window)->metadata.y, (*window)->metadata.width, (*window)->metadata.height)) {
             ret = false;
         }
         _bolt_rwlock_unlock_read(&(*window)->lock);
+
+        if (!ret) {
+            _bolt_rwlock_lock_write(&(*window)->lock);
+            (*window)->metadata.input.mouse_motion = 1;
+            (*window)->metadata.input.motion_x = x - (*window)->metadata.x;
+            (*window)->metadata.input.motion_y = y - (*window)->metadata.y;
+            _bolt_rwlock_unlock_write(&(*window)->lock);
+            break;
+        }
     }
     _bolt_rwlock_unlock_read(&windows->lock);
     if (ret != xcb_mousein_fake) {
         xcb_mousein_fake = ret;
-        ret = true;
         // mutate the event - note that motion_notify, enter_notify and exit_notify have the exact
         // same memory layout, except for the last two bytes, so this is a fairly easy mutation
         xcb_enter_notify_event_t* event = (xcb_enter_notify_event_t*)e;
         event->response_type = ret ? XCB_ENTER_NOTIFY : XCB_LEAVE_NOTIFY;
         event->same_screen_focus = event->mode;
         event->mode = 0;
+        ret = true;
     }
     return ret;
 }
@@ -485,6 +494,35 @@ static uint8_t _bolt_handle_xcb_event(xcb_connection_t* c, xcb_generic_event_t* 
                     ret = false;
                 }
                 _bolt_rwlock_unlock_read(&(*window)->lock);
+
+                if (!ret) {
+                    _bolt_rwlock_lock_write(&(*window)->lock);
+                    switch (event->detail) {
+                        case 1:
+                            (*window)->metadata.input.left_click = 1;
+                            (*window)->metadata.input.left_click_x = event->event_x - (*window)->metadata.x;
+                            (*window)->metadata.input.left_click_y = event->event_y - (*window)->metadata.y;
+                            break;
+                        case 2:
+                            (*window)->metadata.input.middle_click = 1;
+                            (*window)->metadata.input.middle_click_x = event->event_x - (*window)->metadata.x;
+                            (*window)->metadata.input.middle_click_y = event->event_y - (*window)->metadata.y;
+                            break;
+                        case 3:
+                            (*window)->metadata.input.right_click = 1;
+                            (*window)->metadata.input.right_click_x = event->event_x - (*window)->metadata.x;
+                            (*window)->metadata.input.right_click_y = event->event_y - (*window)->metadata.y;
+                            break;
+                        case 4:
+                            (*window)->metadata.input.scroll_up = 1;
+                            break;
+                        case 5:
+                            (*window)->metadata.input.scroll_down = 1;
+                            break;
+                    }
+                    _bolt_rwlock_unlock_write(&(*window)->lock);
+                    break;
+                }
             }
             _bolt_rwlock_unlock_read(&windows->lock);
             return ret;

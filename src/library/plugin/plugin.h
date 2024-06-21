@@ -10,6 +10,12 @@ struct RenderBatch2D;
 struct Plugin;
 struct lua_State;
 
+enum PluginMouseButton {
+    MBLeft = 1,
+    MBRight = 2,
+    MBMiddle = 3,
+};
+
 /// Struct containing "vtable" callback information for RenderBatch2D's list of vertices.
 /// Unless stated otherwise, functions will be called with three params: the index, the specified
 /// userdata, and an output pointer, which must be able to index the returned number of items.
@@ -123,11 +129,31 @@ struct PluginManagedFunctions {
     void (*surface_destroy)(void*);
 };
 
+struct WindowPendingInput {
+    /* bools are listed at the top to make the structure smaller by having less padding in it */
+    uint8_t mouse_motion;
+    uint8_t left_click;
+    uint8_t right_click;
+    uint8_t middle_click;
+    uint8_t scroll_up;
+    uint8_t scroll_down;
+
+    int motion_x;
+    int motion_y;
+    int left_click_x;
+    int left_click_y;
+    int right_click_x;
+    int right_click_y;
+    int middle_click_x;
+    int middle_click_y;
+};
+
 struct EmbeddedWindowMetadata {
     int x;
     int y;
     int width;
     int height;
+    struct WindowPendingInput input;
 };
 
 struct EmbeddedWindow {
@@ -139,8 +165,9 @@ struct EmbeddedWindow {
 };
 
 struct WindowInfo {
-    RWLock lock;
+    RWLock lock; // applies to the whole struct
     struct hashmap* map;
+    struct WindowPendingInput input;
 };
 
 struct RenderBatch2D {
@@ -223,5 +250,14 @@ void _bolt_plugin_handle_minimap(struct RenderMinimapEvent*);
 
 /// Calls the window's handler for resize events.
 void _bolt_plugin_window_onresize(struct EmbeddedWindow*, int, int);
+
+/// Calls the window's handler for mouse motion events.
+void _bolt_plugin_window_onmousemotion(struct EmbeddedWindow*, int, int);
+
+/// Calls the window's handler for mouse button events.
+void _bolt_plugin_window_onmousebutton(struct EmbeddedWindow*, enum PluginMouseButton, int, int);
+
+/// Calls the window's handler for mouse scroll events.
+void _bolt_plugin_window_onscroll(struct EmbeddedWindow*, uint8_t);
 
 #endif

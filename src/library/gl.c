@@ -1092,38 +1092,31 @@ void _bolt_gl_onSwapBuffers(uint32_t window_width, uint32_t window_height) {
             struct EmbeddedWindow* window = *(struct EmbeddedWindow**)item;
             _bolt_rwlock_lock_write(&window->lock);
             struct EmbeddedWindowMetadata metadata = window->metadata;
-            bool did_change = false;
             bool did_resize = false;
             if (metadata.width > window_width) {
                 metadata.width = window_width;
                 did_resize = true;
-                did_change = true;
             }
             if (metadata.height > window_height) {
                 metadata.height = window_height;
                 did_resize = true;
-                did_change = true;
             }
             if (metadata.x < 0) {
                 metadata.x = 0;
-                did_change = true;
             }
             if (metadata.y < 0) {
                 metadata.y = 0;
-                did_change = true;
             }
             if (metadata.x + metadata.width > window_width) {
                 metadata.x = window_width - metadata.width;
-                did_change = true;
             }
             if (metadata.y + metadata.height > window_height) {
                 metadata.y = window_height - metadata.height;
-                did_change = true;
             }
-            if (did_change) {
-                window->metadata = metadata;
-            }
+            window->metadata = metadata;
+            memset(&window->metadata.input, 0, sizeof(window->metadata.input));
             _bolt_rwlock_unlock_write(&window->lock);
+
             if (did_resize) {
                 struct PluginSurfaceUserdata* ud = window->surface_functions.userdata;
                 _bolt_gl_surface_destroy_buffers(ud);
@@ -1134,6 +1127,26 @@ void _bolt_gl_onSwapBuffers(uint32_t window_width, uint32_t window_height) {
                 lgl->Clear(GL_COLOR_BUFFER_BIT);
                 _bolt_plugin_window_onresize(window, metadata.width, metadata.height);
             }
+
+            if (metadata.input.mouse_motion) {
+                _bolt_plugin_window_onmousemotion(window, metadata.input.motion_x, metadata.input.motion_y);
+            }
+            if (metadata.input.left_click) {
+                _bolt_plugin_window_onmousebutton(window, MBLeft, metadata.input.left_click_x, metadata.input.left_click_y);
+            }
+            if (metadata.input.right_click) {
+                _bolt_plugin_window_onmousebutton(window, MBRight, metadata.input.right_click_x, metadata.input.right_click_y);
+            }
+            if (metadata.input.middle_click) {
+                _bolt_plugin_window_onmousebutton(window, MBMiddle, metadata.input.middle_click_x, metadata.input.middle_click_y);
+            }
+            if (metadata.input.scroll_up) {
+                _bolt_plugin_window_onscroll(window, 1);
+            }
+            if (metadata.input.scroll_down) {
+                _bolt_plugin_window_onscroll(window, 0);
+            }
+
             window->surface_functions.draw_to_screen(window->surface_functions.userdata, 0, 0, metadata.width, metadata.height, metadata.x, metadata.y, metadata.width, metadata.height);
         }
         _bolt_rwlock_unlock_read(&windows->lock);
