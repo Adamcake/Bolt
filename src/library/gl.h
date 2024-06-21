@@ -342,6 +342,7 @@ static uint8_t* _bolt_gl_plugin_texture_data(void* userdata, size_t x, size_t y)
 
 static void _bolt_gl_plugin_surface_init(struct SurfaceFunctions* out, unsigned int width, unsigned int height, const void* data);
 static void _bolt_gl_plugin_surface_destroy(void* userdata);
+static void _bolt_gl_plugin_surface_resize(void* userdata, unsigned int width, unsigned int height);
 static void _bolt_gl_plugin_surface_clear(void* userdata, double r, double g, double b, double a);
 static void _bolt_gl_plugin_surface_drawtoscreen(void* userdata, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh);
 static void _bolt_gl_plugin_surface_drawtosurface(void* userdata, void* target, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh);

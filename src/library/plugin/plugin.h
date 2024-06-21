@@ -127,6 +127,7 @@ struct SurfaceFunctions {
 struct PluginManagedFunctions {
     void (*surface_init)(struct SurfaceFunctions*, unsigned int, unsigned int, const void*);
     void (*surface_destroy)(void*);
+    void (*surface_resize_and_clear)(void*, unsigned int, unsigned int);
 };
 
 struct WindowPendingInput {
@@ -210,6 +211,10 @@ void _bolt_plugin_init(const struct PluginManagedFunctions*);
 /// close), otherwise false. This function is not thread-safe, since in a multi-threaded context,
 /// the returned value could be invalidated immediately by another thread calling plugin_init.
 uint8_t _bolt_plugin_is_inited();
+
+/// Processes events for all plugin windows/browsers and renders them. Needs the width and height
+/// of the game view.
+void _bolt_plugin_process_windows(uint32_t, uint32_t);
 
 /// Close the plugin library.
 void _bolt_plugin_close();

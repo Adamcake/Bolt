@@ -1080,77 +1080,7 @@ void* _bolt_gl_GetProcAddress(const char* name) {
 void _bolt_gl_onSwapBuffers(uint32_t window_width, uint32_t window_height) {
     gl_width = window_width;
     gl_height = window_height;
-    if (_bolt_plugin_is_inited()) {
-        struct SwapBuffersEvent event;
-        _bolt_plugin_handle_swapbuffers(&event);
-        _bolt_plugin_handle_messages();
-        struct WindowInfo* windows = _bolt_plugin_windowinfo();
-        _bolt_rwlock_lock_read(&windows->lock);
-        size_t iter = 0;
-        void* item;
-        while (hashmap_iter(windows->map, &iter, &item)) {
-            struct EmbeddedWindow* window = *(struct EmbeddedWindow**)item;
-            _bolt_rwlock_lock_write(&window->lock);
-            struct EmbeddedWindowMetadata metadata = window->metadata;
-            bool did_resize = false;
-            if (metadata.width > window_width) {
-                metadata.width = window_width;
-                did_resize = true;
-            }
-            if (metadata.height > window_height) {
-                metadata.height = window_height;
-                did_resize = true;
-            }
-            if (metadata.x < 0) {
-                metadata.x = 0;
-            }
-            if (metadata.y < 0) {
-                metadata.y = 0;
-            }
-            if (metadata.x + metadata.width > window_width) {
-                metadata.x = window_width - metadata.width;
-            }
-            if (metadata.y + metadata.height > window_height) {
-                metadata.y = window_height - metadata.height;
-            }
-            window->metadata = metadata;
-            memset(&window->metadata.input, 0, sizeof(window->metadata.input));
-            _bolt_rwlock_unlock_write(&window->lock);
-
-            if (did_resize) {
-                struct PluginSurfaceUserdata* ud = window->surface_functions.userdata;
-                _bolt_gl_surface_destroy_buffers(ud);
-                ud->width = metadata.width;
-                ud->height = metadata.height;
-                _bolt_gl_surface_init_buffers(ud);
-                lgl->ClearColor(0.0, 0.0, 0.0, 0.0);
-                lgl->Clear(GL_COLOR_BUFFER_BIT);
-                _bolt_plugin_window_onresize(window, metadata.width, metadata.height);
-            }
-
-            if (metadata.input.mouse_motion) {
-                _bolt_plugin_window_onmousemotion(window, metadata.input.motion_x, metadata.input.motion_y);
-            }
-            if (metadata.input.left_click) {
-                _bolt_plugin_window_onmousebutton(window, MBLeft, metadata.input.left_click_x, metadata.input.left_click_y);
-            }
-            if (metadata.input.right_click) {
-                _bolt_plugin_window_onmousebutton(window, MBRight, metadata.input.right_click_x, metadata.input.right_click_y);
-            }
-            if (metadata.input.middle_click) {
-                _bolt_plugin_window_onmousebutton(window, MBMiddle, metadata.input.middle_click_x, metadata.input.middle_click_y);
-            }
-            if (metadata.input.scroll_up) {
-                _bolt_plugin_window_onscroll(window, 1);
-            }
-            if (metadata.input.scroll_down) {
-                _bolt_plugin_window_onscroll(window, 0);
-            }
-
-            window->surface_functions.draw_to_screen(window->surface_functions.userdata, 0, 0, metadata.width, metadata.height, metadata.x, metadata.y, metadata.width, metadata.height);
-        }
-        _bolt_rwlock_unlock_read(&windows->lock);
-    }
+    _bolt_plugin_process_windows(window_width, window_height);
 }
 
 void _bolt_gl_onCreateContext(void* context, void* shared_context, const struct GLLibFunctions* libgl, void* (*GetProcAddress)(const char*)) {
@@ -1189,6 +1119,7 @@ void _bolt_gl_onMakeCurrent(void* context) {
         const struct PluginManagedFunctions functions = {
             .surface_init = _bolt_gl_plugin_surface_init,
             .surface_destroy = _bolt_gl_plugin_surface_destroy,
+            .surface_resize_and_clear = _bolt_gl_plugin_surface_resize,
         };
         _bolt_plugin_init(&functions);
     }
@@ -1685,6 +1616,16 @@ static void _bolt_gl_plugin_surface_destroy(void* _userdata) {
     struct PluginSurfaceUserdata* userdata = _userdata;
     _bolt_gl_surface_destroy_buffers(userdata);
     free(userdata);
+}
+
+static void _bolt_gl_plugin_surface_resize(void* _userdata, unsigned int width, unsigned int height) {
+    struct PluginSurfaceUserdata* userdata = _userdata;
+    _bolt_gl_surface_destroy_buffers(userdata);
+    userdata->width = width;
+    userdata->height = height;
+    _bolt_gl_surface_init_buffers(userdata);
+    lgl->ClearColor(0.0, 0.0, 0.0, 0.0);
+    lgl->Clear(GL_COLOR_BUFFER_BIT);
 }
 
 static void _bolt_gl_plugin_surface_clear(void* _userdata, double r, double g, double b, double a) {
