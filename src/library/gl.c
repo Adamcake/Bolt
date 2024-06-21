@@ -1688,7 +1688,6 @@ static void _bolt_gl_plugin_surface_destroy(void* _userdata) {
 }
 
 static void _bolt_gl_plugin_surface_clear(void* _userdata, double r, double g, double b, double a) {
-    lgl->GetError();
     struct PluginSurfaceUserdata* userdata = _userdata;
     struct GLContext* c = _bolt_context();
     gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, userdata->framebuffer);
