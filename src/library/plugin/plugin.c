@@ -649,7 +649,7 @@ void _bolt_plugin_window_onscroll(struct EmbeddedWindow* window, uint8_t directi
         lua_pushlightuserdata(state, window); /*stack: window table, event table, function, window*/
         lua_getfield(state, LUA_REGISTRYINDEX, WINDOW_META_REGISTRYNAME); /*stack: window table, event table, function, window, window metatable*/
         lua_setmetatable(state, -2); /*stack: window table, event table, function, window*/
-        lua_pushinteger(state, direction); /*stack: window table, event table, function, window, direction*/
+        lua_pushboolean(state, direction); /*stack: window table, event table, function, window, direction*/
         if (lua_pcall(state, 2, 0, 0)) { /*stack: window table, event table, ?error*/
             const char* e = lua_tolstring(state, -1, 0);
             printf("plugin window onscroll error: %s\n", e);
