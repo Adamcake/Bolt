@@ -34,7 +34,6 @@
 #define MOUSEBUTTON_META_REGISTRYNAME "mousebuttonmeta"
 #define SCROLL_META_REGISTRYNAME "scrollmeta"
 #define WINDOW_META_REGISTRYNAME "windowmeta"
-#define WINDOWLIGHT_META_REGISTRYNAME "windowlightmeta"
 #define SWAPBUFFERS_CB_REGISTRYNAME "swapbufferscb"
 #define BATCH2D_CB_REGISTRYNAME "batch2dcb"
 #define RENDER3D_CB_REGISTRYNAME "render3dcb"
@@ -598,27 +597,22 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     lua_settable(plugin->state, LUA_REGISTRYINDEX);
 
     // create both of the metatables for Window objects
-    for (size_t i = 0; i <= 1; i += 1) {
-        if (i == 0) PUSHSTRING(plugin->state, WINDOW_META_REGISTRYNAME);
-        else PUSHSTRING(plugin->state, WINDOWLIGHT_META_REGISTRYNAME);
-        lua_newtable(plugin->state);
-        PUSHSTRING(plugin->state, "__index");
-        lua_createtable(plugin->state, 0, 7);
-        API_ADD_SUB(plugin->state, id, window)
-        API_ADD_SUB(plugin->state, size, window)
-        API_ADD_SUB(plugin->state, clear, window)
-        API_ADD_SUB(plugin->state, onresize, window)
-        API_ADD_SUB(plugin->state, onmousemotion, window)
-        API_ADD_SUB(plugin->state, onmousebutton, window)
-        API_ADD_SUB(plugin->state, onscroll, window)
-        lua_settable(plugin->state, -3);
-        if (i == 0) {
-            PUSHSTRING(plugin->state, "__gc");
-            lua_pushcfunction(plugin->state, window_gc);
-            lua_settable(plugin->state, -3);
-        }
-        lua_settable(plugin->state, LUA_REGISTRYINDEX);
-    }
+    PUSHSTRING(plugin->state, WINDOW_META_REGISTRYNAME);
+    lua_newtable(plugin->state);
+    PUSHSTRING(plugin->state, "__index");
+    lua_createtable(plugin->state, 0, 7);
+    API_ADD_SUB(plugin->state, id, window)
+    API_ADD_SUB(plugin->state, size, window)
+    API_ADD_SUB(plugin->state, clear, window)
+    API_ADD_SUB(plugin->state, onresize, window)
+    API_ADD_SUB(plugin->state, onmousemotion, window)
+    API_ADD_SUB(plugin->state, onmousebutton, window)
+    API_ADD_SUB(plugin->state, onscroll, window)
+    lua_settable(plugin->state, -3);
+    PUSHSTRING(plugin->state, "__gc");
+    lua_pushcfunction(plugin->state, window_gc);
+    lua_settable(plugin->state, -3);
+    lua_settable(plugin->state, LUA_REGISTRYINDEX);
 
     // create the metatable for all ResizeEvent objects
     PUSHSTRING(plugin->state, RESIZE_META_REGISTRYNAME);
