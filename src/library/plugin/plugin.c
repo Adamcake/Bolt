@@ -385,7 +385,7 @@ void _bolt_plugin_process_windows(uint32_t window_width, uint32_t window_height)
             _bolt_plugin_window_onscroll(window, &event);
         }
         if (inputs.mouse_scroll_down) {
-            struct MouseScrollEvent event = {.details = &inputs.mouse_scroll_up_event, .direction = 0};
+            struct MouseScrollEvent event = {.details = &inputs.mouse_scroll_down_event, .direction = 0};
             _bolt_plugin_window_onscroll(window, &event);
         }
 
