@@ -399,9 +399,8 @@ static int api_window_clear(lua_State*);
 
 /// [-2, +0, -]
 /// Sets an event handler for this window for resize events. If the value is a function, it will be
-/// called with two parameters: the window object, and a resize event object. If the value is not a
-/// function, it will not be called, and therefore the plugin will not be notified of resize
-/// events.
+/// called with one parameter, that being a resize event object. If the value is not a function, it
+/// will not be called, and therefore the plugin will not be notified of resize events.
 ///
 /// Resizing a window clears the contents to be transparent, so plugins must redraw the whole
 /// window contents in response to a resize event (or any time before it next gets drawn).
@@ -409,23 +408,23 @@ static int api_window_onresize(lua_State*);
 
 /// [-2, +0, -]
 /// Sets an event handler for this window for mouse motion events. If the value is a function, it
-/// will be called with two parameters: the window object, and a mouse motion object. If the value
-/// is not a function, it will not be called, and therefore the plugin will not be notified of
-/// mouse motion events.
+/// will be called with one parameter, that being a mouse motion object. If the value is not a
+/// function, it will not be called, and therefore the plugin will not be notified of mouse motion
+/// events.
 static int api_window_onmousemotion(lua_State*);
 
 /// [-2, +0, -]
 /// Sets an event handler for this window for mouse button events. If the value is a function, it
-/// will be called with two parameters: the window object, and a mouse-button object. If the value
-/// is not a function, it will not be called, and therefore the plugin will not be notified of
-/// mouse-button events.
+/// will be called with one parameter, that being a mouse-button object. If the value is not a
+/// function, it will not be called, and therefore the plugin will not be notified of mouse-button
+/// events.
 static int api_window_onmousebutton(lua_State*);
 
 /// [-2, +0, -]
 /// Sets an event handler for this window for mouse scroll events. If the value is a function, it
-/// will be called with two parameters: the window object, and a mouse-scroll object. If the value
-/// is not a function, it will not be called, and therefore the plugin will not be notified of
-/// mouse-scroll events.
+/// will be called with one parameter, that being a mouse-scroll object. If the value is not a
+/// function, it will not be called, and therefore the plugin will not be notified of mouse-scroll
+/// events.
 static int api_window_onscroll(lua_State*);
 
 /// [-1, +1, -]

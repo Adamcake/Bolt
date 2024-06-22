@@ -133,7 +133,8 @@ void _bolt_plugin_handle_##APINAME(struct STRUCTNAME* e) { \
     void* item; \
     while (hashmap_iter(plugins, &iter, &item)) { \
         struct Plugin* plugin = *(struct Plugin* const*)item; \
-        lua_pushlightuserdata(plugin->state, e); /*stack: userdata*/ \
+        void* newud = lua_newuserdata(plugin->state, sizeof(struct STRUCTNAME)); /*stack: userdata*/ \
+        memcpy(newud, e, sizeof(struct STRUCTNAME)); \
         lua_getfield(plugin->state, LUA_REGISTRYINDEX, REGNAME##_META_REGISTRYNAME); /*stack: userdata, metatable*/ \
         lua_setmetatable(plugin->state, -2); /*stack: userdata*/ \
         PUSHSTRING(plugin->state, REGNAME##_CB_REGISTRYNAME); /*stack: userdata, enumname*/ \
@@ -193,13 +194,11 @@ void _bolt_plugin_window_on##APINAME(struct EmbeddedWindow* window, struct EVNAM
     lua_pushinteger(state, WINDOW_ON##REGNAME); /*stack: window table, event table, event id*/ \
     lua_gettable(state, -2); /*stack: window table, event table, function or nil*/ \
     if (lua_isfunction(state, -1)) { \
-        lua_pushlightuserdata(state, window); /*stack: window table, event table, function, window*/ \
-        lua_getfield(state, LUA_REGISTRYINDEX, WINDOWLIGHT_META_REGISTRYNAME); /*stack: window table, event table, function, window, window metatable*/ \
-        lua_setmetatable(state, -2); /*stack: window table, event table, function, window*/ \
-        lua_pushlightuserdata(state, event); /*stack: window table, event table, function, window, event*/ \
-        lua_getfield(state, LUA_REGISTRYINDEX, REGNAME##_META_REGISTRYNAME); /*stack: window table, event table, function, window, event, event metatable*/ \
-        lua_setmetatable(state, -2); /*stack: window table, event table, function, window, event*/ \
-        if (lua_pcall(state, 2, 0, 0)) { /*stack: window table, event table, ?error*/ \
+        void* newud = lua_newuserdata(state, sizeof(struct EVNAME)); /*stack: window table, event table, function, event*/ \
+        memcpy(newud, event, sizeof(struct EVNAME)); \
+        lua_getfield(state, LUA_REGISTRYINDEX, REGNAME##_META_REGISTRYNAME); /*stack: window table, event table, function, event, event metatable*/ \
+        lua_setmetatable(state, -2); /*stack: window table, event table, function, event*/ \
+        if (lua_pcall(state, 1, 0, 0)) { /*stack: window table, event table, ?error*/ \
             const char* e = lua_tolstring(state, -1, 0); \
             printf("plugin window on" #APINAME " error: %s\n", e); \
             lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME); /*stack: window table, event table, error, plugin*/ \
