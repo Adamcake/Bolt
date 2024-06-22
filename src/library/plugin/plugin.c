@@ -29,11 +29,19 @@
 #define MINIMAP_META_REGISTRYNAME "minimapmeta"
 #define SWAPBUFFERS_META_REGISTRYNAME "swapbuffersmeta"
 #define SURFACE_META_REGISTRYNAME "surfacemeta"
+#define RESIZE_META_REGISTRYNAME "resizemeta"
+#define MOUSEMOTION_META_REGISTRYNAME "mousemotionmeta"
+#define MOUSEBUTTON_META_REGISTRYNAME "mousebuttonmeta"
+#define SCROLL_META_REGISTRYNAME "scrollmeta"
 #define WINDOW_META_REGISTRYNAME "windowmeta"
+#define WINDOWLIGHT_META_REGISTRYNAME "windowlightmeta"
 #define SWAPBUFFERS_CB_REGISTRYNAME "swapbufferscb"
 #define BATCH2D_CB_REGISTRYNAME "batch2dcb"
 #define RENDER3D_CB_REGISTRYNAME "render3dcb"
 #define MINIMAP_CB_REGISTRYNAME "minimapcb"
+#define MOUSEMOTION_CB_REGISTRYNAME "mousemotioncb"
+#define MOUSEBUTTON_CB_REGISTRYNAME "mousebuttoncb"
+#define SCROLL_CB_REGISTRYNAME "scrollcb"
 
 enum {
     WINDOW_ONRESIZE,
@@ -41,6 +49,23 @@ enum {
     WINDOW_ONMOUSEBUTTON,
     WINDOW_ONSCROLL,
     WINDOW_EVENT_ENUM_SIZE, // last member of enum
+};
+
+struct ResizeEvent {
+    uint16_t width;
+    uint16_t height;
+};
+
+struct MouseMotionEvent {
+    struct MouseEvent* details;
+};
+struct MouseButtonEvent {
+    struct MouseEvent* details;
+    uint8_t button; // 1 left, 2 right, 3 middle
+};
+struct MouseScrollEvent {
+    struct MouseEvent* details;
+    uint8_t direction; // 0 down, 1 up
 };
 
 static struct PluginManagedFunctions managed_functions;
@@ -63,6 +88,14 @@ struct Plugin {
     uint32_t id_length;
     uint32_t path_length;
 };
+
+static void _bolt_plugin_window_onresize(struct EmbeddedWindow*, struct ResizeEvent*);
+static void _bolt_plugin_window_onmousemotion(struct EmbeddedWindow*, struct MouseMotionEvent*);
+static void _bolt_plugin_window_onmousebutton(struct EmbeddedWindow*, struct MouseButtonEvent*);
+static void _bolt_plugin_window_onscroll(struct EmbeddedWindow*, struct MouseScrollEvent*);
+static void _bolt_plugin_handle_mousemotion(struct MouseMotionEvent*);
+static void _bolt_plugin_handle_mousebutton(struct MouseButtonEvent*);
+static void _bolt_plugin_handle_scroll(struct MouseScrollEvent*);
 
 void _bolt_plugin_free(struct Plugin* const* plugin) {
     lua_close((*plugin)->state);
@@ -133,9 +166,9 @@ static int api_setcallback##APINAME(lua_State* state) { \
     return 0; \
 }
 
-// macro for defining function "api_window_on*"
-// e.g. DEFINE_WINDOWEVENT(resize, RESIZE)
-#define DEFINE_WINDOWEVENT(APINAME, REGNAME) \
+// macro for defining function "api_window_on*" and "_bolt_plugin_window_on*"
+// e.g. DEFINE_WINDOWEVENT(resize, RESIZE, ResizeEvent)
+#define DEFINE_WINDOWEVENT(APINAME, REGNAME, EVNAME) \
 static int api_window_on##APINAME(lua_State* state) { \
     _bolt_check_argc(state, 2, "window_on"#APINAME); \
     const struct EmbeddedWindow* window = lua_touserdata(state, 1); \
@@ -151,6 +184,34 @@ static int api_window_on##APINAME(lua_State* state) { \
     lua_settable(state, -3); /*stack: window table, event table*/ \
     lua_pop(state, 2); /*stack: (empty)*/ \
     return 0; \
+} \
+void _bolt_plugin_window_on##APINAME(struct EmbeddedWindow* window, struct EVNAME* event) { \
+    lua_State* state = window->plugin; \
+    lua_getfield(state, LUA_REGISTRYINDEX, WINDOWS_REGISTRYNAME); /*stack: window table*/ \
+    lua_pushinteger(state, window->id); /*stack: window table, window id*/ \
+    lua_gettable(state, -2); /*stack: window table, event table*/ \
+    lua_pushinteger(state, WINDOW_ON##REGNAME); /*stack: window table, event table, event id*/ \
+    lua_gettable(state, -2); /*stack: window table, event table, function or nil*/ \
+    if (lua_isfunction(state, -1)) { \
+        lua_pushlightuserdata(state, window); /*stack: window table, event table, function, window*/ \
+        lua_getfield(state, LUA_REGISTRYINDEX, WINDOWLIGHT_META_REGISTRYNAME); /*stack: window table, event table, function, window, window metatable*/ \
+        lua_setmetatable(state, -2); /*stack: window table, event table, function, window*/ \
+        lua_pushlightuserdata(state, event); /*stack: window table, event table, function, window, event*/ \
+        lua_getfield(state, LUA_REGISTRYINDEX, REGNAME##_META_REGISTRYNAME); /*stack: window table, event table, function, window, event, event metatable*/ \
+        lua_setmetatable(state, -2); /*stack: window table, event table, function, window, event*/ \
+        if (lua_pcall(state, 2, 0, 0)) { /*stack: window table, event table, ?error*/ \
+            const char* e = lua_tolstring(state, -1, 0); \
+            printf("plugin window on" #APINAME " error: %s\n", e); \
+            lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME); /*stack: window table, event table, error, plugin*/ \
+            const struct Plugin* plugin = lua_touserdata(state, -1); \
+            lua_pop(state, 4); /*stack: (empty)*/ \
+            _bolt_plugin_stop(plugin->id, plugin->id_length); \
+        } else { \
+            lua_pop(state, 2); /*stack: (empty)*/ \
+        } \
+    } else { \
+        lua_pop(state, 3); \
+    } \
 }
 
 static int surface_gc(lua_State* state) {
@@ -227,72 +288,112 @@ uint8_t _bolt_plugin_is_inited() {
 }
 
 void _bolt_plugin_process_windows(uint32_t window_width, uint32_t window_height) {
-    if (_bolt_plugin_is_inited()) {
-        struct SwapBuffersEvent event;
-        _bolt_plugin_handle_swapbuffers(&event);
-        _bolt_plugin_handle_messages();
-        struct WindowInfo* windows = _bolt_plugin_windowinfo();
-        _bolt_rwlock_lock_read(&windows->lock);
-        size_t iter = 0;
-        void* item;
-        while (hashmap_iter(windows->map, &iter, &item)) {
-            struct EmbeddedWindow* window = *(struct EmbeddedWindow**)item;
-            _bolt_rwlock_lock_write(&window->lock);
-            struct EmbeddedWindowMetadata metadata = window->metadata;
-            bool did_resize = false;
-            if (metadata.width > window_width) {
-                metadata.width = window_width;
-                did_resize = true;
-            }
-            if (metadata.height > window_height) {
-                metadata.height = window_height;
-                did_resize = true;
-            }
-            if (metadata.x < 0) {
-                metadata.x = 0;
-            }
-            if (metadata.y < 0) {
-                metadata.y = 0;
-            }
-            if (metadata.x + metadata.width > window_width) {
-                metadata.x = window_width - metadata.width;
-            }
-            if (metadata.y + metadata.height > window_height) {
-                metadata.y = window_height - metadata.height;
-            }
-            window->metadata = metadata;
-            memset(&window->metadata.input, 0, sizeof(window->metadata.input));
-            _bolt_rwlock_unlock_write(&window->lock);
+    struct SwapBuffersEvent event;
+    _bolt_plugin_handle_swapbuffers(&event);
+    _bolt_plugin_handle_messages();
+    struct WindowInfo* windows = _bolt_plugin_windowinfo();
 
-            if (did_resize) {
-                struct PluginSurfaceUserdata* ud = window->surface_functions.userdata;
-                managed_functions.surface_resize_and_clear(ud, metadata.width, metadata.height);
-                _bolt_plugin_window_onresize(window, metadata.width, metadata.height);
-            }
+    _bolt_rwlock_lock_write(&windows->input_lock);
+    struct WindowPendingInput inputs = windows->input;
+    memset(&windows->input, 0, sizeof(windows->input));
+    _bolt_rwlock_unlock_write(&windows->input_lock);
 
-            if (metadata.input.mouse_motion) {
-                _bolt_plugin_window_onmousemotion(window, metadata.input.motion_x, metadata.input.motion_y);
-            }
-            if (metadata.input.left_click) {
-                _bolt_plugin_window_onmousebutton(window, MBLeft, metadata.input.left_click_x, metadata.input.left_click_y);
-            }
-            if (metadata.input.right_click) {
-                _bolt_plugin_window_onmousebutton(window, MBRight, metadata.input.right_click_x, metadata.input.right_click_y);
-            }
-            if (metadata.input.middle_click) {
-                _bolt_plugin_window_onmousebutton(window, MBMiddle, metadata.input.middle_click_x, metadata.input.middle_click_y);
-            }
-            if (metadata.input.scroll_up) {
-                _bolt_plugin_window_onscroll(window, 1);
-            }
-            if (metadata.input.scroll_down) {
-                _bolt_plugin_window_onscroll(window, 0);
-            }
-
-            window->surface_functions.draw_to_screen(window->surface_functions.userdata, 0, 0, metadata.width, metadata.height, metadata.x, metadata.y, metadata.width, metadata.height);
-        }
-        _bolt_rwlock_unlock_read(&windows->lock);
+    
+    if (inputs.mouse_motion) {
+        struct MouseMotionEvent event = {.details = &inputs.mouse_motion_event};
+        _bolt_plugin_handle_mousemotion(&event);
     }
+    if (inputs.mouse_left) {
+        struct MouseButtonEvent event = {.details = &inputs.mouse_left_event, .button = MBLeft};
+        _bolt_plugin_handle_mousebutton(&event);
+    }
+    if (inputs.mouse_right) {
+        struct MouseButtonEvent event = {.details = &inputs.mouse_right_event, .button = MBRight};
+        _bolt_plugin_handle_mousebutton(&event);
+    }
+    if (inputs.mouse_middle) {
+        struct MouseButtonEvent event = {.details = &inputs.mouse_middle_event, .button = MBMiddle};
+        _bolt_plugin_handle_mousebutton(&event);
+    }
+    if (inputs.mouse_scroll_up) {
+        struct MouseScrollEvent event = {.details = &inputs.mouse_scroll_up_event, .direction = 1};
+        _bolt_plugin_handle_scroll(&event);
+    }
+    if (inputs.mouse_scroll_down) {
+        struct MouseScrollEvent event = {.details = &inputs.mouse_scroll_up_event, .direction = 0};
+        _bolt_plugin_handle_scroll(&event);
+    }
+
+    _bolt_rwlock_lock_read(&windows->lock);
+    size_t iter = 0;
+    void* item;
+    while (hashmap_iter(windows->map, &iter, &item)) {
+        struct EmbeddedWindow* window = *(struct EmbeddedWindow**)item;
+        _bolt_rwlock_lock_write(&window->lock);
+        bool did_resize = false;
+        if (window->metadata.width > window_width) {
+            window->metadata.width = window_width;
+            did_resize = true;
+        }
+        if (window->metadata.height > window_height) {
+            window->metadata.height = window_height;
+            did_resize = true;
+        }
+        if (window->metadata.x < 0) {
+            window->metadata.x = 0;
+        }
+        if (window->metadata.y < 0) {
+            window->metadata.y = 0;
+        }
+        if (window->metadata.x + window->metadata.width > window_width) {
+            window->metadata.x = window_width - window->metadata.width;
+        }
+        if (window->metadata.y + window->metadata.height > window_height) {
+            window->metadata.y = window_height - window->metadata.height;
+        }
+        struct EmbeddedWindowMetadata metadata = window->metadata;
+        _bolt_rwlock_unlock_write(&window->lock);
+
+        _bolt_rwlock_lock_write(&window->input_lock);
+        struct WindowPendingInput inputs = window->input;
+        memset(&window->input, 0, sizeof(window->input));
+        _bolt_rwlock_unlock_write(&window->input_lock);
+
+        if (did_resize) {
+            struct PluginSurfaceUserdata* ud = window->surface_functions.userdata;
+            managed_functions.surface_resize_and_clear(ud, metadata.width, metadata.height);
+            struct ResizeEvent event = {.width = metadata.width, .height = metadata.height};
+            _bolt_plugin_window_onresize(window, &event);
+        }
+
+        if (inputs.mouse_motion) {
+            struct MouseMotionEvent event = {.details = &inputs.mouse_motion_event};
+            _bolt_plugin_window_onmousemotion(window, &event);
+        }
+        if (inputs.mouse_left) {
+            struct MouseButtonEvent event = {.details = &inputs.mouse_left_event, .button = MBLeft};
+            _bolt_plugin_window_onmousebutton(window, &event);
+        }
+        if (inputs.mouse_right) {
+            struct MouseButtonEvent event = {.details = &inputs.mouse_right_event, .button = MBRight};
+            _bolt_plugin_window_onmousebutton(window, &event);
+        }
+        if (inputs.mouse_middle) {
+            struct MouseButtonEvent event = {.details = &inputs.mouse_middle_event, .button = MBMiddle};
+            _bolt_plugin_window_onmousebutton(window, &event);
+        }
+        if (inputs.mouse_scroll_up) {
+            struct MouseScrollEvent event = {.details = &inputs.mouse_scroll_up_event, .direction = 1};
+            _bolt_plugin_window_onscroll(window, &event);
+        }
+        if (inputs.mouse_scroll_down) {
+            struct MouseScrollEvent event = {.details = &inputs.mouse_scroll_up_event, .direction = 0};
+            _bolt_plugin_window_onscroll(window, &event);
+        }
+
+        window->surface_functions.draw_to_screen(window->surface_functions.userdata, 0, 0, metadata.width, metadata.height, metadata.x, metadata.y, metadata.width, metadata.height);
+    }
+    _bolt_rwlock_unlock_read(&windows->lock);
 }
 
 void _bolt_plugin_close() {
@@ -497,21 +598,82 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     lua_settable(plugin->state, -3);
     lua_settable(plugin->state, LUA_REGISTRYINDEX);
 
-    // create the metatable for all Window objects
-    PUSHSTRING(plugin->state, WINDOW_META_REGISTRYNAME);
+    // create both of the metatables for Window objects
+    for (size_t i = 0; i <= 1; i += 1) {
+        if (i == 0) PUSHSTRING(plugin->state, WINDOW_META_REGISTRYNAME);
+        else PUSHSTRING(plugin->state, WINDOWLIGHT_META_REGISTRYNAME);
+        lua_newtable(plugin->state);
+        PUSHSTRING(plugin->state, "__index");
+        lua_createtable(plugin->state, 0, 7);
+        API_ADD_SUB(plugin->state, id, window)
+        API_ADD_SUB(plugin->state, size, window)
+        API_ADD_SUB(plugin->state, clear, window)
+        API_ADD_SUB(plugin->state, onresize, window)
+        API_ADD_SUB(plugin->state, onmousemotion, window)
+        API_ADD_SUB(plugin->state, onmousebutton, window)
+        API_ADD_SUB(plugin->state, onscroll, window)
+        lua_settable(plugin->state, -3);
+        if (i == 0) {
+            PUSHSTRING(plugin->state, "__gc");
+            lua_pushcfunction(plugin->state, window_gc);
+            lua_settable(plugin->state, -3);
+        }
+        lua_settable(plugin->state, LUA_REGISTRYINDEX);
+    }
+
+    // create the metatable for all ResizeEvent objects
+    PUSHSTRING(plugin->state, RESIZE_META_REGISTRYNAME);
+    lua_newtable(plugin->state);
+    PUSHSTRING(plugin->state, "__index");
+    lua_createtable(plugin->state, 0, 1);
+    API_ADD_SUB(plugin->state, size, resizeevent)
+    lua_settable(plugin->state, -3);
+    lua_settable(plugin->state, LUA_REGISTRYINDEX);
+
+    // create the metatable for all MouseMotionEvent objects
+    PUSHSTRING(plugin->state, MOUSEMOTION_META_REGISTRYNAME);
     lua_newtable(plugin->state);
     PUSHSTRING(plugin->state, "__index");
     lua_createtable(plugin->state, 0, 7);
-    API_ADD_SUB(plugin->state, id, window)
-    API_ADD_SUB(plugin->state, size, window)
-    API_ADD_SUB(plugin->state, clear, window)
-    API_ADD_SUB(plugin->state, onresize, window)
-    API_ADD_SUB(plugin->state, onmousemotion, window)
-    API_ADD_SUB(plugin->state, onmousebutton, window)
-    API_ADD_SUB(plugin->state, onscroll, window)
+    API_ADD_SUB(plugin->state, xy, mouseevent)
+    API_ADD_SUB(plugin->state, ctrl, mouseevent);
+    API_ADD_SUB(plugin->state, shift, mouseevent);
+    API_ADD_SUB(plugin->state, meta, mouseevent);
+    API_ADD_SUB(plugin->state, alt, mouseevent);
+    API_ADD_SUB(plugin->state, capslock, mouseevent);
+    API_ADD_SUB(plugin->state, numlock, mouseevent);
     lua_settable(plugin->state, -3);
-    PUSHSTRING(plugin->state, "__gc");
-    lua_pushcfunction(plugin->state, window_gc);
+    lua_settable(plugin->state, LUA_REGISTRYINDEX);
+
+    // create the metatable for all MouseButtonEvent objects
+    PUSHSTRING(plugin->state, MOUSEBUTTON_META_REGISTRYNAME);
+    lua_newtable(plugin->state);
+    PUSHSTRING(plugin->state, "__index");
+    lua_createtable(plugin->state, 0, 8);
+    API_ADD_SUB(plugin->state, xy, mouseevent)
+    API_ADD_SUB(plugin->state, ctrl, mouseevent);
+    API_ADD_SUB(plugin->state, shift, mouseevent);
+    API_ADD_SUB(plugin->state, meta, mouseevent);
+    API_ADD_SUB(plugin->state, alt, mouseevent);
+    API_ADD_SUB(plugin->state, capslock, mouseevent);
+    API_ADD_SUB(plugin->state, numlock, mouseevent);
+    API_ADD_SUB(plugin->state, button, mousebutton);
+    lua_settable(plugin->state, -3);
+    lua_settable(plugin->state, LUA_REGISTRYINDEX);
+
+    // create the metatable for all MouseScrollEvent objects
+    PUSHSTRING(plugin->state, SCROLL_META_REGISTRYNAME);
+    lua_newtable(plugin->state);
+    PUSHSTRING(plugin->state, "__index");
+    lua_createtable(plugin->state, 0, 8);
+    API_ADD_SUB(plugin->state, xy, mouseevent)
+    API_ADD_SUB(plugin->state, ctrl, mouseevent);
+    API_ADD_SUB(plugin->state, shift, mouseevent);
+    API_ADD_SUB(plugin->state, meta, mouseevent);
+    API_ADD_SUB(plugin->state, alt, mouseevent);
+    API_ADD_SUB(plugin->state, capslock, mouseevent);
+    API_ADD_SUB(plugin->state, numlock, mouseevent);
+    API_ADD_SUB(plugin->state, direction, scroll);
     lua_settable(plugin->state, -3);
     lua_settable(plugin->state, LUA_REGISTRYINDEX);
 
@@ -548,122 +710,13 @@ DEFINE_CALLBACK(swapbuffers, SWAPBUFFERS, SwapBuffersEvent)
 DEFINE_CALLBACK(2d, BATCH2D, RenderBatch2D)
 DEFINE_CALLBACK(3d, RENDER3D, Render3D)
 DEFINE_CALLBACK(minimap, MINIMAP, RenderMinimapEvent)
-DEFINE_WINDOWEVENT(resize, RESIZE)
-DEFINE_WINDOWEVENT(mousemotion, MOUSEMOTION)
-DEFINE_WINDOWEVENT(mousebutton, MOUSEBUTTON)
-DEFINE_WINDOWEVENT(scroll, SCROLL)
-
-void _bolt_plugin_window_onresize(struct EmbeddedWindow* window, int width, int height) {
-    lua_State* state = window->plugin;
-    lua_getfield(state, LUA_REGISTRYINDEX, WINDOWS_REGISTRYNAME); /*stack: window table*/
-    lua_pushinteger(state, window->id); /*stack: window table, window id*/
-    lua_gettable(state, -2); /*stack: window table, event table*/
-    lua_pushinteger(state, WINDOW_ONRESIZE); /*stack: window table, event table, event id*/
-    lua_gettable(state, -2); /*stack: window table, event table, function or nil*/
-    if (lua_isfunction(state, -1)) {
-        lua_pushlightuserdata(state, window); /*stack: window table, event table, function, window*/
-        lua_getfield(state, LUA_REGISTRYINDEX, WINDOW_META_REGISTRYNAME); /*stack: window table, event table, function, window, window metatable*/
-        lua_setmetatable(state, -2); /*stack: window table, event table, function, window*/
-        lua_pushinteger(state, width); /*stack: window table, event table, function, window, width*/
-        lua_pushinteger(state, height); /*stack: window table, event table, function, window, width, height*/
-        if (lua_pcall(state, 3, 0, 0)) { /*stack: window table, event table, ?error*/
-            const char* e = lua_tolstring(state, -1, 0);
-            printf("plugin window onresize error: %s\n", e);
-            lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME); /*stack: window table, event table, error, plugin*/
-            const struct Plugin* plugin = lua_touserdata(state, -1);
-            lua_pop(state, 4); /*stack: (empty)*/
-            _bolt_plugin_stop(plugin->id, plugin->id_length);
-        } else {
-            lua_pop(state, 2); /*stack: (empty)*/
-        }
-    } else {
-        lua_pop(state, 3);
-    }
-}
-
-void _bolt_plugin_window_onmousemotion(struct EmbeddedWindow* window, int x, int y) {
-    lua_State* state = window->plugin;
-    lua_getfield(state, LUA_REGISTRYINDEX, WINDOWS_REGISTRYNAME); /*stack: window table*/
-    lua_pushinteger(state, window->id); /*stack: window table, window id*/
-    lua_gettable(state, -2); /*stack: window table, event table*/
-    lua_pushinteger(state, WINDOW_ONMOUSEMOTION); /*stack: window table, event table, event id*/
-    lua_gettable(state, -2); /*stack: window table, event table, function or nil*/
-    if (lua_isfunction(state, -1)) {
-        lua_pushlightuserdata(state, window); /*stack: window table, event table, function, window*/
-        lua_getfield(state, LUA_REGISTRYINDEX, WINDOW_META_REGISTRYNAME); /*stack: window table, event table, function, window, window metatable*/
-        lua_setmetatable(state, -2); /*stack: window table, event table, function, window*/
-        lua_pushinteger(state, x); /*stack: window table, event table, function, window, x*/
-        lua_pushinteger(state, y); /*stack: window table, event table, function, window, x, y*/
-        if (lua_pcall(state, 3, 0, 0)) { /*stack: window table, event table, ?error*/
-            const char* e = lua_tolstring(state, -1, 0);
-            printf("plugin window onmousemotion error: %s\n", e);
-            lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME); /*stack: window table, event table, error, plugin*/
-            const struct Plugin* plugin = lua_touserdata(state, -1);
-            lua_pop(state, 4); /*stack: (empty)*/
-            _bolt_plugin_stop(plugin->id, plugin->id_length);
-        } else {
-            lua_pop(state, 2); /*stack: (empty)*/
-        }
-    } else {
-        lua_pop(state, 3);
-    }
-}
-
-void _bolt_plugin_window_onmousebutton(struct EmbeddedWindow* window, enum PluginMouseButton button, int x, int y) {
-    lua_State* state = window->plugin;
-    lua_getfield(state, LUA_REGISTRYINDEX, WINDOWS_REGISTRYNAME); /*stack: window table*/
-    lua_pushinteger(state, window->id); /*stack: window table, window id*/
-    lua_gettable(state, -2); /*stack: window table, event table*/
-    lua_pushinteger(state, WINDOW_ONMOUSEBUTTON); /*stack: window table, event table, event id*/
-    lua_gettable(state, -2); /*stack: window table, event table, function or nil*/
-    if (lua_isfunction(state, -1)) {
-        lua_pushlightuserdata(state, window); /*stack: window table, event table, function, window*/
-        lua_getfield(state, LUA_REGISTRYINDEX, WINDOW_META_REGISTRYNAME); /*stack: window table, event table, function, window, window metatable*/
-        lua_setmetatable(state, -2); /*stack: window table, event table, function, window*/
-        lua_pushinteger(state, button); /*stack: window table, event table, function, window, button*/
-        lua_pushinteger(state, x); /*stack: window table, event table, function, window, button, x*/
-        lua_pushinteger(state, y); /*stack: window table, event table, function, window, button, x, y*/
-        if (lua_pcall(state, 4, 0, 0)) { /*stack: window table, event table, ?error*/
-            const char* e = lua_tolstring(state, -1, 0);
-            printf("plugin window onmousebutton error: %s\n", e);
-            lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME); /*stack: window table, event table, error, plugin*/
-            const struct Plugin* plugin = lua_touserdata(state, -1);
-            lua_pop(state, 4); /*stack: (empty)*/
-            _bolt_plugin_stop(plugin->id, plugin->id_length);
-        } else {
-            lua_pop(state, 2); /*stack: (empty)*/
-        }
-    } else {
-        lua_pop(state, 3);
-    }
-}
-
-void _bolt_plugin_window_onscroll(struct EmbeddedWindow* window, uint8_t direction) {
-    lua_State* state = window->plugin;
-    lua_getfield(state, LUA_REGISTRYINDEX, WINDOWS_REGISTRYNAME); /*stack: window table*/
-    lua_pushinteger(state, window->id); /*stack: window table, window id*/
-    lua_gettable(state, -2); /*stack: window table, event table*/
-    lua_pushinteger(state, WINDOW_ONSCROLL); /*stack: window table, event table, event id*/
-    lua_gettable(state, -2); /*stack: window table, event table, function or nil*/
-    if (lua_isfunction(state, -1)) {
-        lua_pushlightuserdata(state, window); /*stack: window table, event table, function, window*/
-        lua_getfield(state, LUA_REGISTRYINDEX, WINDOW_META_REGISTRYNAME); /*stack: window table, event table, function, window, window metatable*/
-        lua_setmetatable(state, -2); /*stack: window table, event table, function, window*/
-        lua_pushboolean(state, direction); /*stack: window table, event table, function, window, direction*/
-        if (lua_pcall(state, 2, 0, 0)) { /*stack: window table, event table, ?error*/
-            const char* e = lua_tolstring(state, -1, 0);
-            printf("plugin window onscroll error: %s\n", e);
-            lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME); /*stack: window table, event table, error, plugin*/
-            const struct Plugin* plugin = lua_touserdata(state, -1);
-            lua_pop(state, 4); /*stack: (empty)*/
-            _bolt_plugin_stop(plugin->id, plugin->id_length);
-        } else {
-            lua_pop(state, 2); /*stack: (empty)*/
-        }
-    } else {
-        lua_pop(state, 3);
-    }
-}
+DEFINE_CALLBACK(mousemotion, MOUSEMOTION, MouseMotionEvent)
+DEFINE_CALLBACK(mousebutton, MOUSEBUTTON, MouseButtonEvent)
+DEFINE_CALLBACK(scroll, SCROLL, MouseScrollEvent)
+DEFINE_WINDOWEVENT(resize, RESIZE, ResizeEvent)
+DEFINE_WINDOWEVENT(mousemotion, MOUSEMOTION, MouseMotionEvent)
+DEFINE_WINDOWEVENT(mousebutton, MOUSEBUTTON, MouseButtonEvent)
+DEFINE_WINDOWEVENT(scroll, SCROLL, MouseScrollEvent)
 
 static int api_apiversion(lua_State* state) {
     _bolt_check_argc(state, 0, "apiversion");
@@ -816,11 +869,12 @@ static int api_createwindow(lua_State* state) {
     window->id = next_window_id;
     window->plugin = state;
     _bolt_rwlock_init(&window->lock);
+    _bolt_rwlock_init(&window->input_lock);
     window->metadata.x = lua_tointeger(state, 1);
     window->metadata.y = lua_tointeger(state, 2);
     window->metadata.width = lua_tointeger(state, 3);
     window->metadata.height = lua_tointeger(state, 4);
-    memset(&window->metadata.input, 0, sizeof(window->metadata.input));
+    memset(&window->input, 0, sizeof(window->input));
     managed_functions.surface_init(&window->surface_functions, window->metadata.width, window->metadata.height, NULL);
     lua_getfield(state, LUA_REGISTRYINDEX, WINDOW_META_REGISTRYNAME);
     lua_setmetatable(state, -2);
@@ -1263,4 +1317,76 @@ static int api_render3d_worldposition(lua_State* state) {
     lua_pushnumber(state, out[1]);
     lua_pushnumber(state, out[2]);
     return 3;
+}
+
+static int api_resizeevent_size(lua_State* state) {
+    _bolt_check_argc(state, 1, "resizeevent_size");
+    struct ResizeEvent* event = lua_touserdata(state, 1);
+    lua_pushinteger(state, event->width);
+    lua_pushinteger(state, event->height);
+    return 2;
+}
+
+static int api_mouseevent_xy(lua_State* state) {
+    _bolt_check_argc(state, 1, "mouseevent_xy");
+    struct MouseEvent** event = lua_touserdata(state, 1);
+    lua_pushinteger(state, (*event)->x);
+    lua_pushinteger(state, (*event)->y);
+    return 2;
+}
+
+static int api_mouseevent_ctrl(lua_State* state) {
+    _bolt_check_argc(state, 1, "mouseevent_ctrl");
+    struct MouseEvent** event = lua_touserdata(state, 1);
+    lua_pushinteger(state, (*event)->ctrl);
+    return 1;
+}
+
+static int api_mouseevent_shift(lua_State* state) {
+    _bolt_check_argc(state, 1, "mouseevent_shift");
+    struct MouseEvent** event = lua_touserdata(state, 1);
+    lua_pushinteger(state, (*event)->shift);
+    return 1;
+}
+
+static int api_mouseevent_meta(lua_State* state) {
+    _bolt_check_argc(state, 1, "mouseevent_meta");
+    struct MouseEvent** event = lua_touserdata(state, 1);
+    lua_pushinteger(state, (*event)->meta);
+    return 1;
+}
+
+static int api_mouseevent_alt(lua_State* state) {
+    _bolt_check_argc(state, 1, "mouseevent_alt");
+    struct MouseEvent** event = lua_touserdata(state, 1);
+    lua_pushinteger(state, (*event)->alt);
+    return 1;
+}
+
+static int api_mouseevent_capslock(lua_State* state) {
+    _bolt_check_argc(state, 1, "mouseevent_capslock");
+    struct MouseEvent** event = lua_touserdata(state, 1);
+    lua_pushinteger(state, (*event)->capslock);
+    return 1;
+}
+
+static int api_mouseevent_numlock(lua_State* state) {
+    _bolt_check_argc(state, 1, "mouseevent_numlock");
+    struct MouseEvent** event = lua_touserdata(state, 1);
+    lua_pushinteger(state, (*event)->numlock);
+    return 1;
+}
+
+static int api_mousebutton_button(lua_State* state) {
+    _bolt_check_argc(state, 1, "mousebutton_button");
+    struct MouseButtonEvent* event = lua_touserdata(state, 1);
+    lua_pushinteger(state, event->button);
+    return 1;
+}
+
+static int api_scroll_direction(lua_State* state) {
+    _bolt_check_argc(state, 1, "scroll_direction");
+    struct MouseScrollEvent* event = lua_touserdata(state, 1);
+    lua_pushinteger(state, event->direction);
+    return 1;
 }

@@ -195,6 +195,47 @@ static int api_setcallback3d(lua_State*);
 /// image scale (zoom level), and a rough estimate of the tile position it's centered on.
 static int api_setcallbackminimap(lua_State*);
 
+/// [-1, +0, -]
+/// Sets a callback function for mouse motion events, overwriting the previous callback, if any.
+/// Passing a non-function (ideally `nil`) will restore the default setting, which is to have no
+/// handler for mouse motion events.
+///
+/// This callback applies only to inputs received by the game view. If any embedded windows or
+/// browsers receive the input, it will be sent to them, and not to this function. note also that
+/// this callback will be called at most once per frame: plugins will always receive the latest
+/// mouse position, but some position updates will be overwritten by newer ones before the plugin
+/// ever receives them.
+///
+/// The callback will be called with one param, that being a mouse motion object. All of the member
+/// functions of that object can be found in this file, prefixed with "api_mouseevent_".
+static int setcallbackmousemotion(lua_State*);
+
+/// [-1, +0, -]
+/// Sets a callback function for mouse button events, overwriting the previous callback, if any.
+/// Passing a non-function (ideally `nil`) will restore the default setting, which is to have no
+/// handler for mouse button events.
+///
+/// This callback applies only to inputs received by the game view. If any embedded windows or
+/// browsers receive the input, it will be sent to them, and not to this function.
+///
+/// The callback will be called with one param, that being a mouse-button object. All of the member
+/// functions of that object can be found in this file, prefixed with "api_mouseevent_" and
+/// "api_mousebutton_".
+static int setcallbackmousebutton(lua_State*);
+
+/// [-1, +0, -]
+/// Sets a callback function for mouse scroll events, overwriting the previous callback, if any.
+/// Passing a non-function (ideally `nil`) will restore the default setting, which is to have no
+/// handler for mouse scroll events.
+///
+/// This callback applies only to inputs received by the game view. If any embedded windows or
+/// browsers receive the input, it will be sent to them, and not to this function.
+///
+/// The callback will be called with one param, that being a mouse-scroll object. All of the member
+/// functions of that object can be found in this file, prefixed with "api_mouseevent_" and
+/// "api_scroll_".
+static int setcallbackscroll(lua_State*);
+
 /// [-1, +1, -]
 /// Returns the number of vertices in a 2D batch object.
 static int api_batch2d_vertexcount(lua_State*);
@@ -358,8 +399,9 @@ static int api_window_clear(lua_State*);
 
 /// [-2, +0, -]
 /// Sets an event handler for this window for resize events. If the value is a function, it will be
-/// called with the following parameters: window, width, height. If the value is not a function, it
-/// will not be called, and therefore the plugin will not be notified of resize events.
+/// called with two parameters: the window object, and a resize event object. If the value is not a
+/// function, it will not be called, and therefore the plugin will not be notified of resize
+/// events.
 ///
 /// Resizing a window clears the contents to be transparent, so plugins must redraw the whole
 /// window contents in response to a resize event (or any time before it next gets drawn).
@@ -367,25 +409,23 @@ static int api_window_onresize(lua_State*);
 
 /// [-2, +0, -]
 /// Sets an event handler for this window for mouse motion events. If the value is a function, it
-/// will be called with the following parameters: window, x, y. If the value is not a function, it
-/// will not be called, and therefore the plugin will not be notified of mouse motion events. The x
-/// and y are pixel coordinates relative to the top-left of the window.
+/// will be called with two parameters: the window object, and a mouse motion object. If the value
+/// is not a function, it will not be called, and therefore the plugin will not be notified of
+/// mouse motion events.
 static int api_window_onmousemotion(lua_State*);
 
 /// [-2, +0, -]
 /// Sets an event handler for this window for mouse button events. If the value is a function, it
-/// will be called with the following parameters: window, button, x, y. If the value is not a
-/// function, it will not be called, and therefore the plugin will not be notified of button
-/// events. The button may be 1 (left), 2 (right), or 3 (middle). The x and y are pixel coordinates
-/// relative to the top-left of the window.
+/// will be called with two parameters: the window object, and a mouse-button object. If the value
+/// is not a function, it will not be called, and therefore the plugin will not be notified of
+/// mouse-button events.
 static int api_window_onmousebutton(lua_State*);
 
 /// [-2, +0, -]
 /// Sets an event handler for this window for mouse scroll events. If the value is a function, it
-/// will be called with the following parameters: window, direction. If the value is not a
-/// function, it will not be called, and therefore the plugin will not be notified of mouse scroll
-/// events. "direction" is a boolean value: false represents scrolling down, towards the user, and
-/// true represents scrolling up, away from the user.
+/// will be called with two parameters: the window object, and a mouse-scroll object. If the value
+/// is not a function, it will not be called, and therefore the plugin will not be notified of
+/// mouse-scroll events.
 static int api_window_onscroll(lua_State*);
 
 /// [-1, +1, -]
@@ -479,3 +519,47 @@ static int api_render3d_toscreenspace(lua_State*);
 ///
 /// Equivalent to `render:toworldspace(0, 0, 0)`
 static int api_render3d_worldposition(lua_State*);
+
+/// [-1, +2, -]
+/// Returns the new width and height that the window was resized to.
+static int api_resizeevent_size(lua_State*);
+
+/// [-1, +2, -]
+/// Returns the x and y for this mouse event.
+static int api_mouseevent_xy(lua_State*);
+
+/// [-1, +1, -]
+/// Returns a boolean value indicating whether ctrl was held when this event fired.
+static int api_mouseevent_ctrl(lua_State*);
+
+/// [-1, +1, -]
+/// Returns a boolean value indicating whether shift was held when this event fired.
+static int api_mouseevent_shift(lua_State*);
+
+/// [-1, +1, -]
+/// Returns a boolean value indicating whether the meta key (also known as super, command, or the
+/// "windows key") was held when this event fired.
+static int api_mouseevent_meta(lua_State*);
+
+/// [-1, +1, -]
+/// Returns a boolean value indicating whether alt was held when this event fired.
+static int api_mouseevent_alt(lua_State*);
+
+/// [-1, +1, -]
+/// Returns a boolean value indicating whether caps lock was on when this event fired.
+static int api_mouseevent_capslock(lua_State*);
+
+/// [-1, +1, -]
+/// Returns a boolean value indicating whether numlock was on when this event fired.
+static int api_mouseevent_numlock(lua_State*);
+
+/// [-1, +1, -]
+/// Returns an integer representing the mouse button that was pressed. Possible values are 1 for
+/// the left mouse button, 2 for the right mouse button, and 3 for the middle mouse button
+/// (clicking the mouse wheel).
+static int api_mousebutton_button(lua_State*);
+
+/// [-1, +1, -]
+/// Returns a boolean value representing the scroll direction. False means scrolling down, toward
+/// the user, and true means scrolling up, away from the user.
+static int api_scroll_direction(lua_State*);

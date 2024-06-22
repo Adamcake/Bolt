@@ -16,6 +16,21 @@ enum PluginMouseButton {
     MBMiddle = 3,
 };
 
+// having MouseEvent has the first member of structs allows for generalisation with pointers
+struct MouseEvent {
+    int16_t x;
+    int16_t y;
+    uint8_t ctrl;
+    uint8_t shift;
+    uint8_t meta;
+    uint8_t alt;
+    uint8_t capslock;
+    uint8_t numlock;
+    uint8_t mb_left;
+    uint8_t mb_right;
+    uint8_t mb_middle;
+};
+
 /// Struct containing "vtable" callback information for RenderBatch2D's list of vertices.
 /// Unless stated otherwise, functions will be called with three params: the index, the specified
 /// userdata, and an output pointer, which must be able to index the returned number of items.
@@ -133,20 +148,17 @@ struct PluginManagedFunctions {
 struct WindowPendingInput {
     /* bools are listed at the top to make the structure smaller by having less padding in it */
     uint8_t mouse_motion;
-    uint8_t left_click;
-    uint8_t right_click;
-    uint8_t middle_click;
-    uint8_t scroll_up;
-    uint8_t scroll_down;
-
-    int motion_x;
-    int motion_y;
-    int left_click_x;
-    int left_click_y;
-    int right_click_x;
-    int right_click_y;
-    int middle_click_x;
-    int middle_click_y;
+    uint8_t mouse_left;
+    uint8_t mouse_right;
+    uint8_t mouse_middle;
+    uint8_t mouse_scroll_down;
+    uint8_t mouse_scroll_up;
+    struct MouseEvent mouse_motion_event;
+    struct MouseEvent mouse_left_event;
+    struct MouseEvent mouse_right_event;
+    struct MouseEvent mouse_middle_event;
+    struct MouseEvent mouse_scroll_down_event;
+    struct MouseEvent mouse_scroll_up_event;
 };
 
 struct EmbeddedWindowMetadata {
@@ -154,7 +166,6 @@ struct EmbeddedWindowMetadata {
     int y;
     int width;
     int height;
-    struct WindowPendingInput input;
 };
 
 struct EmbeddedWindow {
@@ -163,11 +174,14 @@ struct EmbeddedWindow {
     struct lua_State* plugin;
     RWLock lock; // applies to the metadata
     struct EmbeddedWindowMetadata metadata;
+    RWLock input_lock; // applies to the pending inputs
+    struct WindowPendingInput input;
 };
 
 struct WindowInfo {
-    RWLock lock; // applies to the whole struct
+    RWLock lock; // applies to the map
     struct hashmap* map;
+    RWLock input_lock; // applies to the pending inputs
     struct WindowPendingInput input;
 };
 
@@ -252,17 +266,5 @@ void _bolt_plugin_handle_3d(struct Render3D*);
 
 /// Sends a RenderMinimap to all plugins.
 void _bolt_plugin_handle_minimap(struct RenderMinimapEvent*);
-
-/// Calls the window's handler for resize events.
-void _bolt_plugin_window_onresize(struct EmbeddedWindow*, int, int);
-
-/// Calls the window's handler for mouse motion events.
-void _bolt_plugin_window_onmousemotion(struct EmbeddedWindow*, int, int);
-
-/// Calls the window's handler for mouse button events.
-void _bolt_plugin_window_onmousebutton(struct EmbeddedWindow*, enum PluginMouseButton, int, int);
-
-/// Calls the window's handler for mouse scroll events.
-void _bolt_plugin_window_onscroll(struct EmbeddedWindow*, uint8_t);
 
 #endif

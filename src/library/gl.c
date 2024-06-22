@@ -1105,7 +1105,7 @@ void* _bolt_gl_GetProcAddress(const char* name) {
 void _bolt_gl_onSwapBuffers(uint32_t window_width, uint32_t window_height) {
     gl_width = window_width;
     gl_height = window_height;
-    _bolt_plugin_process_windows(window_width, window_height);
+    if (_bolt_plugin_is_inited()) _bolt_plugin_process_windows(window_width, window_height);
 }
 
 void _bolt_gl_onCreateContext(void* context, void* shared_context, const struct GLLibFunctions* libgl, void* (*GetProcAddress)(const char*)) {
