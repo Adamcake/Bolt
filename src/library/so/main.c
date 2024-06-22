@@ -404,15 +404,14 @@ static uint8_t _bolt_point_in_rect(int16_t x, int16_t y, int rx, int ry, int rw,
 }
 
 static void _bolt_xcb_to_mouse_event(int16_t x, int16_t y, uint16_t state, struct MouseEvent* out) {
-    // TODO: the rest of this
     out->x = x;
     out->y = y;
     out->ctrl = (state >> 2) & 1;
     out->shift = state & 1;
-    //out->meta;
-    //out->alt;
-    //out->capslock;
-    //out->numlock;
+    out->meta = (state >> 6) & 1;
+    out->alt = (state >> 3) & 1;
+    out->capslock = (state >> 1) & 1;
+    out->numlock = (state >> 4) & 1;
     out->mb_left = (state >> 8) & 1;
     out->mb_right = (state >> 10) & 1;
     out->mb_middle = (state >> 9) & 1;
@@ -486,6 +485,7 @@ static uint8_t _bolt_handle_xcb_event(xcb_connection_t* c, xcb_generic_event_t* 
             if (event->extension != XINPUTEXTENSION) break;
             switch (event->event_type) {
                 case XCB_INPUT_MOTION: { // when mouse moves (not drag) inside the game window
+                    //TODO: "event->flags" is not the correct thing to pass here, so what is?
                     xcb_input_motion_event_t* event = (xcb_input_motion_event_t*)e;
                     return _bolt_handle_xcb_motion_event(event->event, event->event_x >> 16, event->event_y >> 16, event->flags, e);
                 }
