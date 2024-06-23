@@ -35,6 +35,6 @@ const std::map<std::string, const char*> map({
 });
 
 const char* GetMimeType(std::filesystem::path& path) {
-	auto i = map.find(path.extension());
+	auto i = map.find(path.extension().string());
 	return (i != map.end()) ? i->second : nullptr;
 }
