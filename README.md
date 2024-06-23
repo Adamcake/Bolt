@@ -80,7 +80,7 @@ Windows builds have only been tested using Visual Studio 2022 (a.k.a. Visual Stu
 - `cmake --build build --config Release`
 - `cmake --install build/`
 
-Run bolt.exe from the install/bolt-launcher directory.
+Run bolt.exe from the install location.
 
 ### Mac
 
