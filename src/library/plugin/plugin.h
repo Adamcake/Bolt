@@ -209,7 +209,12 @@ struct RenderMinimapEvent {
     double y;
 };
 
-struct SwapBuffersEvent {};
+struct SwapBuffersEvent {
+#if defined(_MSC_VER)
+    // MSVC doesn't allow empty structs
+    void* _;
+#endif
+};
 
 /// Setup the plugin library. Must be called (and return) before using any other plugin library functions,
 /// including init and is_inited. This function does not have a "close" reciprocal, as it's expected

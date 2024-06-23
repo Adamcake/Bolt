@@ -16,6 +16,12 @@
 #define LOG(...)
 #endif
 
+#if defined(_MSC_VER)
+#define thread_local __declspec(thread)
+#else
+#define thread_local _Thread_local
+#endif
+
 static unsigned int gl_width;
 static unsigned int gl_height;
 
@@ -108,7 +114,7 @@ static void _bolt_gl_plugin_surface_drawtosurface(void* userdata, void* target, 
 #define CONTEXTS_CAPACITY 64 // not growable so we just have to hard-code a number and hope it's enough forever
 #define GAME_MINIMAP_BIG_SIZE 2048
 static struct GLContext contexts[CONTEXTS_CAPACITY];
-_Thread_local struct GLContext* current_context = NULL;
+thread_local struct GLContext* current_context = NULL;
 
 struct PluginSurfaceUserdata {
     unsigned int width;
@@ -181,7 +187,7 @@ uint8_t _bolt_get_attr_binding(struct GLContext* c, const struct GLAttrBinding* 
     if (!buffer || !buffer->data) return 0;
     uintptr_t buf_offset = binding->offset + (binding->stride * index);
 
-    const void* ptr = buffer->data + buf_offset;
+    const uint8_t* ptr = (uint8_t*)buffer->data + buf_offset;
     if (!binding->normalise) {
         switch (binding->type) {
             case GL_FLOAT:
@@ -244,7 +250,7 @@ uint8_t _bolt_get_attr_binding_int(struct GLContext* c, const struct GLAttrBindi
     if (!buffer || !buffer->data) return 0;
     uintptr_t buf_offset = binding->offset + (binding->stride * index);
 
-    const void* ptr = buffer->data + buf_offset;
+    const uint8_t* ptr = (uint8_t*)buffer->data + buf_offset;
     if (!binding->normalise) {
         switch (binding->type) {
             case GL_UNSIGNED_BYTE:
@@ -777,7 +783,7 @@ void _bolt_glCompressedTexSubImage2D(uint32_t target, int level, int xoffset, in
     int out_xoffset = xoffset;
     int out_yoffset = yoffset;
     for (size_t ii = 0; ii < (width * height); ii += input_stride) {
-        const uint8_t* ptr = data + ii;
+        const uint8_t* ptr = (uint8_t*)data + ii;
         const uint8_t* cptr = is_dxt1 ? ptr : (ptr + 8);
         uint8_t* out_ptr = tex->data + (out_yoffset * tex->width * 4) + (out_xoffset * 4);
         uint16_t c0 = cptr[0] + (cptr[1] << 8);
@@ -987,7 +993,7 @@ void _bolt_glFlushMappedBufferRange(uint32_t target, intptr_t offset, uintptr_t 
         gl.GetIntegerv(binding_type, &buffer_id);
         struct GLArrayBuffer* buffer = _bolt_context_get_buffer(c, buffer_id);
         gl.BufferSubData(target, buffer->mapping_offset + offset, length, buffer->mapping + offset);
-        memcpy(buffer->data + buffer->mapping_offset + offset, buffer->mapping + offset, length);
+        memcpy((uint8_t*)buffer->data + buffer->mapping_offset + offset, buffer->mapping + offset, length);
     } else {
         gl.FlushMappedBufferRange(target, offset, length);
     }
@@ -1183,7 +1189,7 @@ void _bolt_gl_onDrawElements(uint32_t mode, unsigned int count, uint32_t type, c
     int element_binding;
     gl.GetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &element_binding);
     struct GLArrayBuffer* element_buffer = _bolt_context_get_buffer(c, element_binding);
-    const unsigned short* indices = (unsigned short*)(element_buffer->data + (uintptr_t)indices_offset);
+    const unsigned short* indices = (unsigned short*)((uint8_t*)element_buffer->data + (uintptr_t)indices_offset);
     if (type == GL_UNSIGNED_SHORT && mode == GL_TRIANGLES && count > 0 && c->bound_program->is_2d && !c->bound_program->is_minimap) {
         int diffuse_map;
         gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uDiffuseMap, &diffuse_map);
@@ -1262,7 +1268,7 @@ void _bolt_gl_onDrawElements(uint32_t mode, unsigned int count, uint32_t type, c
         } else {
             struct GLPluginDrawElementsVertex2DUserData vertex_userdata;
             vertex_userdata.c = c;
-            vertex_userdata.indices = (unsigned short*)(element_buffer->data + (uintptr_t)indices_offset);
+            vertex_userdata.indices = (unsigned short*)((uint8_t*)element_buffer->data + (uintptr_t)indices_offset);
             vertex_userdata.atlas = c->texture_units[diffuse_map];
             vertex_userdata.position = &attributes[c->bound_program->loc_aVertexPosition2D];
             vertex_userdata.atlas_min = &attributes[c->bound_program->loc_aTextureUVAtlasMin];
@@ -1307,11 +1313,11 @@ void _bolt_gl_onDrawElements(uint32_t mode, unsigned int count, uint32_t type, c
             struct GLTexture2D* tex_settings = c->texture_units[settings_atlas];
             gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ViewTransforms, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
             gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_view_index);
-            const float* view_proj_matrix = (float*)(_bolt_context_get_buffer(c, ubo_view_index)->data + c->bound_program->offset_uViewProjMatrix);
+            const float* view_proj_matrix = (float*)((uint8_t*)(_bolt_context_get_buffer(c, ubo_view_index)->data) + c->bound_program->offset_uViewProjMatrix);
 
             struct GLPluginDrawElementsVertex3DUserData vertex_userdata;
             vertex_userdata.c = c;
-            vertex_userdata.indices = (unsigned short*)(element_buffer->data + (uintptr_t)indices_offset);
+            vertex_userdata.indices = (unsigned short*)((uint8_t*)element_buffer->data + (uintptr_t)indices_offset);
             vertex_userdata.atlas_scale = roundf(atlas_meta[1]);
             vertex_userdata.atlas = tex;
             vertex_userdata.settings_atlas = tex_settings;
@@ -1359,7 +1365,7 @@ void _bolt_gl_onDrawArrays(uint32_t mode, int first, unsigned int count) {
         int ubo_binding, ubo_view_index;
         gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ViewTransforms, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
         gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_view_index);
-        const float* camera_position = (float*)(_bolt_context_get_buffer(c, ubo_view_index)->data + c->bound_program->offset_uCameraPosition);
+        const float* camera_position = (float*)((uint8_t*)(_bolt_context_get_buffer(c, ubo_view_index)->data) + c->bound_program->offset_uCameraPosition);
         tex->is_minimap_tex_big = 1;
         tex->minimap_center_x = camera_position[0];
         tex->minimap_center_y = camera_position[2];
@@ -1407,7 +1413,7 @@ void _bolt_gl_onTexSubImage2D(uint32_t target, int level, int xoffset, int yoffs
         if (tex && !(xoffset < 0 || yoffset < 0 || xoffset + width > tex->width || yoffset + height > tex->height)) {
             for (unsigned int y = 0; y < height; y += 1) {
                 unsigned char* dest_ptr = tex->data + ((tex->width * (y + yoffset)) + xoffset) * 4;
-                const void* src_ptr = pixels + (width * y * 4);
+                const uint8_t* src_ptr = (uint8_t*)pixels + (width * y * 4);
                 memcpy(dest_ptr, src_ptr, width * 4);
             }
         }
