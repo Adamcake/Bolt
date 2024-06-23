@@ -74,10 +74,13 @@ After that, the helper script `./build/bolt.sh` can be used to launch Bolt from 
 ### Windows
 
 Windows builds have only been tested using Visual Studio 2022 (a.k.a. Visual Studio 17) in Release mode, per recommendations by chromium/cef. Other configurations may work but have not been tested.
-- `cmake -S . -B build -G "Visual Studio 17"`
+- `cmake -S . -B build -G "Visual Studio 17" -D CMAKE_BUILD_TYPE=Release -D BOLT_SKIP_LIBRARIES=1`
+  - note: specify `-D BOLT_CEF_INSTALLDIR=[your filepath]` to specify the install location when running the final command. Must be an absolute path. The default is `C:\bolt-launcher\`.
   - note: use `-A Win32` instead for 32-bit targets
-- Open the .sln file created in the `build` directory and go to "Build" > "Build Solution"
-- Create a new directory and copy all of the following into it: bolt.exe, and the entire contents of the "Release" and "Resources" directories from your CEF distribution. Then you can run bolt.exe from that directory.
+- `cmake --build build --config Release`
+- `cmake --install build/`
+
+Run bolt.exe from the install/bolt-launcher directory.
 
 ### Mac
 
