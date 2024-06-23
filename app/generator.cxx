@@ -48,8 +48,6 @@ int main(int argc, const char** argv) {
     size_t i;
     for (size_t arg = 3; arg < argc; arg += 1) {
         std::filesystem::path path = argv[arg];
-        const char* extension = path.extension().c_str();
-        if (strcmp(extension, ".cxx") == 0 || strcmp(extension, ".md") == 0) continue;
         if (!output_file_contents_var(path, filenames.size(), i)) {
             return 2;
         }
@@ -67,7 +65,7 @@ int main(int argc, const char** argv) {
         std::filesystem::path path(uri_name);
         const char* mime_type = GetMimeType(path);
         if (!mime_type) {
-            std::cerr << "ERROR: unknown file extension \"" << path.extension().c_str() << "\" (" << uri_name << "), please add it to mime.cxx and rebuild" << std::endl;
+            std::cerr << "ERROR: unknown file extension \"" << path.extension().string() << "\" (" << uri_name << "), please add it to mime.cxx and rebuild" << std::endl;
             return 3;
         }
         std::cout << "{\"" << uri_name << "\", File {.contents = _" << i << ", .size = " << file.size << ", .mime_type = \"" << mime_type << "\"}}";
