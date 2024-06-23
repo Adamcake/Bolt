@@ -313,14 +313,9 @@ if(UNIX AND NOT APPLE)
     target_link_libraries(bolt PUBLIC "X11")
     target_link_libraries(bolt PUBLIC "xcb")
     target_link_libraries(bolt PUBLIC "archive")
-elseif(MSVC)
-    target_compile_options(bolt PUBLIC $<$<CONFIG:>:/MT> $<$<CONFIG:Debug>:/MTd> $<$<CONFIG:Release>:/MT>)
-    set_target_properties(bolt PROPERTIES WIN32_EXECUTABLE TRUE)
-    # note parentheses instead of brackets below - this variable is for substitution by Visual Studio, not cmake
-    target_link_libraries(bolt PUBLIC "${CEF_ROOT}/$(ConfigurationName)/libcef.lib")
-    target_link_libraries(bolt PUBLIC "${CEF_ROOT}/$(ConfigurationName)/cef_sandbox.lib")
 elseif(WIN32)
-    # note: this is not used on Windows if compiler is MSVC; tht above section is used instead
+    # note: this probably only works when targeting visual studio and msvc and only in release? I hate windows.
+    target_compile_options(bolt PUBLIC $<$<CONFIG:Debug>:/MTd> $<$<CONFIG:Release>:/MT>)
     set_target_properties(bolt PROPERTIES WIN32_EXECUTABLE TRUE)
     target_link_libraries(bolt PUBLIC "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/libcef.lib")
     target_link_libraries(bolt PUBLIC "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/cef_sandbox.lib")
