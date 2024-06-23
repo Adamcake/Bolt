@@ -356,17 +356,25 @@ endif()
 
 # Build plugin library
 if(NOT BOLT_SKIP_LIBRARIES)
-    # todo: anything other than linux
     if(UNIX AND NOT APPLE)
         add_library(${BOLT_PLUGIN_LIB_NAME} SHARED src/library/so/main.c src/library/plugin/plugin.c src/library/gl.c
         src/library/rwlock/rwlock_posix.c src/library/ipc_posix.c src/library/plugin/plugin_posix.c modules/hashmap/hashmap.c
         modules/spng/spng/spng.c)
+        target_include_directories(${BOLT_PLUGIN_LIB_NAME} PUBLIC "${CEF_ROOT}" "${BOLT_LUAJIT_INCLUDE_DIR}" modules/fmt/include)
         install(TARGETS ${BOLT_PLUGIN_LIB_NAME} DESTINATION "${BOLT_LIBDIR}")
     endif()
-    target_include_directories(${BOLT_PLUGIN_LIB_NAME} PUBLIC "${CEF_ROOT}" "${BOLT_LUAJIT_INCLUDE_DIR}" modules/fmt/include)
+    if (WIN32)
+        add_library(${BOLT_PLUGIN_LIB_NAME} SHARED src/library/dll/main.c src/library/plugin/plugin.c src/library/gl.c
+        src/library/rwlock/rwlock_win32.c src/library/ipc_posix.c src/library/plugin/plugin_posix.c modules/hashmap/hashmap.c
+        modules/spng/spng/spng.c)
+        install(TARGETS ${BOLT_PLUGIN_LIB_NAME} DESTINATION "${BOLT_CEF_INSTALLDIR}")
+    endif()
     target_link_libraries(${BOLT_PLUGIN_LIB_NAME} luajit-5.1)
-    target_compile_definitions(bolt PUBLIC BOLT_PLUGINS=1 SPNG_STATIC=1)
-    target_compile_definitions(bolt PUBLIC BOLT_LIB_NAME="${BOLT_PLUGIN_LIB_NAME}")
+    target_compile_definitions(${BOLT_PLUGIN_LIB_NAME} PUBLIC SPNG_STATIC=1)
+    target_compile_definitions(bolt PUBLIC BOLT_LIB_NAME="${BOLT_PLUGIN_LIB_NAME}" BOLT_PLUGINS=1)
+    if(MSVC)
+        target_compile_definitions(${BOLT_PLUGIN_LIB_NAME} PUBLIC _USE_MATH_DEFINES=1)
+    endif()
 endif()
 
 # Finally, install shell script and metadata
