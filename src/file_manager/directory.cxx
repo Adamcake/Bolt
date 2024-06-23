@@ -52,7 +52,7 @@ FileManager::Directory::Directory(std::filesystem::path path): path(path) {
 }
 
 FileManager::File FileManager::Directory::get(std::string_view uri) const {
-	std::filesystem::path path = std::string(this->path) + std::string(uri);
+	std::filesystem::path path = this->path.string() + std::string(uri);
 	std::ifstream file(path, std::ios::in | std::ios::binary);
     if (file.fail()) return File { .contents = nullptr, .size = 0 };
     file.seekg(0, std::ios::end);
@@ -65,7 +65,7 @@ FileManager::File FileManager::Directory::get(std::string_view uri) const {
 	}
 	const char* mime_type = GetMimeType(path);
 	if (!mime_type) {
-		fmt::print("ERROR: unknown file extension \"{}\" ({}), please add it to mime.cxx and rebuild\n", path.extension().c_str(), path.c_str());
+		fmt::print("ERROR: unknown file extension \"{}\" ({}), please add it to mime.cxx and rebuild\n", path.extension().string(), path.string());
 		delete[] buffer;
 		return File { .contents = nullptr, .size = 0 };
 	}
