@@ -260,9 +260,9 @@ add_subdirectory(${CEF_LIBCEF_DLL_WRAPPER_PATH} libcef_dll_wrapper)
 # select implementations for OS-specific behaviour
 if(WIN32)
     set(WINDOW_LAUNCHER_OS_SPECIFIC src/browser/window_launcher_win.cxx)
-    set(CLIENT_OS_SPECIFIC src/browser/client_win.cxx)
+    set(CLIENT_OS_SPECIFIC src/browser/client_win32.cxx)
     if(NOT BOLT_SKIP_LIBRARIES)
-        #library/ipc_win.c? actually windows appears to support AF_UNIX sockets already?
+        set(LIB_IPC_OS_SPECIFIC src/library/ipc_win32.c)
     endif()
 else()
     set(WINDOW_LAUNCHER_OS_SPECIFIC src/browser/window_launcher_posix.cxx)
@@ -366,7 +366,7 @@ if(NOT BOLT_SKIP_LIBRARIES)
     endif()
     if (WIN32)
         add_library(${BOLT_PLUGIN_LIB_NAME} SHARED src/library/dll/main.c src/library/plugin/plugin.c src/library/gl.c
-        src/library/rwlock/rwlock_win32.c src/library/ipc_posix.c src/library/plugin/plugin_posix.c modules/hashmap/hashmap.c
+        src/library/rwlock/rwlock_win32.c src/library/ipc_win32.c src/library/plugin/plugin_win32.c modules/hashmap/hashmap.c
         modules/spng/spng/spng.c)
         target_link_libraries(${BOLT_PLUGIN_LIB_NAME} "${BOLT_LUAJIT_DIR}/lua51.lib")
         target_include_directories(${BOLT_PLUGIN_LIB_NAME} PUBLIC "${CEF_ROOT}" "${BOLT_LUAJIT_DIR}")
