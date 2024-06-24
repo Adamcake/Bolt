@@ -2,16 +2,20 @@
 
 #include "plugin_api.h"
 #include "../ipc.h"
-#include "../../hashmap/hashmap.h"
+#include "../../../modules/hashmap/hashmap.h"
 #include "../../../modules/spng/spng/spng.h"
 
-#include <bits/time.h>
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+
+#if defined(_WIN32)
+#include <windows.h>
+LARGE_INTEGER performance_frequency;
+#endif
 
 #define API_VERSION_MAJOR 1
 #define API_VERSION_MINOR 0
@@ -242,6 +246,9 @@ void _bolt_plugin_on_startup() {
     windows.map = hashmap_new(sizeof(struct EmbeddedWindow*), 8, 0, 0, _bolt_window_map_hash, _bolt_window_map_compare, NULL, NULL);
     _bolt_rwlock_init(&windows.lock);
     memset(&windows.input, 0, sizeof(windows.input));
+#if defined(_WIN32)
+    QueryPerformanceFrequency(&performance_frequency);
+#endif
 }
 
 void _bolt_plugin_init(const struct PluginManagedFunctions* functions) {
@@ -736,10 +743,20 @@ static int api_checkversion(lua_State* state) {
 
 static int api_time(lua_State* state) {
     _bolt_check_argc(state, 0, "time");
+#if defined(_WIN32)
+    LARGE_INTEGER ticks;
+    if (QueryPerformanceCounter(&ticks)) {
+        const uint64_t microseconds = (ticks.QuadPart * 1000000) / performance_frequency.QuadPart;
+        lua_pushinteger(state, microseconds);
+    } else {
+        lua_pushnil(state);
+    }
+#else
     struct timespec s;
-    clock_gettime(CLOCK_MONOTONIC, &s);
+    clock_gettime(CLOCK_MONOTONIC_RAW, &s);
     const uint64_t microseconds = (s.tv_sec * 1000000) + (s.tv_nsec / 1000);
     lua_pushinteger(state, microseconds);
+#endif
     return 1;
 }
 
@@ -786,7 +803,7 @@ static int api_createsurfacefromrgba(lua_State* state) {
     if (length >= req_length) {
         managed_functions.surface_init(functions, w, h, rgba);
     } else {
-        void* ud = lua_newuserdata(state, req_length);
+        uint8_t* ud = lua_newuserdata(state, req_length);
         memcpy(ud, rgba, length);
         memset(ud + length, 0, req_length - length);
         managed_functions.surface_init(functions, w, h, ud);
