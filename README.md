@@ -74,9 +74,11 @@ After that, the helper script `./build/bolt.sh` can be used to launch Bolt from 
 ### Windows
 
 Windows builds have only been tested using Visual Studio 2022 (a.k.a. Visual Studio 17) in Release mode, per recommendations by chromium/cef. Other configurations may work but have not been tested.
-- `cmake -S . -B build -G "Visual Studio 17" -D CMAKE_BUILD_TYPE=Release -D BOLT_SKIP_LIBRARIES=1`
+- optional: if you want to build the plugin library, start by cloning [LuaJIT](https://github.com/LuaJIT/LuaJIT) and build it by running msvcbuild.bat.
+- `cmake -S . -B build -G "Visual Studio 17" -D CMAKE_BUILD_TYPE=Release`
   - note: specify `-D BOLT_CEF_INSTALLDIR=[your filepath]` to specify the install location when running the final command. Must be an absolute path. The default is `C:\bolt-launcher\`.
-  - note: use `-A Win32` instead for 32-bit targets
+  - note: depending on whether you want the plugin library, you need to specify either `-D BOLT_LUAJIT_DIR=path/to/luajit/src/`, where the path is the location of lua51.dll and the various lua headers, or `-D BOLT_SKIP_LIBRARIES=1`
+  - note: use `-A Win32` for 32-bit targets
 - `cmake --build build --config Release`
 - `cmake --install build/`
 
