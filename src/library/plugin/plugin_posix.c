@@ -1,3 +1,5 @@
+#include "plugin.h"
+
 #include <errno.h>
 #include <poll.h>
 #include <stdlib.h>
