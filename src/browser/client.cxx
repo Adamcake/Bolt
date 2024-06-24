@@ -376,7 +376,7 @@ void Browser::Client::StartPlugin(uint64_t client_id, std::string id, std::strin
 	for (const GameClient& g: this->game_clients) {
 		if (g.uid == client_id) {
 			const size_t message_size = sizeof(BoltIPCMessageToClient) + (sizeof(uint32_t) * 3) + id.size() + path.size() + main.size();
-			char* message = new (std::align_val_t(sizeof(BoltIPCMessageToClient))) char[message_size];
+			uint8_t* message = new uint8_t[message_size];
 			*(BoltIPCMessageToClient*)message = {.message_type = IPC_MSG_STARTPLUGINS, .items = 1};
 			size_t pos = sizeof(BoltIPCMessageToClient);
 			*(uint32_t*)(message + pos) = id.size();
