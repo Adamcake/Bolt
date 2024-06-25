@@ -8,7 +8,6 @@
 	let customJarFile: HTMLTextAreaElement;
 	let customJarFileButton: HTMLButtonElement;
 	let useJar: HTMLInputElement;
-	let flatpakDiv: HTMLDivElement;
 
 	// enables the ability to select a custom jar
 	// decided by config load as well
@@ -81,10 +80,6 @@
 		} else {
 			useJar.checked = false;
 			$config.runelite_use_custom_jar = false;
-		}
-
-		if ($platform !== 'linux') {
-			flatpakDiv.remove();
 		}
 	});
 </script>
