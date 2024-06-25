@@ -1607,7 +1607,7 @@ static uint8_t _bolt_gl_plugin_texture_compare(void* userdata, size_t x, size_t 
     const size_t start_offset = (tex->width * y * 4) + (x * 4);
     if (start_offset + len > tex->width * tex->height * 4) {
         printf(
-            "warning: out-of-bounds texture compare attempt: tried to read %lu bytes at %lu,%lu of texture id=%u w,h=%u,%u\n",
+            "warning: out-of-bounds texture compare attempt: tried to read %zu bytes at %zu,%zu of texture id=%u w,h=%u,%u\n",
             len, x, y, tex->id, tex->width, tex->height
         );
         return 0;
