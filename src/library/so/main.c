@@ -11,7 +11,7 @@
 #include "x.h"
 #include "../gl.h"
 #include "../plugin/plugin.h"
-#include "../../hashmap/hashmap.h"
+#include "../../../modules/hashmap/hashmap.h"
 
 // comment or uncomment this to enable verbose logging of hooks in this file
 //#define VERBOSE
