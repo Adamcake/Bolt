@@ -343,15 +343,15 @@ endif()
 # fake java wrapper for running hdos
 if(NOT WIN32)
     add_executable(java-proxy src/fake_java.c)
-    install(TARGETS java-proxy DESTINATION ${BOLT_CEF_INSTALLDIR}/bolt-launcher)
+    install(TARGETS java-proxy DESTINATION "${BOLT_CEF_INSTALLDIR}/bolt-launcher")
 endif()
 
 # Install commands for target dir layout - as per https://bitbucket.org/chromiumembedded/cef/wiki/Tutorial.md
 if(APPLE)
     # TODO: mac support
 else()
-    install(TARGETS bolt DESTINATION ${BOLT_CEF_INSTALLDIR}/bolt-launcher)
-    install(DIRECTORY "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/" "${CEF_ROOT}/Resources/" DESTINATION ${BOLT_CEF_INSTALLDIR}/bolt-launcher USE_SOURCE_PERMISSIONS)
+    install(TARGETS bolt DESTINATION "${BOLT_CEF_INSTALLDIR}/bolt-launcher")
+    install(DIRECTORY "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/" "${CEF_ROOT}/Resources/" DESTINATION "${BOLT_CEF_INSTALLDIR}/bolt-launcher" USE_SOURCE_PERMISSIONS)
 endif()
 
 # Build plugin library
