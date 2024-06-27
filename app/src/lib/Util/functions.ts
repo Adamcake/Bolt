@@ -33,7 +33,11 @@ import {
 	pendingOauth,
 	platform,
 	productionClientId,
-	rs3InstalledHash,
+	rs3DebInstalledHash,
+	rs3ExeInstalledHash,
+	rs3AppInstalledHash,
+	osrsExeInstalledHash,
+	osrsAppInstalledHash,
 	runeLiteInstalledId,
 	selectedPlay
 } from '$lib/Util/store';
@@ -93,7 +97,11 @@ export function urlSearchParams(): void {
 	const query = new URLSearchParams(window.location.search);
 	platform.set(query.get('platform'));
 	//isFlathub = query.get('flathub') === '1';
-	rs3InstalledHash.set(query.get('rs3_linux_installed_hash'));
+	rs3DebInstalledHash.set(query.get('rs3_deb_installed_hash'));
+	rs3ExeInstalledHash.set(query.get('rs3_exe_installed_hash'));
+	rs3AppInstalledHash.set(query.get('rs3_app_installed_hash'));
+	osrsExeInstalledHash.set(query.get('osrs_exe_installed_hash'));
+	osrsAppInstalledHash.set(query.get('osrs_app_installed_hash'));
 	runeLiteInstalledId.set(query.get('runelite_installed_id'));
 	hdosInstalledVersion.set(query.get('hdos_installed_version'));
 	const queryPlugins: string | null = query.get('plugins');
@@ -493,7 +501,7 @@ export function launchRS3Linux(
 			if (xml.readyState == 4) {
 				msg(`Game launch status: '${xml.responseText.trim()}'`);
 				if (xml.status == 200 && hash) {
-					rs3InstalledHash.set(<string>hash);
+					rs3DebInstalledHash.set(<string>hash);
 				}
 			}
 		};
@@ -516,7 +524,7 @@ export function launchRS3Linux(
 				launch();
 				return;
 			}
-			if (lines.SHA256 !== get(rs3InstalledHash)) {
+			if (lines.SHA256 !== get(rs3DebInstalledHash)) {
 				msg('Downloading RS3 client...');
 				const exeXml = new XMLHttpRequest();
 				exeXml.open('GET', contentUrl.concat(lines.Filename), true);
@@ -818,6 +826,13 @@ export async function launchOfficialClient(
 ) {
 	saveConfig();
 	const metaPath: string = `${osrs ? 'osrs' : atob(boltSub.provider)}-${windows ? 'win' : 'mac'}`;
+	const hashStore = windows
+		? osrs
+			? osrsExeInstalledHash
+			: rs3ExeInstalledHash
+		: osrs
+			? osrsAppInstalledHash
+			: rs3AppInstalledHash;
 
 	const launch = async (hash?: string, exe?: Blob) => {
 		const params: Record<string, string> = {};
@@ -835,7 +850,7 @@ export async function launchOfficialClient(
 		);
 		response.text().then((text) => msg(`Game launch status: '${text.trim()}'`));
 		if (response.status == 200 && hash) {
-			// TODO: change installed version to `hash`
+			hashStore.set(hash);
 		}
 	};
 
@@ -850,7 +865,12 @@ export async function launchOfficialClient(
 	const metaToken: Direct6Token = JSON.parse(atob(primaryUrlText.split('.')[1])).environments
 		.production;
 
-	// TODO: check here if metaToken.id matches the already-installed version, if it does, just launch straight away
+	if (get(hashStore) === metaToken.id) {
+		msg('Latest client is already installed');
+		launch();
+		return;
+	}
+	msg(`Downloading client version ${metaToken.version}`);
 
 	// download the catalog for the production environment, which contains info about all the files available for download
 	const catalogUrl: string = `${atob(boltSub.direct6_url)}${metaPath}/catalog/${metaToken.id}/catalog.json`;
