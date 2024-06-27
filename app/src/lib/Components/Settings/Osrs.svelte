@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { config, isConfigDirty, platform, selectedPlay } from '$lib/Util/store';
+	import { config, isConfigDirty, selectedPlay } from '$lib/Util/store';
 	import { launchRuneLiteConfigure } from '$lib/Util/functions';
 	import { msg } from '@/main';
 
