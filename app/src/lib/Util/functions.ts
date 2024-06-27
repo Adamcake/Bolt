@@ -819,7 +819,7 @@ export function launchOfficialClient(
 	saveConfig();
 	const launchPath: string = `/launch-${osrs ? 'osrs' : 'rs3'}-${windows ? 'exe' : 'macapp'}?`;
 	const metaPath: string = `${osrs ? 'osrs' : atob(boltSub.provider)}-${windows ? 'win' : 'mac'}`;
-	const primaryUrl: string = `${atob(boltSub.direct6_url)}${metaPath}/${metaPath}.json`
+	const primaryUrl: string = `${atob(boltSub.direct6_url)}${metaPath}/${metaPath}.json`;
 
 	const launch = (hash?: string, exe?: Blob) => {
 		const xml = new XMLHttpRequest();
@@ -851,7 +851,8 @@ export function launchOfficialClient(
 	xml.onreadystatechange = () => {
 		if (xml.readyState == 4) {
 			if (xml.status == 200) {
-				const metaToken: Direct6Token = JSON.parse(atob(xml.responseText.split('.')[1])).environments.production;
+				const metaToken: Direct6Token = JSON.parse(atob(xml.responseText.split('.')[1]))
+					.environments.production;
 				// TODO: check here if metaToken.id matches the already-installed version, if it does, just launch straight away
 				msg(`Downloading client version ${metaToken.version}...`);
 				const catalogUrl: string = `${atob(boltSub.direct6_url)}${metaPath}/catalog/${metaToken.id}/catalog.json`;
@@ -861,42 +862,62 @@ export function launchOfficialClient(
 					if (xml2.readyState == 4) {
 						if (xml2.status == 200) {
 							const catalog = JSON.parse(atob(xml2.responseText.split('.')[1]));
-							const metafileUrl = catalog.metafile.replace("http:", "https:");
+							const metafileUrl = catalog.metafile.replace('http:', 'https:');
 							const xml3 = new XMLHttpRequest();
 							xml3.open('GET', metafileUrl, true);
 							xml3.onreadystatechange = () => {
 								if (xml3.readyState == 4) {
 									if (xml3.status == 200) {
 										const metafile = JSON.parse(atob(xml3.responseText.split('.')[1]));
-										const chunk_promises: Promise<Blob>[] = metafile.pieces.digests.map((x: string) => {
-											const hex_chunk: string = atob(x).split("").map(c => c.charCodeAt(0).toString(16).padStart(2, "0")).join("");
-											const chunk_url: string = catalog.config.remote.baseUrl.replace("http:", "https:").concat(catalog.config.remote.pieceFormat.replace("{SubString:0,2,{TargetDigest}}", hex_chunk.substring(0, 2)).replace("{TargetDigest}", hex_chunk));
-											return new Promise((resolve, reject) => {
-												const xml = new XMLHttpRequest();
-												xml.open('GET', chunk_url, true);
-												xml.responseType = 'blob';
-												xml.onreadystatechange = () => {
-													if (xml.readyState == 4) {
-														if (xml.status == 200) {
-															const ds = new DecompressionStream("gzip");
-															new Response(xml.response.slice(6).stream().pipeThrough(ds)).blob().then(resolve);
-														} else {
-															reject(`Error from ${chunk_url}: ${xml.status}: ${xml.responseText}`);
+										const chunk_promises: Promise<Blob>[] = metafile.pieces.digests.map(
+											(x: string) => {
+												const hex_chunk: string = atob(x)
+													.split('')
+													.map((c) => c.charCodeAt(0).toString(16).padStart(2, '0'))
+													.join('');
+												const chunk_url: string = catalog.config.remote.baseUrl
+													.replace('http:', 'https:')
+													.concat(
+														catalog.config.remote.pieceFormat
+															.replace('{SubString:0,2,{TargetDigest}}', hex_chunk.substring(0, 2))
+															.replace('{TargetDigest}', hex_chunk)
+													);
+												return new Promise((resolve, reject) => {
+													const xml = new XMLHttpRequest();
+													xml.open('GET', chunk_url, true);
+													xml.responseType = 'blob';
+													xml.onreadystatechange = () => {
+														if (xml.readyState == 4) {
+															if (xml.status == 200) {
+																const ds = new DecompressionStream('gzip');
+																new Response(xml.response.slice(6).stream().pipeThrough(ds))
+																	.blob()
+																	.then(resolve);
+															} else {
+																reject(
+																	`Error from ${chunk_url}: ${xml.status}: ${xml.responseText}`
+																);
+															}
 														}
-													}
-												}
-												xml.send();
-											});
-										});
+													};
+													xml.send();
+												});
+											}
+										);
 
 										// while all that stuff is downloading, let's read the file list and find the exe's location in the data blob
 										var exeOffset: number = 0;
 										var exeSize: number | null = null;
 										for (let i = 0; i < metafile.files.length; i += 1) {
-											const isTargetExe: boolean = windows ? metafile.files[i].name.endsWith(".exe") : metafile.files[i].name.includes(".app/Contents/MacOS/");
+											const isTargetExe: boolean = windows
+												? metafile.files[i].name.endsWith('.exe')
+												: metafile.files[i].name.includes('.app/Contents/MacOS/');
 											if (isTargetExe) {
 												if (exeSize !== null) {
-													err(`Error parsing ${metafileUrl}: file list has multiple possibilities for main exe`, false);
+													err(
+														`Error parsing ${metafileUrl}: file list has multiple possibilities for main exe`,
+														false
+													);
 													return;
 												} else {
 													exeSize = metafile.files[i].size;
@@ -906,11 +927,14 @@ export function launchOfficialClient(
 											}
 										}
 										if (exeSize === null) {
-											err(`Error parsing ${metafileUrl}: file list has no possibilities for main exe`, false);
+											err(
+												`Error parsing ${metafileUrl}: file list has no possibilities for main exe`,
+												false
+											);
 											return;
 										}
 
-										Promise.all(chunk_promises).then(x => {
+										Promise.all(chunk_promises).then((x) => {
 											const exeFile = new Blob(x).slice(exeOffset, exeOffset + <number>exeSize);
 											launch(metafile.id, exeFile);
 										});
