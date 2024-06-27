@@ -26,6 +26,7 @@ export enum Game {
 
 // client enum, maybe this list will grow as clients are added
 export enum Client {
+	osrs,
 	runeLite,
 	hdos,
 	rs3

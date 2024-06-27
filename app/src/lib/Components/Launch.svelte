@@ -1,10 +1,15 @@
 <script lang="ts">
 	import { afterUpdate, onMount } from 'svelte';
 	import { get } from 'svelte/store';
-	import { launchHdos, launchRS3Linux, launchRuneLite } from '$lib/Util/functions';
+	import {
+		launchOfficialClient,
+		launchHdos,
+		launchRS3Linux,
+		launchRuneLite
+	} from '$lib/Util/functions';
 	import { Client, Game } from '$lib/Util/interfaces';
 	import { msg } from '@/main';
-	import { config, hasBoltPlugins, isConfigDirty, selectedPlay } from '$lib/Util/store';
+	import { config, hasBoltPlugins, isConfigDirty, selectedPlay, platform } from '$lib/Util/store';
 
 	export let showPluginMenu = false;
 
@@ -49,26 +54,48 @@
 		}
 		switch ($selectedPlay.game) {
 			case Game.osrs:
-				if ($selectedPlay.client == Client.runeLite) {
-					launchRuneLite(
+				switch ($selectedPlay.client) {
+					case Client.osrs:
+						launchOfficialClient(
+							$platform === 'windows',
+							true,
+							<string>$selectedPlay.credentials?.session_id,
+							<string>$selectedPlay.character?.accountId,
+							<string>$selectedPlay.character?.displayName
+						);
+						break;
+					case Client.runeLite:
+						launchRuneLite(
+							<string>$selectedPlay.credentials?.session_id,
+							<string>$selectedPlay.character?.accountId,
+							<string>$selectedPlay.character?.displayName
+						);
+						break;
+					case Client.hdos:
+						launchHdos(
+							<string>$selectedPlay.credentials?.session_id,
+							<string>$selectedPlay.character?.accountId,
+							<string>$selectedPlay.character?.displayName
+						);
+						break;
+				}
+				break;
+			case Game.rs3:
+				if ($platform === 'linux') {
+					launchRS3Linux(
 						<string>$selectedPlay.credentials?.session_id,
 						<string>$selectedPlay.character?.accountId,
 						<string>$selectedPlay.character?.displayName
 					);
-				} else if ($selectedPlay.client == Client.hdos) {
-					launchHdos(
+				} else {
+					launchOfficialClient(
+						$platform === 'windows',
+						false,
 						<string>$selectedPlay.credentials?.session_id,
 						<string>$selectedPlay.character?.accountId,
 						<string>$selectedPlay.character?.displayName
 					);
 				}
-				break;
-			case Game.rs3:
-				launchRS3Linux(
-					<string>$selectedPlay.credentials?.session_id,
-					<string>$selectedPlay.character?.accountId,
-					<string>$selectedPlay.character?.displayName
-				);
 				break;
 		}
 	}
@@ -123,6 +150,9 @@
 				bind:this={clientSelect}
 				on:change={clientChanged}
 			>
+				{#if $platform !== 'linux'}
+					<option data-id={Client.osrs} class="dark:bg-slate-900">OSRS Client</option>
+				{/if}
 				<option data-id={Client.runeLite} class="dark:bg-slate-900">RuneLite</option>
 				<option data-id={Client.hdos} class="dark:bg-slate-900">HDOS</option>
 			</select>
