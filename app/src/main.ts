@@ -1,6 +1,5 @@
 import App from '@/App.svelte';
 import {
-	messageList,
 	clientListPromise,
 	config,
 	platform,
@@ -27,16 +26,9 @@ import {
 	saveConfig,
 	removePendingGameAuth
 } from '$lib/Util/functions';
-import type {
-	Bolt,
-	Account,
-	Auth,
-	Config,
-	Credentials,
-	Message,
-	SelectedPlay
-} from '$lib/Util/interfaces';
+import type { Bolt, Account, Auth, Config, Credentials, SelectedPlay } from '$lib/Util/interfaces';
 import { unwrap } from '$lib/Util/interfaces';
+import { logger } from '$lib/Util/Logger';
 
 const app = new App({
 	target: document.getElementById('app')!
@@ -63,8 +55,6 @@ export let pendingOauthSub: Auth;
 unsubscribers.push(pendingOauth.subscribe((data) => (pendingOauthSub = <Auth>data)));
 export let pendingGameAuthSub: Array<Auth>;
 unsubscribers.push(pendingGameAuth.subscribe((data) => (pendingGameAuthSub = data)));
-export let messageListSub: Array<Message>;
-unsubscribers.push(messageList.subscribe((data) => (messageListSub = data)));
 export let accountListSub: Map<string, Account>;
 unsubscribers.push(accountList.subscribe((data) => (accountListSub = data)));
 export let selectedPlaySub: SelectedPlay;
@@ -94,7 +84,7 @@ function start(): void {
 	const allowedOrigins = [internalUrlSub, sOrigin, atob(boltSub.origin_2fa)];
 	window.addEventListener('message', (event: MessageEvent) => {
 		if (!allowedOrigins.includes(event.origin)) {
-			msg(`discarding window message from origin ${event.origin}`);
+			logger.info(`discarding window message from origin ${event.origin}`);
 			return;
 		}
 		let pending: Auth | undefined = pendingOauthSub;
@@ -126,11 +116,11 @@ function start(): void {
 										}
 									});
 								} else {
-									err(`Error: invalid credentials received`, false);
+									logger.error(`Error: invalid credentials received`);
 									pending!.win!.close();
 								}
 							} else {
-								err(`Error: from ${exchangeUrl}: ${xml.status}: ${xml.response}`, false);
+								logger.error(`Error: from ${exchangeUrl}: ${xml.status}: ${xml.response}`);
 								pending!.win!.close();
 							}
 						}
@@ -144,7 +134,7 @@ function start(): void {
 			case 'externalUrl':
 				xml.onreadystatechange = () => {
 					if (xml.readyState == 4) {
-						msg(`External URL status: '${xml.responseText.trim()}'`);
+						logger.info(`External URL status: '${xml.responseText.trim()}'`);
 					}
 				};
 				xml.open('POST', '/open-external-url', true);
@@ -158,17 +148,17 @@ function start(): void {
 					removePendingGameAuth(pending, true);
 					const sections = event.data.id_token.split('.');
 					if (sections.length !== 3) {
-						err(`Malformed id_token: ${sections.length} sections, expected 3`, false);
+						logger.error(`Malformed id_token: ${sections.length} sections, expected 3`);
 						break;
 					}
 					const header = JSON.parse(atob(sections[0]));
 					if (header.typ !== 'JWT') {
-						err(`Bad id_token header: typ ${header.typ}, expected JWT`, false);
+						logger.error(`Bad id_token header: typ ${header.typ}, expected JWT`);
 						break;
 					}
 					const payload = JSON.parse(atob(sections[1]));
 					if (atob(payload.nonce) !== pending.nonce) {
-						err('Incorrect nonce in id_token', false);
+						logger.error('Incorrect nonce in id_token');
 						break;
 					}
 					const sessionsUrl = atob(boltSub.auth_api).concat('/sessions');
@@ -191,7 +181,7 @@ function start(): void {
 									}
 								});
 							} else {
-								err(`Error: from ${sessionsUrl}: ${xml.status}: ${xml.response}`, false);
+								logger.error(`Error: from ${sessionsUrl}: ${xml.status}: ${xml.response}`);
 							}
 						}
 					};
@@ -205,7 +195,7 @@ function start(): void {
 				clientListPromise.set(getNewClientListPromise());
 				break;
 			default:
-				msg('Unknown message type: '.concat(event.data.type));
+				logger.info('Unknown message type: '.concat(event.data.type));
 				break;
 		}
 	});
@@ -215,7 +205,7 @@ function start(): void {
 			credentialsSub.forEach(async (value) => {
 				const result = await checkRenewCreds(value, exchangeUrl, clientId);
 				if (result !== null && result !== 0) {
-					err(`Discarding expired login for #${value.sub}`, false);
+					logger.error(`Discarding expired login for #${value.sub}`);
 					credentials.update((data) => {
 						data.delete(value.sub);
 						return data;
@@ -240,40 +230,6 @@ function start(): void {
 		}
 		isConfigDirty.set(false); // overrides all cases where this gets set to "true" due to loading existing config values
 	})();
-}
-
-// adds a message to the message list
-export function msg(str: string) {
-	console.log(str);
-	const message: Message = {
-		isError: false,
-		text: str,
-		time: new Date(Date.now())
-	};
-	messageList.update((list: Array<Message>) => {
-		list.unshift(message);
-		return list;
-	});
-}
-
-// adds an error message to the message list
-// if do_throw is true, throws the error message
-export function err(str: string, doThrow: boolean) {
-	const message: Message = {
-		isError: true,
-		text: str,
-		time: new Date(Date.now())
-	};
-	messageList.update((list: Array<Message>) => {
-		list.unshift(message);
-		return list;
-	});
-
-	if (!doThrow) {
-		console.error(str);
-	} else {
-		throw new Error(str);
-	}
 }
 
 declare const s: () => Bolt;

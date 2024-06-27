@@ -31,13 +31,6 @@ export enum Client {
 	rs3
 }
 
-// messge object
-export interface Message {
-	text: string;
-	isError: boolean;
-	time?: Date;
-}
-
 // s()
 export interface Bolt {
 	provider: string;
