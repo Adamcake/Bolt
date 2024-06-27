@@ -50,6 +50,7 @@ export interface Bolt {
 	profile_api: string;
 	shield_url: string;
 	content_url: string;
+	direct6_url: string;
 	default_config_uri: string;
 	games: Array<string>;
 }
@@ -140,6 +141,14 @@ export interface SelectedPlay {
 	credentials?: Credentials;
 	game?: Game;
 	client?: Client;
+}
+
+// response token from the official "Direct6" URL
+export interface Direct6Token {
+	id?: string;
+	version?: string;
+	promoteTime?: number;
+	scanTime?: number;
 }
 
 // connected game client for plugin management purposes

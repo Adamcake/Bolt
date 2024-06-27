@@ -6,6 +6,7 @@ import {
 	type Auth,
 	type Character,
 	type GameClient,
+	type Direct6Token,
 	unwrap
 } from '$lib/Util/interfaces';
 import {
@@ -804,4 +805,131 @@ export function savePluginConfig(): void {
 		}
 	};
 	xml.send(JSON.stringify(get(pluginList)));
+}
+
+// download and attempt to launch an official windows or mac client
+// (not the official linux client - that comes from a different url, see launchRS3Linux)
+export function launchOfficialClient(
+	windows: boolean,
+	osrs: boolean,
+	jx_session_id: string,
+	jx_character_id: string,
+	jx_display_name: string
+) {
+	saveConfig();
+	const launchPath: string = `/launch-${osrs ? 'osrs' : 'rs3'}-${windows ? 'exe' : 'macapp'}?`;
+	const metaPath: string = `${osrs ? 'osrs' : atob(boltSub.provider)}-${windows ? 'win' : 'mac'}`;
+	const primaryUrl: string = `${atob(boltSub.direct6_url)}${metaPath}/${metaPath}.json`
+
+	const launch = (hash?: string, exe?: Blob) => {
+		const xml = new XMLHttpRequest();
+		const params: Record<string, string> = {};
+		if (hash) params.hash = hash;
+		if (jx_session_id) params.jx_session_id = jx_session_id;
+		if (jx_character_id) params.jx_character_id = jx_character_id;
+		if (jx_display_name) params.jx_display_name = jx_display_name;
+		xml.open('POST', launchPath.concat(new URLSearchParams(params).toString()), true);
+		xml.setRequestHeader('Content-Type', 'application/octet-stream');
+		xml.onreadystatechange = () => {
+			if (xml.readyState == 4) {
+				msg(`Game launch status: '${xml.responseText.trim()}'`);
+				if (xml.status == 200 && hash) {
+					// TODO: change installed version to `hash`
+				}
+			}
+		};
+		if (exe !== null) {
+			exe?.arrayBuffer().then((x) => xml.send(x));
+		} else {
+			xml.send();
+		}
+	};
+
+	// yes, there is way too much nesting happening here
+	const xml = new XMLHttpRequest();
+	xml.open('GET', primaryUrl, true);
+	xml.onreadystatechange = () => {
+		if (xml.readyState == 4) {
+			if (xml.status == 200) {
+				const metaToken: Direct6Token = JSON.parse(atob(xml.responseText.split('.')[1])).environments.production;
+				// TODO: check here if metaToken.id matches the already-installed version, if it does, just launch straight away
+				msg(`Downloading client version ${metaToken.version}...`);
+				const catalogUrl: string = `${atob(boltSub.direct6_url)}${metaPath}/catalog/${metaToken.id}/catalog.json`;
+				const xml2 = new XMLHttpRequest();
+				xml2.open('GET', catalogUrl, true);
+				xml2.onreadystatechange = () => {
+					if (xml2.readyState == 4) {
+						if (xml2.status == 200) {
+							const catalog = JSON.parse(atob(xml2.responseText.split('.')[1]));
+							const metafileUrl = catalog.metafile.replace("http:", "https:");
+							const xml3 = new XMLHttpRequest();
+							xml3.open('GET', metafileUrl, true);
+							xml3.onreadystatechange = () => {
+								if (xml3.readyState == 4) {
+									if (xml3.status == 200) {
+										const metafile = JSON.parse(atob(xml3.responseText.split('.')[1]));
+										const chunk_promises: Promise<Blob>[] = metafile.pieces.digests.map((x: string) => {
+											const hex_chunk: string = atob(x).split("").map(c => c.charCodeAt(0).toString(16).padStart(2, "0")).join("");
+											const chunk_url: string = catalog.config.remote.baseUrl.replace("http:", "https:").concat(catalog.config.remote.pieceFormat.replace("{SubString:0,2,{TargetDigest}}", hex_chunk.substring(0, 2)).replace("{TargetDigest}", hex_chunk));
+											return new Promise((resolve, reject) => {
+												const xml = new XMLHttpRequest();
+												xml.open('GET', chunk_url, true);
+												xml.responseType = 'blob';
+												xml.onreadystatechange = () => {
+													if (xml.readyState == 4) {
+														if (xml.status == 200) {
+															const ds = new DecompressionStream("gzip");
+															new Response(xml.response.slice(6).stream().pipeThrough(ds)).blob().then(resolve);
+														} else {
+															reject(`Error from ${chunk_url}: ${xml.status}: ${xml.responseText}`);
+														}
+													}
+												}
+												xml.send();
+											});
+										});
+
+										// while all that stuff is downloading, let's read the file list and find the exe's location in the data blob
+										var exeOffset: number = 0;
+										var exeSize: number | null = null;
+										for (let i = 0; i < metafile.files.length; i += 1) {
+											const isTargetExe: boolean = windows ? metafile.files[i].name.endsWith(".exe") : metafile.files[i].name.includes(".app/Contents/MacOS/");
+											if (isTargetExe) {
+												if (exeSize !== null) {
+													err(`Error parsing ${metafileUrl}: file list has multiple possibilities for main exe`, false);
+													return;
+												} else {
+													exeSize = metafile.files[i].size;
+												}
+											} else if (exeSize === null) {
+												exeOffset += metafile.files[i].size;
+											}
+										}
+										if (exeSize === null) {
+											err(`Error parsing ${metafileUrl}: file list has no possibilities for main exe`, false);
+											return;
+										}
+
+										Promise.all(chunk_promises).then(x => {
+											const exeFile = new Blob(x).slice(exeOffset, exeOffset + <number>exeSize);
+											launch(metafile.id, exeFile);
+										});
+									} else {
+										err(`Error from ${metafileUrl}: ${xml3.status}: ${xml3.responseText}`, false);
+									}
+								}
+							};
+							xml3.send();
+						} else {
+							err(`Error from ${catalogUrl}: ${xml2.status}: ${xml2.responseText}`, false);
+						}
+					}
+				};
+				xml2.send();
+			} else {
+				err(`Error from ${primaryUrl}: ${xml.status}: ${xml.responseText}`, false);
+			}
+		}
+	};
+	xml.send();
 }
