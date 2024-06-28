@@ -1,21 +1,12 @@
 import { get } from 'svelte/store';
 import { type Account, type Character, type GameClient } from '$lib/Util/interfaces';
-import {
-	accountList,
-	config,
-	credentials,
-	pluginList,
-	hdosInstalledVersion,
-	internalUrl,
-	productionClientId,
-	rs3InstalledHash,
-	runeLiteInstalledId,
-	selectedPlay
-} from '$lib/Util/store';
+import { accountList, internalUrl, productionClientId, selectedPlay } from '$lib/Util/store';
 import { logger } from '$lib/Util/Logger';
 import { BoltService } from '$lib/Services/BoltService';
-import { AuthService, type Credentials } from '$lib/Services/AuthService';
+import { AuthService, type Session } from '$lib/Services/AuthService';
 import { StringUtils } from '$lib/Util/StringUtils';
+import { bolt } from '$lib/State/Bolt';
+import { config } from '$lib/State/Config';
 
 // deprecated?
 // const rs3_basic_auth = 'Basic Y29tX2phZ2V4X2F1dGhfZGVza3RvcF9yczpwdWJsaWM=';
@@ -25,7 +16,7 @@ import { StringUtils } from '$lib/Util/StringUtils';
 // Handles a new session id as part of the login flow. Can also be called on startup with a
 // persisted session id.
 export async function handleNewSessionId(
-	creds: Credentials,
+	creds: Session,
 	accountsUrl: string,
 	accountsInfoPromise: Promise<Account>
 ) {
@@ -74,10 +65,10 @@ export async function handleNewSessionId(
 // called on new successful login with credentials. Delegates to a specific handler based on login_provider value.
 // however it does not save credentials. You should call saveAllCreds after calling this function any number of times.
 // Returns true if the credentials should be treated as valid by the caller immediately after return, or false if not.
-export async function handleLogin(win: Window | null, creds: Credentials) {
+export async function handleLogin(win: Window | null, creds: Session) {
 	const state = StringUtils.makeRandomState();
 	const nonce: string = crypto.randomUUID();
-	const location = BoltService.bolt.origin.concat('/oauth2/auth?').concat(
+	const location = bolt.env.origin.concat('/oauth2/auth?').concat(
 		new URLSearchParams({
 			id_token_hint: creds.id_token,
 			nonce: btoa(nonce),
@@ -109,7 +100,7 @@ export async function handleLogin(win: Window | null, creds: Credentials) {
 
 		return await handleNewSessionId(
 			creds,
-			BoltService.bolt.auth_api.concat('/accounts'),
+			bolt.env.auth_api.concat('/accounts'),
 			<Promise<Account>>accountInfoPromise
 		);
 	}
@@ -122,7 +113,9 @@ export function addNewAccount(account: Account) {
 			data.account = account;
 			const [firstKey] = account.characters.keys();
 			data.character = account.characters.get(firstKey);
-			if (get(credentials).size > 0) data.credentials = get(credentials).get(account.userId);
+			if (bolt.sessions.length > 0) {
+				data.credentials = bolt.sessions.find((session) => session.sub === account.userId);
+			}
 			return data;
 		});
 	};
@@ -132,6 +125,7 @@ export function addNewAccount(account: Account) {
 		return data;
 	});
 
+	const { config } = config;
 	if (get(selectedPlay).account && get(config).selected_account) {
 		if (account.userId == get(config).selected_account) {
 			updateSelectedPlay();
@@ -164,13 +158,14 @@ export function launchRS3Linux(
 	jx_character_id: string,
 	jx_display_name: string
 ) {
+	const { config } = config;
 	BoltService.saveConfig(get(config));
 
-	const launch = (hash?: unknown, deb?: never) => {
+	const launch = (hash?: string, deb?: never) => {
 		const xml = new XMLHttpRequest();
 		const params: Record<string, string> = {};
 		const _config = get(config);
-		if (hash) params.hash = <string>hash;
+		if (hash) params.hash = hash;
 		if (jx_session_id) params.jx_session_id = jx_session_id;
 		if (jx_character_id) params.jx_character_id = jx_character_id;
 		if (jx_display_name) params.jx_display_name = jx_display_name;
@@ -178,14 +173,14 @@ export function launchRS3Linux(
 		if (_config.rs_config_uri) {
 			params.config_uri = _config.rs_config_uri;
 		} else {
-			params.config_uri = BoltService.bolt.default_config_uri;
+			params.config_uri = bolt.env.default_config_uri;
 		}
 		xml.open('POST', '/launch-rs3-deb?'.concat(new URLSearchParams(params).toString()), true);
 		xml.onreadystatechange = () => {
 			if (xml.readyState == 4) {
 				logger.info(`Game launch status: '${xml.responseText.trim()}'`);
 				if (xml.status == 200 && hash) {
-					rs3InstalledHash.set(<string>hash);
+					bolt.rs3InstalledHash = hash;
 				}
 			}
 		};
@@ -193,7 +188,7 @@ export function launchRS3Linux(
 	};
 
 	const xml = new XMLHttpRequest();
-	const contentUrl = BoltService.bolt.content_url;
+	const contentUrl = bolt.env.content_url;
 	const url = contentUrl.concat('dists/trusty/non-free/binary-amd64/Packages');
 	xml.open('GET', url, true);
 	xml.onreadystatechange = () => {
@@ -208,7 +203,7 @@ export function launchRS3Linux(
 				launch();
 				return;
 			}
-			if (lines.SHA256 !== get(rs3InstalledHash)) {
+			if (lines.SHA256 !== bolt.rs3InstalledHash) {
 				logger.info('Downloading RS3 client...');
 				const exeXml = new XMLHttpRequest();
 				exeXml.open('GET', contentUrl.concat(lines.Filename), true);
@@ -251,10 +246,11 @@ function launchRuneLiteInner(
 	jx_display_name: string,
 	configure: boolean
 ) {
+	const { config } = config;
 	BoltService.saveConfig(get(config));
 	const launchPath = configure ? '/launch-runelite-jar-configure?' : '/launch-runelite-jar?';
 
-	const launch = (id?: unknown, jar?: unknown, jarPath?: unknown) => {
+	const launch = (id?: string | null, jar?: unknown, jarPath?: unknown) => {
 		const xml = new XMLHttpRequest();
 		const params: Record<string, string> = {};
 		if (id) params.id = <string>id;
@@ -268,7 +264,7 @@ function launchRuneLiteInner(
 			if (xml.readyState == 4) {
 				logger.info(`Game launch status: '${xml.responseText.trim()}'`);
 				if (xml.status == 200 && id) {
-					runeLiteInstalledId.set(<string>id);
+					bolt.runeLiteInstalledId = id;
 				}
 			}
 		};
@@ -290,7 +286,7 @@ function launchRuneLiteInner(
 					.map((x: Record<string, string>) => x.assets)
 					.flat()
 					.find((x: Record<string, string>) => x.name.toLowerCase() == 'runelite.jar');
-				if (runelite.id != get(runeLiteInstalledId)) {
+				if (runelite.id != bolt.runeLiteInstalledId) {
 					logger.info('Downloading RuneLite...');
 					const xmlRl = new XMLHttpRequest();
 					xmlRl.open('GET', runelite.browser_download_url, true);
@@ -347,6 +343,7 @@ export function launchHdos(
 	jx_character_id: string,
 	jx_display_name: string
 ) {
+	const { config } = config;
 	BoltService.saveConfig(get(config));
 
 	const launch = (version?: string, jar?: string) => {
@@ -361,7 +358,7 @@ export function launchHdos(
 			if (xml.readyState == 4) {
 				logger.info(`Game launch status: '${xml.responseText.trim()}'`);
 				if (xml.status == 200 && version) {
-					hdosInstalledVersion.set(version);
+					bolt.hdosInstalledVersion = version;
 				}
 			}
 		};
@@ -379,7 +376,7 @@ export function launchHdos(
 				);
 				if (versionRegex && versionRegex.length >= 2) {
 					const latestVersion = versionRegex[1];
-					if (latestVersion !== get(hdosInstalledVersion)) {
+					if (latestVersion !== bolt.hdosInstalledVersion) {
 						const jarUrl = `https://cdn.hdos.dev/launcher/v${latestVersion}/hdos-launcher.jar`;
 						logger.info('Downloading HDOS...');
 						const xmlHdos = new XMLHttpRequest();
@@ -455,5 +452,5 @@ export function savePluginConfig(): void {
 			logger.info(`Save-plugin-config status: ${xml.responseText.trim()}`);
 		}
 	};
-	xml.send(JSON.stringify(get(pluginList)));
+	xml.send(JSON.stringify(bolt.pluginList));
 }

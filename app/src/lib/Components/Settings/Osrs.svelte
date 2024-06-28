@@ -1,8 +1,10 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { config, isConfigDirty, platform, selectedPlay } from '$lib/Util/store';
+	import { selectedPlay } from '$lib/Util/store';
 	import { launchRuneLiteConfigure } from '$lib/Util/functions';
 	import { logger } from '$lib/Util/Logger';
+	import { Platform, bolt } from '$lib/State/Bolt';
+	import { config } from '$lib/State/Config';
 
 	let customJarDiv: HTMLDivElement;
 	let customJarFile: HTMLTextAreaElement;
@@ -25,12 +27,10 @@
 			$config.runelite_custom_jar = '';
 			$config.runelite_use_custom_jar = false;
 		}
-		$isConfigDirty = true;
 	}
 
 	function textChanged(): void {
 		$config.runelite_custom_jar = customJarFile.value;
-		$isConfigDirty = true;
 	}
 
 	function selectFile(): void {
@@ -47,7 +47,6 @@
 				if (xml.status == 200) {
 					customJarFile.value = xml.responseText;
 					$config.runelite_custom_jar = xml.responseText;
-					$isConfigDirty = true;
 				}
 				customJarFileButton.disabled = false;
 				useJar.disabled = false;
@@ -83,7 +82,7 @@
 			$config.runelite_use_custom_jar = false;
 		}
 
-		if ($platform !== 'linux') {
+		if (bolt.platform !== Platform.Linux) {
 			flatpakDiv.remove();
 		}
 	});

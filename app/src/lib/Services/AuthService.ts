@@ -1,10 +1,9 @@
-import { BoltService } from '$lib/Services/BoltService';
+import { bolt } from '$lib/State/Bolt';
 import { ParseUtils } from '$lib/Util/ParseUtils';
 import { StringUtils } from '$lib/Util/StringUtils';
 import { unwrap, type Account } from '$lib/Util/interfaces';
 
-// credential type, passed around often
-export interface Credentials {
+export interface Session {
 	access_token: string;
 	id_token: string;
 	refresh_token: string;
@@ -23,7 +22,7 @@ interface PendingLogin {
 export interface Auth {
 	state?: string;
 	nonce?: string;
-	creds?: Credentials;
+	creds?: Session;
 	win?: Window | null;
 	account_info_promise?: Promise<Account>;
 	verifier?: string;
@@ -59,9 +58,9 @@ export class AuthService {
 
 	// makes a request to the account_info endpoint and returns the promise
 	// the promise will return either a JSON object on success or a status code on failure
-	static getStandardAccountInfo(creds: Credentials): Promise<Account | number> {
+	static getStandardAccountInfo(creds: Session): Promise<Account | number> {
 		return new Promise((resolve) => {
-			const url = `${BoltService.bolt.api}/users/${creds.sub}/displayName`;
+			const url = `${bolt.env.api}/users/${creds.sub}/displayName`;
 			const xml = new XMLHttpRequest();
 			xml.onreadystatechange = () => {
 				if (xml.readyState == 4) {
@@ -82,7 +81,7 @@ export class AuthService {
 	// and renews them using the oauth endpoint if so.
 	// Does not save credentials but sets credentials_are_dirty as appropriate.
 	// Returns null on success or an http status code on failure
-	static async checkRenewCreds(creds: Credentials, url: string, clientId: string) {
+	static async checkRenewCreds(creds: Session, url: string, clientId: string) {
 		return new Promise((resolve) => {
 			// only renew if less than 30 seconds left
 			if (creds.expiry - Date.now() < 30000) {

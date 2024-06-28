@@ -1,6 +1,6 @@
 // file for all interfaces, types, and their helper functions
 
-import type { Credentials } from '$lib/Services/AuthService';
+import type { Session } from '$lib/Services/AuthService';
 
 // result type, similar to rust's implementation
 // useful if a function may succeed or fail
@@ -20,6 +20,14 @@ export function unwrap<T, E = Error>(result: Result<T, E>): T {
 	}
 }
 
+export function ok<T>(value: T): Result<T, never> {
+	return { ok: true, value };
+}
+
+export function error<T>(error: T): Result<never, T> {
+	return { ok: false, error };
+}
+
 // game enum
 export enum Game {
 	rs3,
@@ -32,51 +40,6 @@ export enum Client {
 	hdos,
 	rs3
 }
-
-// s()
-export interface Bolt {
-	provider: string;
-	origin: string;
-	origin_2fa: string;
-	redirect: string;
-	clientid: string;
-	api: string;
-	auth_api: string;
-	profile_api: string;
-	shield_url: string;
-	content_url: string;
-	default_config_uri: string;
-	games: string[];
-}
-
-// load on start and save on exit
-export interface Config {
-	use_dark_theme?: boolean;
-	rs_plugin_loader?: boolean;
-	rs_config_uri?: string;
-	flatpak_rich_presence?: boolean;
-	runelite_use_custom_jar?: boolean;
-	runelite_custom_jar?: string;
-	selected_account?: string;
-	selected_characters?: Map<string, string>; // account userId, then character accountId
-	selected_game_accounts?: Map<string, string>; // legacy version of selected_characters
-	selected_game_index?: number;
-	selected_client_index?: number;
-}
-
-// if no config is loaded, these defaults are set to ensure the app runs
-export const defaultConfig: Config = {
-	use_dark_theme: true,
-	flatpak_rich_presence: false,
-	rs_config_uri: '',
-	runelite_custom_jar: '',
-	runelite_use_custom_jar: false,
-	selected_account: '',
-	selected_characters: new Map(),
-	selected_game_accounts: new Map(),
-	selected_game_index: 1,
-	selected_client_index: 1
-};
 
 // account info
 export interface Account {
@@ -99,7 +62,7 @@ export interface Character {
 export interface SelectedPlay {
 	account?: Account;
 	character?: Character;
-	credentials?: Credentials;
+	credentials?: Session;
 	game?: Game;
 	client?: Client;
 }

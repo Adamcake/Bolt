@@ -1,41 +1,62 @@
 import App from '@/App.svelte';
-import {
-	clientListPromise,
-	internalUrl,
-	credentials,
-	isConfigDirty,
-	showDisclaimer
-} from '$lib/Util/store';
+import { clientListPromise, internalUrl, showDisclaimer } from '$lib/Util/store';
 import { get } from 'svelte/store';
 import { getNewClientListPromise, handleLogin, handleNewSessionId } from '$lib/Util/functions';
-import type { Account, Bolt } from '$lib/Util/interfaces';
+import type { Account } from '$lib/Util/interfaces';
 import { unwrap } from '$lib/Util/interfaces';
 import { logger } from '$lib/Util/Logger';
 import { BoltService } from '$lib/Services/BoltService';
 import { ParseUtils } from '$lib/Util/ParseUtils';
-import { AuthService, type Auth, type Credentials } from '$lib/Services/AuthService';
+import { AuthService, type Auth, type Session } from '$lib/Services/AuthService';
+import { Platform, bolt } from '$lib/State/Bolt';
 
-declare const s: () => Bolt;
-BoltService.bolt = ParseUtils.decodeBolt(s());
-start();
+initBolt();
+addWindowListeners();
+
 const app = new App({
 	target: document.getElementById('app')!
 });
 
 export default app;
 
-export function start(): void {
-	// TODO: refactor this function and its contents
-	ParseUtils.parseUrlParams(window.location.search);
+function initBolt() {
+	const params = new URLSearchParams(window.location.search);
+	bolt.platform = params.get('platform') as Platform | null;
+	bolt.isFlathub = params.get('flathub') === '1';
+	bolt.rs3InstalledHash = params.get('rs3_linux_installed_hash');
+	bolt.runeLiteInstalledId = params.get('runelite_installed_id');
+	bolt.hdosInstalledVersion = params.get('hdos_installed_version');
 
-	const bolt = BoltService.bolt;
-	const origin = bolt.origin;
-	const clientId = bolt.clientid;
-	const origin_2fa = bolt.origin_2fa;
+	const plugins = params.get('plugins');
+	bolt.hasBoltPlugins = plugins !== null;
+	if (plugins !== null) {
+		try {
+			bolt.pluginList = JSON.parse(plugins);
+		} catch (e) {
+			logger.error('Unable to parse plugin list');
+		}
+	}
+
+	const sessionsParam = params.get('credentials');
+	if (sessionsParam) {
+		try {
+			bolt.sessions = JSON.parse(sessionsParam) as Session[];
+		} catch (e) {
+			logger.error('Unable to parse saved credentials');
+		}
+	}
+}
+
+// TODO: refactor to not use listeners
+function addWindowListeners(): void {
+	const env = bolt.env;
+	const origin = env.origin;
+	const clientId = env.clientid;
+	const origin_2fa = env.origin_2fa;
 	const boltUrl = get(internalUrl);
 	const exchangeUrl = origin.concat('/oauth2/token');
 
-	if (get(credentials).size == 0) {
+	if (bolt.sessions.length == 0) {
 		showDisclaimer.set(true);
 	}
 
@@ -53,10 +74,10 @@ export function start(): void {
 					AuthService.pendingOauth = null;
 					const post_data = new URLSearchParams({
 						grant_type: 'authorization_code',
-						client_id: bolt.clientid,
+						client_id: env.clientid,
 						code: event.data.code,
 						code_verifier: <string>pending.verifier,
-						redirect_uri: bolt.redirect
+						redirect_uri: env.redirect
 					});
 					xml.onreadystatechange = () => {
 						if (xml.readyState == 4) {
@@ -66,10 +87,7 @@ export function start(): void {
 								if (creds) {
 									handleLogin(<Window>pending?.win, creds).then((x) => {
 										if (x) {
-											credentials.update((data) => {
-												data.set(creds.sub, creds);
-												return data;
-											});
+											bolt.sessions.push(creds);
 											BoltService.saveAllCreds();
 										}
 									});
@@ -120,22 +138,19 @@ export function start(): void {
 						logger.error('Incorrect nonce in id_token');
 						break;
 					}
-					const sessionsUrl = bolt.auth_api.concat('/sessions');
+					const sessionsUrl = env.auth_api.concat('/sessions');
 					xml.onreadystatechange = () => {
 						if (xml.readyState == 4) {
 							if (xml.status == 200) {
-								const accountsUrl = bolt.auth_api.concat('/accounts');
+								const accountsUrl = env.auth_api.concat('/accounts');
 								pending!.creds!.session_id = JSON.parse(xml.response).sessionId;
 								handleNewSessionId(
-									<Credentials>pending!.creds,
+									<Session>pending!.creds,
 									accountsUrl,
 									<Promise<Account>>pending!.account_info_promise
 								).then((x) => {
 									if (x) {
-										credentials.update((data) => {
-											data.set(<string>pending?.creds?.sub, <Credentials>pending!.creds);
-											return data;
-										});
+										bolt.sessions.push(<Session>pending!.creds);
 										BoltService.saveAllCreds();
 									}
 								});
@@ -160,33 +175,26 @@ export function start(): void {
 	});
 
 	(async () => {
-		if (get(credentials).size > 0) {
-			get(credentials).forEach(async (value) => {
+		if (bolt.sessions.length > 0) {
+			bolt.sessions.forEach(async (value) => {
 				const result = await AuthService.checkRenewCreds(value, exchangeUrl, clientId);
 				if (result !== null && result !== 0) {
 					logger.error(`Discarding expired login for #${value.sub}`);
-					credentials.update((data) => {
-						data.delete(value.sub);
-						return data;
-					});
+					const index = bolt.sessions.findIndex((session) => session.sub === value.sub);
+					if (index > -1) bolt.sessions.splice(index, 1);
 					BoltService.saveAllCreds();
 				}
-				let checkedCred: Record<string, Credentials | boolean>;
+				let checkedCred: Record<string, Session | boolean>;
 				if (result === null && (await handleLogin(null, value))) {
 					checkedCred = { creds: value, valid: true };
 				} else {
 					checkedCred = { creds: value, valid: result === 0 };
 				}
 				if (checkedCred.valid) {
-					const creds = <Credentials>value;
-					credentials.update((data) => {
-						data.set(creds.sub, creds);
-						return data;
-					});
+					bolt.sessions.push(value);
 					BoltService.saveAllCreds();
 				}
 			});
 		}
-		isConfigDirty.set(false); // overrides all cases where this gets set to "true" due to loading existing config values
 	})();
 }

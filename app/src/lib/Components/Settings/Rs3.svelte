@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { bolt, config, isConfigDirty, hasBoltPlugins } from '$lib/Util/store';
+	import { bolt } from '$lib/State/Bolt';
+	import { config } from '$lib/State/Config';
 
 	let configUriDiv: HTMLDivElement;
 	let configUriAddress: HTMLTextAreaElement;
@@ -11,17 +12,15 @@
 	function toggleUriDiv(): void {
 		configUriDiv.classList.toggle('opacity-25');
 		configUriAddress.disabled = !configUriAddress.disabled;
-		$isConfigDirty = true;
 
 		if (!useUri.checked) {
-			configUriAddress.value = atob($bolt.default_config_uri);
+			configUriAddress.value = atob(bolt.env.default_config_uri);
 			$config.rs_config_uri = '';
 		}
 	}
 
 	function uriAddressChanged(): void {
 		$config.rs_config_uri = configUriAddress.value;
-		$isConfigDirty = true;
 	}
 
 	// loads configs for menu
@@ -31,13 +30,13 @@
 			useUri.checked = true;
 			toggleUriDiv();
 		} else {
-			configUriAddress.value = atob($bolt.default_config_uri);
+			configUriAddress.value = atob(bolt.env.default_config_uri);
 		}
 	});
 </script>
 
 <div id="rs3_options" class="col-span-3 p-5 pt-10">
-	{#if hasBoltPlugins}
+	{#if bolt.hasBoltPlugins}
 		<div class="mx-auto p-2">
 			<label for="enable_plugins">Enable Bolt plugin loader: </label>
 			<input
@@ -45,7 +44,6 @@
 				name="enable_plugins"
 				id="enable_plugins"
 				bind:checked={$config.rs_plugin_loader}
-				on:change={() => isConfigDirty.set(true)}
 				class="ml-2"
 			/>
 		</div>

@@ -1,12 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { Game } from '$lib/Util/interfaces';
-	import { config, isConfigDirty, selectedPlay } from '$lib/Util/store';
+	import { selectedPlay } from '$lib/Util/store';
 	import SettingsModal from '$lib/Components/SettingsModal.svelte';
 	import Dropdown from '$lib/Components/CommonUI/Dropdown.svelte';
 	import Account from '$lib/Components/Account.svelte';
-	import { BoltService } from '$lib/Services/BoltService';
 	import { AuthService } from '$lib/Services/AuthService';
+	import { bolt } from '$lib/State/Bolt';
+	import { config } from '$lib/State/Config';
 
 	let settingsModal: SettingsModal;
 	let rs3Button: HTMLButtonElement;
@@ -19,14 +20,12 @@
 				$selectedPlay.game = Game.osrs;
 				$selectedPlay.client = $config.selected_client_index;
 				$config.selected_game_index = Game.osrs;
-				$isConfigDirty = true;
 				osrsButton.classList.add('bg-blue-500', 'text-black');
 				rs3Button.classList.remove('bg-blue-500', 'text-black');
 				break;
 			case Game.rs3:
 				$selectedPlay.game = Game.rs3;
 				$config.selected_game_index = Game.rs3;
-				$isConfigDirty = true;
 				osrsButton.classList.remove('bg-blue-500', 'text-black');
 				rs3Button.classList.add('bg-blue-500', 'text-black');
 				break;
@@ -92,7 +91,7 @@
 			<button
 				class="h-11 w-48 rounded-lg border-2 border-slate-300 bg-inherit p-2 text-center font-bold text-black duration-200 hover:opacity-75 dark:border-slate-800 dark:text-slate-50"
 				on:click={() => {
-					const { origin, redirect, clientid } = BoltService.bolt;
+					const { origin, redirect, clientid } = bolt.env;
 					AuthService.openLoginWindow(origin, redirect, clientid);
 				}}
 			>

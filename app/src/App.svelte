@@ -5,9 +5,10 @@
 	import PluginMenu from '$lib/Components/PluginMenu.svelte';
 	import LogView from '$lib/Components/LogView.svelte';
 	import { logger } from '$lib/Util/Logger';
-	import { config, showDisclaimer } from '$lib/Util/store';
+	import { showDisclaimer } from '$lib/Util/store';
 	import DisclaimerModal from '$lib/Components/DisclaimerModal.svelte';
 	import { BoltService } from '$lib/Services/BoltService';
+	import { config } from '$lib/State/Config';
 
 	let showPluginMenu: boolean = false;
 	let authorizing: boolean = false;

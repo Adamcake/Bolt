@@ -1,10 +1,11 @@
 <script lang="ts">
 	import { afterUpdate, onMount } from 'svelte';
-	import { get } from 'svelte/store';
 	import { launchHdos, launchRS3Linux, launchRuneLite } from '$lib/Util/functions';
 	import { Client, Game } from '$lib/Util/interfaces';
-	import { config, hasBoltPlugins, isConfigDirty, selectedPlay } from '$lib/Util/store';
+	import { selectedPlay } from '$lib/Util/store';
 	import { logger } from '$lib/Util/Logger';
+	import { bolt } from '$lib/State/Bolt';
+	import { config } from '$lib/State/Config';
 
 	export let showPluginMenu = false;
 
@@ -25,7 +26,6 @@
 				$selectedPlay.character?.accountId
 			);
 		}
-		$isConfigDirty = true;
 	}
 
 	// update selected_play
@@ -37,7 +37,6 @@
 			$selectedPlay.client = Client.hdos;
 			$config.selected_client_index = Client.hdos;
 		}
-		$isConfigDirty = true;
 	}
 
 	// when play is clicked, check the selected_play store for all relevant details
@@ -128,11 +127,11 @@
 			</select>
 		{:else if $selectedPlay.game == Game.rs3}
 			<button
-				disabled={!get(hasBoltPlugins)}
-				title={get(hasBoltPlugins) ? null : 'Coming soon...'}
+				disabled={!bolt.hasBoltPlugins}
+				title={bolt.hasBoltPlugins ? null : 'Coming soon...'}
 				class="mx-auto mb-2 w-52 rounded-lg p-2 font-bold text-black duration-200 enabled:bg-blue-500 enabled:hover:opacity-75 disabled:bg-gray-500"
 				on:click={() => {
-					showPluginMenu = get(hasBoltPlugins) ?? false;
+					showPluginMenu = bolt.hasBoltPlugins ?? false;
 				}}
 			>
 				Plugin menu

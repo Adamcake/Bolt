@@ -1,14 +1,16 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { accountList, config, credentials, isConfigDirty, selectedPlay } from '$lib/Util/store';
+	import { accountList, selectedPlay } from '$lib/Util/store';
 	import { revokeOauthCreds } from '$lib/Util/functions';
 	import { logger } from '$lib/Util/Logger';
 	import { BoltService } from '$lib/Services/BoltService';
-	import { AuthService, type Credentials } from '$lib/Services/AuthService';
+	import { AuthService, type Session } from '$lib/Services/AuthService';
+	import { bolt } from '$lib/State/Bolt';
+	import { config } from '$lib/State/Config';
 
 	// values gather from s()
-	const sOrigin = BoltService.bolt.origin;
-	const clientId = BoltService.bolt.clientid;
+	const sOrigin = bolt.env.origin;
+	const clientId = bolt.env.clientid;
 	const exchangeUrl = sOrigin.concat('/oauth2/token');
 	const revokeUrl = sOrigin.concat('/oauth2/revoke');
 
@@ -21,7 +23,7 @@
 			return;
 		}
 
-		let creds: Credentials | undefined = $selectedPlay.credentials;
+		let creds: Session | undefined = $selectedPlay.credentials;
 		if ($selectedPlay.account) {
 			$accountList.delete($selectedPlay.account?.userId);
 			$accountList = $accountList; // certain data structure methods won't trigger an update, so we force one manually
@@ -47,7 +49,7 @@
 				revokeOauthCreds(creds!.access_token, revokeUrl, clientId).then((res: unknown) => {
 					if (res === 200) {
 						logger.info('Successful logout');
-						removeLogin(<Credentials>creds);
+						removeLogin(<Session>creds);
 					} else {
 						logger.error(`Logout unsuccessful: status ${res}`);
 					}
@@ -62,23 +64,22 @@
 	}
 
 	// clear credentials when logout is clicked
-	function removeLogin(creds: Credentials): void {
-		$credentials.delete(creds.sub);
-		BoltService.saveAllCreds();
+	function removeLogin(creds: Session): void {
+		const index = bolt.sessions.findIndex((session) => session.sub === creds.sub);
+		if (index > -1) {
+			bolt.sessions.splice(index, 1);
+			BoltService.saveAllCreds();
+		}
 	}
 
 	// updated active account in selected_play store
 	function accountChanged(): void {
-		isConfigDirty.set(true);
-
 		const key: string = <string>accountSelect[accountSelect.selectedIndex].getAttribute('data-id');
 		$selectedPlay.account = $accountList.get(key);
 		$config.selected_account = key;
-		$selectedPlay.credentials = $credentials.get(<string>$selectedPlay.account?.userId);
+		// Unsure what the equivalent of this is with the refector
+		//$selectedPlay.credentials = $credentials.get(<string>$selectedPlay.account?.userId);
 
-		// state updates can be weird, for some reason, changing the 'options' under the character_select
-		// does not trigger the 'on:change', so we force update it.
-		// I dislike this bit of code but couldn't think of another way to solve the problem other than props from the parent
 		if ($selectedPlay.account && $selectedPlay.account.characters) {
 			const char_select: HTMLSelectElement = <HTMLSelectElement>(
 				document.getElementById('character_select')
@@ -99,7 +100,8 @@
 			index++;
 		});
 
-		$selectedPlay.credentials = $credentials.get(<string>$selectedPlay.account?.userId);
+		// Unsure what the equivalent of this is with the refactor
+		//$selectedPlay.credentials = $credentials.get(<string>$selectedPlay.account?.userId);
 	});
 </script>
 
@@ -120,7 +122,7 @@
 	<button
 		class="mx-auto mr-2 rounded-lg bg-blue-500 p-2 font-bold text-black duration-200 hover:opacity-75"
 		on:click={() => {
-			const { origin, redirect, clientid } = BoltService.bolt;
+			const { origin, redirect, clientid } = bolt.env;
 			AuthService.openLoginWindow(origin, redirect, clientid);
 		}}
 	>

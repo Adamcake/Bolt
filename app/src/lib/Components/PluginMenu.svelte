@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { get } from 'svelte/store';
 	import { onDestroy } from 'svelte';
 	import { getNewClientListPromise, savePluginConfig } from '$lib/Util/functions';
 	import { type PluginConfig } from '$lib/Util/interfaces';
-	import { clientListPromise, hasBoltPlugins, pluginList, platform } from '$lib/Util/store';
+	import { clientListPromise } from '$lib/Util/store';
 	import { logger } from '$lib/Util/Logger';
 	import Modal from '$lib/Components/CommonUI/Modal.svelte';
+	import { bolt } from '$lib/State/Bolt';
 
 	// props
 	export let showPluginMenu: boolean;
@@ -29,7 +29,7 @@
 	};
 
 	const getPluginConfigPromiseFromID = (id: string): Promise<PluginConfig> | null => {
-		const list = get(pluginList);
+		const list = bolt.pluginList;
 		const meta = list[id];
 		if (!meta) return null;
 		const path = meta.path;
@@ -44,8 +44,8 @@
 			.then((plugin: PluginConfig) => {
 				do {
 					selectedPlugin = crypto.randomUUID();
-				} while (Object.keys(get(pluginList)).includes(selectedPlugin));
-				$pluginList[selectedPlugin] = {
+				} while (Object.keys(bolt.pluginList).includes(selectedPlugin));
+				bolt.pluginList[selectedPlugin] = {
 					name: plugin.name ?? unnamedPluginName,
 					path: folderPath
 				};
@@ -67,7 +67,7 @@
 				// if the user closes the file picker without selecting a file, status here is 204
 				if (xml.status == 200) {
 					const path: string =
-						get(platform) === 'windows' ? xml.responseText.replaceAll('\\', '/') : xml.responseText;
+						bolt.platform === 'windows' ? xml.responseText.replaceAll('\\', '/') : xml.responseText;
 					if (path.endsWith('/bolt.json')) {
 						const subpath: string = path.substring(0, path.length - 9);
 						handleNewPlugin(subpath, path);
@@ -176,12 +176,12 @@
 		{/await}
 	</div>
 	<div class="h-full pt-10">
-		{#if hasBoltPlugins}
+		{#if bolt.hasBoltPlugins}
 			<select
 				bind:value={selectedPlugin}
 				class="mx-auto mb-4 w-[min(280px,_45%)] cursor-pointer rounded-lg border-2 border-slate-300 bg-inherit p-2 text-inherit duration-200 hover:opacity-75 dark:border-slate-800"
 			>
-				{#each Object.entries($pluginList) as [id, plugin]}
+				{#each Object.entries(bolt.pluginList) as [id, plugin]}
 					<option class="dark:bg-slate-900" value={id}>{plugin.name ?? unnamedPluginName}</option>
 				{/each}
 			</select>
@@ -194,8 +194,8 @@
 					+
 				</button>
 				<br />
-				{#if Object.entries($pluginList).length !== 0}
-					{#if Object.keys(get(pluginList)).includes(selectedPlugin) && managementPluginPromise !== null}
+				{#if Object.entries(bolt.pluginList).length !== 0}
+					{#if Object.keys(bolt.pluginList).includes(selectedPlugin) && managementPluginPromise !== null}
 						{#await managementPluginPromise}
 							<p>loading...</p>
 						{:then plugin}
@@ -215,9 +215,9 @@
 							on:click={() => {
 								managementPluginPromise = null;
 								pluginConfigDirty = true;
-								let list = get(pluginList);
+								let list = bolt.pluginList;
 								delete list[selectedPlugin];
-								pluginList.set(list);
+								bolt.pluginList = list;
 							}}
 						>
 							Remove
@@ -241,15 +241,15 @@
 				{#await managementPluginPromise}
 					<p>loading...</p>
 				{:then plugin}
-					{#if plugin && plugin.main && Object.keys($pluginList).includes(selectedPlugin)}
-						{#if $pluginList[selectedPlugin].path}
+					{#if plugin && plugin.main && Object.keys(bolt.pluginList).includes(selectedPlugin)}
+						{#if bolt.pluginList[selectedPlugin].path}
 							<button
 								class="mx-auto mb-1 w-auto rounded-lg bg-emerald-500 p-2 font-bold text-black duration-200 hover:opacity-75"
 								on:click={() =>
 									startPlugin(
 										selectedClientId,
 										selectedPlugin,
-										$pluginList[selectedPlugin].path ?? '',
+										bolt.pluginList[selectedPlugin].path ?? '',
 										plugin.main ?? ''
 									)}
 							>
