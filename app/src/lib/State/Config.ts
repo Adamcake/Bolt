@@ -1,6 +1,6 @@
 import { logger } from '$lib/Util/Logger';
 import { onWritableChange } from '$lib/Util/onWritableChange';
-import { writable } from 'svelte/store';
+import { writable, type Writable } from 'svelte/store';
 
 export interface Config {
 	use_dark_theme: boolean;
@@ -17,30 +17,42 @@ export interface Config {
 }
 
 export let configHasPendingChanges = false;
+export let config: Writable<Config>;
 
-const params = new URLSearchParams(window.location.search);
-const configParam = params.get('config');
-let parsedConfig: Config = {
-	use_dark_theme: true,
-	rs_plugin_loader: false,
-	flatpak_rich_presence: false,
-	runelite_use_custom_jar: false,
-	selected_characters: new Map(),
-	selected_game_accounts: new Map(),
-	selected_game_index: 1,
-	selected_client_index: 1
-};
+export function initConfig() {
+	const params = new URLSearchParams(window.location.search);
+	const configParam = params.get('config');
 
-if (configParam) {
-	try {
-		parsedConfig = JSON.parse(configParam) as Config;
-	} catch (e) {
-		logger.error('Unable to parse config, restoring to default');
+	let parsedConfig: Config = {
+		use_dark_theme: true,
+		rs_plugin_loader: false,
+		flatpak_rich_presence: false,
+		runelite_use_custom_jar: false,
+		selected_characters: new Map(),
+		selected_game_accounts: new Map(),
+		selected_game_index: 1,
+		selected_client_index: 1
+	};
+
+	if (configParam) {
+		try {
+			parsedConfig = JSON.parse(configParam) as Config;
+		} catch (e) {
+			logger.error('Unable to parse config, restoring to default');
+		}
 	}
+
+	// TODO: remove this section, selected_game_accounts or selected_characters should not be maps
+	if (parsedConfig.selected_game_accounts) {
+		parsedConfig.selected_characters = new Map(Object.entries(parsedConfig.selected_game_accounts));
+		delete parsedConfig.selected_game_accounts;
+	} else if (parsedConfig.selected_characters) {
+		parsedConfig.selected_characters = new Map(Object.entries(parsedConfig.selected_characters));
+	}
+
+	config = writable(parsedConfig);
+
+	onWritableChange(config, () => {
+		configHasPendingChanges = true;
+	});
 }
-
-export const config = writable<Config>(parsedConfig);
-
-onWritableChange(config, () => {
-	configHasPendingChanges = true;
-});

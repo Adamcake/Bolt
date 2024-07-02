@@ -6,8 +6,9 @@ let saveInProgress: boolean = false;
 
 export class BoltService {
 	// sends an asynchronous request to save the current user config to disk, if it has changed
-	static saveConfig(configToSave: Config) {
-		if (!configHasPendingChanges || saveInProgress) return;
+	static saveConfig(configToSave: Config, checkForPendingChanges = true) {
+		if (saveInProgress) return;
+		if (checkForPendingChanges && !configHasPendingChanges) return;
 
 		saveInProgress = true;
 		const xml = new XMLHttpRequest();

@@ -9,8 +9,10 @@ import { BoltService } from '$lib/Services/BoltService';
 import { ParseUtils } from '$lib/Util/ParseUtils';
 import { AuthService, type Auth, type Session } from '$lib/Services/AuthService';
 import { Platform, bolt } from '$lib/State/Bolt';
+import { initConfig } from '$lib/State/Config';
 
 initBolt();
+initConfig();
 addWindowListeners();
 
 const app = new App({

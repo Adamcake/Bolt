@@ -125,7 +125,6 @@ export function addNewAccount(account: Account) {
 		return data;
 	});
 
-	const { config } = config;
 	if (get(selectedPlay).account && get(config).selected_account) {
 		if (account.userId == get(config).selected_account) {
 			updateSelectedPlay();
@@ -158,7 +157,6 @@ export function launchRS3Linux(
 	jx_character_id: string,
 	jx_display_name: string
 ) {
-	const { config } = config;
 	BoltService.saveConfig(get(config));
 
 	const launch = (hash?: string, deb?: never) => {
@@ -246,7 +244,6 @@ function launchRuneLiteInner(
 	jx_display_name: string,
 	configure: boolean
 ) {
-	const { config } = config;
 	BoltService.saveConfig(get(config));
 	const launchPath = configure ? '/launch-runelite-jar-configure?' : '/launch-runelite-jar?';
 
@@ -343,7 +340,6 @@ export function launchHdos(
 	jx_character_id: string,
 	jx_display_name: string
 ) {
-	const { config } = config;
 	BoltService.saveConfig(get(config));
 
 	const launch = (version?: string, jar?: string) => {
