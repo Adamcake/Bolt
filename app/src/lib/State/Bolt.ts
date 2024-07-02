@@ -27,7 +27,7 @@ export interface BoltEnv {
 export interface Bolt {
 	env: BoltEnv;
 	platform: Platform | null;
-	// TODO: move the install identifiers into a nested object
+	// TODO: simplify installed hash system (1 variable instead of multiple?)
 	rs3DebInstalledHash: string | null;
 	rs3ExeInstalledHash: string | null;
 	rs3AppInstalledHash: string | null;
