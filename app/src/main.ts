@@ -1,5 +1,5 @@
 import App from '@/App.svelte';
-import { clientListPromise, internalUrl, showDisclaimer } from '$lib/Util/store';
+import { clientListPromise, internalUrl } from '$lib/Util/store';
 import { get } from 'svelte/store';
 import { getNewClientListPromise, handleLogin, handleNewSessionId } from '$lib/Util/functions';
 import type { Account } from '$lib/Util/interfaces';
@@ -61,10 +61,6 @@ function addWindowListeners(): void {
 	const origin_2fa = env.origin_2fa;
 	const boltUrl = get(internalUrl);
 	const exchangeUrl = origin.concat('/oauth2/token');
-
-	if (bolt.sessions.length == 0) {
-		showDisclaimer.set(true);
-	}
 
 	const allowedOrigins = [boltUrl, origin, origin_2fa];
 	window.addEventListener('message', (event: MessageEvent) => {

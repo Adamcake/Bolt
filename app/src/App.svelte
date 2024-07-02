@@ -5,7 +5,6 @@
 	import PluginMenu from '$lib/Components/PluginMenu.svelte';
 	import LogView from '$lib/Components/LogView.svelte';
 	import { logger } from '$lib/Util/Logger';
-	import { showDisclaimer } from '$lib/Util/store';
 	import DisclaimerModal from '$lib/Components/DisclaimerModal.svelte';
 	import { BoltService } from '$lib/Services/BoltService';
 	import { config } from '$lib/State/Config';
@@ -58,10 +57,7 @@
 		{#if showPluginMenu}
 			<PluginMenu bind:showPluginMenu></PluginMenu>
 		{/if}
-		{#if showDisclaimer}
-			<!-- TODO: remove showDisclaimer -->
-			<DisclaimerModal></DisclaimerModal>
-		{/if}
+		<DisclaimerModal />
 		<TopBar></TopBar>
 		<div class="mt-16 grid h-full grid-flow-col grid-cols-3">
 			<div></div>
