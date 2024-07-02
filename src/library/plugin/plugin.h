@@ -8,6 +8,28 @@
 
 struct RenderBatch2D;
 struct Plugin;
+struct lua_State;
+
+enum PluginMouseButton {
+    MBLeft = 1,
+    MBRight = 2,
+    MBMiddle = 3,
+};
+
+// having MouseEvent has the first member of structs allows for generalisation with pointers
+struct MouseEvent {
+    int16_t x;
+    int16_t y;
+    uint8_t ctrl;
+    uint8_t shift;
+    uint8_t meta;
+    uint8_t alt;
+    uint8_t capslock;
+    uint8_t numlock;
+    uint8_t mb_left;
+    uint8_t mb_right;
+    uint8_t mb_middle;
+};
 
 /// Struct containing "vtable" callback information for RenderBatch2D's list of vertices.
 /// Unless stated otherwise, functions will be called with three params: the index, the specified
@@ -120,21 +142,47 @@ struct SurfaceFunctions {
 struct PluginManagedFunctions {
     void (*surface_init)(struct SurfaceFunctions*, unsigned int, unsigned int, const void*);
     void (*surface_destroy)(void*);
+    void (*surface_resize_and_clear)(void*, unsigned int, unsigned int);
 };
 
-struct EmbeddedWindow {
-    uint64_t id;
-    struct SurfaceFunctions surface_functions;
-    RWLock lock; // applies to everything below this
+struct WindowPendingInput {
+    /* bools are listed at the top to make the structure smaller by having less padding in it */
+    uint8_t mouse_motion;
+    uint8_t mouse_left;
+    uint8_t mouse_right;
+    uint8_t mouse_middle;
+    uint8_t mouse_scroll_down;
+    uint8_t mouse_scroll_up;
+    struct MouseEvent mouse_motion_event;
+    struct MouseEvent mouse_left_event;
+    struct MouseEvent mouse_right_event;
+    struct MouseEvent mouse_middle_event;
+    struct MouseEvent mouse_scroll_down_event;
+    struct MouseEvent mouse_scroll_up_event;
+};
+
+struct EmbeddedWindowMetadata {
     int x;
     int y;
     int width;
     int height;
 };
 
+struct EmbeddedWindow {
+    uint64_t id;
+    struct SurfaceFunctions surface_functions;
+    struct lua_State* plugin;
+    RWLock lock; // applies to the metadata
+    struct EmbeddedWindowMetadata metadata;
+    RWLock input_lock; // applies to the pending inputs
+    struct WindowPendingInput input;
+};
+
 struct WindowInfo {
-    RWLock lock;
+    RWLock lock; // applies to the map
     struct hashmap* map;
+    RWLock input_lock; // applies to the pending inputs
+    struct WindowPendingInput input;
 };
 
 struct RenderBatch2D {
@@ -161,7 +209,12 @@ struct RenderMinimapEvent {
     double y;
 };
 
-struct SwapBuffersEvent {};
+struct SwapBuffersEvent {
+#if defined(_MSC_VER)
+    // MSVC doesn't allow empty structs
+    void* _;
+#endif
+};
 
 /// Setup the plugin library. Must be called (and return) before using any other plugin library functions,
 /// including init and is_inited. This function does not have a "close" reciprocal, as it's expected
@@ -177,6 +230,10 @@ void _bolt_plugin_init(const struct PluginManagedFunctions*);
 /// close), otherwise false. This function is not thread-safe, since in a multi-threaded context,
 /// the returned value could be invalidated immediately by another thread calling plugin_init.
 uint8_t _bolt_plugin_is_inited();
+
+/// Processes events for all plugin windows/browsers and renders them. Needs the width and height
+/// of the game view.
+void _bolt_plugin_process_windows(uint32_t, uint32_t);
 
 /// Close the plugin library.
 void _bolt_plugin_close();

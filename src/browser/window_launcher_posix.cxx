@@ -204,7 +204,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<C
 					written += archive_read_data(ar, game + written, game_size - written);
 				}
 				written = 0;
-				int file = open(this->rs3_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0755);
+				int file = open(this->rs3_elf_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0755);
 				if (file == -1) {
 					// failed to open game binary file on disk - probably in use or a permissions issue
 					delete[] game;
@@ -260,7 +260,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<C
 	}
 
 	// setup argv for the new process
-	std::string path_str(this->rs3_path.c_str());
+	std::string path_str(this->rs3_elf_path.c_str());
 	char arg_configuri[] = "--configURI";
 	char* argv[] = {
 		path_str.data(),
@@ -293,7 +293,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<C
 	fmt::print("[B] Successfully spawned game process with pid {}\n", pid);
 	if (has_hash) {
 		size_t written = 0;
-		int file = open(this->rs3_hash_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+		int file = open(this->rs3_elf_hash_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
 		if (file == -1) {
 			const char* data = "OK, but unable to save hash file\n";
 			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
@@ -305,6 +305,26 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<C
 	}
 	const char* data = "OK\n";
 	return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
+}
+
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Exe(CefRefPtr<CefRequest> request, std::string_view query) {
+	const char* data = ".exe is not supported on this platform\n";
+	return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+}
+
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3App(CefRefPtr<CefRequest> request, std::string_view query) {
+	const char* data = "Mac binaries are not supported on this platform\n";
+	return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+}
+
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchOsrsExe(CefRefPtr<CefRequest> request, std::string_view query) {
+	const char* data = ".exe is not supported on this platform\n";
+	return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+}
+
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchOsrsApp(CefRefPtr<CefRequest> request, std::string_view query) {
+	const char* data = "Mac binaries are not supported on this platform\n";
+	return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
 }
 
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRefPtr<CefRequest> request, std::string_view query, bool configure) {

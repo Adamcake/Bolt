@@ -1,6 +1,11 @@
 <script lang="ts">
 	import { afterUpdate, onMount } from 'svelte';
-	import { launchHdos, launchRS3Linux, launchRuneLite } from '$lib/Util/functions';
+	import {
+		launchHdos,
+		launchOfficialClient,
+		launchRS3Linux,
+		launchRuneLite
+	} from '$lib/Util/functions';
 	import { Client, Game } from '$lib/Util/interfaces';
 	import { selectedPlay } from '$lib/Util/store';
 	import { logger } from '$lib/Util/Logger';
@@ -48,26 +53,48 @@
 		}
 		switch ($selectedPlay.game) {
 			case Game.osrs:
-				if ($selectedPlay.client == Client.runeLite) {
-					launchRuneLite(
+				switch ($selectedPlay.client) {
+					case Client.osrs:
+						launchOfficialClient(
+							bolt.platform === 'windows',
+							true,
+							<string>$selectedPlay.credentials?.session_id,
+							<string>$selectedPlay.character?.accountId,
+							<string>$selectedPlay.character?.displayName
+						);
+						break;
+					case Client.runeLite:
+						launchRuneLite(
+							<string>$selectedPlay.credentials?.session_id,
+							<string>$selectedPlay.character?.accountId,
+							<string>$selectedPlay.character?.displayName
+						);
+						break;
+					case Client.hdos:
+						launchHdos(
+							<string>$selectedPlay.credentials?.session_id,
+							<string>$selectedPlay.character?.accountId,
+							<string>$selectedPlay.character?.displayName
+						);
+						break;
+				}
+				break;
+			case Game.rs3:
+				if (bolt.platform === 'linux') {
+					launchRS3Linux(
 						<string>$selectedPlay.credentials?.session_id,
 						<string>$selectedPlay.character?.accountId,
 						<string>$selectedPlay.character?.displayName
 					);
-				} else if ($selectedPlay.client == Client.hdos) {
-					launchHdos(
+				} else {
+					launchOfficialClient(
+						bolt.platform === 'windows',
+						false,
 						<string>$selectedPlay.credentials?.session_id,
 						<string>$selectedPlay.character?.accountId,
 						<string>$selectedPlay.character?.displayName
 					);
 				}
-				break;
-			case Game.rs3:
-				launchRS3Linux(
-					<string>$selectedPlay.credentials?.session_id,
-					<string>$selectedPlay.character?.accountId,
-					<string>$selectedPlay.character?.displayName
-				);
 				break;
 		}
 	}
@@ -122,6 +149,9 @@
 				bind:this={clientSelect}
 				on:change={clientChanged}
 			>
+				{#if bolt.platform !== 'linux'}
+					<option data-id={Client.osrs} class="dark:bg-slate-900">OSRS Client</option>
+				{/if}
 				<option data-id={Client.runeLite} class="dark:bg-slate-900">RuneLite</option>
 				<option data-id={Client.hdos} class="dark:bg-slate-900">HDOS</option>
 			</select>

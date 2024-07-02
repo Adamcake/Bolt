@@ -5,7 +5,7 @@
 #include "browser/app.hxx"
 #include "browser/client.hxx"
 
-#if defined(BOLT_PLUGINS)
+#if defined(BOLT_PLUGINS) && !defined(_WIN32)
 #include <sys/un.h>
 #include <sys/socket.h>
 #include "library/ipc.h"
@@ -116,8 +116,8 @@ int BoltRunBrowserProcess(CefMainArgs main_args, CefRefPtr<Browser::App> cef_app
 
 // called after we fail to obtain the lockfile, likely meaning an instance of Bolt is already running
 void BoltFailToObtainLockfile(std::filesystem::path tempdir) {
-#if defined(BOLT_PLUGINS)
-	// probably doesn't compile on Windows
+	// TODO: do this for windows
+#if defined(BOLT_PLUGINS) && !defined(_WIN32)
 	struct sockaddr_un addr = {.sun_family = AF_UNIX};
     int fd = socket(addr.sun_family, SOCK_STREAM, 0);
 	tempdir.append("ipc-0");

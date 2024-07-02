@@ -3,7 +3,7 @@
 
 #if defined(_WIN32)
 #include <windows.h>
-typedef PSRWLOCK RWLock;
+typedef SRWLOCK RWLock;
 #else
 #include <pthread.h>
 typedef pthread_rwlock_t RWLock;

@@ -3,14 +3,12 @@
 	import { selectedPlay } from '$lib/Util/store';
 	import { launchRuneLiteConfigure } from '$lib/Util/functions';
 	import { logger } from '$lib/Util/Logger';
-	import { Platform, bolt } from '$lib/State/Bolt';
 	import { config } from '$lib/State/Config';
 
 	let customJarDiv: HTMLDivElement;
 	let customJarFile: HTMLTextAreaElement;
 	let customJarFileButton: HTMLButtonElement;
 	let useJar: HTMLInputElement;
-	let flatpakDiv: HTMLDivElement;
 
 	// enables the ability to select a custom jar
 	// decided by config load as well
@@ -80,10 +78,6 @@
 		} else {
 			useJar.checked = false;
 			$config.runelite_use_custom_jar = false;
-		}
-
-		if (bolt.platform !== Platform.Linux) {
-			flatpakDiv.remove();
 		}
 	});
 </script>

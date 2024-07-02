@@ -9,4 +9,8 @@ void Browser::Client::IPCRun() {
 	// todo
 }
 
+void Browser::Client::IPCStop() {
+	// todo
+}
+
 #endif

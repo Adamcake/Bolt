@@ -36,6 +36,7 @@ export enum Game {
 
 // client enum, maybe this list will grow as clients are added
 export enum Client {
+	osrs,
 	runeLite,
 	hdos,
 	rs3
@@ -65,6 +66,14 @@ export interface SelectedPlay {
 	credentials?: Session;
 	game?: Game;
 	client?: Client;
+}
+
+// response token from the official "Direct6" URL
+export interface Direct6Token {
+	id?: string;
+	version?: string;
+	promoteTime?: number;
+	scanTime?: number;
 }
 
 // connected game client for plugin management purposes

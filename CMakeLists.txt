@@ -260,9 +260,9 @@ add_subdirectory(${CEF_LIBCEF_DLL_WRAPPER_PATH} libcef_dll_wrapper)
 # select implementations for OS-specific behaviour
 if(WIN32)
     set(WINDOW_LAUNCHER_OS_SPECIFIC src/browser/window_launcher_win.cxx)
-    set(CLIENT_OS_SPECIFIC src/browser/client_win.cxx)
+    set(CLIENT_OS_SPECIFIC src/browser/client_win32.cxx)
     if(NOT BOLT_SKIP_LIBRARIES)
-        #library/ipc_win.c? actually windows appears to support AF_UNIX sockets already?
+        set(LIB_IPC_OS_SPECIFIC src/library/ipc_win32.c)
     endif()
 else()
     set(WINDOW_LAUNCHER_OS_SPECIFIC src/browser/window_launcher_posix.cxx)
@@ -313,14 +313,9 @@ if(UNIX AND NOT APPLE)
     target_link_libraries(bolt PUBLIC "X11")
     target_link_libraries(bolt PUBLIC "xcb")
     target_link_libraries(bolt PUBLIC "archive")
-elseif(MSVC)
-    target_compile_options(bolt PUBLIC $<$<CONFIG:>:/MT> $<$<CONFIG:Debug>:/MTd> $<$<CONFIG:Release>:/MT>)
-    set_target_properties(bolt PROPERTIES WIN32_EXECUTABLE TRUE)
-    # note parentheses instead of brackets below - this variable is for substitution by Visual Studio, not cmake
-    target_link_libraries(bolt PUBLIC "${CEF_ROOT}/$(ConfigurationName)/libcef.lib")
-    target_link_libraries(bolt PUBLIC "${CEF_ROOT}/$(ConfigurationName)/cef_sandbox.lib")
 elseif(WIN32)
-    # note: this is not used on Windows if compiler is MSVC; tht above section is used instead
+    # note: this probably only works when targeting visual studio and msvc and only in release? I hate windows.
+    target_compile_options(bolt PUBLIC $<$<CONFIG:Debug>:/MTd> $<$<CONFIG:Release>:/MT>)
     set_target_properties(bolt PROPERTIES WIN32_EXECUTABLE TRUE)
     target_link_libraries(bolt PUBLIC "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/libcef.lib")
     target_link_libraries(bolt PUBLIC "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/cef_sandbox.lib")
@@ -348,30 +343,42 @@ endif()
 # fake java wrapper for running hdos
 if(NOT WIN32)
     add_executable(java-proxy src/fake_java.c)
-    install(TARGETS java-proxy DESTINATION ${BOLT_CEF_INSTALLDIR}/bolt-launcher)
+    install(TARGETS java-proxy DESTINATION "${BOLT_CEF_INSTALLDIR}/bolt-launcher")
 endif()
 
 # Install commands for target dir layout - as per https://bitbucket.org/chromiumembedded/cef/wiki/Tutorial.md
 if(APPLE)
     # TODO: mac support
 else()
-    install(TARGETS bolt DESTINATION ${BOLT_CEF_INSTALLDIR}/bolt-launcher)
-    install(DIRECTORY "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/" "${CEF_ROOT}/Resources/" DESTINATION ${BOLT_CEF_INSTALLDIR}/bolt-launcher USE_SOURCE_PERMISSIONS)
+    install(TARGETS bolt DESTINATION "${BOLT_CEF_INSTALLDIR}/bolt-launcher")
+    install(DIRECTORY "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/" "${CEF_ROOT}/Resources/" DESTINATION "${BOLT_CEF_INSTALLDIR}/bolt-launcher" USE_SOURCE_PERMISSIONS)
 endif()
 
 # Build plugin library
 if(NOT BOLT_SKIP_LIBRARIES)
-    # todo: anything other than linux
     if(UNIX AND NOT APPLE)
         add_library(${BOLT_PLUGIN_LIB_NAME} SHARED src/library/so/main.c src/library/plugin/plugin.c src/library/gl.c
         src/library/rwlock/rwlock_posix.c src/library/ipc_posix.c src/library/plugin/plugin_posix.c modules/hashmap/hashmap.c
-        modules/spng/spng/spng.c)
+        src/miniz/miniz.c modules/spng/spng/spng.c)
+        target_link_libraries(${BOLT_PLUGIN_LIB_NAME} luajit-5.1)
+        target_include_directories(${BOLT_PLUGIN_LIB_NAME} PUBLIC "${BOLT_LUAJIT_INCLUDE_DIR}")
         install(TARGETS ${BOLT_PLUGIN_LIB_NAME} DESTINATION "${BOLT_LIBDIR}")
     endif()
-    target_include_directories(${BOLT_PLUGIN_LIB_NAME} PUBLIC "${CEF_ROOT}" "${BOLT_LUAJIT_INCLUDE_DIR}" modules/fmt/include)
-    target_link_libraries(${BOLT_PLUGIN_LIB_NAME} luajit-5.1)
-    target_compile_definitions(bolt PUBLIC BOLT_PLUGINS=1 SPNG_STATIC=1)
-    target_compile_definitions(bolt PUBLIC BOLT_LIB_NAME="${BOLT_PLUGIN_LIB_NAME}")
+    if (WIN32)
+        add_library(${BOLT_PLUGIN_LIB_NAME} SHARED src/library/dll/main.c src/library/plugin/plugin.c src/library/gl.c
+        src/library/rwlock/rwlock_win32.c src/library/ipc_win32.c src/library/plugin/plugin_win32.c modules/hashmap/hashmap.c
+        src/miniz/miniz.c modules/spng/spng/spng.c)
+        target_link_libraries(${BOLT_PLUGIN_LIB_NAME} PUBLIC "${BOLT_LUAJIT_DIR}/lua51.lib")
+        target_include_directories(${BOLT_PLUGIN_LIB_NAME} PUBLIC "${BOLT_LUAJIT_DIR}" "${BOLT_ZLIB_DIR}")
+        install(TARGETS ${BOLT_PLUGIN_LIB_NAME} DESTINATION "${BOLT_CEF_INSTALLDIR}/bolt-launcher")
+        install(FILES "${BOLT_LUAJIT_DIR}/lua51.dll" DESTINATION "${BOLT_CEF_INSTALLDIR}/bolt-launcher")
+    endif()
+    target_include_directories(${BOLT_PLUGIN_LIB_NAME} PUBLIC "${CEF_ROOT}" "${CMAKE_CURRENT_SOURCE_DIR}/src/miniz")
+    target_compile_definitions(${BOLT_PLUGIN_LIB_NAME} PUBLIC SPNG_STATIC=1 SPNG_USE_MINIZ=1)
+    target_compile_definitions(bolt PUBLIC BOLT_LIB_NAME="${BOLT_PLUGIN_LIB_NAME}" BOLT_PLUGINS=1)
+    if(MSVC)
+        target_compile_definitions(${BOLT_PLUGIN_LIB_NAME} PUBLIC _USE_MATH_DEFINES=1)
+    endif()
 endif()
 
 # Finally, install shell script and metadata

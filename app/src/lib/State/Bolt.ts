@@ -19,6 +19,7 @@ export interface BoltEnv {
 	profile_api: string;
 	shield_url: string;
 	content_url: string;
+	direct6_url: string;
 	default_config_uri: string;
 	games: string[];
 }
@@ -26,7 +27,12 @@ export interface BoltEnv {
 export interface Bolt {
 	env: BoltEnv;
 	platform: Platform | null;
-	rs3InstalledHash: string | null;
+	// TODO: move the install identifiers into a nested object
+	rs3DebInstalledHash: string | null;
+	rs3ExeInstalledHash: string | null;
+	rs3AppInstalledHash: string | null;
+	osrsExeInstalledHash: string | null;
+	osrsAppInstalledHash: string | null;
 	runeLiteInstalledId: string | null;
 	hdosInstalledVersion: string | null;
 	isFlathub: boolean;
@@ -40,7 +46,11 @@ declare const s: () => BoltEnv;
 export const bolt: Bolt = {
 	env: ParseUtils.decodeBolt(s()),
 	platform: null,
-	rs3InstalledHash: null,
+	rs3DebInstalledHash: null,
+	rs3ExeInstalledHash: null,
+	rs3AppInstalledHash: null,
+	osrsExeInstalledHash: null,
+	osrsAppInstalledHash: null,
 	runeLiteInstalledId: null,
 	hdosInstalledVersion: null,
 	isFlathub: false,

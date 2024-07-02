@@ -11,7 +11,7 @@
 #include "x.h"
 #include "../gl.h"
 #include "../plugin/plugin.h"
-#include "../../hashmap/hashmap.h"
+#include "../../../modules/hashmap/hashmap.h"
 
 // comment or uncomment this to enable verbose logging of hooks in this file
 //#define VERBOSE
@@ -403,35 +403,64 @@ static uint8_t _bolt_point_in_rect(int16_t x, int16_t y, int rx, int ry, int rw,
     return rx <= x && rx + rw > x && ry <= y && ry + rh > y;
 }
 
+static void _bolt_xcb_to_mouse_event(int16_t x, int16_t y, uint16_t state, struct MouseEvent* out) {
+    out->x = x;
+    out->y = y;
+    out->ctrl = (state >> 2) & 1;
+    out->shift = state & 1;
+    out->meta = (state >> 6) & 1;
+    out->alt = (state >> 3) & 1;
+    out->capslock = (state >> 1) & 1;
+    out->numlock = (state >> 4) & 1;
+    out->mb_left = (state >> 8) & 1;
+    out->mb_right = (state >> 10) & 1;
+    out->mb_middle = (state >> 9) & 1;
+}
+
 // called by handle_xcb_event
 // policy is as follows: if the target window is NOT main_window, do not interfere at all.
 // if the target window IS main_window, the event can be swallowed if it's above a window or we're
 // currently in a drag action, otherwise the event may also mutate into an enter or leave event.
-static uint8_t _bolt_handle_xcb_motion_event(xcb_window_t win, int16_t x, int16_t y, xcb_generic_event_t* e) {
+static uint8_t _bolt_handle_xcb_motion_event(xcb_window_t win, int16_t x, int16_t y, uint16_t state, xcb_generic_event_t* e) {
     if (win != main_window_xcb) return true;
     struct WindowInfo* windows = _bolt_plugin_windowinfo();
     uint8_t ret = true;
     _bolt_rwlock_lock_read(&windows->lock);
     size_t iter = 0;
     void* item;
-    while (ret && hashmap_iter(windows->map, &iter, &item)) {
+    while (hashmap_iter(windows->map, &iter, &item)) {
         struct EmbeddedWindow** window = item;
         _bolt_rwlock_lock_read(&(*window)->lock);
-        if (_bolt_point_in_rect(x, y, (*window)->x, (*window)->y, (*window)->width, (*window)->height)) {
+        if (_bolt_point_in_rect(x, y, (*window)->metadata.x, (*window)->metadata.y, (*window)->metadata.width, (*window)->metadata.height)) {
             ret = false;
         }
         _bolt_rwlock_unlock_read(&(*window)->lock);
+
+        if (!ret) {
+            _bolt_rwlock_lock_write(&(*window)->input_lock);
+            (*window)->input.mouse_motion = 1;
+            _bolt_xcb_to_mouse_event(x - (*window)->metadata.x, y - (*window)->metadata.y, state, &(*window)->input.mouse_motion_event);
+            _bolt_rwlock_unlock_write(&(*window)->input_lock);
+            break;
+        }
     }
     _bolt_rwlock_unlock_read(&windows->lock);
+
+    if (ret) {
+        _bolt_rwlock_lock_write(&windows->input_lock);
+        windows->input.mouse_motion = 1;
+        _bolt_xcb_to_mouse_event(x, y, state, &windows->input.mouse_motion_event);
+        _bolt_rwlock_unlock_write(&windows->input_lock);
+    }
     if (ret != xcb_mousein_fake) {
         xcb_mousein_fake = ret;
-        ret = true;
         // mutate the event - note that motion_notify, enter_notify and exit_notify have the exact
         // same memory layout, except for the last two bytes, so this is a fairly easy mutation
         xcb_enter_notify_event_t* event = (xcb_enter_notify_event_t*)e;
         event->response_type = ret ? XCB_ENTER_NOTIFY : XCB_LEAVE_NOTIFY;
         event->same_screen_focus = event->mode;
         event->mode = 0;
+        ret = true;
     }
     return ret;
 }
@@ -456,8 +485,9 @@ static uint8_t _bolt_handle_xcb_event(xcb_connection_t* c, xcb_generic_event_t* 
             if (event->extension != XINPUTEXTENSION) break;
             switch (event->event_type) {
                 case XCB_INPUT_MOTION: { // when mouse moves (not drag) inside the game window
+                    //TODO: "event->flags" is not the correct thing to pass here, so what is?
                     xcb_input_motion_event_t* event = (xcb_input_motion_event_t*)e;
-                    return _bolt_handle_xcb_motion_event(event->event, event->event_x >> 16, event->event_y >> 16, e);
+                    return _bolt_handle_xcb_motion_event(event->event, event->event_x >> 16, event->event_y >> 16, event->flags, e);
                 }
                 case XCB_INPUT_RAW_MOTION: // when mouse moves (not drag) anywhere globally on the PC
                 case XCB_INPUT_RAW_BUTTON_PRESS: // when pressing a mouse button anywhere globally on the PC
@@ -480,13 +510,69 @@ static uint8_t _bolt_handle_xcb_event(xcb_connection_t* c, xcb_generic_event_t* 
             while (hashmap_iter(windows->map, &iter, &item)) {
                 struct EmbeddedWindow** window = item;
                 _bolt_rwlock_lock_read(&(*window)->lock);
-                if (_bolt_point_in_rect(event->event_x, event->event_y, (*window)->x, (*window)->y, (*window)->width, (*window)->height)) {
+                struct EmbeddedWindowMetadata metadata = (*window)->metadata;
+                _bolt_rwlock_unlock_read(&(*window)->lock);
+
+                if (_bolt_point_in_rect(event->event_x, event->event_y, metadata.x, metadata.y, metadata.width, metadata.height)) {
                     grabbed_window_id = (*window)->id;
                     ret = false;
                 }
-                _bolt_rwlock_unlock_read(&(*window)->lock);
+
+                if (!ret) {
+                    _bolt_rwlock_lock_write(&(*window)->input_lock);
+                    switch (event->detail) {
+                        case 1:
+                            (*window)->input.mouse_left = 1;
+                            _bolt_xcb_to_mouse_event(event->event_x - metadata.x, event->event_y - metadata.y, event->state, &(*window)->input.mouse_left_event);
+                            break;
+                        case 2:
+                            (*window)->input.mouse_middle = 1;
+                            _bolt_xcb_to_mouse_event(event->event_x - metadata.x, event->event_y - metadata.y, event->state, &(*window)->input.mouse_middle_event);
+                            break;
+                        case 3:
+                            (*window)->input.mouse_right = 1;
+                            _bolt_xcb_to_mouse_event(event->event_x - metadata.x, event->event_y - metadata.y, event->state, &(*window)->input.mouse_right_event);
+                            break;
+                        case 4:
+                            (*window)->input.mouse_scroll_up = 1;
+                            _bolt_xcb_to_mouse_event(event->event_x - metadata.x, event->event_y - metadata.y, event->state, &(*window)->input.mouse_scroll_up_event);
+                            break;
+                        case 5:
+                            (*window)->input.mouse_scroll_down = 1;
+                            _bolt_xcb_to_mouse_event(event->event_x - metadata.x, event->event_y - metadata.y, event->state, &(*window)->input.mouse_scroll_down_event);
+                            break;
+                    }
+                    _bolt_rwlock_unlock_write(&(*window)->input_lock);
+                    break;
+                }
             }
             _bolt_rwlock_unlock_read(&windows->lock);
+            if (ret) {
+                _bolt_rwlock_lock_write(&windows->input_lock);
+                switch (event->detail) {
+                    case 1:
+                        windows->input.mouse_left = 1;
+                        _bolt_xcb_to_mouse_event(event->event_x, event->event_y, event->state, &windows->input.mouse_left_event);
+                        break;
+                    case 2:
+                        windows->input.mouse_middle = 1;
+                        _bolt_xcb_to_mouse_event(event->event_x, event->event_y, event->state, &windows->input.mouse_middle_event);
+                        break;
+                    case 3:
+                        windows->input.mouse_right = 1;
+                        _bolt_xcb_to_mouse_event(event->event_x, event->event_y, event->state, &windows->input.mouse_right_event);
+                        break;
+                    case 4:
+                        windows->input.mouse_scroll_up = 1;
+                        _bolt_xcb_to_mouse_event(event->event_x, event->event_y, event->state, &windows->input.mouse_scroll_up_event);
+                        break;
+                    case 5:
+                        windows->input.mouse_scroll_down = 1;
+                        _bolt_xcb_to_mouse_event(event->event_x, event->event_y, event->state, &windows->input.mouse_scroll_down_event);
+                        break;
+                }
+                _bolt_rwlock_unlock_write(&windows->input_lock);
+            }
             return ret;
         }
         case XCB_BUTTON_RELEASE: { // when releasing a mouse button, for which the press was received by the game window
@@ -500,7 +586,7 @@ static uint8_t _bolt_handle_xcb_event(xcb_connection_t* c, xcb_generic_event_t* 
             while (hashmap_iter(windows->map, &iter, &item)) {
                 struct EmbeddedWindow** window = item;
                 _bolt_rwlock_lock_read(&(*window)->lock);
-                if (_bolt_point_in_rect(event->event_x, event->event_y, (*window)->x, (*window)->y, (*window)->width, (*window)->height)) {
+                if (_bolt_point_in_rect(event->event_x, event->event_y, (*window)->metadata.x, (*window)->metadata.y, (*window)->metadata.width, (*window)->metadata.height)) {
                     on_any_window = true;
                 }
                 _bolt_rwlock_unlock_read(&(*window)->lock);
@@ -545,7 +631,7 @@ static uint8_t _bolt_handle_xcb_event(xcb_connection_t* c, xcb_generic_event_t* 
             while (hashmap_iter(windows->map, &iter, &item)) {
                 struct EmbeddedWindow** window = item;
                 _bolt_rwlock_lock_read(&(*window)->lock);
-                if (_bolt_point_in_rect(event->event_x, event->event_y, (*window)->x, (*window)->y, (*window)->width, (*window)->height)) {
+                if (_bolt_point_in_rect(event->event_x, event->event_y, (*window)->metadata.x, (*window)->metadata.y, (*window)->metadata.width, (*window)->metadata.height)) {
                     ret = false;
                 }
                 _bolt_rwlock_unlock_read(&(*window)->lock);

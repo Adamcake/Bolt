@@ -3,6 +3,7 @@
 
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 // comment or uncomment this to enable verbose logging of hooks in this file
@@ -13,6 +14,12 @@
 #define LOG printf
 #else
 #define LOG(...)
+#endif
+
+#if defined(_MSC_VER)
+#define thread_local __declspec(thread)
+#else
+#define thread_local _Thread_local
 #endif
 
 static unsigned int gl_width;
@@ -75,6 +82,30 @@ static struct GLVertexArray* _bolt_context_get_vao(struct GLContext*, unsigned i
 static void _bolt_glcontext_init(struct GLContext*, void*, void*);
 static void _bolt_glcontext_free(struct GLContext*);
 
+static void _bolt_gl_plugin_drawelements_vertex2d_xy(size_t index, void* userdata, int32_t* out);
+static void _bolt_gl_plugin_drawelements_vertex2d_atlas_xy(size_t index, void* userdata, int32_t* out);
+static void _bolt_gl_plugin_drawelements_vertex2d_atlas_wh(size_t index, void* userdata, int32_t* out);
+static void _bolt_gl_plugin_drawelements_vertex2d_uv(size_t index, void* userdata, double* out);
+static void _bolt_gl_plugin_drawelements_vertex2d_colour(size_t index, void* userdata, double* out);
+static void _bolt_gl_plugin_drawelements_vertex3d_xyz(size_t index, void* userdata, int32_t* out);
+static size_t _bolt_gl_plugin_drawelements_vertex3d_atlas_meta(size_t index, void* userdata);
+static void _bolt_gl_plugin_drawelements_vertex3d_meta_xywh(size_t meta, void* userdata, int32_t* out);
+static void _bolt_gl_plugin_drawelements_vertex3d_uv(size_t index, void* userdata, double* out);
+static void _bolt_gl_plugin_drawelements_vertex3d_colour(size_t index, void* userdata, double* out);
+static void _bolt_gl_plugin_matrix3d_toworldspace(int x, int y, int z, void* userdata, double* out);
+static void _bolt_gl_plugin_matrix3d_toscreenspace(int x, int y, int z, void* userdata, double* out);
+static void _bolt_gl_plugin_matrix3d_worldpos(void* userdata, double* out);
+static size_t _bolt_gl_plugin_texture_id(void* userdata);
+static void _bolt_gl_plugin_texture_size(void* userdata, size_t* out);
+static uint8_t _bolt_gl_plugin_texture_compare(void* userdata, size_t x, size_t y, size_t len, const unsigned char* data);
+static uint8_t* _bolt_gl_plugin_texture_data(void* userdata, size_t x, size_t y);
+static void _bolt_gl_plugin_surface_init(struct SurfaceFunctions* out, unsigned int width, unsigned int height, const void* data);
+static void _bolt_gl_plugin_surface_destroy(void* userdata);
+static void _bolt_gl_plugin_surface_resize(void* userdata, unsigned int width, unsigned int height);
+static void _bolt_gl_plugin_surface_clear(void* userdata, double r, double g, double b, double a);
+static void _bolt_gl_plugin_surface_drawtoscreen(void* userdata, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh);
+static void _bolt_gl_plugin_surface_drawtosurface(void* userdata, void* target, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh);
+
 #define MAX_TEXTURE_UNITS 4096 // would be nice if there was a way to query this at runtime, but it would be awkward to set up
 #define BUFFER_LIST_CAPACITY 256 * 256
 #define TEXTURE_LIST_CAPACITY 256
@@ -83,7 +114,7 @@ static void _bolt_glcontext_free(struct GLContext*);
 #define CONTEXTS_CAPACITY 64 // not growable so we just have to hard-code a number and hope it's enough forever
 #define GAME_MINIMAP_BIG_SIZE 2048
 static struct GLContext contexts[CONTEXTS_CAPACITY];
-_Thread_local struct GLContext* current_context = NULL;
+thread_local struct GLContext* current_context = NULL;
 
 struct PluginSurfaceUserdata {
     unsigned int width;
@@ -156,7 +187,7 @@ uint8_t _bolt_get_attr_binding(struct GLContext* c, const struct GLAttrBinding* 
     if (!buffer || !buffer->data) return 0;
     uintptr_t buf_offset = binding->offset + (binding->stride * index);
 
-    const void* ptr = buffer->data + buf_offset;
+    const uint8_t* ptr = (uint8_t*)buffer->data + buf_offset;
     if (!binding->normalise) {
         switch (binding->type) {
             case GL_FLOAT:
@@ -219,7 +250,7 @@ uint8_t _bolt_get_attr_binding_int(struct GLContext* c, const struct GLAttrBindi
     if (!buffer || !buffer->data) return 0;
     uintptr_t buf_offset = binding->offset + (binding->stride * index);
 
-    const void* ptr = buffer->data + buf_offset;
+    const uint8_t* ptr = (uint8_t*)buffer->data + buf_offset;
     if (!binding->normalise) {
         switch (binding->type) {
             case GL_UNSIGNED_BYTE:
@@ -752,7 +783,7 @@ void _bolt_glCompressedTexSubImage2D(uint32_t target, int level, int xoffset, in
     int out_xoffset = xoffset;
     int out_yoffset = yoffset;
     for (size_t ii = 0; ii < (width * height); ii += input_stride) {
-        const uint8_t* ptr = data + ii;
+        const uint8_t* ptr = (uint8_t*)data + ii;
         const uint8_t* cptr = is_dxt1 ? ptr : (ptr + 8);
         uint8_t* out_ptr = tex->data + (out_yoffset * tex->width * 4) + (out_xoffset * 4);
         uint16_t c0 = cptr[0] + (cptr[1] << 8);
@@ -962,7 +993,7 @@ void _bolt_glFlushMappedBufferRange(uint32_t target, intptr_t offset, uintptr_t 
         gl.GetIntegerv(binding_type, &buffer_id);
         struct GLArrayBuffer* buffer = _bolt_context_get_buffer(c, buffer_id);
         gl.BufferSubData(target, buffer->mapping_offset + offset, length, buffer->mapping + offset);
-        memcpy(buffer->data + buffer->mapping_offset + offset, buffer->mapping + offset, length);
+        memcpy((uint8_t*)buffer->data + buffer->mapping_offset + offset, buffer->mapping + offset, length);
     } else {
         gl.FlushMappedBufferRange(target, offset, length);
     }
@@ -1080,48 +1111,7 @@ void* _bolt_gl_GetProcAddress(const char* name) {
 void _bolt_gl_onSwapBuffers(uint32_t window_width, uint32_t window_height) {
     gl_width = window_width;
     gl_height = window_height;
-    struct GLContext* c = _bolt_context();
-    if (_bolt_plugin_is_inited()) {
-        struct SwapBuffersEvent event;
-        _bolt_plugin_handle_swapbuffers(&event);
-        _bolt_plugin_handle_messages();
-        struct WindowInfo* windows = _bolt_plugin_windowinfo();
-        _bolt_rwlock_lock_read(&windows->lock);
-        size_t iter = 0;
-        void* item;
-        while (hashmap_iter(windows->map, &iter, &item)) {
-            struct EmbeddedWindow* window = *(struct EmbeddedWindow**)item;
-            _bolt_rwlock_lock_write(&window->lock);
-            bool did_resize = false;
-            if (window->width > window_width) {
-                window->width = window_width;
-                did_resize = true;
-            }
-            if (window->height > window_height) {
-                window->height = window_height;
-                did_resize = true;
-            }
-            if (window->x < 0) window->x = 0;
-            if (window->y < 0) window->y = 0;
-            if (window->x + window->width > window_width) window->x = window_width - window->width;
-            if (window->y + window->height > window_height) window->y = window_height - window->height;
-            if (did_resize) {
-                struct PluginSurfaceUserdata* ud = window->surface_functions.userdata;
-                _bolt_gl_surface_destroy_buffers(ud);
-                ud->width = window->width;
-                ud->height = window->height;
-                _bolt_gl_surface_init_buffers(ud);
-                lgl->ClearColor(0.0, 0.0, 0.0, 0.0);
-                lgl->Clear(GL_COLOR_BUFFER_BIT);
-            }
-            _bolt_rwlock_unlock_write(&window->lock);
-            // TODO: send a resize event to the plugin
-            _bolt_rwlock_lock_read(&window->lock);
-            window->surface_functions.draw_to_screen(window->surface_functions.userdata, 0, 0, window->width, window->height, window->x, window->y, window->width, window->height);
-            _bolt_rwlock_unlock_read(&window->lock);
-        }
-        _bolt_rwlock_unlock_read(&windows->lock);
-    }
+    if (_bolt_plugin_is_inited()) _bolt_plugin_process_windows(window_width, window_height);
 }
 
 void _bolt_gl_onCreateContext(void* context, void* shared_context, const struct GLLibFunctions* libgl, void* (*GetProcAddress)(const char*)) {
@@ -1160,6 +1150,7 @@ void _bolt_gl_onMakeCurrent(void* context) {
         const struct PluginManagedFunctions functions = {
             .surface_init = _bolt_gl_plugin_surface_init,
             .surface_destroy = _bolt_gl_plugin_surface_destroy,
+            .surface_resize_and_clear = _bolt_gl_plugin_surface_resize,
         };
         _bolt_plugin_init(&functions);
     }
@@ -1198,7 +1189,7 @@ void _bolt_gl_onDrawElements(uint32_t mode, unsigned int count, uint32_t type, c
     int element_binding;
     gl.GetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &element_binding);
     struct GLArrayBuffer* element_buffer = _bolt_context_get_buffer(c, element_binding);
-    const unsigned short* indices = (unsigned short*)(element_buffer->data + (uintptr_t)indices_offset);
+    const unsigned short* indices = (unsigned short*)((uint8_t*)element_buffer->data + (uintptr_t)indices_offset);
     if (type == GL_UNSIGNED_SHORT && mode == GL_TRIANGLES && count > 0 && c->bound_program->is_2d && !c->bound_program->is_minimap) {
         int diffuse_map;
         gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uDiffuseMap, &diffuse_map);
@@ -1277,7 +1268,7 @@ void _bolt_gl_onDrawElements(uint32_t mode, unsigned int count, uint32_t type, c
         } else {
             struct GLPluginDrawElementsVertex2DUserData vertex_userdata;
             vertex_userdata.c = c;
-            vertex_userdata.indices = (unsigned short*)(element_buffer->data + (uintptr_t)indices_offset);
+            vertex_userdata.indices = (unsigned short*)((uint8_t*)element_buffer->data + (uintptr_t)indices_offset);
             vertex_userdata.atlas = c->texture_units[diffuse_map];
             vertex_userdata.position = &attributes[c->bound_program->loc_aVertexPosition2D];
             vertex_userdata.atlas_min = &attributes[c->bound_program->loc_aTextureUVAtlasMin];
@@ -1322,11 +1313,11 @@ void _bolt_gl_onDrawElements(uint32_t mode, unsigned int count, uint32_t type, c
             struct GLTexture2D* tex_settings = c->texture_units[settings_atlas];
             gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ViewTransforms, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
             gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_view_index);
-            const float* view_proj_matrix = (float*)(_bolt_context_get_buffer(c, ubo_view_index)->data + c->bound_program->offset_uViewProjMatrix);
+            const float* view_proj_matrix = (float*)((uint8_t*)(_bolt_context_get_buffer(c, ubo_view_index)->data) + c->bound_program->offset_uViewProjMatrix);
 
             struct GLPluginDrawElementsVertex3DUserData vertex_userdata;
             vertex_userdata.c = c;
-            vertex_userdata.indices = (unsigned short*)(element_buffer->data + (uintptr_t)indices_offset);
+            vertex_userdata.indices = (unsigned short*)((uint8_t*)element_buffer->data + (uintptr_t)indices_offset);
             vertex_userdata.atlas_scale = roundf(atlas_meta[1]);
             vertex_userdata.atlas = tex;
             vertex_userdata.settings_atlas = tex_settings;
@@ -1374,7 +1365,7 @@ void _bolt_gl_onDrawArrays(uint32_t mode, int first, unsigned int count) {
         int ubo_binding, ubo_view_index;
         gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ViewTransforms, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
         gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_view_index);
-        const float* camera_position = (float*)(_bolt_context_get_buffer(c, ubo_view_index)->data + c->bound_program->offset_uCameraPosition);
+        const float* camera_position = (float*)((uint8_t*)(_bolt_context_get_buffer(c, ubo_view_index)->data) + c->bound_program->offset_uCameraPosition);
         tex->is_minimap_tex_big = 1;
         tex->minimap_center_x = camera_position[0];
         tex->minimap_center_y = camera_position[2];
@@ -1422,7 +1413,7 @@ void _bolt_gl_onTexSubImage2D(uint32_t target, int level, int xoffset, int yoffs
         if (tex && !(xoffset < 0 || yoffset < 0 || xoffset + width > tex->width || yoffset + height > tex->height)) {
             for (unsigned int y = 0; y < height; y += 1) {
                 unsigned char* dest_ptr = tex->data + ((tex->width * (y + yoffset)) + xoffset) * 4;
-                const void* src_ptr = pixels + (width * y * 4);
+                const uint8_t* src_ptr = (uint8_t*)pixels + (width * y * 4);
                 memcpy(dest_ptr, src_ptr, width * 4);
             }
         }
@@ -1616,7 +1607,7 @@ static uint8_t _bolt_gl_plugin_texture_compare(void* userdata, size_t x, size_t 
     const size_t start_offset = (tex->width * y * 4) + (x * 4);
     if (start_offset + len > tex->width * tex->height * 4) {
         printf(
-            "warning: out-of-bounds texture compare attempt: tried to read %lu bytes at %lu,%lu of texture id=%u w,h=%u,%u\n",
+            "warning: out-of-bounds texture compare attempt: tried to read %zu bytes at %zu,%zu of texture id=%u w,h=%u,%u\n",
             len, x, y, tex->id, tex->width, tex->height
         );
         return 0;
@@ -1658,8 +1649,17 @@ static void _bolt_gl_plugin_surface_destroy(void* _userdata) {
     free(userdata);
 }
 
+static void _bolt_gl_plugin_surface_resize(void* _userdata, unsigned int width, unsigned int height) {
+    struct PluginSurfaceUserdata* userdata = _userdata;
+    _bolt_gl_surface_destroy_buffers(userdata);
+    userdata->width = width;
+    userdata->height = height;
+    _bolt_gl_surface_init_buffers(userdata);
+    lgl->ClearColor(0.0, 0.0, 0.0, 0.0);
+    lgl->Clear(GL_COLOR_BUFFER_BIT);
+}
+
 static void _bolt_gl_plugin_surface_clear(void* _userdata, double r, double g, double b, double a) {
-    lgl->GetError();
     struct PluginSurfaceUserdata* userdata = _userdata;
     struct GLContext* c = _bolt_context();
     gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, userdata->framebuffer);

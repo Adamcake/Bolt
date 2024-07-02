@@ -1,20 +1,6 @@
 {
 	"name": "vite_app",
-	"private": true,
 	"version": "0.0.0",
-	"type": "module",
-	"scripts": {
-		"dev": "vite build --watch --mode development",
-		"watch": "vite build --watch --mode development",
-		"build": "vite build",
-		"minify": "vite build --minify",
-		"preview": "vite preview",
-		"check": "svelte-check --tsconfig ./tsconfig.json",
-		"test": "vitest",
-		"eslint": "eslint .",
-		"lint": "prettier --check . && eslint .",
-		"format": "prettier --write ."
-	},
 	"devDependencies": {
 		"@sveltejs/vite-plugin-svelte": "^3.0.2",
 		"@tsconfig/svelte": "^5.0.2",
@@ -35,5 +21,19 @@
 		"vite": "^5.2.0",
 		"vite-tsconfig-paths": "^4.3.2",
 		"vitest": "^1.2.0"
-	}
+	},
+	"private": true,
+	"scripts": {
+		"dev": "vite build --watch --mode development",
+		"watch": "vite build --watch --mode development",
+		"build": "vite build",
+		"minify": "vite build --minify",
+		"preview": "vite preview",
+		"check": "svelte-check --tsconfig ./tsconfig.json",
+		"test": "vitest",
+		"eslint": "eslint .",
+		"lint": "prettier --check . && eslint .",
+		"format": "prettier --write ."
+	},
+	"type": "module"
 }

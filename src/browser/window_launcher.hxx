@@ -43,6 +43,10 @@ namespace Browser {
 		*/
 
 		CefRefPtr<CefResourceRequestHandler> LaunchRs3Deb(CefRefPtr<CefRequest>, std::string_view);
+		CefRefPtr<CefResourceRequestHandler> LaunchRs3Exe(CefRefPtr<CefRequest>, std::string_view);
+		CefRefPtr<CefResourceRequestHandler> LaunchRs3App(CefRefPtr<CefRequest>, std::string_view);
+		CefRefPtr<CefResourceRequestHandler> LaunchOsrsExe(CefRefPtr<CefRequest>, std::string_view);
+		CefRefPtr<CefResourceRequestHandler> LaunchOsrsApp(CefRefPtr<CefRequest>, std::string_view);
 		CefRefPtr<CefResourceRequestHandler> LaunchRuneliteJar(CefRefPtr<CefRequest>, std::string_view, bool configure);
 		CefRefPtr<CefResourceRequestHandler> LaunchHdosJar(CefRefPtr<CefRequest>, std::string_view);
 
@@ -52,8 +56,16 @@ namespace Browser {
 			std::filesystem::path data_dir;
 			std::filesystem::path creds_path;
 			std::filesystem::path config_path;
-			std::filesystem::path rs3_path;
-			std::filesystem::path rs3_hash_path;
+			std::filesystem::path rs3_elf_path;
+			std::filesystem::path rs3_elf_hash_path;
+			std::filesystem::path rs3_exe_path;
+			std::filesystem::path rs3_exe_hash_path;
+			std::filesystem::path rs3_app_path;
+			std::filesystem::path rs3_app_hash_path;
+			std::filesystem::path osrs_exe_path;
+			std::filesystem::path osrs_exe_hash_path;
+			std::filesystem::path osrs_app_path;
+			std::filesystem::path osrs_app_hash_path;
 			std::filesystem::path runelite_path;
 			std::filesystem::path runelite_id_path;
 			std::filesystem::path hdos_path;

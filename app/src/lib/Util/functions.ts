@@ -1,5 +1,10 @@
 import { get } from 'svelte/store';
-import { type Account, type Character, type GameClient } from '$lib/Util/interfaces';
+import {
+	type Account,
+	type Character,
+	type GameClient,
+	type Direct6Token
+} from '$lib/Util/interfaces';
 import { accountList, internalUrl, productionClientId, selectedPlay } from '$lib/Util/store';
 import { logger } from '$lib/Util/Logger';
 import { BoltService } from '$lib/Services/BoltService';
@@ -178,7 +183,7 @@ export function launchRS3Linux(
 			if (xml.readyState == 4) {
 				logger.info(`Game launch status: '${xml.responseText.trim()}'`);
 				if (xml.status == 200 && hash) {
-					bolt.rs3InstalledHash = hash;
+					bolt.rs3DebInstalledHash = hash;
 				}
 			}
 		};
@@ -201,7 +206,7 @@ export function launchRS3Linux(
 				launch();
 				return;
 			}
-			if (lines.SHA256 !== bolt.rs3InstalledHash) {
+			if (lines.SHA256 !== bolt.rs3DebInstalledHash) {
 				logger.info('Downloading RS3 client...');
 				const exeXml = new XMLHttpRequest();
 				exeXml.open('GET', contentUrl.concat(lines.Filename), true);
@@ -449,4 +454,134 @@ export function savePluginConfig(): void {
 		}
 	};
 	xml.send(JSON.stringify(bolt.pluginList));
+}
+
+// download and attempt to launch an official windows or mac client
+// (not the official linux client - that comes from a different url, see launchRS3Linux)
+export async function launchOfficialClient(
+	windows: boolean,
+	osrs: boolean,
+	jx_session_id: string,
+	jx_character_id: string,
+	jx_display_name: string
+) {
+	BoltService.saveConfig(get(config));
+	const metaPath: string = `${osrs ? 'osrs' : bolt.env.provider}-${windows ? 'win' : 'mac'}`;
+	let installedHash = windows
+		? osrs
+			? bolt.osrsExeInstalledHash
+			: bolt.rs3ExeInstalledHash
+		: osrs
+			? bolt.osrsAppInstalledHash
+			: bolt.rs3AppInstalledHash;
+
+	const launch = async (hash?: string, exe?: Blob) => {
+		const params: Record<string, string> = {};
+		if (hash) params.hash = hash;
+		if (jx_session_id) params.jx_session_id = jx_session_id;
+		if (jx_character_id) params.jx_character_id = jx_character_id;
+		if (jx_display_name) params.jx_display_name = jx_display_name;
+		const response = await fetch(
+			`/launch-${osrs ? 'osrs' : 'rs3'}-${windows ? 'exe' : 'app'}?${new URLSearchParams(params).toString()}`,
+			{
+				method: 'POST',
+				headers: { 'Content-Type': 'application/octet-stream' },
+				body: exe
+			}
+		);
+		response.text().then((text) => logger.info(`Game launch status: '${text.trim()}'`));
+		if (response.status == 200 && hash) {
+			installedHash = hash;
+		}
+	};
+
+	// download a list of all the environments, find the "production" environment
+	const primaryUrl: string = `${bolt.env.direct6_url}${metaPath}/${metaPath}.json`;
+	const primaryUrlResponse = await fetch(primaryUrl, { method: 'GET' });
+	const primaryUrlText = await primaryUrlResponse.text();
+	if (primaryUrlResponse.status !== 200) {
+		logger.error(`Error from ${primaryUrl}: ${primaryUrlResponse.status}: ${primaryUrlText}`);
+		return;
+	}
+	const metaToken: Direct6Token = JSON.parse(atob(primaryUrlText.split('.')[1])).environments
+		.production;
+
+	if (installedHash === metaToken.id) {
+		logger.info('Latest client is already installed');
+		launch();
+		return;
+	}
+	logger.info(`Downloading client version ${metaToken.version}`);
+
+	// download the catalog for the production environment, which contains info about all the files available for download
+	const catalogUrl: string = `${bolt.env.direct6_url}${metaPath}/catalog/${metaToken.id}/catalog.json`;
+	const catalogUrlResponse = await fetch(catalogUrl, { method: 'GET' });
+	const catalogText = await catalogUrlResponse.text();
+	if (catalogUrlResponse.status !== 200) {
+		logger.error(`Error from ${catalogUrl}: ${catalogUrlResponse.status}: ${catalogText}`);
+		return;
+	}
+	const catalog = JSON.parse(atob(catalogText.split('.')[1]));
+
+	// download the metafile that's linked in the catalog, used to download the actual files
+	const metafileUrl = catalog.metafile.replace(/^http:/i, 'https:');
+	const metafileUrlResponse = await fetch(metafileUrl, { method: 'GET' });
+	const metafileText = await metafileUrlResponse.text();
+	if (metafileUrlResponse.status !== 200) {
+		logger.error(`Error from ${metafileUrl}: ${metafileUrlResponse.status}: ${metafileText}`);
+		return;
+	}
+	const metafile = JSON.parse(atob(metafileText.split('.')[1]));
+
+	// download each available gzip blob, decompress them, and keep them in the correct order
+	const chunk_promises: Promise<Blob>[] = metafile.pieces.digests.map((x: string) => {
+		const hex_chunk: string = atob(x)
+			.split('')
+			.map((c) => c.charCodeAt(0).toString(16).padStart(2, '0'))
+			.join('');
+		const chunk_url: string = catalog.config.remote.baseUrl
+			.replace(/^http:/i, 'https:')
+			.concat(
+				catalog.config.remote.pieceFormat
+					.replace('{SubString:0,2,{TargetDigest}}', hex_chunk.substring(0, 2))
+					.replace('{TargetDigest}', hex_chunk)
+			);
+		return fetch(chunk_url, { method: 'GET' }).then((x: Response) =>
+			x.blob().then((blob) => {
+				const ds = new DecompressionStream('gzip');
+				return new Response(blob.slice(6).stream().pipeThrough(ds)).blob();
+			})
+		);
+	});
+
+	// while all that stuff is downloading, read the file list and find the exe's location in the data blob
+	let exeOffset: number = 0;
+	let exeSize: number | null = null;
+	for (let i = 0; i < metafile.files.length; i += 1) {
+		const isTargetExe: boolean = windows
+			? metafile.files[i].name.endsWith('.exe')
+			: metafile.files[i].name.includes('.app/Contents/MacOS/');
+		if (isTargetExe) {
+			if (exeSize !== null) {
+				logger.error(
+					`Error parsing ${metafileUrl}: file list has multiple possibilities for main exe`
+				);
+				return;
+			} else {
+				exeSize = metafile.files[i].size;
+			}
+		} else if (exeSize === null) {
+			exeOffset += metafile.files[i].size;
+		}
+	}
+	if (exeSize === null) {
+		logger.error(`Error parsing ${metafileUrl}: file list has no possibilities for main exe`);
+		return;
+	}
+
+	// stitch all the data together, slice the exe out of it, and launch the game
+	Promise.all(chunk_promises).then((x) => {
+		const exeFile = new Blob(x).slice(exeOffset, exeOffset + <number>exeSize);
+		launch(metafile.id, exeFile);
+	});
 }

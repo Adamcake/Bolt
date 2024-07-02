@@ -85,11 +85,35 @@ Browser::Launcher::Launcher(
 	this->config_path = config_dir;
 	this->config_path.append("launcher.json");
 
-	this->rs3_path = data_dir;
-	this->rs3_path.append("rs3linux");
+	this->rs3_elf_path = data_dir;
+	this->rs3_elf_path.append("rs3linux");
 
-	this->rs3_hash_path = data_dir;
-	this->rs3_hash_path.append("rs3linux.sha256");
+	this->rs3_elf_hash_path = data_dir;
+	this->rs3_elf_hash_path.append("rs3linux.sha256");
+
+	this->rs3_exe_path = data_dir;
+	this->rs3_exe_path.append("rs3windows.exe");
+
+	this->rs3_exe_hash_path = data_dir;
+	this->rs3_exe_hash_path.append("rs3windows.sha256");
+
+	this->rs3_app_path = data_dir;
+	this->rs3_app_path.append("rs3mac");
+
+	this->rs3_app_hash_path = data_dir;
+	this->rs3_app_hash_path.append("rs3mac.sha256");
+
+	this->osrs_exe_path = data_dir;
+	this->osrs_exe_path.append("osrswindows.exe");
+
+	this->osrs_exe_hash_path = data_dir;
+	this->osrs_exe_hash_path.append("osrswindows.sha256");
+
+	this->osrs_app_path = data_dir;
+	this->osrs_app_path.append("osrsmac");
+
+	this->osrs_app_hash_path = data_dir;
+	this->osrs_app_hash_path.append("osrsmac.sha256");
 
 	this->runelite_path = data_dir;
 	this->runelite_path.append("runelite.jar");
@@ -221,6 +245,26 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 		// instruction to launch RS3 .deb
 		if (path == "/launch-rs3-deb") {
 			return this->LaunchRs3Deb(request, query);
+		}
+
+		// instruction to launch RS3 .exe
+		if (path == "/launch-rs3-exe") {
+			return this->LaunchRs3Exe(request, query);
+		}
+
+		// instruction to launch RS3 app (mac)
+		if (path == "/launch-rs3-app") {
+			return this->LaunchRs3App(request, query);
+		}
+
+		// instruction to launch OSRS .exe
+		if (path == "/launch-osrs-exe") {
+			return this->LaunchOsrsExe(request, query);
+		}
+
+		// instruction to launch OSRS app (mac)
+		if (path == "/launch-osrs-app") {
+			return this->LaunchOsrsApp(request, query);
 		}
 
 		// instruction to launch RuneLite.jar
@@ -422,9 +466,29 @@ CefString Browser::Launcher::BuildURL() const {
 	std::stringstream url;
 	url << this->internal_url << URI << "&flathub=" << BOLT_FLATHUB_BUILD;
 
-	std::ifstream rs_deb_hashfile(this->rs3_hash_path.c_str(), std::ios::in | std::ios::binary);
-	if (!rs_deb_hashfile.fail()) {
-		url << "&rs3_linux_installed_hash=" << rs_deb_hashfile.rdbuf();
+	std::ifstream rs_elf_hashfile(this->rs3_elf_hash_path.c_str(), std::ios::in | std::ios::binary);
+	if (!rs_elf_hashfile.fail()) {
+		url << "&rs3_deb_installed_hash=" << rs_elf_hashfile.rdbuf();
+	}
+
+	std::ifstream rs_exe_hashfile(this->rs3_exe_hash_path.c_str(), std::ios::in | std::ios::binary);
+	if (!rs_exe_hashfile.fail()) {
+		url << "&rs3_exe_installed_hash=" << rs_exe_hashfile.rdbuf();
+	}
+
+	std::ifstream rs_app_hashfile(this->rs3_app_hash_path.c_str(), std::ios::in | std::ios::binary);
+	if (!rs_app_hashfile.fail()) {
+		url << "&rs3_app_installed_hash=" << rs_app_hashfile.rdbuf();
+	}
+
+	std::ifstream osrs_exe_hashfile(this->osrs_exe_hash_path.c_str(), std::ios::in | std::ios::binary);
+	if (!osrs_exe_hashfile.fail()) {
+		url << "&osrs_exe_installed_hash=" << osrs_exe_hashfile.rdbuf();
+	}
+
+	std::ifstream osrs_app_hashfile(this->osrs_app_hash_path.c_str(), std::ios::in | std::ios::binary);
+	if (!osrs_app_hashfile.fail()) {
+		url << "&osrs_app_installed_hash=" << osrs_app_hashfile.rdbuf();
 	}
 
 	std::ifstream rl_hashfile(this->runelite_id_path.c_str(), std::ios::in | std::ios::binary);
