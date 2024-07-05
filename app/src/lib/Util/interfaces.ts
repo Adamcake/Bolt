@@ -1,6 +1,6 @@
 // file for all interfaces, types, and their helper functions
 
-import type { Session } from '$lib/Services/AuthService';
+import type { Session, TokenSet } from '$lib/Services/AuthService';
 
 // result type, similar to rust's implementation
 // useful if a function may succeed or fail
@@ -95,3 +95,34 @@ export interface PluginConfig {
 	description?: string;
 	main?: string;
 }
+
+interface AuthTokenUpdateMessage {
+	type: 'authTokenUpdate';
+	tokenSet: TokenSet;
+}
+
+interface AuthSessionUpdateMessage {
+	type: 'authSessionUpdate';
+	sessionId: string;
+}
+
+interface AuthFailedMessage {
+	type: 'authFailed';
+	reason: string;
+}
+
+interface ExternalUrlMessage {
+	type: 'externalUrl';
+	url: string;
+}
+
+interface GameClientListMessage {
+	type: 'gameClientListUpdate';
+}
+
+export type BoltMessage =
+	| AuthTokenUpdateMessage
+	| AuthSessionUpdateMessage
+	| AuthFailedMessage
+	| ExternalUrlMessage
+	| GameClientListMessage;

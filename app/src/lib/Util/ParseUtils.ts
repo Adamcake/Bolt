@@ -1,38 +1,48 @@
-import type { Session } from '$lib/Services/AuthService';
+import type { TokenSet } from '$lib/Services/AuthService';
 import type { BoltEnv } from '$lib/State/Bolt';
-import { logger } from '$lib/Util/Logger';
-import type { Result } from '$lib/Util/interfaces';
+import { error, ok, type Result } from '$lib/Util/interfaces';
 
 export class ParseUtils {
-	// parses a response from the oauth endpoint
-	// returns a Result, it may
-	static parseCredentials(str: string): Result<Session> {
-		const oauthCreds = JSON.parse(str);
-		const sections = oauthCreds.id_token.split('.');
-		if (sections.length !== 3) {
-			const errMsg: string = `Malformed id_token: ${sections.length} sections, expected 3`;
-			logger.error(errMsg);
-			return { ok: false, error: new Error(errMsg) };
-		}
-		const header = JSON.parse(atob(sections[0]));
-		if (header.typ !== 'JWT') {
-			const errMsg: string = `Bad id_token header: typ ${header.typ}, expected JWT`;
-			logger.error(errMsg);
-			return { ok: false, error: new Error(errMsg) };
-		}
-		const payload = JSON.parse(atob(sections[1]));
-		return {
-			ok: true,
-			value: {
+	/**
+	 * Parses the response from /oauth2/token, and returns a Session object
+	 */
+	static parseTokenResponse(response: string): Result<TokenSet, string> {
+		try {
+			const oauthCreds = JSON.parse(response);
+			const sections = oauthCreds.id_token.split('.');
+			if (sections.length !== 3) {
+				const msg: string = `Malformed id_token: ${sections.length} sections, expected 3`;
+				return error(msg);
+			}
+			const header = JSON.parse(atob(sections[0]));
+			if (header.typ !== 'JWT') {
+				const msg: string = `Bad id_token header: typ ${header.typ}, expected JWT`;
+				return error(msg);
+			}
+			const payload = JSON.parse(atob(sections[1]));
+			return ok({
 				access_token: oauthCreds.access_token,
 				id_token: oauthCreds.id_token,
 				refresh_token: oauthCreds.refresh_token,
 				sub: payload.sub,
-				login_provider: payload.login_provider || null,
-				expiry: Date.now() + oauthCreds.expires_in * 1000,
-				session_id: oauthCreds.session_id
+				expiry: Date.now() + oauthCreds.expires_in * 1000
+			});
+		} catch (e) {
+			return error('Unable to parse token response');
+		}
+	}
+
+	static parseSessionResponse(response: string): Result<string, string> {
+		try {
+			const parsed = JSON.parse(response);
+			if (parsed.sessionId) {
+				return ok(parsed.sessionId);
+			} else {
+				return error('sessionId does not exist on parsed object');
 			}
-		};
+		} catch (e) {
+			return error('Unable to parse session response');
+		}
 	}
 
 	// The bolt object from the C++ app has its values base64 encoded.

@@ -1,20 +1,28 @@
 import App from '@/App.svelte';
 import { clientListPromise, internalUrl } from '$lib/Util/store';
 import { get } from 'svelte/store';
-import { getNewClientListPromise, handleLogin, handleNewSessionId } from '$lib/Util/functions';
-import type { Account } from '$lib/Util/interfaces';
-import { unwrap } from '$lib/Util/interfaces';
+import { getNewClientListPromise } from '$lib/Util/functions';
+import { type BoltMessage } from '$lib/Util/interfaces';
 import { logger } from '$lib/Util/Logger';
-import { BoltService } from '$lib/Services/BoltService';
-import { ParseUtils } from '$lib/Util/ParseUtils';
-import { AuthService, type Auth, type Session } from '$lib/Services/AuthService';
+import { AuthService, type Session, type TokenSet } from '$lib/Services/AuthService';
 import { Platform, bolt } from '$lib/State/Bolt';
 import { initConfig } from '$lib/State/Config';
+import { LocalStorageService } from '$lib/Services/LocalStorageService';
+import { BoltService } from '$lib/Services/BoltService';
 
-initBolt();
-initConfig();
-addWindowListeners();
+// TODO: make this less obscure
+// window.opener is set when the current window is a popup (the auth window)
+// id_token is set after sending the consent request, aka the user is still authenticating
+if (window.opener || window.location.search.includes('id_token')) {
+	AuthService.authenticating = true;
+} else {
+	initBolt();
+	initConfig();
+	addMessageListeners();
+	refreshStoredTokens();
+}
 
+// TODO: render a different app when authenticating, instead of using AuthService.authenticating
 const app = new App({
 	target: document.getElementById('app')!
 });
@@ -22,6 +30,9 @@ const app = new App({
 export default app;
 
 function initBolt() {
+	// Store all of the bolt env variables for the auth window to use
+	LocalStorageService.set('boltEnv', bolt.env);
+
 	const params = new URLSearchParams(window.location.search);
 	bolt.platform = params.get('platform') as Platform | null;
 	bolt.isFlathub = params.get('flathub') === '1';
@@ -53,63 +64,43 @@ function initBolt() {
 	}
 }
 
-// TODO: refactor to not use listeners
-function addWindowListeners(): void {
-	const env = bolt.env;
-	const origin = env.origin;
-	const clientId = env.clientid;
-	const origin_2fa = env.origin_2fa;
+function addMessageListeners(): void {
+	const { origin, origin_2fa } = bolt.env;
 	const boltUrl = get(internalUrl);
-	const exchangeUrl = origin.concat('/oauth2/token');
 
 	const allowedOrigins = [boltUrl, origin, origin_2fa];
-	window.addEventListener('message', (event: MessageEvent) => {
+	let pendingAuthTokenSet: TokenSet | null = null;
+	window.addEventListener('message', async (event: MessageEvent<BoltMessage>) => {
 		if (!allowedOrigins.includes(event.origin)) {
 			logger.info(`discarding window message from origin ${event.origin}`);
 			return;
 		}
-		let pending: Auth | undefined | null = AuthService.pendingOauth;
-		const xml = new XMLHttpRequest();
 		switch (event.data.type) {
-			case 'authCode':
-				if (pending) {
-					AuthService.pendingOauth = null;
-					const post_data = new URLSearchParams({
-						grant_type: 'authorization_code',
-						client_id: env.clientid,
-						code: event.data.code,
-						code_verifier: <string>pending.verifier,
-						redirect_uri: env.redirect
-					});
-					xml.onreadystatechange = () => {
-						if (xml.readyState == 4) {
-							if (xml.status == 200) {
-								const result = ParseUtils.parseCredentials(xml.response);
-								const creds = unwrap(result);
-								if (creds) {
-									handleLogin(<Window>pending?.win, creds).then((x) => {
-										if (x) {
-											bolt.sessions.push(creds);
-											BoltService.saveAllCreds();
-										}
-									});
-								} else {
-									logger.error(`Error: invalid credentials received`);
-									pending!.win!.close();
-								}
-							} else {
-								logger.error(`Error: from ${exchangeUrl}: ${xml.status}: ${xml.response}`);
-								pending!.win!.close();
-							}
-						}
-					};
-					xml.open('POST', exchangeUrl, true);
-					xml.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-					xml.setRequestHeader('Accept', 'application/json');
-					xml.send(post_data);
-				}
+			case 'authTokenUpdate': {
+				pendingAuthTokenSet = event.data.tokenSet;
 				break;
-			case 'externalUrl':
+			}
+			case 'authSessionUpdate': {
+				if (pendingAuthTokenSet === null) {
+					return logger.error('pendingAuthTokens is not defined. Please try again.');
+				}
+				const session: Session = {
+					session_id: event.data.sessionId,
+					tokenSet: pendingAuthTokenSet
+				};
+				bolt.sessions.push(session);
+				// TODO: make a request to /accounts and /displayName to update the UI
+				BoltService.saveAllCreds();
+				pendingAuthTokenSet = null;
+				AuthService.pendingLoginWindow = null;
+				break;
+			}
+			case 'authFailed': {
+				logger.error(`Unable to authenticate: ${event.data.reason}`);
+				break;
+			}
+			case 'externalUrl': {
+				const xml = new XMLHttpRequest();
 				xml.onreadystatechange = () => {
 					if (xml.readyState == 4) {
 						logger.info(`External URL status: '${xml.responseText.trim()}'`);
@@ -118,85 +109,38 @@ function addWindowListeners(): void {
 				xml.open('POST', '/open-external-url', true);
 				xml.send(event.data.url);
 				break;
-			case 'gameSessionServerAuth':
-				pending = AuthService.pendingGameAuth.find((x: Auth) => {
-					return event.data.state == x.state;
-				});
-				if (pending) {
-					pending.win?.close();
-					AuthService.pendingGameAuth.splice(AuthService.pendingGameAuth.indexOf(pending), 1);
-					const sections = event.data.id_token.split('.');
-					if (sections.length !== 3) {
-						logger.error(`Malformed id_token: ${sections.length} sections, expected 3`);
-						break;
-					}
-					const header = JSON.parse(atob(sections[0]));
-					if (header.typ !== 'JWT') {
-						logger.error(`Bad id_token header: typ ${header.typ}, expected JWT`);
-						break;
-					}
-					const payload = JSON.parse(atob(sections[1]));
-					if (atob(payload.nonce) !== pending.nonce) {
-						logger.error('Incorrect nonce in id_token');
-						break;
-					}
-					const sessionsUrl = env.auth_api.concat('/sessions');
-					xml.onreadystatechange = () => {
-						if (xml.readyState == 4) {
-							if (xml.status == 200) {
-								const accountsUrl = env.auth_api.concat('/accounts');
-								pending!.creds!.session_id = JSON.parse(xml.response).sessionId;
-								handleNewSessionId(
-									<Session>pending!.creds,
-									accountsUrl,
-									<Promise<Account>>pending!.account_info_promise
-								).then((x) => {
-									if (x) {
-										bolt.sessions.push(<Session>pending!.creds);
-										BoltService.saveAllCreds();
-									}
-								});
-							} else {
-								logger.error(`Error: from ${sessionsUrl}: ${xml.status}: ${xml.response}`);
-							}
-						}
-					};
-					xml.open('POST', sessionsUrl, true);
-					xml.setRequestHeader('Content-Type', 'application/json');
-					xml.setRequestHeader('Accept', 'application/json');
-					xml.send(`{"idToken": "${event.data.id_token}"}`);
-				}
-				break;
+			}
 			case 'gameClientListUpdate':
 				clientListPromise.set(getNewClientListPromise());
 				break;
-			default:
-				logger.info('Unknown message type: '.concat(event.data.type));
+			default: {
+				const type = (event.data as { type: string | undefined })?.type ?? 'no type provided';
+				logger.info(`Unknown message type: ${type}`);
 				break;
+			}
 		}
 	});
+}
 
-	(async () => {
-		if (bolt.sessions.length > 0) {
-			bolt.sessions.forEach(async (value) => {
-				const result = await AuthService.checkRenewCreds(value, exchangeUrl, clientId);
-				if (result !== null && result !== 0) {
-					logger.error(`Discarding expired login for #${value.sub}`);
-					const index = bolt.sessions.findIndex((session) => session.sub === value.sub);
-					if (index > -1) bolt.sessions.splice(index, 1);
+function refreshStoredTokens() {
+	bolt.sessions.forEach(async (session) => {
+		const result = await AuthService.refreshOAuthToken(session.tokenSet);
+		if (!result.ok) {
+			if (result.error === 0) {
+				return logger.error(
+					`Unable to verify saved login, status: ${result.error}. Do you have an internet connection? Please relaunch Bolt to try again.`
+				);
+			} else {
+				logger.error(`Discarding expired login, status: ${result.error}. Please sign in again.`);
+				const index = bolt.sessions.findIndex((s) => s.tokenSet.sub === session.tokenSet.sub);
+				if (index > -1) {
+					bolt.sessions.splice(index, 1);
 					BoltService.saveAllCreds();
-				}
-				let checkedCred: Record<string, Session | boolean>;
-				if (result === null && (await handleLogin(null, value))) {
-					checkedCred = { creds: value, valid: true };
 				} else {
-					checkedCred = { creds: value, valid: result === 0 };
+					// TODO: updated stored tokenSet to reflect newly refreshed tokenSet
+					// make a request to /accounts and /displayName to update the UI
 				}
-				if (checkedCred.valid) {
-					bolt.sessions.push(value);
-					BoltService.saveAllCreds();
-				}
-			});
+			}
 		}
-	})();
+	});
 }

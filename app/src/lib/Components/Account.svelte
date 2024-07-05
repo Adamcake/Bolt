@@ -9,9 +9,8 @@
 	import { config } from '$lib/State/Config';
 
 	// values gather from s()
-	const sOrigin = bolt.env.origin;
 	const clientId = bolt.env.clientid;
-	const exchangeUrl = sOrigin.concat('/oauth2/token');
+	const sOrigin = bolt.env.origin;
 	const revokeUrl = sOrigin.concat('/oauth2/revoke');
 
 	let accountSelect: HTMLSelectElement;
@@ -44,7 +43,7 @@
 
 		if (!creds) return;
 
-		AuthService.checkRenewCreds(creds, exchangeUrl, clientId).then((x) => {
+		AuthService.refreshOAuthToken(creds).then((x) => {
 			if (x === null) {
 				revokeOauthCreds(creds!.access_token, revokeUrl, clientId).then((res: unknown) => {
 					if (res === 200) {
@@ -77,7 +76,7 @@
 		const key: string = <string>accountSelect[accountSelect.selectedIndex].getAttribute('data-id');
 		$selectedPlay.account = $accountList.get(key);
 		$config.selected_account = key;
-		// Unsure what the equivalent of this is with the refector
+		// TODO: Unsure what the equivalent of this is with the refector
 		//$selectedPlay.credentials = $credentials.get(<string>$selectedPlay.account?.userId);
 
 		if ($selectedPlay.account && $selectedPlay.account.characters) {

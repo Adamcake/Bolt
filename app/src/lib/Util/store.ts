@@ -9,9 +9,6 @@ import {
 
 // readable stores. known at starup
 export const internalUrl: Readable<string> = readable('https://bolt-internal');
-export const productionClientId: Readable<string> = readable(
-	'1fddee4e-b100-4f4e-b2b0-097f9088f9d2'
-);
 
 export const clientListPromise: Writable<Promise<GameClient[]>> = writable();
 export const accountList: Writable<Map<string, Account>> = writable(new Map());

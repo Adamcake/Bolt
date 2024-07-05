@@ -1,115 +1,10 @@
 import { get } from 'svelte/store';
-import {
-	type Account,
-	type Character,
-	type GameClient,
-	type Direct6Token
-} from '$lib/Util/interfaces';
-import { accountList, internalUrl, productionClientId, selectedPlay } from '$lib/Util/store';
+import { type Account, type GameClient, type Direct6Token } from '$lib/Util/interfaces';
+import { accountList, internalUrl, selectedPlay } from '$lib/Util/store';
 import { logger } from '$lib/Util/Logger';
 import { BoltService } from '$lib/Services/BoltService';
-import { AuthService, type Session } from '$lib/Services/AuthService';
-import { StringUtils } from '$lib/Util/StringUtils';
 import { bolt } from '$lib/State/Bolt';
 import { config } from '$lib/State/Config';
-
-// deprecated?
-// const rs3_basic_auth = 'Basic Y29tX2phZ2V4X2F1dGhfZGVza3RvcF9yczpwdWJsaWM=';
-// const osrs_basic_auth = 'Basic Y29tX2phZ2V4X2F1dGhfZGVza3RvcF9vc3JzOnB1YmxpYw==';
-//let isFlathub: boolean = false;
-
-// Handles a new session id as part of the login flow. Can also be called on startup with a
-// persisted session id.
-export async function handleNewSessionId(
-	creds: Session,
-	accountsUrl: string,
-	accountsInfoPromise: Promise<Account>
-) {
-	return new Promise((resolve) => {
-		const xml = new XMLHttpRequest();
-		xml.onreadystatechange = () => {
-			if (xml.readyState == 4) {
-				if (xml.status == 200) {
-					accountsInfoPromise.then((accountInfo) => {
-						if (typeof accountInfo !== 'number') {
-							const account: Account = {
-								id: accountInfo.id,
-								userId: accountInfo.userId,
-								displayName: accountInfo.displayName,
-								suffix: accountInfo.suffix,
-								characters: new Map()
-							};
-							logger.info(`Successfully added login for ${account.displayName}`);
-							JSON.parse(xml.response).forEach((acc: Character) => {
-								account.characters.set(acc.accountId, {
-									accountId: acc.accountId,
-									displayName: acc.displayName,
-									userHash: acc.userHash
-								});
-							});
-							addNewAccount(account);
-							resolve(true);
-						} else {
-							logger.error(`Error getting account info: ${accountInfo}`);
-							resolve(false);
-						}
-					});
-				} else {
-					logger.error(`Error: from ${accountsUrl}: ${xml.status}: ${xml.response}`);
-					resolve(false);
-				}
-			}
-		};
-		xml.open('GET', accountsUrl, true);
-		xml.setRequestHeader('Accept', 'application/json');
-		xml.setRequestHeader('Authorization', 'Bearer '.concat(creds.session_id));
-		xml.send();
-	});
-}
-
-// called on new successful login with credentials. Delegates to a specific handler based on login_provider value.
-// however it does not save credentials. You should call saveAllCreds after calling this function any number of times.
-// Returns true if the credentials should be treated as valid by the caller immediately after return, or false if not.
-export async function handleLogin(win: Window | null, creds: Session) {
-	const state = StringUtils.makeRandomState();
-	const nonce: string = crypto.randomUUID();
-	const location = bolt.env.origin.concat('/oauth2/auth?').concat(
-		new URLSearchParams({
-			id_token_hint: creds.id_token,
-			nonce: btoa(nonce),
-			prompt: 'consent',
-			redirect_uri: 'http://localhost',
-			response_type: 'id_token code',
-			state: state,
-			client_id: get(productionClientId),
-			scope: 'openid offline'
-		}).toString()
-	);
-	const accountInfoPromise: Promise<Account | number> = AuthService.getStandardAccountInfo(creds);
-
-	if (win) {
-		win.location.href = location;
-		AuthService.pendingGameAuth.push({
-			state: state,
-			nonce: nonce,
-			creds: creds,
-			win: win,
-			account_info_promise: <Promise<Account>>accountInfoPromise
-		});
-		return false;
-	} else {
-		if (!creds.session_id) {
-			logger.error('Rejecting stored credentials with missing session_id');
-			return false;
-		}
-
-		return await handleNewSessionId(
-			creds,
-			bolt.env.auth_api.concat('/accounts'),
-			<Promise<Account>>accountInfoPromise
-		);
-	}
-}
 
 // adds an account to the accounts_list store item
 export function addNewAccount(account: Account) {
@@ -137,7 +32,6 @@ export function addNewAccount(account: Account) {
 	} else if (!get(selectedPlay).account) {
 		updateSelectedPlay();
 	}
-	AuthService.pendingOauth = null;
 }
 
 // revokes the given oauth tokens, returning an http status code.
