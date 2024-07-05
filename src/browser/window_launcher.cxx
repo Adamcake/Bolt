@@ -454,7 +454,18 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 		}
 	}
 
-	return nullptr;
+	if (!browser->IsSame(this->browser) || !frame->IsMain()) {
+		return nullptr;
+	}
+
+	// default way to handle web requests from the main window is to make a CefURLRequest that's not subject to CORS safety
+	disable_default_handling = true;
+	CefRefPtr<CefRequest> new_request = CefRequest::Create();
+	CefRequest::HeaderMap headers;
+	request->GetHeaderMap(headers); // doesn't include Referer header
+	headers.erase("Origin");
+	new_request->Set(request->GetURL(), request->GetMethod(), request->GetPostData(), headers);
+	return new DefaultURLHandler(new_request);
 }
 
 void Browser::Launcher::OnBrowserDestroyed(CefRefPtr<CefBrowserView> view, CefRefPtr<CefBrowser> browser) {
