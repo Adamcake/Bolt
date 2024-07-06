@@ -4,16 +4,17 @@ import { get } from 'svelte/store';
 import { getNewClientListPromise } from '$lib/Util/functions';
 import { type BoltMessage } from '$lib/Util/interfaces';
 import { logger } from '$lib/Util/Logger';
-import { AuthService, type Session, type TokenSet } from '$lib/Services/AuthService';
+import { AuthService, type Session, type AuthTokens } from '$lib/Services/AuthService';
 import { Platform, bolt } from '$lib/State/Bolt';
 import { initConfig } from '$lib/State/Config';
 import { LocalStorageService } from '$lib/Services/LocalStorageService';
+import { UserService } from '$lib/Services/UserService';
 import { BoltService } from '$lib/Services/BoltService';
 
 // TODO: make this less obscure
 // window.opener is set when the current window is a popup (the auth window)
 // id_token is set after sending the consent request, aka the user is still authenticating
-if (window.opener || window.location.search.includes('id_token')) {
+if (window.opener || window.location.search.includes('&id_token')) {
 	AuthService.authenticating = true;
 } else {
 	initBolt();
@@ -57,7 +58,13 @@ function initBolt() {
 	const sessionsParam = params.get('credentials');
 	if (sessionsParam) {
 		try {
-			bolt.sessions = JSON.parse(sessionsParam) as Session[];
+			const sessions = JSON.parse(sessionsParam) as Session[];
+			const validConfig = sessions.every((session) => {
+				return typeof session.session_id === 'string' && typeof session.tokens === 'object';
+			});
+
+			// If user has an old creds file, reset it to empty on load
+			AuthService.sessions = validConfig ? sessions : [];
 		} catch (e) {
 			logger.error('Unable to parse saved credentials');
 		}
@@ -69,7 +76,7 @@ function addMessageListeners(): void {
 	const boltUrl = get(internalUrl);
 
 	const allowedOrigins = [boltUrl, origin, origin_2fa];
-	let pendingAuthTokenSet: TokenSet | null = null;
+	let tokens: AuthTokens | null = null;
 	window.addEventListener('message', async (event: MessageEvent<BoltMessage>) => {
 		if (!allowedOrigins.includes(event.origin)) {
 			logger.info(`discarding window message from origin ${event.origin}`);
@@ -77,26 +84,34 @@ function addMessageListeners(): void {
 		}
 		switch (event.data.type) {
 			case 'authTokenUpdate': {
-				pendingAuthTokenSet = event.data.tokenSet;
+				tokens = event.data.tokens;
 				break;
 			}
 			case 'authSessionUpdate': {
-				if (pendingAuthTokenSet === null) {
-					return logger.error('pendingAuthTokens is not defined. Please try again.');
+				if (tokens === null) {
+					return logger.error('auth is null. Please try again.');
 				}
-				const session: Session = {
-					session_id: event.data.sessionId,
-					tokenSet: pendingAuthTokenSet
-				};
-				bolt.sessions.push(session);
-				// TODO: make a request to /accounts and /displayName to update the UI
-				BoltService.saveAllCreds();
-				pendingAuthTokenSet = null;
+				const session_id = event.data.sessionId;
+				const profileResult = await UserService.buildProfile(
+					tokens.sub,
+					tokens.access_token,
+					session_id
+				);
+				if (profileResult.ok) {
+					UserService.profiles.push(profileResult.value);
+				} else {
+					logger.error(`Unable to fetch profile: ${profileResult.error}`);
+				}
+				AuthService.sessions.push({ session_id, tokens });
+				BoltService.saveCredentials(AuthService.sessions);
 				AuthService.pendingLoginWindow = null;
+				tokens = null;
 				break;
 			}
 			case 'authFailed': {
 				logger.error(`Unable to authenticate: ${event.data.reason}`);
+				AuthService.pendingLoginWindow = null;
+				tokens = null;
 				break;
 			}
 			case 'externalUrl': {
@@ -122,25 +137,40 @@ function addMessageListeners(): void {
 	});
 }
 
-function refreshStoredTokens() {
-	bolt.sessions.forEach(async (session) => {
-		const result = await AuthService.refreshOAuthToken(session.tokenSet);
-		if (!result.ok) {
-			if (result.error === 0) {
+async function refreshStoredTokens() {
+	const expiredTokens: string[] = [];
+
+	for (const session of AuthService.sessions) {
+		const tokensResult = await AuthService.refreshOAuthToken(session.tokens);
+		if (!tokensResult.ok) {
+			if (tokensResult.error === 0) {
 				return logger.error(
-					`Unable to verify saved login, status: ${result.error}. Do you have an internet connection? Please relaunch Bolt to try again.`
+					`Unable to verify saved login, status: ${tokensResult.error}. Do you have an internet connection? Please relaunch Bolt to try again.`
 				);
 			} else {
-				logger.error(`Discarding expired login, status: ${result.error}. Please sign in again.`);
-				const index = bolt.sessions.findIndex((s) => s.tokenSet.sub === session.tokenSet.sub);
-				if (index > -1) {
-					bolt.sessions.splice(index, 1);
-					BoltService.saveAllCreds();
-				} else {
-					// TODO: updated stored tokenSet to reflect newly refreshed tokenSet
-					// make a request to /accounts and /displayName to update the UI
-				}
+				logger.error(
+					`Discarding expired login, status: ${tokensResult.error}. Please sign in again.`
+				);
+				expiredTokens.push(session.tokens.sub);
+				continue;
 			}
 		}
+
+		const tokens = tokensResult.value;
+		session.tokens = tokens;
+		const profileResult = await UserService.buildProfile(
+			tokens.sub,
+			tokens.access_token,
+			session.session_id
+		);
+		if (profileResult.ok) {
+			UserService.profiles.push(profileResult.value);
+		} else {
+			logger.error(`Unable to refresh stored login. Error: ${profileResult.error}`);
+		}
+	}
+
+	expiredTokens.forEach((sub) => {
+		AuthService.logout(sub);
 	});
 }

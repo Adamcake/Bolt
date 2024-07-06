@@ -1,4 +1,4 @@
-import type { TokenSet } from '$lib/Services/AuthService';
+import type { AuthTokens } from '$lib/Services/AuthService';
 import type { BoltEnv } from '$lib/State/Bolt';
 import { error, ok, type Result } from '$lib/Util/interfaces';
 
@@ -6,7 +6,7 @@ export class ParseUtils {
 	/**
 	 * Parses the response from /oauth2/token, and returns a Session object
 	 */
-	static parseTokenResponse(response: string): Result<TokenSet, string> {
+	static parseTokenResponse(response: string): Result<AuthTokens, string> {
 		try {
 			const oauthCreds = JSON.parse(response);
 			const sections = oauthCreds.id_token.split('.');

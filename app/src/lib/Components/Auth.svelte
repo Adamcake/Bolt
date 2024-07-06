@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { AuthService, type TokenSet } from '$lib/Services/AuthService';
+	import { AuthService, type AuthTokens } from '$lib/Services/AuthService';
 	import { CookieService } from '$lib/Services/CookieService';
 	import { LocalStorageService } from '$lib/Services/LocalStorageService';
 	import type { BoltEnv } from '$lib/State/Bolt';
@@ -16,7 +16,7 @@
 		fail('BoltEnv is not defined. Please close and re-open Bolt to try again.');
 	}
 
-	async function retrieveOAuthToken(authCode: string): Promise<TokenSet | null> {
+	async function retrieveOAuthToken(authCode: string): Promise<AuthTokens | null> {
 		const verifier = CookieService.get('auth_verifier') as string;
 		if (!verifier) {
 			fail('Verifier token has expired. Please try signing in again.');
@@ -72,14 +72,14 @@
 		const id_token = params.get('id_token');
 		if (id_token == null && code && state) {
 			// First step, after the user has signed in
-			const tokenSet = await retrieveOAuthToken(code);
-			if (!tokenSet) return fail('tokenSet object is null.');
+			const authTokens = await retrieveOAuthToken(code);
+			if (!authTokens) return fail('tokens object is null.');
 
-			message({ type: 'authTokenUpdate', tokenSet });
+			message({ type: 'authTokenUpdate', tokens: authTokens });
 			const nonce = crypto.randomUUID();
-			AuthService.navigateToAuthConsent(boltEnv.origin, tokenSet.id_token, nonce);
+			AuthService.navigateToAuthConsent(boltEnv.origin, authTokens.id_token, nonce);
 		} else if (id_token && code && state) {
-			// Second step, after retrieving the tokenSet and consent request has returned
+			// Second step, after retrieving the authTokens and consent request has returned
 			const sessionId = await retrieveSessionId(id_token);
 			if (!sessionId) return fail('sessionId is null');
 

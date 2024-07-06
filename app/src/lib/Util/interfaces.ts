@@ -1,6 +1,5 @@
-// file for all interfaces, types, and their helper functions
+import type { AuthTokens } from '$lib/Services/AuthService';
 
-import type { Session, TokenSet } from '$lib/Services/AuthService';
 
 // result type, similar to rust's implementation
 // useful if a function may succeed or fail
@@ -98,7 +97,7 @@ export interface PluginConfig {
 
 interface AuthTokenUpdateMessage {
 	type: 'authTokenUpdate';
-	tokenSet: TokenSet;
+	tokens: AuthTokens;
 }
 
 interface AuthSessionUpdateMessage {

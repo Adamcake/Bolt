@@ -1,54 +1,10 @@
 import { get } from 'svelte/store';
-import { type Account, type GameClient, type Direct6Token } from '$lib/Util/interfaces';
-import { accountList, internalUrl, selectedPlay } from '$lib/Util/store';
+import { type GameClient, type Direct6Token } from '$lib/Util/interfaces';
+import { internalUrl } from '$lib/Util/store';
 import { logger } from '$lib/Util/Logger';
 import { BoltService } from '$lib/Services/BoltService';
 import { bolt } from '$lib/State/Bolt';
 import { config } from '$lib/State/Config';
-
-// adds an account to the accounts_list store item
-export function addNewAccount(account: Account) {
-	const updateSelectedPlay = () => {
-		selectedPlay.update((data) => {
-			data.account = account;
-			const [firstKey] = account.characters.keys();
-			data.character = account.characters.get(firstKey);
-			if (bolt.sessions.length > 0) {
-				data.credentials = bolt.sessions.find((session) => session.sub === account.userId);
-			}
-			return data;
-		});
-	};
-
-	accountList.update((data) => {
-		data.set(account.userId, account);
-		return data;
-	});
-
-	if (get(selectedPlay).account && get(config).selected_account) {
-		if (account.userId == get(config).selected_account) {
-			updateSelectedPlay();
-		}
-	} else if (!get(selectedPlay).account) {
-		updateSelectedPlay();
-	}
-}
-
-// revokes the given oauth tokens, returning an http status code.
-// tokens were revoked only if response is 200
-export function revokeOauthCreds(accessToken: string, revokeUrl: string, clientId: string) {
-	return new Promise((resolve) => {
-		const xml = new XMLHttpRequest();
-		xml.open('POST', revokeUrl, true);
-		xml.onreadystatechange = () => {
-			if (xml.readyState == 4) {
-				resolve(xml.status);
-			}
-		};
-		xml.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-		xml.send(new URLSearchParams({ token: accessToken, client_id: clientId }));
-	});
-}
 
 // asynchronously download and launch RS3's official .deb client using the given env variables
 export function launchRS3Linux(

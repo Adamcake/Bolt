@@ -1,11 +1,12 @@
 import { Time } from '$lib/Enums/Time';
+import { BoltService } from '$lib/Services/BoltService';
 import { CookieService } from '$lib/Services/CookieService';
 import { bolt } from '$lib/State/Bolt';
 import { ParseUtils } from '$lib/Util/ParseUtils';
 import { StringUtils } from '$lib/Util/StringUtils';
 import { error, ok, type Result } from '$lib/Util/interfaces';
 
-export interface TokenSet {
+export interface AuthTokens {
 	access_token: string;
 	id_token: string;
 	refresh_token: string;
@@ -14,13 +15,23 @@ export interface TokenSet {
 }
 
 export interface Session {
-	tokenSet: TokenSet;
 	session_id: string;
+	tokens: AuthTokens;
 }
 
 export class AuthService {
+	static sessions: Session[];
 	static authenticating: boolean = false;
 	static pendingLoginWindow: Window | null = null;
+
+	static async logout(sub: string): Promise<Session[]> {
+		const index = AuthService.sessions.findIndex((session) => session.tokens.sub === sub);
+		const { access_token } = AuthService.sessions[index].tokens;
+		AuthService.revokeOauthCreds(access_token, sub);
+		AuthService.sessions.splice(index, 1);
+		BoltService.saveCredentials(AuthService.sessions);
+		return AuthService.sessions;
+	}
 
 	static async openLoginWindow(origin: string, redirect: string, clientid: string): Promise<void> {
 		if (AuthService.pendingLoginWindow !== null) {
@@ -76,19 +87,19 @@ export class AuthService {
 
 	/**
 	 * Checks if `session` is about to expire or has already expired.
-	 * If expired, return the new session with refreshed tokenSet.
+	 * If expired, return the new session with refreshed authTokens.
 	 * If expired, but fails to refresh, return the HTTP status code of the request
 	 * 0 means the request failed for an unknown reason (likely bad internet connection)
 	 * Any other code means it should be removed from disk, as it is no longer valid.
 	 */
-	static async refreshOAuthToken(tokenSet: TokenSet): Promise<Result<TokenSet, number>> {
+	static async refreshOAuthToken(authTokens: AuthTokens): Promise<Result<AuthTokens, number>> {
 		return new Promise((resolve) => {
 			// only renew if less than 30 seconds left
-			if (tokenSet.expiry - Date.now() < 30000) {
+			if (authTokens.expiry - Date.now() < 30000) {
 				const postData = new URLSearchParams({
 					grant_type: 'refresh_token',
 					client_id: bolt.env.clientid,
-					refresh_token: tokenSet.refresh_token
+					refresh_token: authTokens.refresh_token
 				});
 				const xml = new XMLHttpRequest();
 				xml.onreadystatechange = () => {
@@ -114,7 +125,7 @@ export class AuthService {
 				xml.setRequestHeader('Accept', 'application/json');
 				xml.send(postData);
 			} else {
-				resolve(ok(tokenSet));
+				resolve(ok(authTokens));
 			}
 		});
 	}
@@ -125,7 +136,7 @@ export class AuthService {
 		code_verifier: string,
 		redirect_uri: string,
 		authCode: string
-	): Promise<Result<TokenSet, string>> {
+	): Promise<Result<AuthTokens, string>> {
 		const tokenUrl = `${origin}/oauth2/token`;
 		return new Promise((resolve) => {
 			const xml = new XMLHttpRequest();
@@ -153,6 +164,22 @@ export class AuthService {
 				code_verifier,
 				redirect_uri
 			});
+			xml.send(post_data);
+		});
+	}
+
+	static revokeOauthCreds(access_token: string, clientId: string) {
+		const revokeUrl = `${bolt.env.origin}/oauth2/revoke`;
+		return new Promise((resolve) => {
+			const xml = new XMLHttpRequest();
+			xml.open('POST', revokeUrl, true);
+			xml.onreadystatechange = () => {
+				if (xml.readyState == 4) {
+					resolve(xml.status);
+				}
+			};
+			xml.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+			const post_data = new URLSearchParams({ token: access_token, client_id: clientId });
 			xml.send(post_data);
 		});
 	}

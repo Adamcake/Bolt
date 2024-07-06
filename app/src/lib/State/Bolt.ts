@@ -1,4 +1,3 @@
-import type { Session } from '$lib/Services/AuthService';
 import { ParseUtils } from '$lib/Util/ParseUtils';
 import type { PluginMeta } from '$lib/Util/interfaces';
 
@@ -38,7 +37,6 @@ export interface Bolt {
 	isFlathub: boolean;
 	hasBoltPlugins: boolean;
 	pluginList: { [key: string]: PluginMeta }; // May need to be a writable
-	sessions: Session[];
 }
 
 declare const s: () => BoltEnv;
@@ -55,6 +53,5 @@ export const bolt: Bolt = {
 	hdosInstalledVersion: null,
 	isFlathub: false,
 	hasBoltPlugins: false,
-	pluginList: {},
-	sessions: []
+	pluginList: {}
 };

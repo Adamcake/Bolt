@@ -1,6 +1,6 @@
 import { configHasPendingChanges, type Config } from '$lib/State/Config';
-import { bolt } from '$lib/State/Bolt';
 import { logger } from '$lib/Util/Logger';
+import type { Session } from '$lib/Services/AuthService';
 
 let saveInProgress: boolean = false;
 
@@ -37,7 +37,7 @@ export class BoltService {
 
 	// sends a request to save all credentials to their config file,
 	// overwriting the previous file, if any
-	static async saveAllCreds() {
+	static async saveCredentials(sessions: Session[]) {
 		const xml = new XMLHttpRequest();
 		xml.open('POST', '/save-credentials', true);
 		xml.setRequestHeader('Content-Type', 'application/json');
@@ -52,8 +52,7 @@ export class BoltService {
 		// 	data.credentials = credentialsSub.get(<string>selectedPlaySub.account?.userId);
 		// 	return data;
 		// });
-		console.log('saveAllCreds', bolt.sessions);
 
-		xml.send(JSON.stringify(bolt.sessions));
+		xml.send(JSON.stringify(sessions));
 	}
 }
