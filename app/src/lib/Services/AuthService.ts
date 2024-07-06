@@ -1,6 +1,7 @@
 import { Time } from '$lib/Enums/Time';
 import { BoltService } from '$lib/Services/BoltService';
 import { CookieService } from '$lib/Services/CookieService';
+import { UserService, type Profile } from '$lib/Services/UserService';
 import { bolt } from '$lib/State/Bolt';
 import { ParseUtils } from '$lib/Util/ParseUtils';
 import { StringUtils } from '$lib/Util/StringUtils';
@@ -10,7 +11,7 @@ export interface AuthTokens {
 	access_token: string;
 	id_token: string;
 	refresh_token: string;
-	sub: string;
+	sub: string; // equivalent to userId on the User object
 	expiry: number;
 }
 
@@ -23,6 +24,26 @@ export class AuthService {
 	static sessions: Session[];
 	static authenticating: boolean = false;
 	static pendingLoginWindow: Window | null = null;
+
+	static async login(session_id: string, authTokens: AuthTokens): Promise<Result<Profile, string>> {
+		const profileResult = await UserService.buildProfile(
+			authTokens.sub,
+			authTokens.access_token,
+			session_id
+		);
+		if (profileResult.ok) {
+			UserService.profiles.push(profileResult.value);
+		} else {
+			return error(`Unable to build user profile: ${profileResult.error}`);
+		}
+		const session = { session_id, tokens: authTokens };
+		const alreadyExists = AuthService.sessions.find(
+			(session) => session.tokens.sub === authTokens.sub
+		);
+		if (!alreadyExists) AuthService.sessions.push(session);
+		BoltService.saveCredentials(AuthService.sessions);
+		return ok(profileResult.value);
+	}
 
 	static async logout(sub: string): Promise<Session[]> {
 		const index = AuthService.sessions.findIndex((session) => session.tokens.sub === sub);

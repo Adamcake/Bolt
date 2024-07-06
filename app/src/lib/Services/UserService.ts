@@ -12,6 +12,7 @@ export interface User {
 export interface Account {
 	accountId: string;
 	displayName: string;
+	userHash: string;
 }
 
 export interface Profile {
@@ -27,21 +28,19 @@ export class UserService {
 		access_token: string,
 		session_id: string
 	): Promise<Result<Profile, string>> {
-		const userResponse = await UserService.getUser(userId, access_token);
-
-		if (!userResponse.ok) {
-			return error(`Failed to fetch user. Status: ${userResponse.error}`);
+		const userResult = await UserService.getUser(userId, access_token);
+		if (!userResult.ok) {
+			return error(`Failed to fetch user. Status: ${userResult.error}`);
 		}
 
-		const accountResponse = await UserService.getUserAccounts(session_id);
-
-		if (!accountResponse.ok) {
-			return error(`Failed to fetch game accounts. Reason: ${accountResponse.error}`);
+		const accountResult = await UserService.getUserAccounts(session_id);
+		if (!accountResult.ok) {
+			return error(`Failed to fetch game accounts. Status: ${accountResult.error}`);
 		}
 
 		return ok({
-			user: userResponse.value,
-			accounts: accountResponse.value
+			user: userResult.value,
+			accounts: accountResult.value
 		});
 	}
 
@@ -65,15 +64,19 @@ export class UserService {
 		});
 	}
 
-	static getUserAccounts(session_id: string): Promise<Result<Account[], string>> {
+	static getUserAccounts(session_id: string): Promise<Result<Account[], number>> {
 		const accountsUrl = `${bolt.env.auth_api}/accounts`;
 
 		return new Promise((resolve) => {
 			const xml = new XMLHttpRequest();
 			xml.onreadystatechange = async () => {
-				if (xml.readyState !== 4) return;
-				if (xml.readyState == 4 && xml.status !== 200) {
-					return resolve(error(`Error: from ${accountsUrl}: ${xml.status}: ${xml.response}`));
+				if (xml.readyState == 4) {
+					if (xml.status == 200) {
+						const accounts = JSON.parse(xml.response) as Account[];
+						resolve(ok(accounts));
+					} else {
+						resolve(error(xml.status));
+					}
 				}
 			};
 			xml.open('GET', accountsUrl, true);

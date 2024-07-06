@@ -37,22 +37,24 @@ export class BoltService {
 
 	// sends a request to save all credentials to their config file,
 	// overwriting the previous file, if any
-	static async saveCredentials(sessions: Session[]) {
-		const xml = new XMLHttpRequest();
-		xml.open('POST', '/save-credentials', true);
-		xml.setRequestHeader('Content-Type', 'application/json');
-		xml.onreadystatechange = () => {
-			if (xml.readyState == 4) {
-				logger.info(`Save-credentials status: ${xml.responseText.trim()}`);
-			}
-		};
+	static async saveCredentials(sessions: Session[]): Promise<undefined> {
+		new Promise((resolve) => {
+			const xml = new XMLHttpRequest();
+			xml.open('POST', '/save-credentials', true);
+			xml.setRequestHeader('Content-Type', 'application/json');
+			xml.onreadystatechange = () => {
+				if (xml.readyState == 4) {
+					resolve(undefined);
+				}
+			};
 
-		// TODO: figure out why this was here, and how to re-implement it
-		// selectedPlay.update((data) => {
-		// 	data.credentials = credentialsSub.get(<string>selectedPlaySub.account?.userId);
-		// 	return data;
-		// });
+			// TODO: figure out why this was here, and how to re-implement it
+			// selectedPlay.update((data) => {
+			// 	data.credentials = credentialsSub.get(<string>selectedPlaySub.account?.userId);
+			// 	return data;
+			// });
 
-		xml.send(JSON.stringify(sessions));
+			xml.send(JSON.stringify(sessions));
+		});
 	}
 }

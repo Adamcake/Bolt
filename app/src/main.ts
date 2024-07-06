@@ -8,8 +8,6 @@ import { AuthService, type Session, type AuthTokens } from '$lib/Services/AuthSe
 import { Platform, bolt } from '$lib/State/Bolt';
 import { initConfig } from '$lib/State/Config';
 import { LocalStorageService } from '$lib/Services/LocalStorageService';
-import { UserService } from '$lib/Services/UserService';
-import { BoltService } from '$lib/Services/BoltService';
 
 // TODO: make this less obscure
 // window.opener is set when the current window is a popup (the auth window)
@@ -62,7 +60,6 @@ function initBolt() {
 			const validConfig = sessions.every((session) => {
 				return typeof session.session_id === 'string' && typeof session.tokens === 'object';
 			});
-
 			// If user has an old creds file, reset it to empty on load
 			AuthService.sessions = validConfig ? sessions : [];
 		} catch (e) {
@@ -92,18 +89,13 @@ function addMessageListeners(): void {
 					return logger.error('auth is null. Please try again.');
 				}
 				const session_id = event.data.sessionId;
-				const profileResult = await UserService.buildProfile(
-					tokens.sub,
-					tokens.access_token,
-					session_id
-				);
-				if (profileResult.ok) {
-					UserService.profiles.push(profileResult.value);
+				const loginResult = await AuthService.login(session_id, tokens);
+				if (loginResult.ok) {
+					logger.info(`Successfully added account ${loginResult.value.user.displayName}`);
 				} else {
-					logger.error(`Unable to fetch profile: ${profileResult.error}`);
+					logger.error(`Unable to sign into account. ${loginResult.error}`);
 				}
-				AuthService.sessions.push({ session_id, tokens });
-				BoltService.saveCredentials(AuthService.sessions);
+
 				AuthService.pendingLoginWindow = null;
 				tokens = null;
 				break;
@@ -158,15 +150,11 @@ async function refreshStoredTokens() {
 
 		const tokens = tokensResult.value;
 		session.tokens = tokens;
-		const profileResult = await UserService.buildProfile(
-			tokens.sub,
-			tokens.access_token,
-			session.session_id
-		);
-		if (profileResult.ok) {
-			UserService.profiles.push(profileResult.value);
+		const loginResult = await AuthService.login(session.session_id, tokens);
+		if (loginResult.ok) {
+			logger.info(`Logged into stored account ${loginResult.value.user.displayName}`);
 		} else {
-			logger.error(`Unable to refresh stored login. Error: ${profileResult.error}`);
+			logger.error(`Unable to login with stored account. ${loginResult.error}`);
 		}
 	}
 
