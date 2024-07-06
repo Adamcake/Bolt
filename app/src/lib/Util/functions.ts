@@ -834,7 +834,7 @@ export async function launchOfficialClient(
 			? osrsAppInstalledHash
 			: rs3AppInstalledHash;
 
-	const launch = async (hash?: string, exe?: Blob) => {
+	const launch = async (hash?: string, exe?: Promise<ArrayBuffer>) => {
 		const params: Record<string, string> = {};
 		if (hash) params.hash = hash;
 		if (jx_session_id) params.jx_session_id = jx_session_id;
@@ -845,7 +845,7 @@ export async function launchOfficialClient(
 			{
 				method: 'POST',
 				headers: { 'Content-Type': 'application/octet-stream' },
-				body: exe
+				body: await exe
 			}
 		);
 		response.text().then((text) => msg(`Game launch status: '${text.trim()}'`));
@@ -942,6 +942,6 @@ export async function launchOfficialClient(
 	// stitch all the data together, slice the exe out of it, and launch the game
 	Promise.all(chunk_promises).then((x) => {
 		const exeFile = new Blob(x).slice(exeOffset, exeOffset + <number>exeSize);
-		launch(metafile.id, exeFile);
+		launch(metafile.id, exeFile.arrayBuffer());
 	});
 }
