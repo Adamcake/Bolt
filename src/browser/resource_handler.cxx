@@ -4,15 +4,15 @@
 
 // returns content-length or -1 if it's malformed or nonexistent
 // CEF interprets -1 as "unknown length"
-static int64 GetContentLength(CefRefPtr<CefResponse> response) {
+static int64_t GetContentLength(CefRefPtr<CefResponse> response) {
 	std::string content_length = response->GetHeaderByName("Content-Length").ToString();
 	if (content_length.size() == 0) {
 		return -1;
 	}
-	int64 length = 0;
+	int64_t length = 0;
 	for (auto it = content_length.begin(); it != content_length.end(); it++) {
 		if (*it < '0' || *it > '9') return -1;
-		length = (length * 10) + ((int64)(*it) - '0');
+		length = (length * 10) + ((int64_t)(*it) - '0');
 	}
 	return length;
 }
@@ -107,7 +107,7 @@ bool Browser::DefaultURLHandler::Open(CefRefPtr<CefRequest> request, bool& handl
 	return true;
 }
 
-void Browser::DefaultURLHandler::GetResponseHeaders(CefRefPtr<CefResponse> response, int64& response_length, CefString& redirectUrl) {
+void Browser::DefaultURLHandler::GetResponseHeaders(CefRefPtr<CefResponse> response, int64_t& response_length, CefString& redirectUrl) {
 	CefRefPtr<CefResponse> url_response = this->url_request->GetResponse();
 	CefResponse::HeaderMap headers;
 	url_response->GetHeaderMap(headers);
@@ -140,7 +140,7 @@ bool Browser::DefaultURLHandler::Read(void* data_out, int bytes_to_read, int& by
 	return true;
 }
 
-bool Browser::DefaultURLHandler::Skip(int64 bytes_to_skip, int64& bytes_skipped, CefRefPtr<CefResourceSkipCallback> callback) {
+bool Browser::DefaultURLHandler::Skip(int64_t bytes_to_skip, int64_t& bytes_skipped, CefRefPtr<CefResourceSkipCallback> callback) {
 	if (this->cursor + bytes_to_skip <= this->data.size()) {
 		// skip in bounds
 		bytes_skipped = bytes_to_skip;
@@ -164,13 +164,13 @@ void Browser::DefaultURLHandler::OnRequestComplete(CefRefPtr<CefURLRequest> requ
 	}
 }
 
-void Browser::DefaultURLHandler::OnUploadProgress(CefRefPtr<CefURLRequest> request, int64 current, int64 total) {}
-void Browser::DefaultURLHandler::OnDownloadProgress(CefRefPtr<CefURLRequest> request, int64 current, int64 total) {}
+void Browser::DefaultURLHandler::OnUploadProgress(CefRefPtr<CefURLRequest> request, int64_t current, int64_t total) {}
+void Browser::DefaultURLHandler::OnDownloadProgress(CefRefPtr<CefURLRequest> request, int64_t current, int64_t total) {}
 
 void Browser::DefaultURLHandler::OnDownloadData(CefRefPtr<CefURLRequest> request, const void* data, size_t data_length) {
 	CefRefPtr<CefResponse> response = request->GetResponse();
 	if (!this->headers_checked && response) {
-		const int64 content_length = GetContentLength(response);
+		const int64_t content_length = GetContentLength(response);
 		if (content_length != -1) this->data.reserve(content_length);
 		this->headers_checked = true;
 	}
