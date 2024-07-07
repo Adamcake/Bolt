@@ -1,40 +1,15 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { Game } from '$lib/Util/interfaces';
-	import { selectedPlay } from '$lib/Util/store';
 	import SettingsModal from '$lib/Components/SettingsModal.svelte';
 	import Dropdown from '$lib/Components/CommonUI/Dropdown.svelte';
-	import Account from '$lib/Components/Account.svelte';
 	import { AuthService } from '$lib/Services/AuthService';
 	import { bolt } from '$lib/State/Bolt';
-	import { config } from '$lib/State/Config';
+	import Account from '$lib/Components/Account.svelte';
+	import { GlobalState } from '$lib/State/GlobalState';
+	import { BoltService } from '$lib/Services/BoltService';
 
+	const { config, profiles } = GlobalState;
 	let settingsModal: SettingsModal;
-	let rs3Button: HTMLButtonElement;
-	let osrsButton: HTMLButtonElement;
-
-	// swaps game visually, will effect all relevant selects
-	function toggle_game(game: Game): void {
-		switch (game) {
-			case Game.osrs:
-				$selectedPlay.game = Game.osrs;
-				$selectedPlay.client = $config.selected_client_index;
-				$config.selected_game_index = Game.osrs;
-				osrsButton.classList.add('bg-blue-500', 'text-black');
-				rs3Button.classList.remove('bg-blue-500', 'text-black');
-				break;
-			case Game.rs3:
-				$selectedPlay.game = Game.rs3;
-				$config.selected_game_index = Game.rs3;
-				osrsButton.classList.remove('bg-blue-500', 'text-black');
-				rs3Button.classList.add('bg-blue-500', 'text-black');
-				break;
-		}
-	}
-
-	onMount(() => {
-		toggle_game(<Game>$config.selected_game_index);
-	});
 </script>
 
 <SettingsModal bind:this={settingsModal}></SettingsModal>
@@ -45,18 +20,20 @@
 	<div class="m-3 ml-9 font-bold">
 		<button
 			class="mx-1 w-20 rounded-lg border-2 border-blue-500 p-2 duration-200 hover:opacity-75"
-			bind:this={rs3Button}
+			class:text-black={$config.selected_game === Game.rs3}
+			class:bg-blue-500={$config.selected_game === Game.rs3}
 			on:click={() => {
-				toggle_game(Game.rs3);
+				$config.selected_game = Game.rs3;
 			}}
 		>
 			RS3
 		</button>
 		<button
 			class="mx-1 w-20 rounded-lg border-2 border-blue-500 bg-blue-500 p-2 text-black duration-200 hover:opacity-75"
-			bind:this={osrsButton}
+			class:text-black={$config.selected_game === Game.osrs}
+			class:bg-blue-500={$config.selected_game === Game.osrs}
 			on:click={() => {
-				toggle_game(Game.osrs);
+				$config.selected_game = Game.osrs;
 			}}
 		>
 			OSRS
@@ -75,12 +52,13 @@
 		>
 			<img src="svgs/gear-solid.svg" class="m-auto h-6 w-6" alt="Settings" />
 		</button>
-		{#if $selectedPlay.account}
+		{#if $profiles.length > 0}
+			{@const selectedProfile = BoltService.findProfile($config.selected_user_id ?? '')}
 			<Dropdown align="center">
 				<button
 					class="h-11 w-48 rounded-lg border-2 border-slate-300 bg-inherit text-center font-bold text-black duration-200 hover:opacity-75 dark:border-slate-800 dark:text-slate-50"
 				>
-					{$selectedPlay.account?.displayName}
+					{selectedProfile?.user.displayName ?? 'No user selected'}
 				</button>
 
 				<div slot="content" class="w-40">

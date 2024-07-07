@@ -1,18 +1,15 @@
 <script lang="ts">
 	import { AuthService, type AuthTokens } from '$lib/Services/AuthService';
 	import { CookieService } from '$lib/Services/CookieService';
-	import { LocalStorageService } from '$lib/Services/LocalStorageService';
-	import type { BoltEnv } from '$lib/State/Bolt';
 	import type { BoltMessage } from '$lib/Util/interfaces';
 	import { onDestroy, onMount } from 'svelte';
+	import { bolt } from '$lib/State/Bolt';
 
 	const parentWindow = window.opener as {
 		postMessage: (event: BoltMessage, allowedOrigin: string) => void;
 	};
 
-	const boltEnv = LocalStorageService.get('boltEnv') as BoltEnv;
-
-	if (boltEnv == null) {
+	if (bolt.env == null) {
 		fail('BoltEnv is not defined. Please close and re-open Bolt to try again.');
 	}
 
@@ -22,9 +19,9 @@
 			fail('Verifier token has expired. Please try signing in again.');
 			return null;
 		}
-		const { clientid, redirect } = boltEnv;
+		const { clientid, redirect } = bolt.env;
 		const tokenResult = await AuthService.getOAuthToken(
-			boltEnv.origin,
+			bolt.env.origin,
 			clientid,
 			verifier,
 			redirect,
@@ -44,7 +41,7 @@
 			fail(validateResult.error);
 			return null;
 		}
-		const sessionIdResult = await AuthService.getSessionId(boltEnv.auth_api, idToken);
+		const sessionIdResult = await AuthService.getSessionId(bolt.env.auth_api, idToken);
 		if (!sessionIdResult.ok) {
 			fail(`Unable to retreive session id. ${sessionIdResult.error}`);
 			return null;
@@ -77,7 +74,7 @@
 
 			message({ type: 'authTokenUpdate', tokens: authTokens });
 			const nonce = crypto.randomUUID();
-			AuthService.navigateToAuthConsent(boltEnv.origin, authTokens.id_token, nonce);
+			AuthService.navigateToAuthConsent(bolt.env.origin, authTokens.id_token, nonce);
 		} else if (id_token && code && state) {
 			// Second step, after retrieving the authTokens and consent request has returned
 			const sessionId = await retrieveSessionId(id_token);

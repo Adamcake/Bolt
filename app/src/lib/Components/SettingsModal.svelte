@@ -1,6 +1,5 @@
 <script lang="ts">
 	import General from '$lib/Components/Settings/General.svelte';
-	import Osrs from '$lib/Components/Settings/Osrs.svelte';
 	import Rs3 from '$lib/Components/Settings/Rs3.svelte';
 	import Modal from '$lib/Components/CommonUI/Modal.svelte';
 
@@ -82,7 +81,7 @@
 		{#if showOption == Options.general}
 			<General></General>
 		{:else if showOption == Options.osrs}
-			<Osrs></Osrs>
+			<!-- <Osrs></Osrs> -->
 		{:else if showOption == Options.rs3}
 			<Rs3></Rs3>
 		{/if}

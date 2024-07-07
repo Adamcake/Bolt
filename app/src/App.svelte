@@ -1,22 +1,22 @@
 <script lang="ts">
 	import TopBar from '$lib/Components/TopBar.svelte';
-	import Launch from '$lib/Components/Launch.svelte';
 	import Auth from '$lib/Components/Auth.svelte';
 	import PluginMenu from '$lib/Components/PluginMenu.svelte';
 	import LogView from '$lib/Components/LogView.svelte';
 	import { logger } from '$lib/Util/Logger';
 	import DisclaimerModal from '$lib/Components/DisclaimerModal.svelte';
 	import { BoltService } from '$lib/Services/BoltService';
-	import { config } from '$lib/State/Config';
 	import { AuthService } from '$lib/Services/AuthService';
+	import { GlobalState } from '$lib/State/GlobalState';
 
 	let showPluginMenu: boolean = false;
-	$: darkTheme = $config?.use_dark_theme ?? true;
+	const { config } = GlobalState;
+	$: darkTheme = $config.use_dark_theme;
 
 	const logs = logger.logs;
 </script>
 
-<svelte:window on:beforeunload={() => BoltService.saveConfig($config)} />
+<svelte:window on:beforeunload={() => BoltService.saveConfig()} />
 
 <main
 	class:dark={darkTheme}
@@ -32,7 +32,7 @@
 		<TopBar></TopBar>
 		<div class="mt-16 grid h-full grid-flow-col grid-cols-3">
 			<div></div>
-			<Launch bind:showPluginMenu></Launch>
+			<!-- <Launch bind:showPluginMenu></Launch> -->
 			<div></div>
 		</div>
 		<LogView logs={$logs} />

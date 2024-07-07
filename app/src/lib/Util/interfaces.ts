@@ -1,23 +1,6 @@
 import type { AuthTokens } from '$lib/Services/AuthService';
 
-
-// result type, similar to rust's implementation
-// useful if a function may succeed or fail
 export type Result<T, E = Error> = { ok: true; value: T } | { ok: false; error: E };
-
-// wraps a type in Result
-export function wrap<T, E = Error>(value: T): Result<T, E> {
-	return { value, ok: true };
-}
-
-// unwraps the value within a Result
-export function unwrap<T, E = Error>(result: Result<T, E>): T {
-	if (result.ok) {
-		return result.value;
-	} else {
-		throw result.error;
-	}
-}
 
 export function ok<T>(value: T): Result<T, never> {
 	return { ok: true, value };
@@ -27,45 +10,31 @@ export function error<T>(error: T): Result<never, T> {
 	return { ok: false, error };
 }
 
-// game enum
 export enum Game {
-	rs3,
-	osrs
+	rs3 = 'rs3',
+	osrs = 'osrs'
 }
 
-// client enum, maybe this list will grow as clients are added
 export enum Client {
-	osrs,
-	runeLite,
-	hdos,
-	rs3
+	official = 'official',
+	runelite = 'runelite',
+	hdos = 'hdos'
 }
 
-// account info
-export interface Account {
-	id: string;
-	userId: string;
-	displayName: string;
-	suffix: string;
-	characters: Map<string, Character>;
-}
+export const clientMap: Record<Game, Client[]> = {
+	[Game.rs3]: [Client.official],
+	[Game.osrs]: [Client.official, Client.runelite, Client.hdos]
+};
 
-// character info, an account may have multiple characters
-export interface Character {
-	accountId: string;
-	displayName: string;
-	userHash: string;
-}
-
-// this is the referenced object when wanting to launch any client
-// these values are changed across the components to ensure selected choices are used
-export interface SelectedPlay {
-	account?: Account;
-	character?: Character;
-	credentials?: Session;
-	game?: Game;
-	client?: Client;
-}
+// // this is the referenced object when wanting to launch any client
+// // these values are changed across the components to ensure selected choices are used
+// export interface SelectedPlay {
+// 	account?: Profile;
+// 	character?: Character;
+// 	credentials?: Session;
+// 	game?: Game;
+// 	client?: Client;
+// }
 
 // response token from the official "Direct6" URL
 export interface Direct6Token {

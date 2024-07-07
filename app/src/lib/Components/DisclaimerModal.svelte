@@ -1,12 +1,12 @@
 <script lang="ts">
 	import Modal from '$lib/Components/CommonUI/Modal.svelte';
-	import { AuthService } from '$lib/Services/AuthService';
+	import { GlobalState } from '$lib/State/GlobalState';
 	import { onMount } from 'svelte';
 
 	let modal: Modal;
 
 	onMount(() => {
-		if (AuthService.sessions.length == 0) {
+		if (GlobalState.sessions.length == 0) {
 			modal.open();
 		}
 	});

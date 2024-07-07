@@ -1,13 +1,15 @@
 import App from '@/App.svelte';
-import { clientListPromise, internalUrl } from '$lib/Util/store';
-import { get } from 'svelte/store';
+import { clientListPromise } from '$lib/Util/store';
 import { getNewClientListPromise } from '$lib/Util/functions';
 import { type BoltMessage } from '$lib/Util/interfaces';
 import { logger } from '$lib/Util/Logger';
 import { AuthService, type Session, type AuthTokens } from '$lib/Services/AuthService';
 import { Platform, bolt } from '$lib/State/Bolt';
-import { initConfig } from '$lib/State/Config';
-import { LocalStorageService } from '$lib/Services/LocalStorageService';
+import { initConfig } from '$lib/Util/ConfigUtils';
+import { BoltService } from '$lib/Services/BoltService';
+import { GlobalState } from '$lib/State/GlobalState';
+
+initBolt();
 
 // TODO: make this less obscure
 // window.opener is set when the current window is a popup (the auth window)
@@ -15,10 +17,13 @@ import { LocalStorageService } from '$lib/Services/LocalStorageService';
 if (window.opener || window.location.search.includes('&id_token')) {
 	AuthService.authenticating = true;
 } else {
-	initBolt();
+	setup();
+}
+
+async function setup() {
+	await refreshStoredTokens();
 	initConfig();
 	addMessageListeners();
-	refreshStoredTokens();
 }
 
 // TODO: render a different app when authenticating, instead of using AuthService.authenticating
@@ -29,9 +34,6 @@ const app = new App({
 export default app;
 
 function initBolt() {
-	// Store all of the bolt env variables for the auth window to use
-	LocalStorageService.set('boltEnv', bolt.env);
-
 	const params = new URLSearchParams(window.location.search);
 	bolt.platform = params.get('platform') as Platform | null;
 	bolt.isFlathub = params.get('flathub') === '1';
@@ -61,7 +63,7 @@ function initBolt() {
 				return typeof session.session_id === 'string' && typeof session.tokens === 'object';
 			});
 			// If user has an old creds file, reset it to empty on load
-			AuthService.sessions = validConfig ? sessions : [];
+			GlobalState.sessions = validConfig ? sessions : [];
 		} catch (e) {
 			logger.error('Unable to parse saved credentials');
 		}
@@ -70,7 +72,7 @@ function initBolt() {
 
 function addMessageListeners(): void {
 	const { origin, origin_2fa } = bolt.env;
-	const boltUrl = get(internalUrl);
+	const boltUrl = 'https://bolt-internal';
 
 	const allowedOrigins = [boltUrl, origin, origin_2fa];
 	let tokens: AuthTokens | null = null;
@@ -89,7 +91,7 @@ function addMessageListeners(): void {
 					return logger.error('auth is null. Please try again.');
 				}
 				const session_id = event.data.sessionId;
-				const loginResult = await AuthService.login(session_id, tokens);
+				const loginResult = await BoltService.login(session_id, tokens);
 				if (loginResult.ok) {
 					logger.info(`Successfully added account ${loginResult.value.user.displayName}`);
 				} else {
@@ -132,7 +134,7 @@ function addMessageListeners(): void {
 async function refreshStoredTokens() {
 	const expiredTokens: string[] = [];
 
-	for (const session of AuthService.sessions) {
+	for (const session of GlobalState.sessions) {
 		const tokensResult = await AuthService.refreshOAuthToken(session.tokens);
 		if (!tokensResult.ok) {
 			if (tokensResult.error === 0) {
@@ -150,15 +152,15 @@ async function refreshStoredTokens() {
 
 		const tokens = tokensResult.value;
 		session.tokens = tokens;
-		const loginResult = await AuthService.login(session.session_id, tokens);
+		const loginResult = await BoltService.login(session.session_id, tokens);
 		if (loginResult.ok) {
-			logger.info(`Logged into stored account ${loginResult.value.user.displayName}`);
+			logger.info(`Logged into account '${loginResult.value.user.displayName}'`);
 		} else {
 			logger.error(`Unable to login with stored account. ${loginResult.error}`);
 		}
 	}
 
 	expiredTokens.forEach((sub) => {
-		AuthService.logout(sub);
+		BoltService.logout(sub);
 	});
 }

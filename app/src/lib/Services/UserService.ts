@@ -21,8 +21,6 @@ export interface Profile {
 }
 
 export class UserService {
-	static profiles: Profile[] = [];
-
 	static async buildProfile(
 		userId: string,
 		access_token: string,

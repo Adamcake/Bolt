@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { bolt } from '$lib/State/Bolt';
-	import { config } from '$lib/State/Config';
+	import { GlobalState } from '$lib/State/GlobalState';
+
+	const { config } = GlobalState;
 
 	let configUriDiv: HTMLDivElement;
 	let configUriAddress: HTMLTextAreaElement;

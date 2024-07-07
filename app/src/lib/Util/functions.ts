@@ -4,7 +4,7 @@ import { internalUrl } from '$lib/Util/store';
 import { logger } from '$lib/Util/Logger';
 import { BoltService } from '$lib/Services/BoltService';
 import { bolt } from '$lib/State/Bolt';
-import { config } from '$lib/State/Config';
+import { GlobalState } from '$lib/State/GlobalState';
 
 // asynchronously download and launch RS3's official .deb client using the given env variables
 export function launchRS3Linux(
@@ -12,12 +12,12 @@ export function launchRS3Linux(
 	jx_character_id: string,
 	jx_display_name: string
 ) {
-	BoltService.saveConfig(get(config));
+	BoltService.saveConfig();
 
 	const launch = (hash?: string, deb?: never) => {
 		const xml = new XMLHttpRequest();
 		const params: Record<string, string> = {};
-		const _config = get(config);
+		const _config = get(GlobalState.config);
 		if (hash) params.hash = hash;
 		if (jx_session_id) params.jx_session_id = jx_session_id;
 		if (jx_character_id) params.jx_character_id = jx_character_id;
@@ -99,7 +99,7 @@ function launchRuneLiteInner(
 	jx_display_name: string,
 	configure: boolean
 ) {
-	BoltService.saveConfig(get(config));
+	BoltService.saveConfig();
 	const launchPath = configure ? '/launch-runelite-jar-configure?' : '/launch-runelite-jar?';
 
 	const launch = (id?: string | null, jar?: unknown, jarPath?: unknown) => {
@@ -110,7 +110,7 @@ function launchRuneLiteInner(
 		if (jx_session_id) params.jx_session_id = jx_session_id;
 		if (jx_character_id) params.jx_character_id = jx_character_id;
 		if (jx_display_name) params.jx_display_name = jx_display_name;
-		if (get(config).flatpak_rich_presence) params.flatpak_rich_presence = '';
+		if (get(GlobalState.config).flatpak_rich_presence) params.flatpak_rich_presence = '';
 		xml.open(jar ? 'POST' : 'GET', launchPath.concat(new URLSearchParams(params).toString()), true);
 		xml.onreadystatechange = () => {
 			if (xml.readyState == 4) {
@@ -123,8 +123,8 @@ function launchRuneLiteInner(
 		xml.send(<string>jar);
 	};
 
-	if (get(config).runelite_use_custom_jar) {
-		launch(null, null, get(config).runelite_custom_jar);
+	if (get(GlobalState.config).runelite_use_custom_jar) {
+		launch(null, null, get(GlobalState.config).runelite_custom_jar);
 		return;
 	}
 
@@ -195,7 +195,7 @@ export function launchHdos(
 	jx_character_id: string,
 	jx_display_name: string
 ) {
-	BoltService.saveConfig(get(config));
+	BoltService.saveConfig();
 
 	const launch = (version?: string, jar?: string) => {
 		const xml = new XMLHttpRequest();
@@ -315,7 +315,7 @@ export async function launchOfficialClient(
 	jx_character_id: string,
 	jx_display_name: string
 ) {
-	BoltService.saveConfig(get(config));
+	BoltService.saveConfig();
 	const metaPath: string = `${osrs ? 'osrs' : bolt.env.provider}-${windows ? 'win' : 'mac'}`;
 	let installedHash = windows
 		? osrs
