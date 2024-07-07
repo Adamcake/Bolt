@@ -3,11 +3,13 @@ import { clientListPromise } from '$lib/Util/store';
 import { getNewClientListPromise } from '$lib/Util/functions';
 import { type BoltMessage } from '$lib/Util/interfaces';
 import { logger } from '$lib/Util/Logger';
-import { AuthService, type Session, type AuthTokens } from '$lib/Services/AuthService';
+import { UserService, type Session } from '$lib/Services/UserService';
+import { AuthService, type AuthTokens } from '$lib/Services/AuthService';
 import { Platform, bolt } from '$lib/State/Bolt';
 import { initConfig } from '$lib/Util/ConfigUtils';
 import { BoltService } from '$lib/Services/BoltService';
 import { GlobalState } from '$lib/State/GlobalState';
+import { get } from 'svelte/store';
 
 initBolt();
 
@@ -21,7 +23,7 @@ if (window.opener || window.location.search.includes('&id_token')) {
 }
 
 async function setup() {
-	await refreshStoredTokens();
+	await refreshStoredSessions();
 	initConfig();
 	addMessageListeners();
 }
@@ -60,12 +62,26 @@ function initBolt() {
 		try {
 			const sessions = JSON.parse(sessionsParam) as Session[];
 			const validConfig = sessions.every((session) => {
-				return typeof session.session_id === 'string' && typeof session.tokens === 'object';
+				return (
+					typeof session.session_id === 'string' &&
+					typeof session.tokens === 'object' &&
+					typeof session.accounts === 'object' &&
+					typeof session.user === 'object'
+				);
 			});
-			// If user has an old creds file, reset it to empty on load
-			GlobalState.sessions = validConfig ? sessions : [];
+
+			if (validConfig) {
+				GlobalState.sessions.set(sessions);
+			} else {
+				GlobalState.sessions.set([]);
+				BoltService.saveCredentials();
+				logger.warn('Credentials saved on disk are out of date. Please sign in again.');
+			}
+			GlobalState.sessions.set(validConfig ? sessions : []);
 		} catch (e) {
-			logger.error('Unable to parse saved credentials');
+			GlobalState.sessions.set([]);
+			BoltService.saveCredentials();
+			logger.error('Unable to parse saved credentials. Please sign in again.');
 		}
 	}
 }
@@ -91,15 +107,21 @@ function addMessageListeners(): void {
 					return logger.error('auth is null. Please try again.');
 				}
 				const session_id = event.data.sessionId;
-				const loginResult = await BoltService.login(session_id, tokens);
-				if (loginResult.ok) {
-					logger.info(`Successfully added account ${loginResult.value.user.displayName}`);
+				const sessionResult = await UserService.buildSession(tokens, session_id);
+				if (sessionResult.ok) {
+					GlobalState.sessions.update((session) => {
+						session.push(sessionResult.value);
+						return session;
+					});
+					BoltService.saveCredentials();
+					logger.info(`Successfully added account '${sessionResult.value.user.displayName}'`);
 				} else {
-					logger.error(`Unable to sign into account. ${loginResult.error}`);
+					logger.error(`Unable to sign into account. ${sessionResult.error}`);
 				}
 
 				AuthService.pendingLoginWindow = null;
 				tokens = null;
+				BoltService.saveCredentials();
 				break;
 			}
 			case 'authFailed': {
@@ -131,14 +153,15 @@ function addMessageListeners(): void {
 	});
 }
 
-async function refreshStoredTokens() {
+async function refreshStoredSessions() {
+	const sessions = get(GlobalState.sessions);
 	const expiredTokens: string[] = [];
 
-	for (const session of GlobalState.sessions) {
+	for (const session of sessions) {
 		const tokensResult = await AuthService.refreshOAuthToken(session.tokens);
 		if (!tokensResult.ok) {
 			if (tokensResult.error === 0) {
-				return logger.error(
+				logger.error(
 					`Unable to verify saved login, status: ${tokensResult.error}. Do you have an internet connection? Please relaunch Bolt to try again.`
 				);
 			} else {
@@ -146,21 +169,31 @@ async function refreshStoredTokens() {
 					`Discarding expired login, status: ${tokensResult.error}. Please sign in again.`
 				);
 				expiredTokens.push(session.tokens.sub);
-				continue;
 			}
+			continue;
 		}
 
 		const tokens = tokensResult.value;
 		session.tokens = tokens;
-		const loginResult = await BoltService.login(session.session_id, tokens);
-		if (loginResult.ok) {
-			logger.info(`Logged into account '${loginResult.value.user.displayName}'`);
+		const sessionResult = await UserService.buildSession(tokens, session.session_id);
+		if (sessionResult.ok) {
+			const existingSession = BoltService.findSession(tokens.sub);
+			if (!existingSession) {
+				session.user = sessionResult.value.user;
+				session.accounts = sessionResult.value.accounts;
+			}
+			logger.info(`Logged into account '${sessionResult.value.user.displayName}'`);
 		} else {
-			logger.error(`Unable to login with stored account. ${loginResult.error}`);
+			logger.error(
+				`Unable to login to account '${session.user.displayName}'. ${sessionResult.error}`
+			);
+			expiredTokens.push(session.tokens.sub);
 		}
 	}
 
 	expiredTokens.forEach((sub) => {
 		BoltService.logout(sub);
 	});
+
+	GlobalState.sessions.set(sessions);
 }

@@ -26,16 +26,6 @@ export const clientMap: Record<Game, Client[]> = {
 	[Game.osrs]: [Client.official, Client.runelite, Client.hdos]
 };
 
-// // this is the referenced object when wanting to launch any client
-// // these values are changed across the components to ensure selected choices are used
-// export interface SelectedPlay {
-// 	account?: Profile;
-// 	character?: Character;
-// 	credentials?: Session;
-// 	game?: Game;
-// 	client?: Client;
-// }
-
 // response token from the official "Direct6" URL
 export interface Direct6Token {
 	id?: string;

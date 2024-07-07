@@ -1,60 +1,34 @@
 <script lang="ts">
-	import { afterUpdate, onMount } from 'svelte';
 	import {
 		launchHdos,
 		launchOfficialClient,
 		launchRS3Linux,
 		launchRuneLite
 	} from '$lib/Util/functions';
-	import { Client, Game } from '$lib/Util/interfaces';
-	import { selectedPlay } from '$lib/Util/store';
+	import { Client, clientMap, Game } from '$lib/Util/interfaces';
 	import { logger } from '$lib/Util/Logger';
-	import { bolt } from '$lib/State/Bolt';
-	import { config } from '$lib/State/Config';
+	import { bolt, Platform } from '$lib/State/Bolt';
+	import { GlobalState } from '$lib/State/GlobalState';
+	import { BoltService } from '$lib/Services/BoltService';
 
 	export let showPluginMenu = false;
 
-	let characterSelect: HTMLSelectElement;
-	let clientSelect: HTMLSelectElement;
-
-	// update selected_play store
-	export function characterChanged(): void {
-		if (!$selectedPlay.account) return;
-
-		const key: string = <string>(
-			characterSelect[characterSelect.selectedIndex].getAttribute('data-id')
-		);
-		$selectedPlay.character = $selectedPlay.account.characters.get(key);
-		if ($selectedPlay.character) {
-			$config.selected_characters?.set(
-				$selectedPlay.account.userId,
-				$selectedPlay.character?.accountId
-			);
-		}
-	}
-
-	// update selected_play
-	function clientChanged(): void {
-		if (clientSelect.value == 'RuneLite') {
-			$selectedPlay.client = Client.runeLite;
-			$config.selected_client_index = Client.runeLite;
-		} else if (clientSelect.value == 'HDOS') {
-			$selectedPlay.client = Client.hdos;
-			$config.selected_client_index = Client.hdos;
-		}
-	}
+	let { config } = GlobalState;
 
 	// when play is clicked, check the selected_play store for all relevant details
 	// calls the appropriate launch functions
-	function play_clicked(): void {
-		if (!$selectedPlay.account || !$selectedPlay.character) {
-			logger.info('Please log in to launch a client');
-			return;
+	function launch(game: Game, client: Client): void {
+		if (!$config.selected_user_id) {
+			return logger.warn('Please log in to launch a client');
 		}
-		switch ($selectedPlay.game) {
+		const session = BoltService.findSession($config.selected_user_id);
+		if (!session) return logger.warn('Unable to launch game, session was not found.');
+		const { session_id, tokens } = session;
+
+		switch (game) {
 			case Game.osrs:
-				switch ($selectedPlay.client) {
-					case Client.osrs:
+				switch (client) {
+					case Client.official:
 						launchOfficialClient(
 							bolt.platform === 'windows',
 							true,
@@ -63,7 +37,7 @@
 							<string>$selectedPlay.character?.displayName
 						);
 						break;
-					case Client.runeLite:
+					case Client.runelite:
 						launchRuneLite(
 							<string>$selectedPlay.credentials?.session_id,
 							<string>$selectedPlay.character?.accountId,
@@ -98,33 +72,6 @@
 				break;
 		}
 	}
-
-	afterUpdate(() => {
-		if ($selectedPlay.game == Game.osrs && $selectedPlay.client) {
-			clientSelect.selectedIndex = $selectedPlay.client;
-		}
-		if ($selectedPlay.account && $config.selected_characters?.has($selectedPlay.account.userId)) {
-			for (let i = 0; i < characterSelect.options.length; i++) {
-				if (
-					characterSelect[i].getAttribute('data-id') ==
-					$config.selected_characters.get($selectedPlay.account.userId)
-				) {
-					characterSelect.selectedIndex = i;
-					const key: string = <string>(
-						characterSelect[characterSelect.selectedIndex].getAttribute('data-id')
-					);
-					$selectedPlay.character = $selectedPlay.account.characters.get(key);
-				}
-			}
-		}
-	});
-
-	onMount(() => {
-		if ($config.selected_game_index == Game.osrs) {
-			clientSelect.selectedIndex = <number>$config.selected_client_index;
-			$selectedPlay.client = clientSelect.selectedIndex;
-		}
-	});
 </script>
 
 <div class="bg-grad flex h-full flex-col border-slate-300 p-5 duration-200 dark:border-slate-800">
@@ -135,12 +82,27 @@
 	/>
 	<button
 		class="mx-auto mb-2 w-52 rounded-lg bg-emerald-500 p-2 font-bold text-black duration-200 hover:opacity-75"
-		on:click={play_clicked}
+		on:click={() => launch($config.selected_game, $config.selected_client)}
 	>
 		Play
 	</button>
 	<div class="mx-auto my-2">
-		{#if $selectedPlay.game == Game.osrs}
+		<label>
+			<span class="text-sm">Game Client</span>
+			<select
+				id="game_client_select"
+				class="mx-auto w-52 cursor-pointer rounded-lg border-2 border-slate-300 bg-inherit p-2 text-inherit duration-200 hover:opacity-75 dark:border-slate-800"
+				bind:value={$config.selected_client}
+			>
+				{#each clientMap[$config.selected_game] as client}
+					<option
+						disabled={client === Client.official && bolt.platform !== Platform.Linux}
+						value={client}>{client}</option
+					>
+				{/each}
+			</select>
+		</label>
+		<!-- {#if $selectedPlay.game == Game.osrs}
 			<label for="game_client_select" class="text-sm">Game Client</label>
 			<br />
 			<select
@@ -166,7 +128,7 @@
 			>
 				Plugin menu
 			</button>
-		{/if}
+		{/if} -->
 	</div>
 	<div class="mx-auto my-2">
 		<label for="character_select" class="text-sm"> Character</label>

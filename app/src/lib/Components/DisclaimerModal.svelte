@@ -3,10 +3,11 @@
 	import { GlobalState } from '$lib/State/GlobalState';
 	import { onMount } from 'svelte';
 
+	const { sessions } = GlobalState;
 	let modal: Modal;
 
 	onMount(() => {
-		if (GlobalState.sessions.length == 0) {
+		if ($sessions.length == 0) {
 			modal.open();
 		}
 	});

@@ -61,22 +61,22 @@ export function initConfig() {
 	}
 
 	const selected_user_id = get(config).selected_user_id;
-	const savedProfileIsMissing = BoltService.findProfile(selected_user_id ?? '') === undefined;
-	if (savedProfileIsMissing) selectFirstProfile();
+	const savedSessionIsMissing = BoltService.findSession(selected_user_id ?? '') === undefined;
+	if (savedSessionIsMissing) selectFirstSession();
 
 	onWritableChange(GlobalState.config, () => {
 		GlobalState.configHasPendingChanges = true;
 	});
 }
 
-export function selectFirstProfile() {
-	const { config, profiles } = GlobalState;
+export function selectFirstSession() {
+	const { config, sessions: sessionsStore } = GlobalState;
 	config.update((_config) => {
-		const _profiles = get(profiles);
-		if (_profiles.length > 0) {
-			const firstProfile = _profiles[0];
-			_config.selected_user_id = firstProfile.user.userId;
-			_config.selected_account_id = firstProfile.accounts[0].accountId;
+		const sessions = get(sessionsStore);
+		if (sessions.length > 0) {
+			const firstSession = sessions[0];
+			_config.selected_user_id = firstSession.user.userId;
+			_config.selected_account_id = firstSession.accounts[0].accountId;
 		} else {
 			_config.selected_user_id = undefined;
 			_config.selected_account_id = undefined;

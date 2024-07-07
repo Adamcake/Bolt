@@ -8,7 +8,7 @@
 	import { GlobalState } from '$lib/State/GlobalState';
 	import { BoltService } from '$lib/Services/BoltService';
 
-	const { config, profiles } = GlobalState;
+	const { config, sessions } = GlobalState;
 	let settingsModal: SettingsModal;
 </script>
 
@@ -52,13 +52,13 @@
 		>
 			<img src="svgs/gear-solid.svg" class="m-auto h-6 w-6" alt="Settings" />
 		</button>
-		{#if $profiles.length > 0}
-			{@const selectedProfile = BoltService.findProfile($config.selected_user_id ?? '')}
+		{#if $sessions.length > 0}
+			{@const selectedSession = BoltService.findSession($config.selected_user_id ?? '')}
 			<Dropdown align="center">
 				<button
 					class="h-11 w-48 rounded-lg border-2 border-slate-300 bg-inherit text-center font-bold text-black duration-200 hover:opacity-75 dark:border-slate-800 dark:text-slate-50"
 				>
-					{selectedProfile?.user.displayName ?? 'No user selected'}
+					{selectedSession?.user.displayName ?? 'No user selected'}
 				</button>
 
 				<div slot="content" class="w-40">

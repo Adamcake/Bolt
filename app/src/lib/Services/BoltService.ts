@@ -1,51 +1,23 @@
 import { logger } from '$lib/Util/Logger';
-import { AuthService, type AuthTokens, type Session } from '$lib/Services/AuthService';
-import { error, ok, type Result } from '$lib/Util/interfaces';
-import { UserService, type Profile } from '$lib/Services/UserService';
+import { AuthService } from '$lib/Services/AuthService';
+import { type Session } from '$lib/Services/UserService';
 import { GlobalState } from '$lib/State/GlobalState';
 import { get } from 'svelte/store';
-import { selectFirstProfile } from '$lib/Util/ConfigUtils';
+import { selectFirstSession } from '$lib/Util/ConfigUtils';
 
 let saveInProgress: boolean = false;
 
 export class BoltService {
-	static async login(session_id: string, authTokens: AuthTokens): Promise<Result<Profile, string>> {
-		const profileResult = await UserService.buildProfile(
-			authTokens.sub,
-			authTokens.access_token,
-			session_id
-		);
-		if (!profileResult.ok) {
-			return error(`Unable to build user profile: ${profileResult.error}`);
-		}
-		const newProfile = profileResult.value;
-		GlobalState.profiles.update((profiles) => {
-			profiles.push(newProfile);
-			return profiles;
-		});
-		const session = { session_id, tokens: authTokens };
-		const existingSession = BoltService.findSession(authTokens.sub);
-		if (!existingSession) GlobalState.sessions.push(session);
-		BoltService.saveCredentials();
-		return ok(profileResult.value);
-	}
-
 	static async logout(sub: string): Promise<Session[]> {
-		const { sessions, profiles } = GlobalState;
-		const sessionIndex = sessions.findIndex((session) => session.tokens.sub === sub);
+		const { sessions: sessionsStore } = GlobalState;
+		const sessions = get(sessionsStore);
+		const sessionIndex = sessions.findIndex((session) => session.user.userId === sub);
 		if (sessionIndex > -1) {
-			const { access_token } = GlobalState.sessions[sessionIndex].tokens;
-			AuthService.revokeOauthCreds(access_token);
+			AuthService.revokeOauthCreds(sessions[sessionIndex].tokens.access_token);
 			sessions.splice(sessionIndex, 1);
+			sessionsStore.set(sessions);
 		}
-		const profileIndex = get(profiles).findIndex((profile) => profile.user.userId === sub);
-		if (profileIndex > -1) {
-			profiles.update((_profiles) => {
-				_profiles.splice(profileIndex, 1);
-				return _profiles;
-			});
-		}
-		selectFirstProfile();
+		selectFirstSession();
 		BoltService.saveCredentials();
 		return sessions;
 	}
@@ -90,17 +62,13 @@ export class BoltService {
 			// 	return data;
 			// });
 
-			const sessions = GlobalState.sessions;
+			const sessions = get(GlobalState.sessions);
 			xml.send(JSON.stringify(sessions));
 		});
 	}
 
-	static findProfile(userId: string): Profile | undefined {
-		const profiles = get(GlobalState.profiles);
-		return profiles.find((profile) => profile.user.userId === userId);
-	}
-
-	static findSession(sub: string): Session | undefined {
-		return GlobalState.sessions.find((session) => session.tokens.sub === sub);
+	static findSession(userId: string): Session | undefined {
+		const sessions = get(GlobalState.sessions);
+		return sessions.find((session) => session.user.userId === userId);
 	}
 }

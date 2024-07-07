@@ -13,11 +13,6 @@ export interface AuthTokens {
 	expiry: number;
 }
 
-export interface Session {
-	session_id: string;
-	tokens: AuthTokens;
-}
-
 export class AuthService {
 	static authenticating: boolean = false;
 	static pendingLoginWindow: Window | null = null;
@@ -75,8 +70,8 @@ export class AuthService {
 	}
 
 	/**
-	 * Checks if `session` is about to expire or has already expired.
-	 * If expired, return the new session with refreshed authTokens.
+	 * Checks if `authTokens` is about to expire or has already expired.
+	 * If expired, return the new set of AuthTokens.
 	 * If expired, but fails to refresh, return the HTTP status code of the request
 	 * 0 means the request failed for an unknown reason (likely bad internet connection)
 	 * Any other code means it should be removed from disk, as it is no longer valid.

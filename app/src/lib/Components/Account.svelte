@@ -4,18 +4,18 @@
 	import { bolt } from '$lib/State/Bolt';
 	import { GlobalState } from '$lib/State/GlobalState';
 
-	const { profiles, config } = GlobalState;
+	const { sessions, config } = GlobalState;
 </script>
 
 <select
 	class="w-full cursor-pointer rounded-lg border-2 border-inherit bg-inherit p-2 text-center"
 	bind:value={$config.selected_user_id}
 >
-	{#each $profiles as profile (profile.user.userId)}
+	{#each $sessions as session (session.user.userId)}
 		<option
-			selected={profile.user.userId === $config.selected_user_id}
-			value={profile.user.userId}
-			class="dark:bg-slate-900">{profile.user.displayName}</option
+			selected={session.user.userId === $config.selected_user_id}
+			value={session.user.userId}
+			class="dark:bg-slate-900">{session.user.displayName}</option
 		>
 	{/each}
 </select>

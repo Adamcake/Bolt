@@ -93,7 +93,7 @@ export function launchRS3Linux(
 // locate runelite's .jar either from the user's config or by parsing github releases,
 // then attempt to launch it with the given env variables
 // last param indices whether --configure will be passed or not
-function launchRuneLiteInner(
+export function launchRuneLite(
 	jx_session_id: string,
 	jx_character_id: string,
 	jx_display_name: string,
@@ -171,22 +171,6 @@ function launchRuneLiteInner(
 		}
 	};
 	xml.send();
-}
-
-export function launchRuneLite(
-	jx_session_id: string,
-	jx_character_id: string,
-	jx_display_name: string
-) {
-	return launchRuneLiteInner(jx_session_id, jx_character_id, jx_display_name, false);
-}
-
-export function launchRuneLiteConfigure(
-	jx_session_id: string,
-	jx_character_id: string,
-	jx_display_name: string
-) {
-	return launchRuneLiteInner(jx_session_id, jx_character_id, jx_display_name, true);
 }
 
 // locate hdos's .jar from their CDN, then attempt to launch it with the given env variables

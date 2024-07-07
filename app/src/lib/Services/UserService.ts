@@ -1,3 +1,4 @@
+import type { AuthTokens } from '$lib/Services/AuthService';
 import { bolt } from '$lib/State/Bolt';
 import { error, ok, type Result } from '$lib/Util/interfaces';
 
@@ -15,18 +16,19 @@ export interface Account {
 	userHash: string;
 }
 
-export interface Profile {
+export interface Session {
 	user: User;
 	accounts: Account[];
+	tokens: AuthTokens;
+	session_id: string;
 }
 
 export class UserService {
-	static async buildProfile(
-		userId: string,
-		access_token: string,
+	static async buildSession(
+		tokens: AuthTokens,
 		session_id: string
-	): Promise<Result<Profile, string>> {
-		const userResult = await UserService.getUser(userId, access_token);
+	): Promise<Result<Session, string>> {
+		const userResult = await UserService.getUser(tokens.sub, tokens.access_token);
 		if (!userResult.ok) {
 			return error(`Failed to fetch user. Status: ${userResult.error}`);
 		}
@@ -38,7 +40,9 @@ export class UserService {
 
 		return ok({
 			user: userResult.value,
-			accounts: accountResult.value
+			accounts: accountResult.value,
+			tokens: tokens,
+			session_id: session_id
 		});
 	}
 
