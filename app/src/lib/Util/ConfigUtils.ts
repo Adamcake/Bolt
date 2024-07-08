@@ -12,6 +12,7 @@ export interface Config {
 	runelite_use_custom_jar: boolean;
 	selected_game: Game;
 	selected_client: Client;
+	use_custom_rs_config_uri: boolean;
 	rs_config_uri?: string;
 	runelite_custom_jar?: string;
 	selected_user_id?: string;
@@ -23,6 +24,7 @@ export const defaultConfig: Config = {
 	rs_plugin_loader: false,
 	flatpak_rich_presence: false,
 	runelite_use_custom_jar: false,
+	use_custom_rs_config_uri: false,
 	selected_game: Game.osrs,
 	selected_client: Client.official
 };

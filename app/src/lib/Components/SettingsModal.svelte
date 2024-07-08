@@ -1,6 +1,6 @@
 <script lang="ts">
-	import General from '$lib/Components/Settings/General.svelte';
-	import Rs3 from '$lib/Components/Settings/Rs3.svelte';
+	import GeneralSettingsTab from '$lib/Components/Settings/GeneralSettingsTab.svelte';
+	import Rs3SettingsTab from '$lib/Components/Settings/Rs3SettingsTab.svelte';
 	import Modal from '$lib/Components/CommonUI/Modal.svelte';
 
 	let modal: Modal;
@@ -79,11 +79,11 @@
 			>
 		</div>
 		{#if showOption == Options.general}
-			<General></General>
+			<GeneralSettingsTab></GeneralSettingsTab>
 		{:else if showOption == Options.osrs}
 			<!-- <Osrs></Osrs> -->
 		{:else if showOption == Options.rs3}
-			<Rs3></Rs3>
+			<Rs3SettingsTab></Rs3SettingsTab>
 		{/if}
 	</div>
 </Modal>

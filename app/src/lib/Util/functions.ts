@@ -17,14 +17,14 @@ export function launchRS3Linux(
 	const launch = (hash?: string, deb?: never) => {
 		const xml = new XMLHttpRequest();
 		const params: Record<string, string> = {};
-		const _config = get(GlobalState.config);
+		const config = get(GlobalState.config);
 		if (hash) params.hash = hash;
 		if (jx_session_id) params.jx_session_id = jx_session_id;
 		if (jx_character_id) params.jx_character_id = jx_character_id;
 		if (jx_display_name) params.jx_display_name = jx_display_name;
-		if (_config.rs_plugin_loader) params.plugin_loader = '1';
-		if (_config.rs_config_uri) {
-			params.config_uri = _config.rs_config_uri;
+		if (config.rs_plugin_loader) params.plugin_loader = '1';
+		if (config.use_custom_rs_config_uri && config.rs_config_uri) {
+			params.config_uri = config.rs_config_uri;
 		} else {
 			params.config_uri = bolt.env.default_config_uri;
 		}
