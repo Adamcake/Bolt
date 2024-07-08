@@ -7,8 +7,11 @@
 	import Modal from '$lib/Components/CommonUI/Modal.svelte';
 	import { bolt } from '$lib/State/Bolt';
 
-	// props
-	export let showPluginMenu: boolean;
+	let modal: Modal;
+
+	export function open() {
+		modal.open();
+	}
 
 	const getPluginConfigPromise = (dirpath: string): Promise<PluginConfig> => {
 		return new Promise((resolve, reject) => {
@@ -105,19 +108,6 @@
 		xml.send();
 	};
 
-	// hide plugin menu on 'escape'
-	const tryExit = () => {
-		if (!disableButtons) {
-			showPluginMenu = false;
-		}
-	};
-	function keyPressed(evt: KeyboardEvent): void {
-		if (evt.key === 'Escape') {
-			tryExit();
-		}
-	}
-	addEventListener('keydown', keyPressed);
-
 	// plugin management interface - currently-selected plugin
 	var selectedPlugin: string;
 	$: managementPluginPromise = getPluginConfigPromiseFromID(selectedPlugin);
@@ -130,13 +120,10 @@
 	onDestroy(() => {
 		// save plugin config if it's been changed
 		if (pluginConfigDirty) savePluginConfig();
-
-		// When the component is removed, delete the event listener also
-		removeEventListener('keydown', keyPressed);
 	});
 </script>
 
-<Modal on:close={tryExit} class="h-[90%] w-[90%]">
+<Modal bind:this={modal} class="h-[90%] w-[90%]">
 	<div
 		class="left-0 float-left h-full w-[min(180px,_50%)] overflow-hidden border-r-2 border-slate-300 pt-2 dark:border-slate-800"
 	>
@@ -268,5 +255,5 @@
 		{:else}
 			<p>error</p>
 		{/if}
-	</div></Modal
->
+	</div>
+</Modal>

@@ -1,7 +1,6 @@
 <script lang="ts">
 	import TopBar from '$lib/Components/TopBar.svelte';
 	import Auth from '@/AuthApp.svelte';
-	import PluginMenu from '$lib/Components/PluginMenu.svelte';
 	import LogView from '$lib/Components/LogView.svelte';
 	import { logger } from '$lib/Util/Logger';
 	import DisclaimerModal from '$lib/Components/DisclaimerModal.svelte';
@@ -9,8 +8,6 @@
 	import { AuthService } from '$lib/Services/AuthService';
 	import MainLayout from '$lib/Components/MainLayout.svelte';
 	import Launch from '$lib/Components/Launch.svelte';
-
-	let showPluginMenu: boolean = false;
 
 	const logs = logger.logs;
 </script>
@@ -21,14 +18,11 @@
 	{#if AuthService.authenticating}
 		<Auth></Auth>
 	{:else}
-		{#if showPluginMenu}
-			<PluginMenu bind:showPluginMenu></PluginMenu>
-		{/if}
 		<DisclaimerModal />
 		<TopBar></TopBar>
 		<div class="mt-16 grid h-full grid-flow-col grid-cols-3">
 			<div></div>
-			<Launch bind:showPluginMenu></Launch>
+			<Launch></Launch>
 			<div></div>
 		</div>
 		<LogView logs={$logs} />

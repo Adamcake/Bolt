@@ -10,9 +10,9 @@
 	import { bolt, Platform } from '$lib/State/Bolt';
 	import { GlobalState } from '$lib/State/GlobalState';
 	import { BoltService } from '$lib/Services/BoltService';
+	import PluginModal from '$lib/Components/PluginModal.svelte';
 
-	export let showPluginMenu = false;
-
+	let pluginModal: PluginModal;
 	let { config } = GlobalState;
 	$: accounts = BoltService.findSession($config.selected_user_id ?? '')?.accounts ?? [];
 
@@ -57,6 +57,8 @@
 	}
 </script>
 
+<PluginModal bind:this={pluginModal}></PluginModal>
+
 <div class="bg-grad flex h-full flex-col border-slate-300 p-5 duration-200 dark:border-slate-800">
 	<img
 		src="svgs/rocket-solid.svg"
@@ -93,7 +95,7 @@
 				title={bolt.hasBoltPlugins ? null : 'Coming soon...'}
 				class="mx-auto mb-2 w-52 rounded-lg p-2 font-bold text-black duration-200 enabled:bg-blue-500 enabled:hover:opacity-75 disabled:bg-gray-500"
 				on:click={() => {
-					showPluginMenu = bolt.hasBoltPlugins ?? false;
+					pluginModal.open();
 				}}
 			>
 				Plugin menu
