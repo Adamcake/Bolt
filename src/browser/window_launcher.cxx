@@ -454,18 +454,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 		}
 	}
 
-	if (!browser->IsSame(this->browser) || !frame->IsMain()) {
-		return nullptr;
-	}
-
-	// default way to handle web requests from the main window is to make a CefURLRequest that's not subject to CORS safety
-	disable_default_handling = true;
-	CefRefPtr<CefRequest> new_request = CefRequest::Create();
-	CefRequest::HeaderMap headers;
-	request->GetHeaderMap(headers); // doesn't include Referer header
-	headers.erase("Origin");
-	new_request->Set(request->GetURL(), request->GetMethod(), request->GetPostData(), headers);
-	return new DefaultURLHandler(new_request);
+	return nullptr;
 }
 
 void Browser::Launcher::OnBrowserDestroyed(CefRefPtr<CefBrowserView> view, CefRefPtr<CefBrowser> browser) {
@@ -553,26 +542,6 @@ void Browser::Launcher::Refresh() const {
 	// override the default behaviour, which would be to call ReloadIgnoreCache() (a.k.a. ctrl+f5)
 	// because if certain config files have changed, we need to set different URL params than before
 	this->browser->GetMainFrame()->LoadURL(this->BuildURL());
-}
-
-void Browser::Launcher::ParseQuery(std::string_view query, std::function<void(const std::string_view&, const std::string_view&)> callback) {
-	size_t pos = 0;
-	while (true) {
-		const size_t next_and = query.find('&', pos);
-		const size_t next_eq = query.find('=', pos);
-		if (next_eq == std::string_view::npos) break;
-		else if (next_and != std::string_view::npos && next_eq > next_and) {
-			pos = next_and + 1;
-			continue;
-		}
-		const bool is_last = next_and == std::string_view::npos;
-		const auto end = is_last ? query.end() : query.begin() + next_and;
-		const std::string_view key(query.begin() + pos, query.begin() + next_eq);
-		const std::string_view val(query.begin() + next_eq + 1, end);
-		callback(key, val);
-		if (is_last) break;
-		pos = next_and + 1;
-	}
 }
 
 CefRefPtr<CefResourceRequestHandler> SaveFileFromPost(CefRefPtr<CefRequest> request, const std::filesystem::path::value_type* path) {

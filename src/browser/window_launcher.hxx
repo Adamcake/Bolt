@@ -4,10 +4,7 @@
 #include "../browser.hxx"
 #include "../file_manager.hxx"
 
-#include "include/cef_parser.h"
-
 #include <filesystem>
-#include <functional>
 
 namespace Browser {
 	struct Launcher: public Window {
@@ -39,9 +36,6 @@ namespace Browser {
 		/// Builds and returns the URL for the launcher to open, including reading config files and
 		/// inserting their contents into the query params
 		CefString BuildURL() const;
-
-		/// Goes through all the key-value pairs in the given query string and calls the callback for each one.
-		void ParseQuery(std::string_view query, std::function<void(const std::string_view&, const std::string_view&)> callback);
 
 		/* 
 		Functions called by GetResourceRequestHandler. The result will be returned immediately and must not be null.
@@ -80,25 +74,6 @@ namespace Browser {
 			std::filesystem::path plugin_config_path;
 #endif
 	};
-}
-
-#if defined(_WIN32)
-#define PQTOSTRING ToWString
-#else
-#define PQTOSTRING ToString
-#endif
-
-#define PQCHECK(KEY) \
-if (key == #KEY) { \
-	has_##KEY = true; \
-	KEY = CefURIDecode(std::string(val), true, (cef_uri_unescape_rule_t)(UU_SPACES | UU_PATH_SEPARATORS | UU_URL_SPECIAL_CHARS_EXCEPT_PATH_SEPARATORS | UU_REPLACE_PLUS_WITH_SPACE)).PQTOSTRING(); \
-	return; \
-}
-
-#define PQBOOL(KEY) \
-if (key == #KEY) { \
-	KEY = (val.size() > 0 && val != "0"); \
-	return; \
 }
 
 #endif

@@ -135,8 +135,31 @@ void BoltFailToObtainLockfile(std::filesystem::path tempdir) {
 
 #if defined(__linux__)
 int main(int argc, char* argv[]) {
-	CefMainArgs main_args(argc, argv);
+	// Provide CEF with command-line arguments
+	// Add a flag to disable web security, because a certain company's API endpoints don't have correct
+	// access control settings; remove this setting if they ever get their stuff together
+	// Also add a flag to disable GPUCache being saved on disk because it just breaks sometimes?
+	const char* arg1 = "--disable-web-security";
+	const char* arg2 = "--disable-gpu-shader-disk-cache";
+	const size_t arg1_len = strlen(arg1);
+	const size_t arg2_len = strlen(arg2);
+	char* arg1_ = new char[arg1_len + 1];
+	char* arg2_ = new char[arg2_len + 1];
+	memcpy(arg1_, arg1, arg1_len);
+	memcpy(arg2_, arg2, arg2_len);
+	arg1_[arg1_len] = '\0';
+	arg2_[arg2_len] = '\0';
+	char** argv_ = new char*[argc + 2];
+	memcpy(argv_, argv, argc * sizeof(char*));
+	argv_[argc] = arg1_;
+	argv_[argc + 1] = arg2_;
+
+	CefMainArgs main_args(argc + 2, argv_);
 	int ret = BoltRunAnyProcess(main_args);
+
+	delete[] argv_;
+	delete[] arg2_;
+	delete[] arg1_;
 	return ret;
 }
 
@@ -237,9 +260,15 @@ int wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, wchar_t* lpCmdLine, i
 		fmt::print("Exiting with error: CommandLineToArgvW failed\n");
 		return 1;
 	}
+	const wchar_t* const arg = L"--disable-web-security";
 	const wchar_t* subp_arg = L"--type=";
+	bool has_arg = false;
 	bool is_subprocess = false;
 	for(size_t i = 0; i < argc; i += 1) {
+		// check if arg is --disable-web-security
+		if (wcsstr(argv[i], arg)) {
+			has_arg = true;
+		}
 		// check if arg begins with --type=
 		if (wcsncmp(argv[i], subp_arg, wcslen(subp_arg)) == 0) {
 			is_subprocess = true;
@@ -252,13 +281,24 @@ int wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, wchar_t* lpCmdLine, i
 		int ret = BoltRunAnyProcess(CefMainArgs(hInstance));
 		CefShutdown();
 		return ret;
-	} else {
+	} else if (has_arg) {
 		// CefApp struct - this implements handlers used by multiple processes
 		Browser::App cef_app_;
 		CefRefPtr<Browser::App> cef_app = &cef_app_;
 		int ret = BoltRunBrowserProcess(CefMainArgs(hInstance), cef_app);
 		CefShutdown();
 		return ret;
+	} else {
+		wchar_t module_name[1024];
+		GetModuleFileNameW(NULL, module_name, 1024);
+		std::wstring command_line(lpCmdLine);
+		command_line += std::wstring(L" ");
+		command_line += std::wstring(arg);
+		PROCESS_INFORMATION process_info;
+		STARTUPINFOW startup_info;
+		GetStartupInfoW(&startup_info);
+		CreateProcessW(module_name, command_line.data(), NULL, NULL, 0, 0, NULL, NULL, &startup_info, &process_info);
+		return 0;
 	}
 }
 
