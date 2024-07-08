@@ -16,9 +16,9 @@ export enum Game {
 }
 
 export enum Client {
-	official = 'official',
-	runelite = 'runelite',
-	hdos = 'hdos'
+	official = 'Official',
+	runelite = 'RuneLite',
+	hdos = 'HDOS'
 }
 
 export const clientMap: Record<Game, Client[]> = {

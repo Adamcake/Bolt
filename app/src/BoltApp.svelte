@@ -8,6 +8,7 @@
 	import { BoltService } from '$lib/Services/BoltService';
 	import { AuthService } from '$lib/Services/AuthService';
 	import MainLayout from '$lib/Components/MainLayout.svelte';
+	import Launch from '$lib/Components/Launch.svelte';
 
 	let showPluginMenu: boolean = false;
 
@@ -27,7 +28,7 @@
 		<TopBar></TopBar>
 		<div class="mt-16 grid h-full grid-flow-col grid-cols-3">
 			<div></div>
-			<!-- <Launch bind:showPluginMenu></Launch> -->
+			<Launch bind:showPluginMenu></Launch>
 			<div></div>
 		</div>
 		<LogView logs={$logs} />

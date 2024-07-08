@@ -54,9 +54,11 @@ export function initConfig() {
 				logger.error(
 					'The config saved on disk is not the correct format. It has been restored to default.'
 				);
+				GlobalState.configHasPendingChanges = true;
 			}
 		} catch (e) {
 			logger.error('Unable to parse config, restoring to default');
+			GlobalState.configHasPendingChanges = true;
 		}
 	}
 

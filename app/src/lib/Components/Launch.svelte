@@ -14,6 +14,7 @@
 	export let showPluginMenu = false;
 
 	let { config } = GlobalState;
+	$: accounts = BoltService.findSession($config.selected_user_id ?? '')?.accounts ?? [];
 
 	// when play is clicked, check the selected_play store for all relevant details
 	// calls the appropriate launch functions
@@ -23,51 +24,33 @@
 		}
 		const session = BoltService.findSession($config.selected_user_id);
 		if (!session) return logger.warn('Unable to launch game, session was not found.');
-		const { session_id, tokens } = session;
-
+		const { session_id } = session;
+		const account = session.accounts.find(
+			(account) => account.accountId == $config.selected_account_id
+		);
+		if (!account) return logger.warn('Unable to launch game, account was not found.');
+		const { accountId, displayName } = account;
+		const isWindows = bolt.platform === Platform.Windows;
+		const isLinux = bolt.platform === Platform.Linux;
 		switch (game) {
 			case Game.osrs:
 				switch (client) {
 					case Client.official:
-						launchOfficialClient(
-							bolt.platform === 'windows',
-							true,
-							<string>$selectedPlay.credentials?.session_id,
-							<string>$selectedPlay.character?.accountId,
-							<string>$selectedPlay.character?.displayName
-						);
+						launchOfficialClient(isWindows, true, session_id, accountId, displayName);
 						break;
 					case Client.runelite:
-						launchRuneLite(
-							<string>$selectedPlay.credentials?.session_id,
-							<string>$selectedPlay.character?.accountId,
-							<string>$selectedPlay.character?.displayName
-						);
+						launchRuneLite(session_id, accountId, displayName, false);
 						break;
 					case Client.hdos:
-						launchHdos(
-							<string>$selectedPlay.credentials?.session_id,
-							<string>$selectedPlay.character?.accountId,
-							<string>$selectedPlay.character?.displayName
-						);
+						launchHdos(session_id, accountId, displayName);
 						break;
 				}
 				break;
 			case Game.rs3:
-				if (bolt.platform === 'linux') {
-					launchRS3Linux(
-						<string>$selectedPlay.credentials?.session_id,
-						<string>$selectedPlay.character?.accountId,
-						<string>$selectedPlay.character?.displayName
-					);
+				if (isLinux) {
+					launchRS3Linux(session_id, accountId, displayName);
 				} else {
-					launchOfficialClient(
-						bolt.platform === 'windows',
-						false,
-						<string>$selectedPlay.credentials?.session_id,
-						<string>$selectedPlay.character?.accountId,
-						<string>$selectedPlay.character?.displayName
-					);
+					launchOfficialClient(isWindows, false, session_id, accountId, displayName);
 				}
 				break;
 		}
@@ -87,37 +70,24 @@
 		Play
 	</button>
 	<div class="mx-auto my-2">
-		<label>
-			<span class="text-sm">Game Client</span>
-			<select
-				id="game_client_select"
-				class="mx-auto w-52 cursor-pointer rounded-lg border-2 border-slate-300 bg-inherit p-2 text-inherit duration-200 hover:opacity-75 dark:border-slate-800"
-				bind:value={$config.selected_client}
-			>
-				{#each clientMap[$config.selected_game] as client}
-					<option
-						disabled={client === Client.official && bolt.platform !== Platform.Linux}
-						value={client}>{client}</option
-					>
-				{/each}
-			</select>
-		</label>
-		<!-- {#if $selectedPlay.game == Game.osrs}
-			<label for="game_client_select" class="text-sm">Game Client</label>
-			<br />
-			<select
-				id="game_client_select"
-				class="mx-auto w-52 cursor-pointer rounded-lg border-2 border-slate-300 bg-inherit p-2 text-inherit duration-200 hover:opacity-75 dark:border-slate-800"
-				bind:this={clientSelect}
-				on:change={clientChanged}
-			>
-				{#if bolt.platform !== 'linux'}
-					<option data-id={Client.osrs} class="dark:bg-slate-900">OSRS Client</option>
-				{/if}
-				<option data-id={Client.runeLite} class="dark:bg-slate-900">RuneLite</option>
-				<option data-id={Client.hdos} class="dark:bg-slate-900">HDOS</option>
-			</select>
-		{:else if $selectedPlay.game == Game.rs3}
+		{#if $config.selected_game == Game.osrs}
+			<label>
+				<span class="text-sm">Game Client</span>
+				<select
+					id="game_client_select"
+					class="mx-auto w-52 cursor-pointer rounded-lg border-2 border-slate-300 bg-inherit p-2 text-inherit duration-200 hover:opacity-75 dark:border-slate-800"
+					bind:value={$config.selected_client}
+				>
+					{#each clientMap[$config.selected_game] as client}
+						<option
+							class="dark:bg-slate-900"
+							disabled={client === Client.official && bolt.platform !== Platform.Linux}
+							value={client}>{client}</option
+						>
+					{/each}
+				</select>
+			</label>
+		{:else if $config.selected_game === Game.rs3}
 			<button
 				disabled={!bolt.hasBoltPlugins}
 				title={bolt.hasBoltPlugins ? null : 'Coming soon...'}
@@ -128,28 +98,29 @@
 			>
 				Plugin menu
 			</button>
-		{/if} -->
+		{/if}
 	</div>
 	<div class="mx-auto my-2">
-		<label for="character_select" class="text-sm"> Character</label>
-		<br />
-		<select
-			id="character_select"
-			class="mx-auto w-52 cursor-pointer rounded-lg border-2 border-slate-300 bg-inherit p-2 text-inherit duration-200 hover:opacity-75 dark:border-slate-800"
-			bind:this={characterSelect}
-			on:change={() => characterChanged()}
-		>
-			{#if $selectedPlay.account}
-				{#each $selectedPlay.account.characters as character}
-					<option data-id={character[1].accountId} class="dark:bg-slate-900">
-						{#if character[1].displayName}
-							{character[1].displayName}
+		<label>
+			<span class="text-sm">Character</span>
+
+			<select
+				id="character_select"
+				class="mx-auto w-52 cursor-pointer rounded-lg border-2 border-slate-300 bg-inherit p-2 text-inherit duration-200 hover:opacity-75 dark:border-slate-800"
+				bind:value={$config.selected_account_id}
+			>
+				{#each accounts as account}
+					<option value={account.accountId} class="dark:bg-slate-900">
+						{#if account.displayName}
+							{account.displayName}
 						{:else}
 							New Character
 						{/if}
 					</option>
+				{:else}
+					<option class="dark:bg-slate-900" disabled selected>No characters</option>
 				{/each}
-			{/if}
-		</select>
+			</select>
+		</label>
 	</div>
 </div>
