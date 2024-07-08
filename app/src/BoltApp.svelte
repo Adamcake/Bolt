@@ -1,27 +1,22 @@
 <script lang="ts">
 	import TopBar from '$lib/Components/TopBar.svelte';
-	import Auth from '$lib/Components/Auth.svelte';
+	import Auth from '@/AuthApp.svelte';
 	import PluginMenu from '$lib/Components/PluginMenu.svelte';
 	import LogView from '$lib/Components/LogView.svelte';
 	import { logger } from '$lib/Util/Logger';
 	import DisclaimerModal from '$lib/Components/DisclaimerModal.svelte';
 	import { BoltService } from '$lib/Services/BoltService';
 	import { AuthService } from '$lib/Services/AuthService';
-	import { GlobalState } from '$lib/State/GlobalState';
+	import MainLayout from '$lib/Components/MainLayout.svelte';
 
 	let showPluginMenu: boolean = false;
-	const { config } = GlobalState;
-	$: darkTheme = $config.use_dark_theme;
 
 	const logs = logger.logs;
 </script>
 
 <svelte:window on:beforeunload={() => BoltService.saveConfig()} />
 
-<main
-	class:dark={darkTheme}
-	class="fixed top-0 h-screen w-screen bg-slate-100 text-xs text-slate-900 duration-200 sm:text-sm md:text-base dark:bg-slate-900 dark:text-slate-50"
->
+<MainLayout>
 	{#if AuthService.authenticating}
 		<Auth></Auth>
 	{:else}
@@ -37,4 +32,4 @@
 		</div>
 		<LogView logs={$logs} />
 	{/if}
-</main>
+</MainLayout>

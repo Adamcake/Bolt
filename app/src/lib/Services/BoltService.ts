@@ -56,12 +56,6 @@ export class BoltService {
 				}
 			};
 
-			// TODO: figure out why this was here, and how to re-implement it
-			// selectedPlay.update((data) => {
-			// 	data.credentials = credentialsSub.get(<string>selectedPlaySub.account?.userId);
-			// 	return data;
-			// });
-
 			const sessions = get(GlobalState.sessions);
 			xml.send(JSON.stringify(sessions));
 		});

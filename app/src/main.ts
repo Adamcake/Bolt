@@ -1,4 +1,5 @@
-import App from '@/App.svelte';
+import BoltApp from '@/BoltApp.svelte';
+import AuthApp from '@/AuthApp.svelte';
 import { clientListPromise } from '$lib/Util/store';
 import { getNewClientListPromise } from '$lib/Util/functions';
 import { type BoltMessage } from '$lib/Util/interfaces';
@@ -6,34 +7,35 @@ import { logger } from '$lib/Util/Logger';
 import { UserService, type Session } from '$lib/Services/UserService';
 import { AuthService, type AuthTokens } from '$lib/Services/AuthService';
 import { Platform, bolt } from '$lib/State/Bolt';
-import { initConfig } from '$lib/Util/ConfigUtils';
+import { initConfig, selectFirstSession } from '$lib/Util/ConfigUtils';
 import { BoltService } from '$lib/Services/BoltService';
 import { GlobalState } from '$lib/State/GlobalState';
 import { get } from 'svelte/store';
 
-initBolt();
+let app: BoltApp | AuthApp;
+const appConfig = {
+	target: document.getElementById('app') as HTMLElement
+};
 
-// TODO: make this less obscure
+// TODO: instead of rendering different apps here, we should have separate .html files.
+// For eg, index.html, and authenticate.html
 // window.opener is set when the current window is a popup (the auth window)
 // id_token is set after sending the consent request, aka the user is still authenticating
 if (window.opener || window.location.search.includes('&id_token')) {
-	AuthService.authenticating = true;
+	app = new AuthApp(appConfig);
 } else {
-	setup();
+	setupBoltApp();
+	app = new BoltApp(appConfig);
 }
 
-async function setup() {
+export default app;
+
+async function setupBoltApp() {
+	initBolt();
 	await refreshStoredSessions();
 	initConfig();
 	addMessageListeners();
 }
-
-// TODO: render a different app when authenticating, instead of using AuthService.authenticating
-const app = new App({
-	target: document.getElementById('app')!
-});
-
-export default app;
 
 function initBolt() {
 	const params = new URLSearchParams(window.location.search);
@@ -108,11 +110,13 @@ function addMessageListeners(): void {
 				}
 				const session_id = event.data.sessionId;
 				const sessionResult = await UserService.buildSession(tokens, session_id);
+				const { config, sessions } = GlobalState;
 				if (sessionResult.ok) {
-					GlobalState.sessions.update((session) => {
+					sessions.update((session) => {
 						session.push(sessionResult.value);
 						return session;
 					});
+					if (!get(config).selected_user_id) selectFirstSession();
 					BoltService.saveCredentials();
 					logger.info(`Successfully added account '${sessionResult.value.user.displayName}'`);
 				} else {
@@ -121,7 +125,6 @@ function addMessageListeners(): void {
 
 				AuthService.pendingLoginWindow = null;
 				tokens = null;
-				BoltService.saveCredentials();
 				break;
 			}
 			case 'authFailed': {

@@ -4,7 +4,7 @@
 	import Dropdown from '$lib/Components/CommonUI/Dropdown.svelte';
 	import { AuthService } from '$lib/Services/AuthService';
 	import { bolt } from '$lib/State/Bolt';
-	import Account from '$lib/Components/Account.svelte';
+	import AccountDropdownContent from '$lib/Components/AccountDropdownContent.svelte';
 	import { GlobalState } from '$lib/State/GlobalState';
 	import { BoltService } from '$lib/Services/BoltService';
 
@@ -62,7 +62,7 @@
 				</button>
 
 				<div slot="content" class="w-40">
-					<Account />
+					<AccountDropdownContent />
 				</div>
 			</Dropdown>
 		{:else}

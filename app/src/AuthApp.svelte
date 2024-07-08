@@ -4,6 +4,7 @@
 	import type { BoltMessage } from '$lib/Util/interfaces';
 	import { onDestroy, onMount } from 'svelte';
 	import { bolt } from '$lib/State/Bolt';
+	import MainLayout from '$lib/Components/MainLayout.svelte';
 
 	const parentWindow = window.opener as {
 		postMessage: (event: BoltMessage, allowedOrigin: string) => void;
@@ -95,8 +96,8 @@
 	});
 </script>
 
-<div
-	class="container mx-auto bg-slate-100 p-5 text-center text-slate-900 dark:bg-slate-900 dark:text-slate-50"
->
-	<img src="svgs/circle-notch-solid.svg" alt="" class="mx-auto h-1/6 w-1/6 animate-spin" />
-</div>
+<MainLayout>
+	<div class="flex h-full items-center justify-center">
+		<img class="h-60 w-60 animate-spin" src="svgs/circle-notch-solid.svg" alt="loading" />
+	</div>
+</MainLayout>
