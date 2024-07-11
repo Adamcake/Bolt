@@ -239,7 +239,8 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 	}
 
 	// internal pages
-	if (domain == "bolt-internal") {
+	const bool is_internal_initiator = request_initiator == L"https://bolt-internal";
+	if (domain == "bolt-internal" && is_internal_initiator) {
 		disable_default_handling = true;
 
 		// instruction to launch RS3 .deb
@@ -454,7 +455,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 		}
 	}
 
-	if (!browser->IsSame(this->browser) || !frame->IsMain()) {
+	if (!is_internal_initiator) {
 		return nullptr;
 	}
 
