@@ -1,14 +1,11 @@
 #include "window_launcher.hxx"
 #include "resource_handler.hxx"
 
-#include "include/cef_parser.h"
-
 #include <archive.h>
 #include <archive_entry.h>
 #include <fcntl.h>
 #include <filesystem>
 #include <fmt/core.h>
-#include <functional>
 #include <spawn.h>
 
 // see #34 for why this function exists and why it can't be run between fork-exec or just run `env`.
@@ -40,28 +37,6 @@ bool FindJava(const char* java_home, std::string& out) {
 	}
 	return false;
 }
-
-void ParseQuery(std::string_view query, std::function<void(const std::string_view&, const std::string_view&)> callback) {
-	size_t pos = 0;
-	while (true) {
-		const size_t next_and = query.find('&', pos);
-		const size_t next_eq = query.find('=', pos);
-		if (next_eq == std::string_view::npos) break;
-		else if (next_and != std::string_view::npos && next_eq > next_and) {
-			pos = next_and + 1;
-			continue;
-		}
-		const bool is_last = next_and == std::string_view::npos;
-		const auto end = is_last ? query.end() : query.begin() + next_and;
-		const std::string_view key(query.begin() + pos, query.begin() + next_eq);
-		const std::string_view val(query.begin() + next_eq + 1, end);
-		callback(key, val);
-		if (is_last) break;
-		pos = next_and + 1;
-	}
-}
-const cef_uri_unescape_rule_t pqrule = (cef_uri_unescape_rule_t)(UU_SPACES | UU_PATH_SEPARATORS | UU_URL_SPECIAL_CHARS_EXCEPT_PATH_SEPARATORS | UU_REPLACE_PLUS_WITH_SPACE);
-#define PQCHECK(KEY) if (key == #KEY) { has_##KEY = true; KEY = CefURIDecode(std::string(val), true, pqrule).ToString(); return; }
 
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<CefRequest> request, std::string_view query) {
 	/* strings that I don't want to be searchable, which also need to be mutable for passing to env functions */
@@ -102,18 +77,14 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<C
 #if defined(BOLT_PLUGINS)
 	bool plugin_loader = false;
 #endif
-	ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
+	this->ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
 		PQCHECK(hash)
 		PQCHECK(config_uri)
 		PQCHECK(jx_session_id)
 		PQCHECK(jx_character_id)
 		PQCHECK(jx_display_name)
-
 #if defined(BOLT_PLUGINS)
-		// no reason to URIDecode this
-		if (key == "plugin_loader" && val == "1") {
-			plugin_loader = true;
-		}
+		PQBOOL(plugin_loader)
 #endif
 	});
 
@@ -344,7 +315,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 	bool has_jx_character_id = false;
 	std::string jx_display_name;
 	bool has_jx_display_name = false;
-	ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
+	this->ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
 		PQCHECK(rl_path)
 		PQCHECK(id)
 		PQCHECK(jx_session_id)
@@ -501,7 +472,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<
 	bool has_jx_character_id = false;
 	std::string jx_display_name;
 	bool has_jx_display_name = false;
-	ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
+	this->ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
 		PQCHECK(version)
 		PQCHECK(jx_session_id)
 		PQCHECK(jx_character_id)
