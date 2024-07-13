@@ -238,10 +238,15 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 302, "text/plain", location);
 	}
 
-	// internal pages
-	const bool is_internal_initiator = request_initiator == L"https://bolt-internal";
-	if (domain == "bolt-internal" && is_internal_initiator) {
+	const bool is_internal_target = domain == "bolt-internal";
+	const bool is_internal_initiator = request_initiator == "https://bolt-internal";
+
+	if (is_internal_target) {
 		disable_default_handling = true;
+	}
+
+	// internal API endpoints - only allowed if it's a request from internal URL to internal URL
+	if (is_internal_target && is_internal_initiator) {
 
 		// instruction to launch RS3 .deb
 		if (path == "/launch-rs3-deb") {
@@ -443,8 +448,11 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 		if (path == "/json-file-picker") {
 			return new FilePicker(browser, {".json"});
 		}
+	}
 
-		// respond using internal hashmap of filenames
+	// internal hashmap of filenames - allowed to fetch these either if the request is from an internal origin,
+	// or is_navigation is true, since navigations have no origin
+	if (is_internal_target && (is_internal_initiator || is_navigation)) {
 		FileManager::File file = this->file_manager->get(path);
 		if (file.contents) {
 			return new ResourceHandler(file, this->file_manager);
