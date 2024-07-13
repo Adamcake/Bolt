@@ -36,6 +36,8 @@ async function setupBoltApp() {
 	// changes the selected session/account if they aren't in the list of available options.
 	// The one drawback to this method, is if the user picks light mode, it will show dark mode first
 	// and change to white mode after refreshing.
+	// TODO: instead of having initConfig removing the saved session from the config if it doesn't exist,
+	// refreshStoredSessions should remove it instead, that way the user's preferences load first
 	await refreshStoredSessions();
 	initConfig();
 	addMessageListeners();
