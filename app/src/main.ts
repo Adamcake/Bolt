@@ -159,7 +159,6 @@ function addMessageListeners(): void {
 	});
 }
 
-// TODO: there is a bug if the token is >30 mins old, it fails to renew (401 unauthorized)
 async function refreshStoredSessions() {
 	const sessions = get(GlobalState.sessions);
 	const expiredTokens: string[] = [];
