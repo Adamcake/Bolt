@@ -14,7 +14,6 @@ export interface AuthTokens {
 }
 
 export class AuthService {
-	static authenticating: boolean = false;
 	static pendingLoginWindow: Window | null = null;
 
 	static async openLoginWindow(origin: string, redirect: string, clientid: string): Promise<void> {
