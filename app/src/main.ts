@@ -200,4 +200,5 @@ async function refreshStoredSessions() {
 	});
 
 	GlobalState.sessions.set(sessions);
+	BoltService.saveCredentials();
 }
