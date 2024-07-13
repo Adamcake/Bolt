@@ -1,4 +1,8 @@
 <script lang="ts">
+	import PluginModal from '$lib/Components/PluginModal.svelte';
+	import { BoltService } from '$lib/Services/BoltService';
+	import { bolt, Platform } from '$lib/State/Bolt';
+	import { GlobalState } from '$lib/State/GlobalState';
 	import {
 		launchHdos,
 		launchOfficialClient,
@@ -7,10 +11,6 @@
 	} from '$lib/Util/functions';
 	import { Client, clientMap, Game } from '$lib/Util/interfaces';
 	import { logger } from '$lib/Util/Logger';
-	import { bolt, Platform } from '$lib/State/Bolt';
-	import { GlobalState } from '$lib/State/GlobalState';
-	import { BoltService } from '$lib/Services/BoltService';
-	import PluginModal from '$lib/Components/PluginModal.svelte';
 
 	let pluginModal: PluginModal;
 	let { config } = GlobalState;
@@ -57,7 +57,9 @@
 	}
 </script>
 
-<PluginModal bind:this={pluginModal}></PluginModal>
+{#if bolt.hasBoltPlugins}
+	<PluginModal bind:this={pluginModal}></PluginModal>
+{/if}
 
 <div class="bg-grad flex h-full flex-col border-slate-300 p-5 duration-200 dark:border-slate-800">
 	<img
