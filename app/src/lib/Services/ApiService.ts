@@ -1,5 +1,6 @@
 const BASE_URL = 'bolt-internal';
 
+// Unused. Could simplify BoltService, AuthService, UserService but would need changes
 export class ApiService {
 	static async get(route: string, params?: URLSearchParams): Promise<Response> {
 		let parsedParams = '';

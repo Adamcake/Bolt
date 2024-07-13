@@ -1,10 +1,9 @@
-import { get } from 'svelte/store';
-import { type GameClient, type Direct6Token } from '$lib/Util/interfaces';
-import { internalUrl } from '$lib/Util/store';
-import { logger } from '$lib/Util/Logger';
 import { BoltService } from '$lib/Services/BoltService';
 import { bolt } from '$lib/State/Bolt';
 import { GlobalState } from '$lib/State/GlobalState';
+import { type Direct6Token, type GameClient } from '$lib/Util/interfaces';
+import { logger } from '$lib/Util/Logger';
+import { get } from 'svelte/store';
 
 // asynchronously download and launch RS3's official .deb client using the given env variables
 export function launchRS3Linux(
@@ -258,7 +257,7 @@ export function launchHdos(
 export function getNewClientListPromise(): Promise<GameClient[]> {
 	return new Promise((resolve, reject) => {
 		const xml = new XMLHttpRequest();
-		const url = get(internalUrl).concat('/list-game-clients');
+		const url = bolt.internalUrl.concat('/list-game-clients');
 		xml.open('GET', url, true);
 		xml.onreadystatechange = () => {
 			if (xml.readyState == 4) {
@@ -278,6 +277,7 @@ export function getNewClientListPromise(): Promise<GameClient[]> {
 	});
 }
 
+// TODO: move to BoltService
 export function savePluginConfig(): void {
 	const xml = new XMLHttpRequest();
 	xml.open('POST', '/save-plugin-config', true);

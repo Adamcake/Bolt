@@ -1,10 +1,10 @@
 <script lang="ts">
+	import MainLayout from '$lib/Components/MainLayout.svelte';
 	import { AuthService, type AuthTokens } from '$lib/Services/AuthService';
 	import { CookieService } from '$lib/Services/CookieService';
+	import { bolt } from '$lib/State/Bolt';
 	import type { BoltMessage } from '$lib/Util/interfaces';
 	import { onDestroy, onMount } from 'svelte';
-	import { bolt } from '$lib/State/Bolt';
-	import MainLayout from '$lib/Components/MainLayout.svelte';
 
 	const parentWindow = window.opener as {
 		postMessage: (event: BoltMessage, allowedOrigin: string) => void;
@@ -59,8 +59,7 @@
 	 * Messages the parent window with an event name and associated data
 	 */
 	function message(event: BoltMessage) {
-		const internalUrl = 'https://bolt-internal';
-		parentWindow.postMessage(event, internalUrl);
+		parentWindow.postMessage(event, bolt.internalUrl);
 	}
 
 	onMount(async () => {

@@ -1,15 +1,15 @@
-import BoltApp from '@/BoltApp.svelte';
-import AuthApp from '@/AuthApp.svelte';
-import { clientListPromise } from '$lib/Util/store';
+import { AuthService, type AuthTokens } from '$lib/Services/AuthService';
+import { BoltService } from '$lib/Services/BoltService';
+import { UserService, type Session } from '$lib/Services/UserService';
+import { Platform, bolt } from '$lib/State/Bolt';
+import { GlobalState } from '$lib/State/GlobalState';
+import { initConfig, selectFirstSession } from '$lib/Util/ConfigUtils';
 import { getNewClientListPromise } from '$lib/Util/functions';
 import { type BoltMessage } from '$lib/Util/interfaces';
 import { logger } from '$lib/Util/Logger';
-import { UserService, type Session } from '$lib/Services/UserService';
-import { AuthService, type AuthTokens } from '$lib/Services/AuthService';
-import { Platform, bolt } from '$lib/State/Bolt';
-import { initConfig, selectFirstSession } from '$lib/Util/ConfigUtils';
-import { BoltService } from '$lib/Services/BoltService';
-import { GlobalState } from '$lib/State/GlobalState';
+import { clientListPromise } from '$lib/Util/store';
+import AuthApp from '@/AuthApp.svelte';
+import BoltApp from '@/BoltApp.svelte';
 import { get } from 'svelte/store';
 
 let app: BoltApp | AuthApp;
@@ -32,6 +32,10 @@ export default app;
 
 async function setupBoltApp() {
 	initBolt();
+	// refreshStoredSessions needs to happen before initConfig, since initConfig contains code that
+	// changes the selected session/account if they aren't in the list of available options.
+	// The one drawback to this method, is if the user picks light mode, it will show dark mode first
+	// and change to white mode after refreshing.
 	await refreshStoredSessions();
 	initConfig();
 	addMessageListeners();
@@ -90,9 +94,8 @@ function initBolt() {
 
 function addMessageListeners(): void {
 	const { origin, origin_2fa } = bolt.env;
-	const boltUrl = 'https://bolt-internal';
 
-	const allowedOrigins = [boltUrl, origin, origin_2fa];
+	const allowedOrigins = [bolt.internalUrl, origin, origin_2fa];
 	let tokens: AuthTokens | null = null;
 	window.addEventListener('message', async (event: MessageEvent<BoltMessage>) => {
 		if (!allowedOrigins.includes(event.origin)) {
