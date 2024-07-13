@@ -1,7 +1,8 @@
 <script lang="ts">
-	import GeneralSettingsTab from '$lib/Components/Settings/GeneralSettingsTab.svelte';
-	import Rs3SettingsTab from '$lib/Components/Settings/Rs3SettingsTab.svelte';
 	import Modal from '$lib/Components/CommonUI/Modal.svelte';
+	import GeneralSettingsTab from '$lib/Components/Settings/GeneralSettingsTab.svelte';
+	import OsrsSettingsTab from '$lib/Components/Settings/OsrsSettingsTab.svelte';
+	import Rs3SettingsTab from '$lib/Components/Settings/Rs3SettingsTab.svelte';
 
 	let modal: Modal;
 	export function open() {
@@ -9,81 +10,49 @@
 	}
 
 	// settings categories
-	enum Options {
+	enum Tab {
 		general,
 		osrs,
 		rs3
 	}
 
 	// variables for swapping options and styling
-	let showOption: Options = Options.osrs;
+	let openTab: Tab = Tab.osrs;
 	let activeClass =
 		'border-2 border-blue-500 bg-blue-500 hover:opacity-75 font-bold text-black duration-200 rounded-lg p-1 mx-auto my-1 w-3/4';
 	let inactiveClass =
 		'border-2 border-blue-500 hover:opacity-75 duration-200 rounded-lg p-1 mx-auto my-1 w-3/4';
-	let generalButton: HTMLButtonElement;
-	let osrsButton: HTMLButtonElement;
-	let rs3Button: HTMLButtonElement;
-
-	// uses enum above to determine active option and styling
-	function toggleOptions(option: Options): void {
-		switch (option) {
-			case Options.general:
-				showOption = Options.general;
-				generalButton!.classList.value = activeClass;
-				osrsButton!.classList.value = inactiveClass;
-				rs3Button!.classList.value = inactiveClass;
-				break;
-			case Options.osrs:
-				showOption = Options.osrs;
-				generalButton!.classList.value = inactiveClass;
-				osrsButton!.classList.value = activeClass;
-				rs3Button!.classList.value = inactiveClass;
-				break;
-			case Options.rs3:
-				showOption = Options.rs3;
-				generalButton!.classList.value = inactiveClass;
-				osrsButton!.classList.value = inactiveClass;
-				rs3Button!.classList.value = activeClass;
-				break;
-		}
-	}
 </script>
 
 <Modal bind:this={modal} class="h-3/4 w-3/4">
 	<div class="grid h-full grid-cols-4">
 		<div class="relative h-full border-r-2 border-slate-300 pt-10 dark:border-slate-800">
 			<button
-				id="general_button"
-				bind:this={generalButton}
-				class={inactiveClass}
+				class={openTab === Tab.general ? activeClass : inactiveClass}
 				on:click={() => {
-					toggleOptions(Options.general);
+					openTab = Tab.general;
 				}}>General</button
 			><br />
 			<button
-				id="osrs_button"
-				bind:this={osrsButton}
-				class={activeClass}
+				class={openTab === Tab.osrs ? activeClass : inactiveClass}
 				on:click={() => {
-					toggleOptions(Options.osrs);
+					openTab = Tab.osrs;
 				}}>OSRS</button
 			><br />
 			<button
-				id="rs3_button"
-				bind:this={rs3Button}
-				class={inactiveClass}
+				class={openTab === Tab.rs3 ? activeClass : inactiveClass}
 				on:click={() => {
-					toggleOptions(Options.rs3);
+					openTab = Tab.rs3;
 				}}>RS3</button
 			>
 		</div>
-		{#if showOption == Options.general}
-			<GeneralSettingsTab></GeneralSettingsTab>
-		{:else if showOption == Options.osrs}
-			<!-- <Osrs></Osrs> -->
-		{:else if showOption == Options.rs3}
-			<Rs3SettingsTab></Rs3SettingsTab>
+
+		{#if openTab == Tab.general}
+			<GeneralSettingsTab />
+		{:else if openTab == Tab.osrs}
+			<OsrsSettingsTab />
+		{:else if openTab == Tab.rs3}
+			<Rs3SettingsTab />
 		{/if}
 	</div>
 </Modal>

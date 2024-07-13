@@ -1,9 +1,9 @@
-import { logger } from '$lib/Util/Logger';
 import { AuthService } from '$lib/Services/AuthService';
-import { type Session } from '$lib/Services/UserService';
+import { type Account, type Session } from '$lib/Services/UserService';
 import { GlobalState } from '$lib/State/GlobalState';
-import { get } from 'svelte/store';
 import { selectFirstSession } from '$lib/Util/ConfigUtils';
+import { logger } from '$lib/Util/Logger';
+import { get } from 'svelte/store';
 
 let saveInProgress: boolean = false;
 
@@ -61,8 +61,29 @@ export class BoltService {
 		});
 	}
 
+	static async openFilePicker(): Promise<string | undefined> {
+		return new Promise((resolve) => {
+			const xml = new XMLHttpRequest();
+			xml.onreadystatechange = () => {
+				if (xml.readyState == 4) {
+					// if the user closes the file picker without selecting a file, status here is 204
+					if (xml.status == 200) {
+						return resolve(xml.responseText);
+					}
+					return resolve(undefined);
+				}
+			};
+			xml.open('GET', '/jar-file-picker', true);
+			xml.send();
+		});
+	}
+
 	static findSession(userId: string): Session | undefined {
 		const sessions = get(GlobalState.sessions);
 		return sessions.find((session) => session.user.userId === userId);
+	}
+
+	static findAccount(accounts: Account[], accountId: string): Account | undefined {
+		return accounts.find((account) => account.accountId == accountId);
 	}
 }

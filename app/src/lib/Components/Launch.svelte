@@ -19,15 +19,13 @@
 	// when play is clicked, check the selected_play store for all relevant details
 	// calls the appropriate launch functions
 	function launch(game: Game, client: Client): void {
-		if (!$config.selected_user_id) {
+		if (!$config.selected_user_id || !$config.selected_account_id) {
 			return logger.warn('Please log in to launch a client');
 		}
 		const session = BoltService.findSession($config.selected_user_id);
 		if (!session) return logger.warn('Unable to launch game, session was not found.');
 		const { session_id } = session;
-		const account = session.accounts.find(
-			(account) => account.accountId == $config.selected_account_id
-		);
+		const account = BoltService.findAccount(session.accounts, $config.selected_account_id);
 		if (!account) return logger.warn('Unable to launch game, account was not found.');
 		const { accountId, displayName } = account;
 		const isWindows = bolt.platform === Platform.Windows;
