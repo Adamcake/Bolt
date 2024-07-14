@@ -83,7 +83,7 @@
 					{#each clientMap[$config.selected_game] as client}
 						<option
 							class="dark:bg-slate-900"
-							disabled={client === Client.official && bolt.platform !== Platform.Linux}
+							disabled={client === Client.official && bolt.platform == Platform.Linux}
 							value={client}>{client}</option
 						>
 					{/each}

@@ -26,7 +26,7 @@ export const defaultConfig: Config = {
 	runelite_use_custom_jar: false,
 	use_custom_rs_config_uri: false,
 	selected_game: Game.osrs,
-	selected_client: Client.official
+	selected_client: Client.runelite
 };
 
 export function initConfig() {
