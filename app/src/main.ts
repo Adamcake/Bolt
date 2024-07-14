@@ -24,18 +24,14 @@ const appConfig = {
 if (window.opener || window.location.search.includes('&id_token')) {
 	app = new AuthApp(appConfig);
 } else {
-	setupBoltApp();
+	initBolt();
+	initConfig();
+	addMessageListeners();
+	refreshStoredSessions();
 	app = new BoltApp(appConfig);
 }
 
 export default app;
-
-async function setupBoltApp() {
-	initBolt();
-	initConfig();
-	await refreshStoredSessions();
-	addMessageListeners();
-}
 
 function initBolt() {
 	const params = new URLSearchParams(window.location.search);
@@ -91,7 +87,7 @@ function initBolt() {
 function addMessageListeners(): void {
 	const { origin, origin_2fa } = bolt.env;
 
-	const allowedOrigins = [bolt.internalUrl, origin, origin_2fa];
+	const allowedOrigins = [window.location.origin, origin, origin_2fa];
 	let tokens: AuthTokens | null = null;
 	window.addEventListener('message', async (event: MessageEvent<BoltMessage>) => {
 		if (!allowedOrigins.includes(event.origin)) {

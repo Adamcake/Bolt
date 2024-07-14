@@ -25,7 +25,6 @@ export interface BoltEnv {
 
 export interface Bolt {
 	env: BoltEnv;
-	internalUrl: string;
 	platform: Platform | null;
 	// TODO: simplify installed hash system (1 variable instead of multiple?)
 	rs3DebInstalledHash: string | null;
@@ -44,7 +43,6 @@ declare const s: () => BoltEnv;
 
 export const bolt: Bolt = {
 	env: ParseUtils.decodeBolt(s()),
-	internalUrl: 'https://bolt-internal',
 	platform: null,
 	rs3DebInstalledHash: null,
 	rs3ExeInstalledHash: null,

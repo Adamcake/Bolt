@@ -257,8 +257,7 @@ export function launchHdos(
 export function getNewClientListPromise(): Promise<GameClient[]> {
 	return new Promise((resolve, reject) => {
 		const xml = new XMLHttpRequest();
-		const url = bolt.internalUrl.concat('/list-game-clients');
-		xml.open('GET', url, true);
+		xml.open('GET', '/list-game-clients', true);
 		xml.onreadystatechange = () => {
 			if (xml.readyState == 4) {
 				if (xml.status == 200 && xml.getResponseHeader('content-type') === 'application/json') {

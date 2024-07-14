@@ -59,7 +59,7 @@
 	 * Messages the parent window with an event name and associated data
 	 */
 	function message(event: BoltMessage) {
-		parentWindow.postMessage(event, bolt.internalUrl);
+		parentWindow.postMessage(event, window.location.origin);
 	}
 
 	onMount(async () => {
