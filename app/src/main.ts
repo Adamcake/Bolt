@@ -32,14 +32,8 @@ export default app;
 
 async function setupBoltApp() {
 	initBolt();
-	// refreshStoredSessions needs to happen before initConfig, since initConfig contains code that
-	// changes the selected session/account if they aren't in the list of available options.
-	// The one drawback to this method, is if the user picks light mode, it will show dark mode first
-	// and change to white mode after refreshing.
-	// TODO: instead of having initConfig removing the saved session from the config if it doesn't exist,
-	// refreshStoredSessions should remove it instead, that way the user's preferences load first
-	await refreshStoredSessions();
 	initConfig();
+	await refreshStoredSessions();
 	addMessageListeners();
 }
 
@@ -205,4 +199,10 @@ async function refreshStoredSessions() {
 
 	GlobalState.sessions.set(sessions);
 	BoltService.saveCredentials();
+
+	// After refreshing the sessions, check if the saved session_user_id is valid in the config
+	const config = get(GlobalState.config);
+	const selected_user_id = config.selected_user_id;
+	const savedSessionIsMissing = BoltService.findSession(selected_user_id ?? '') === undefined;
+	if (savedSessionIsMissing) selectFirstSession();
 }

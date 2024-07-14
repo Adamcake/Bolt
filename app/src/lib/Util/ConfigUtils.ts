@@ -1,4 +1,3 @@
-import { BoltService } from '$lib/Services/BoltService';
 import { GlobalState } from '$lib/State/GlobalState';
 import { Client, Game } from '$lib/Util/interfaces';
 import { logger } from '$lib/Util/Logger';
@@ -63,10 +62,6 @@ export function initConfig() {
 			GlobalState.configHasPendingChanges = true;
 		}
 	}
-
-	const selected_user_id = get(config).selected_user_id;
-	const savedSessionIsMissing = BoltService.findSession(selected_user_id ?? '') === undefined;
-	if (savedSessionIsMissing) selectFirstSession();
 
 	onWritableChange(GlobalState.config, () => {
 		GlobalState.configHasPendingChanges = true;
