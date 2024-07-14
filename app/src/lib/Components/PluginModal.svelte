@@ -1,11 +1,10 @@
 <script lang="ts">
-	import { onDestroy } from 'svelte';
-	import { getNewClientListPromise, savePluginConfig } from '$lib/Util/functions';
-	import { type PluginConfig } from '$lib/Util/interfaces';
-	import { clientListPromise } from '$lib/Util/store';
-	import { logger } from '$lib/Util/Logger';
 	import Modal from '$lib/Components/CommonUI/Modal.svelte';
 	import { bolt } from '$lib/State/Bolt';
+	import { getNewClientListPromise, savePluginConfig } from '$lib/Util/functions';
+	import { type PluginConfig } from '$lib/Util/interfaces';
+	import { logger } from '$lib/Util/Logger';
+	import { clientListPromise } from '$lib/Util/store';
 
 	let modal: Modal;
 
@@ -117,13 +116,17 @@
 	var selectedClientId: string;
 
 	let pluginConfigDirty: boolean = false;
-	onDestroy(() => {
-		// save plugin config if it's been changed
-		if (pluginConfigDirty) savePluginConfig();
-	});
 </script>
 
-<Modal bind:this={modal} class="h-[90%] w-[90%]">
+<Modal
+	bind:this={modal}
+	class="h-[90%] w-[90%]"
+	on:close={() => {
+		if (pluginConfigDirty) {
+			savePluginConfig();
+		}
+	}}
+>
 	<div
 		class="left-0 float-left h-full w-[min(180px,_50%)] overflow-hidden border-r-2 border-slate-300 pt-2 dark:border-slate-800"
 	>
