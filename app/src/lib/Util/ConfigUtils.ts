@@ -1,3 +1,4 @@
+import { BoltService } from '$lib/Services/BoltService';
 import { GlobalState } from '$lib/State/GlobalState';
 import { Client, Game } from '$lib/Util/interfaces';
 import { logger } from '$lib/Util/Logger';
@@ -61,6 +62,8 @@ export function initConfig() {
 			logger.error('Unable to parse config, restoring to default');
 			GlobalState.configHasPendingChanges = true;
 		}
+	} else {
+		BoltService.saveConfig(false);
 	}
 
 	onWritableChange(GlobalState.config, () => {
