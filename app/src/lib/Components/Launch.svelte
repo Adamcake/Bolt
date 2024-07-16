@@ -60,24 +60,24 @@
 {/if}
 
 <div class="bg-grad flex h-full flex-col border-slate-300 p-5 duration-200 dark:border-slate-800">
-	<img
-		src="svgs/rocket-solid.svg"
-		alt="Launch icon"
-		class="mx-auto mb-5 w-24 rounded-3xl bg-gradient-to-br from-rose-500 to-violet-500 p-5"
-	/>
-	<button
-		class="mx-auto mb-2 w-52 rounded-lg bg-emerald-500 p-2 font-bold text-black duration-200 hover:opacity-75"
-		on:click={() => launch($config.selected_game, $config.selected_client)}
-	>
-		Play
-	</button>
-	<div class="mx-auto my-2">
+	<div class="flex flex-col items-center gap-4">
+		<img
+			src="svgs/rocket-solid.svg"
+			alt="Launch icon"
+			class="mb-3 w-24 rounded-3xl bg-gradient-to-br from-rose-500 to-violet-500 p-5"
+		/>
+		<button
+			class="w-52 rounded-lg bg-emerald-500 p-2 font-bold text-black duration-200 hover:opacity-75"
+			on:click={() => launch($config.selected_game, $config.selected_client)}
+		>
+			Play
+		</button>
 		{#if $config.selected_game == Game.osrs}
-			<label>
+			<label class="flex flex-col">
 				<span class="text-sm">Game Client</span>
 				<select
 					id="game_client_select"
-					class="mx-auto w-52 cursor-pointer rounded-lg border-2 border-slate-300 bg-inherit p-2 text-inherit duration-200 hover:opacity-75 dark:border-slate-800"
+					class="w-52 cursor-pointer rounded-lg border-2 border-slate-300 bg-inherit p-2 text-inherit duration-200 hover:opacity-75 dark:border-slate-800"
 					bind:value={$config.selected_client}
 				>
 					{#each clientMap[$config.selected_game] as client}
@@ -93,7 +93,7 @@
 			<button
 				disabled={!bolt.hasBoltPlugins}
 				title={bolt.hasBoltPlugins ? null : 'Coming soon...'}
-				class="mx-auto mb-2 w-52 rounded-lg p-2 font-bold text-black duration-200 enabled:bg-blue-500 enabled:hover:opacity-75 disabled:bg-gray-500"
+				class="w-52 rounded-lg p-2 font-bold text-black duration-200 enabled:bg-blue-500 enabled:hover:opacity-75 disabled:bg-gray-500"
 				on:click={() => {
 					pluginModal.open();
 				}}
@@ -101,11 +101,8 @@
 				Plugin menu
 			</button>
 		{/if}
-	</div>
-	<div class="mx-auto my-2">
-		<label>
+		<label class="flex flex-col">
 			<span class="text-sm">Character</span>
-
 			<select
 				id="character_select"
 				class="mx-auto w-52 cursor-pointer rounded-lg border-2 border-slate-300 bg-inherit p-2 text-inherit duration-200 hover:opacity-75 dark:border-slate-800"
