@@ -120,7 +120,7 @@
 
 <Modal
 	bind:this={modal}
-	class="h-[90%] w-[90%]"
+	class="h-[90%] w-[90%] text-center"
 	on:close={() => {
 		if (pluginConfigDirty) {
 			savePluginConfig();
