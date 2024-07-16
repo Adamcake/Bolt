@@ -63,7 +63,7 @@ export function launchRS3Linux(
 				exeXml.onprogress = (e) => {
 					if (e.loaded) {
 						const progress = (Math.round((1000.0 * e.loaded) / e.total) / 10.0).toFixed(1);
-						logger.info(`Downloading RS3 client... ${progress}%`);
+						logger.updateLogAtIndex(0, `Downloading RS3 client... ${progress}%`);
 					}
 				};
 				exeXml.onreadystatechange = () => {
@@ -156,7 +156,7 @@ export function launchRuneLite(
 					xmlRl.onprogress = (e) => {
 						if (e.loaded && e.lengthComputable) {
 							const progress = (Math.round((1000.0 * e.loaded) / e.total) / 10.0).toFixed(1);
-							logger.info(`Downloading RuneLite... ${progress}`);
+							logger.updateLogAtIndex(0, `Downloading RuneLite... ${progress}%`);
 						}
 					};
 					xmlRl.send();
@@ -234,7 +234,7 @@ export function launchHdos(
 						xmlHdos.onprogress = (e) => {
 							if (e.loaded && e.lengthComputable) {
 								const progress = (Math.round((1000.0 * e.loaded) / e.total) / 10.0).toFixed(1);
-								logger.info(`Downloading HDOS... ${progress}%`);
+								logger.updateLogAtIndex(0, `Downloading HDOS... ${progress}%`);
 							}
 						};
 						xmlHdos.send();

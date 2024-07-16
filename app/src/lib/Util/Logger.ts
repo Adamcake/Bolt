@@ -38,6 +38,14 @@ class Logger {
 	error(content: string) {
 		this._addLog(Severity.error, content);
 	}
+
+	updateLogAtIndex(index: number, content: string) {
+		this.logs.update((logs) => {
+			if (!logs[index]) return logs;
+			logs[index].content = content;
+			return logs;
+		});
+	}
 }
 
 export const logger = new Logger();
