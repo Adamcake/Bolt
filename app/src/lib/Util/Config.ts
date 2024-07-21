@@ -1,4 +1,3 @@
-import { BoltService } from '$lib/Services/BoltService';
 import { GlobalState } from '$lib/State/GlobalState';
 import { Client, Game } from '$lib/Util/interfaces';
 import { logger } from '$lib/Util/Logger';
@@ -78,7 +77,7 @@ export function initConfig() {
 			GlobalState.configHasPendingChanges = true;
 		}
 	} else {
-		BoltService.saveConfig(false);
+		GlobalState.configHasPendingChanges = true;
 	}
 
 	onWritableChange(GlobalState.config, () => {
