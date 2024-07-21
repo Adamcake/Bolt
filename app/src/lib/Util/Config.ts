@@ -3,7 +3,6 @@ import { GlobalState } from '$lib/State/GlobalState';
 import { Client, Game } from '$lib/Util/interfaces';
 import { logger } from '$lib/Util/Logger';
 import { onWritableChange } from '$lib/Util/onWritableChange';
-import { get } from 'svelte/store';
 
 type UserDetails = {
 	account_id: string;
@@ -84,19 +83,5 @@ export function initConfig() {
 
 	onWritableChange(GlobalState.config, () => {
 		GlobalState.configHasPendingChanges = true;
-	});
-}
-
-export function selectFirstSession() {
-	const { config, sessions: sessionsStore } = GlobalState;
-	config.update((_config) => {
-		const sessions = get(sessionsStore);
-		if (sessions.length > 0) {
-			const firstSession = sessions[0];
-			_config.selected.user_id = firstSession.user.userId;
-		} else {
-			_config.selected.user_id = null;
-		}
-		return _config;
 	});
 }

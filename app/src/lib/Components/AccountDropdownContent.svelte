@@ -11,11 +11,9 @@
 	class="w-full cursor-pointer rounded-lg border-2 border-inherit bg-inherit p-2 text-center"
 	bind:value={$config.selected.user_id}
 >
+	<option value={null} disabled class="dark:bg-slate-900">Select a user</option>
 	{#each $sessions as session (session.user.userId)}
-		<option
-			selected={session.user.userId === $config.selected.user_id}
-			value={session.user.userId}
-			class="dark:bg-slate-900">{session.user.displayName}</option
+		<option value={session.user.userId} class="dark:bg-slate-900">{session.user.displayName}</option
 		>
 	{/each}
 </select>

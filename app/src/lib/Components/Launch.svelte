@@ -22,7 +22,7 @@
 	// calls the appropriate launch functions
 	function launch(game: Game, client: Client): void {
 		if (!selectedUserId) {
-			return logger.warn('Please log in to launch a client');
+			return logger.warn('Please log in or select a user to play.');
 		}
 		if (!selectedAccountId) {
 			return logger.warn('Please select a character from the select menu.');
@@ -128,7 +128,7 @@
 				disabled={$config.selected.user_id === null}
 				on:change={handleAccountChange}
 			>
-				<option disabled selected>Select an account</option>
+				<option disabled selected class="dark:bg-slate-900">Select an account</option>
 				{#each accounts as account}
 					<option
 						selected={selectedAccountId === account.accountId}

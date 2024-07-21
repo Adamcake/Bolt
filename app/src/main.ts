@@ -3,7 +3,7 @@ import { BoltService } from '$lib/Services/BoltService';
 import { type Session } from '$lib/Services/UserService';
 import { Platform, bolt } from '$lib/State/Bolt';
 import { GlobalState } from '$lib/State/GlobalState';
-import { initConfig, selectFirstSession } from '$lib/Util/Config';
+import { initConfig } from '$lib/Util/Config';
 import { getNewClientListPromise } from '$lib/Util/functions';
 import { type BoltMessage } from '$lib/Util/interfaces';
 import { logger } from '$lib/Util/Logger';
@@ -184,10 +184,4 @@ async function refreshStoredSessions() {
 
 	GlobalState.sessions.set(sessions);
 	BoltService.saveCredentials();
-
-	// After refreshing the sessions, check if the saved session_user_id is valid in the config
-	const config = get(GlobalState.config);
-	const selectedUserId = config.selected.user_id;
-	const savedSessionIsMissing = BoltService.findSession(selectedUserId) === undefined;
-	if (savedSessionIsMissing) selectFirstSession();
 }

@@ -1,7 +1,6 @@
 import { AuthService, type AuthTokens } from '$lib/Services/AuthService';
 import { UserService, type Account, type Session } from '$lib/Services/UserService';
 import { GlobalState } from '$lib/State/GlobalState';
-import { selectFirstSession } from '$lib/Util/Config';
 import { error, ok, type Result } from '$lib/Util/interfaces';
 import { logger } from '$lib/Util/Logger';
 import { get } from 'svelte/store';
@@ -49,9 +48,9 @@ export class BoltService {
 			if (typeof c.userDetails[sub] !== 'undefined') {
 				delete c.userDetails[sub];
 			}
+			if (c.selected.user_id === sub) c.selected.user_id = null;
 			return c;
 		});
-		selectFirstSession();
 		return get(sessions);
 	}
 
