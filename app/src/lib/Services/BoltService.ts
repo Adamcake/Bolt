@@ -1,13 +1,40 @@
-import { AuthService } from '$lib/Services/AuthService';
-import { type Account, type Session } from '$lib/Services/UserService';
+import { AuthService, type AuthTokens } from '$lib/Services/AuthService';
+import { UserService, type Account, type Session } from '$lib/Services/UserService';
 import { GlobalState } from '$lib/State/GlobalState';
 import { selectFirstSession } from '$lib/Util/Config';
+import { error, ok, type Result } from '$lib/Util/interfaces';
 import { logger } from '$lib/Util/Logger';
 import { get } from 'svelte/store';
 
 let saveInProgress: boolean = false;
 
 export class BoltService {
+	// After refreshing or adding a new account, this function will need to be called.
+	// It will initialize or update the Sessions array, and set the config when appropriate
+	// Note: Does not call saveCredentials
+	static async login(tokens: AuthTokens, session_id: string): Promise<Result<Session, string>> {
+		const sessionResult = await UserService.buildSession(tokens, session_id);
+		if (!sessionResult.ok) return error(sessionResult.error);
+		const { config, sessions } = GlobalState;
+		const newSession = sessionResult.value;
+		const sessionExists = BoltService.findSession(tokens.sub);
+		if (!sessionExists) {
+			sessions.update((session) => {
+				session.push(newSession);
+				return session;
+			});
+			config.update((c) => {
+				c.selected.user_id = newSession.user.userId;
+				return c;
+			});
+		}
+		if (!get(config).selected.user_id === null) newSession.user.userId;
+		return ok(newSession);
+	}
+
+	// After the tokens are older than 30 days, or the user clicks logout, this function will need to be called.
+	// It will remove the session from the list of Sessions, and update the saved config
+	// Note: Does not call saveCredentials
 	static async logout(sub: string): Promise<Session[]> {
 		const { sessions: sessionsStore } = GlobalState;
 		const sessions = get(sessionsStore);
@@ -18,7 +45,6 @@ export class BoltService {
 			sessionsStore.set(sessions);
 		}
 		selectFirstSession();
-		BoltService.saveCredentials();
 		return sessions;
 	}
 
@@ -78,12 +104,12 @@ export class BoltService {
 		});
 	}
 
-	static findSession(userId: string): Session | undefined {
+	static findSession(userId: string | null): Session | undefined {
 		const sessions = get(GlobalState.sessions);
 		return sessions.find((session) => session.user.userId === userId);
 	}
 
-	static findAccount(accounts: Account[], accountId: string): Account | undefined {
+	static findAccount(accounts: Account[], accountId?: string): Account | undefined {
 		return accounts.find((account) => account.accountId == accountId);
 	}
 }

@@ -9,11 +9,11 @@
 
 <select
 	class="w-full cursor-pointer rounded-lg border-2 border-inherit bg-inherit p-2 text-center"
-	bind:value={$config.selected_user_id}
+	bind:value={$config.selected.user_id}
 >
 	{#each $sessions as session (session.user.userId)}
 		<option
-			selected={session.user.userId === $config.selected_user_id}
+			selected={session.user.userId === $config.selected.user_id}
 			value={session.user.userId}
 			class="dark:bg-slate-900">{session.user.displayName}</option
 		>
@@ -32,10 +32,10 @@
 	</button>
 	<button
 		class="mx-auto rounded-lg border-2 border-blue-500 p-2 font-bold duration-200 hover:opacity-75"
-		disabled={!$config.selected_user_id}
+		disabled={!$config.selected.user_id}
 		on:click={() => {
-			if (!$config.selected_user_id) return;
-			BoltService.logout($config.selected_user_id);
+			if (!$config.selected.user_id) return;
+			BoltService.logout($config.selected.user_id);
 		}}
 	>
 		Log Out

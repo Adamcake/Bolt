@@ -5,18 +5,27 @@ import { logger } from '$lib/Util/Logger';
 import { onWritableChange } from '$lib/Util/onWritableChange';
 import { get } from 'svelte/store';
 
+type UserDetails = {
+	account_id: string;
+};
+
 export interface Config {
 	use_dark_theme: boolean;
 	rs_plugin_loader: boolean;
 	flatpak_rich_presence: boolean;
 	runelite_use_custom_jar: boolean;
-	selected_game: Game;
-	selected_client: Client;
 	use_custom_rs_config_uri: boolean;
 	rs_config_uri?: string;
 	runelite_custom_jar?: string;
-	selected_user_id?: string;
-	selected_account_id?: string;
+	selected: {
+		game: Game;
+		client: Client;
+		user_id: string | null;
+	};
+	// Each user has data associated with it that is recalled on sign-in or when switching between them
+	userDetails: {
+		[user_id: string]: UserDetails | undefined;
+	};
 }
 
 export const defaultConfig: Config = {
@@ -25,8 +34,12 @@ export const defaultConfig: Config = {
 	flatpak_rich_presence: false,
 	runelite_use_custom_jar: false,
 	use_custom_rs_config_uri: false,
-	selected_game: Game.osrs,
-	selected_client: Client.runelite
+	selected: {
+		game: Game.osrs,
+		client: Client.runelite,
+		user_id: null
+	},
+	userDetails: {}
 };
 
 export function initConfig() {
@@ -40,8 +53,11 @@ export function initConfig() {
 			typeof conf.rs_plugin_loader === 'boolean' &&
 			typeof conf.flatpak_rich_presence === 'boolean' &&
 			typeof conf.runelite_use_custom_jar === 'boolean' &&
-			Object.values(Game).includes(conf.selected_game) &&
-			Object.values(Client).includes(conf.selected_client)
+			typeof conf.selected === 'object' &&
+			Object.values(Game).includes(conf.selected.game) &&
+			Object.values(Client).includes(conf.selected.client) &&
+			(typeof conf.selected.user_id === 'string' || conf.selected.user_id === null) &&
+			typeof conf.userDetails === 'object'
 		);
 	}
 
@@ -77,11 +93,9 @@ export function selectFirstSession() {
 		const sessions = get(sessionsStore);
 		if (sessions.length > 0) {
 			const firstSession = sessions[0];
-			_config.selected_user_id = firstSession.user.userId;
-			_config.selected_account_id = firstSession.accounts[0].accountId;
+			_config.selected.user_id = firstSession.user.userId;
 		} else {
-			_config.selected_user_id = undefined;
-			_config.selected_account_id = undefined;
+			_config.selected.user_id = null;
 		}
 		return _config;
 	});

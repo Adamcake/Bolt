@@ -14,18 +14,23 @@
 
 	let pluginModal: PluginModal;
 	let { config } = GlobalState;
-	$: accounts = BoltService.findSession($config.selected_user_id ?? '')?.accounts ?? [];
+	$: selectedUserId = $config.selected.user_id;
+	$: selectedAccountId = $config.userDetails[selectedUserId ?? '']?.account_id;
+	$: accounts = BoltService.findSession($config.selected.user_id)?.accounts ?? [];
 
 	// when play is clicked, check the selected_play store for all relevant details
 	// calls the appropriate launch functions
 	function launch(game: Game, client: Client): void {
-		if (!$config.selected_user_id || !$config.selected_account_id) {
+		if (!selectedUserId) {
 			return logger.warn('Please log in to launch a client');
 		}
-		const session = BoltService.findSession($config.selected_user_id);
+		if (!selectedAccountId) {
+			return logger.warn('Please select a character from the select menu.');
+		}
+		const session = BoltService.findSession($config.selected.user_id);
 		if (!session) return logger.warn('Unable to launch game, session was not found.');
 		const { session_id } = session;
-		const account = BoltService.findAccount(session.accounts, $config.selected_account_id);
+		const account = BoltService.findAccount(session.accounts, selectedAccountId);
 		if (!account) return logger.warn('Unable to launch game, account was not found.');
 		const { accountId, displayName } = account;
 		const isWindows = bolt.platform === Platform.Windows;
@@ -53,6 +58,20 @@
 				break;
 		}
 	}
+
+	function handleAccountChange(e: Event) {
+		const value = (e.target as HTMLSelectElement).value;
+		if (!selectedUserId) return;
+		const details = $config.userDetails[selectedUserId];
+		if (details) {
+			details.account_id = value;
+			$config.userDetails[selectedUserId] = details;
+		} else {
+			$config.userDetails[selectedUserId] = {
+				account_id: value
+			};
+		}
+	}
 </script>
 
 {#if bolt.hasBoltPlugins}
@@ -68,19 +87,19 @@
 		/>
 		<button
 			class="w-52 rounded-lg bg-emerald-500 p-2 font-bold text-black duration-200 hover:opacity-75"
-			on:click={() => launch($config.selected_game, $config.selected_client)}
+			on:click={() => launch($config.selected.game, $config.selected.client)}
 		>
 			Play
 		</button>
-		{#if $config.selected_game == Game.osrs}
+		{#if $config.selected.game == Game.osrs}
 			<label class="flex flex-col">
 				<span class="text-sm">Game Client</span>
 				<select
 					id="game_client_select"
 					class="w-52 cursor-pointer rounded-lg border-2 border-slate-300 bg-inherit p-2 text-inherit duration-200 hover:opacity-75 dark:border-slate-800"
-					bind:value={$config.selected_client}
+					bind:value={$config.selected.client}
 				>
-					{#each clientMap[$config.selected_game] as client}
+					{#each clientMap[$config.selected.game] as client}
 						<option
 							class="dark:bg-slate-900"
 							disabled={client === Client.official && bolt.platform == Platform.Linux}
@@ -89,7 +108,7 @@
 					{/each}
 				</select>
 			</label>
-		{:else if $config.selected_game === Game.rs3}
+		{:else if $config.selected.game === Game.rs3}
 			<button
 				disabled={!bolt.hasBoltPlugins}
 				title={bolt.hasBoltPlugins ? null : 'Coming soon...'}
@@ -106,10 +125,16 @@
 			<select
 				id="character_select"
 				class="mx-auto w-52 cursor-pointer rounded-lg border-2 border-slate-300 bg-inherit p-2 text-inherit duration-200 hover:opacity-75 dark:border-slate-800"
-				bind:value={$config.selected_account_id}
+				disabled={$config.selected.user_id === null}
+				on:change={handleAccountChange}
 			>
+				<option disabled selected>Select an account</option>
 				{#each accounts as account}
-					<option value={account.accountId} class="dark:bg-slate-900">
+					<option
+						selected={selectedAccountId === account.accountId}
+						value={account.accountId}
+						class="dark:bg-slate-900"
+					>
 						{#if account.displayName}
 							{account.displayName}
 						{:else}

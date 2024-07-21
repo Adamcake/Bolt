@@ -5,12 +5,11 @@
 
 	const { config } = GlobalState;
 
-	$: selectedSession = BoltService.findSession($config.selected_user_id ?? '');
+	$: selectedSession = BoltService.findSession($config.selected.user_id);
 	$: selectedAccount = BoltService.findAccount(
 		selectedSession?.accounts ?? [],
-		$config.selected_account_id ?? ''
+		$config.userDetails[$config.selected.user_id ?? '']?.account_id
 	);
-	$: configureRuneLiteDisabled = !(selectedSession?.session_id && selectedAccount?.accountId);
 
 	let currentlyPickingFile = false;
 
@@ -40,7 +39,7 @@
 </script>
 
 <button
-	disabled={configureRuneLiteDisabled}
+	disabled={!selectedSession?.session_id || !selectedAccount?.accountId}
 	class="p-2 pb-5 hover:opacity-75"
 	on:click={() => launchConfigure()}
 >

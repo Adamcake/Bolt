@@ -1,6 +1,6 @@
 import { AuthService, type AuthTokens } from '$lib/Services/AuthService';
 import { BoltService } from '$lib/Services/BoltService';
-import { UserService, type Session } from '$lib/Services/UserService';
+import { type Session } from '$lib/Services/UserService';
 import { Platform, bolt } from '$lib/State/Bolt';
 import { GlobalState } from '$lib/State/GlobalState';
 import { initConfig, selectFirstSession } from '$lib/Util/Config';
@@ -104,20 +104,13 @@ function addMessageListeners(): void {
 					return logger.error('auth is null. Please try again.');
 				}
 				const session_id = event.data.sessionId;
-				const sessionResult = await UserService.buildSession(tokens, session_id);
-				const { config, sessions } = GlobalState;
-				if (sessionResult.ok) {
-					sessions.update((session) => {
-						session.push(sessionResult.value);
-						return session;
-					});
-					if (!get(config).selected_user_id) selectFirstSession();
-					BoltService.saveCredentials();
-					logger.info(`Successfully added account '${sessionResult.value.user.displayName}'`);
+				const loginResult = await BoltService.login(tokens, session_id);
+				if (!loginResult.ok) {
+					logger.error(`Unable to add new user. Please try again. ${loginResult.error}`);
 				} else {
-					logger.error(`Unable to sign into account. ${sessionResult.error}`);
+					logger.info(`Added new user '${loginResult.value.user.displayName}'`);
 				}
-
+				BoltService.saveCredentials();
 				AuthService.pendingLoginWindow = null;
 				tokens = null;
 				break;
@@ -173,19 +166,15 @@ async function refreshStoredSessions() {
 
 		const tokens = tokensResult.value;
 		session.tokens = tokens;
-		const sessionResult = await UserService.buildSession(tokens, session.session_id);
-		if (sessionResult.ok) {
-			const existingSession = BoltService.findSession(tokens.sub);
-			if (!existingSession) {
-				session.user = sessionResult.value.user;
-				session.accounts = sessionResult.value.accounts;
-			}
-			logger.info(`Logged into account '${sessionResult.value.user.displayName}'`);
-		} else {
+
+		const loginResult = await BoltService.login(tokens, session.session_id);
+		if (!loginResult.ok) {
 			logger.error(
-				`Unable to login to account '${session.user.displayName}'. ${sessionResult.error}`
+				`Unable to sign into saved user '${session.user.displayName}' - please sign in again. ${loginResult.error}`
 			);
 			expiredTokens.push(session.tokens.sub);
+		} else {
+			logger.info(`Signed into saved user '${loginResult.value.user.displayName}'`);
 		}
 	}
 
@@ -198,7 +187,7 @@ async function refreshStoredSessions() {
 
 	// After refreshing the sessions, check if the saved session_user_id is valid in the config
 	const config = get(GlobalState.config);
-	const selected_user_id = config.selected_user_id;
-	const savedSessionIsMissing = BoltService.findSession(selected_user_id ?? '') === undefined;
+	const selectedUserId = config.selected.user_id;
+	const savedSessionIsMissing = BoltService.findSession(selectedUserId) === undefined;
 	if (savedSessionIsMissing) selectFirstSession();
 }
