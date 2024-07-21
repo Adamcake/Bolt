@@ -33,9 +33,10 @@
 	<button
 		class="mx-auto rounded-lg border-2 border-blue-500 p-2 font-bold duration-200 hover:opacity-75"
 		disabled={!$config.selected.user_id}
-		on:click={() => {
+		on:click={async () => {
 			if (!$config.selected.user_id) return;
-			BoltService.logout($config.selected.user_id);
+			await BoltService.logout($config.selected.user_id);
+			BoltService.saveCredentials();
 		}}
 	>
 		Log Out
