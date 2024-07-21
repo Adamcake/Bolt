@@ -126,15 +126,12 @@
 				id="character_select"
 				class="mx-auto w-52 cursor-pointer rounded-lg border-2 border-slate-300 bg-inherit p-2 text-inherit duration-200 hover:opacity-75 dark:border-slate-800"
 				disabled={$config.selected.user_id === null}
+				value={selectedAccountId}
 				on:change={handleAccountChange}
 			>
-				<option disabled selected class="dark:bg-slate-900">Select an account</option>
+				<option value={undefined} disabled class="dark:bg-slate-900">Select an account</option>
 				{#each accounts as account}
-					<option
-						selected={selectedAccountId === account.accountId}
-						value={account.accountId}
-						class="dark:bg-slate-900"
-					>
+					<option value={account.accountId} class="dark:bg-slate-900">
 						{#if account.displayName}
 							{account.displayName}
 						{:else}
