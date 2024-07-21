@@ -36,16 +36,23 @@ export class BoltService {
 	// It will remove the session from the list of Sessions, and update the saved config
 	// Note: Does not call saveCredentials
 	static async logout(sub: string): Promise<Session[]> {
-		const { sessions: sessionsStore } = GlobalState;
-		const sessions = get(sessionsStore);
-		const sessionIndex = sessions.findIndex((session) => session.user.userId === sub);
-		if (sessionIndex > -1) {
-			AuthService.revokeOauthCreds(sessions[sessionIndex].tokens.access_token);
-			sessions.splice(sessionIndex, 1);
-			sessionsStore.set(sessions);
-		}
+		const { sessions, config } = GlobalState;
+		sessions.update((s) => {
+			const sessionIndex = s.findIndex((session) => session.user.userId === sub);
+			if (sessionIndex > -1) {
+				AuthService.revokeOauthCreds(s[sessionIndex].tokens.access_token);
+				s.splice(sessionIndex, 1);
+			}
+			return s;
+		});
+		config.update((c) => {
+			if (typeof c.userDetails[sub] !== 'undefined') {
+				delete c.userDetails[sub];
+			}
+			return c;
+		});
 		selectFirstSession();
-		return sessions;
+		return get(sessions);
 	}
 
 	// sends an asynchronous request to save the current user config to disk, if it has changed
