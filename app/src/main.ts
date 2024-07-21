@@ -3,7 +3,7 @@ import { BoltService } from '$lib/Services/BoltService';
 import { UserService, type Session } from '$lib/Services/UserService';
 import { Platform, bolt } from '$lib/State/Bolt';
 import { GlobalState } from '$lib/State/GlobalState';
-import { initConfig, selectFirstSession } from '$lib/Util/ConfigUtils';
+import { initConfig, selectFirstSession } from '$lib/Util/Config';
 import { getNewClientListPromise } from '$lib/Util/functions';
 import { type BoltMessage } from '$lib/Util/interfaces';
 import { logger } from '$lib/Util/Logger';

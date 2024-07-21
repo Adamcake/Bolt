@@ -1,7 +1,7 @@
 import { AuthService } from '$lib/Services/AuthService';
 import { type Account, type Session } from '$lib/Services/UserService';
 import { GlobalState } from '$lib/State/GlobalState';
-import { selectFirstSession } from '$lib/Util/ConfigUtils';
+import { selectFirstSession } from '$lib/Util/Config';
 import { logger } from '$lib/Util/Logger';
 import { get } from 'svelte/store';
 
