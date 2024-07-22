@@ -1,194 +1,147 @@
 <script lang="ts">
-	import { afterUpdate, onMount } from 'svelte';
-	import { get } from 'svelte/store';
+	import PluginModal from '$lib/Components/PluginModal.svelte';
+	import { BoltService } from '$lib/Services/BoltService';
+	import { bolt, Platform } from '$lib/State/Bolt';
+	import { GlobalState } from '$lib/State/GlobalState';
 	import {
-		launchOfficialClient,
 		launchHdos,
+		launchOfficialClient,
 		launchRS3Linux,
 		launchRuneLite
 	} from '$lib/Util/functions';
-	import { Client, Game } from '$lib/Util/interfaces';
-	import { msg } from '@/main';
-	import { config, hasBoltPlugins, isConfigDirty, selectedPlay, platform } from '$lib/Util/store';
+	import { Client, clientMap, Game } from '$lib/Util/interfaces';
+	import { logger } from '$lib/Util/Logger';
 
-	export let showPluginMenu = false;
-
-	let characterSelect: HTMLSelectElement;
-	let clientSelect: HTMLSelectElement;
-
-	// update selected_play store
-	export function characterChanged(): void {
-		if (!$selectedPlay.account) return;
-
-		const key: string = <string>(
-			characterSelect[characterSelect.selectedIndex].getAttribute('data-id')
-		);
-		$selectedPlay.character = $selectedPlay.account.characters.get(key);
-		if ($selectedPlay.character) {
-			$config.selected_characters?.set(
-				$selectedPlay.account.userId,
-				$selectedPlay.character?.accountId
-			);
-		}
-		$isConfigDirty = true;
-	}
-
-	// update selected_play
-	function clientChanged(): void {
-		if (clientSelect.value == 'RuneLite') {
-			$selectedPlay.client = Client.runeLite;
-			$config.selected_client_index = Client.runeLite;
-		} else if (clientSelect.value == 'HDOS') {
-			$selectedPlay.client = Client.hdos;
-			$config.selected_client_index = Client.hdos;
-		}
-		$isConfigDirty = true;
-	}
+	let pluginModal: PluginModal;
+	let { config } = GlobalState;
+	$: selectedUserId = $config.selected.user_id;
+	$: selectedAccountId = $config.userDetails[selectedUserId ?? '']?.account_id;
+	$: accounts = BoltService.findSession($config.selected.user_id)?.accounts ?? [];
 
 	// when play is clicked, check the selected_play store for all relevant details
 	// calls the appropriate launch functions
-	function play_clicked(): void {
-		if (!$selectedPlay.account || !$selectedPlay.character) {
-			msg('Please log in to launch a client');
-			return;
+	function launch(game: Game, client: Client): void {
+		if (!selectedUserId) {
+			return logger.warn('Please log in or select a user to play.');
 		}
-		switch ($selectedPlay.game) {
+		if (!selectedAccountId) {
+			return logger.warn('Please select a character from the select menu.');
+		}
+		const session = BoltService.findSession($config.selected.user_id);
+		if (!session) return logger.warn('Unable to launch game, session was not found.');
+		const { session_id } = session;
+		const account = BoltService.findAccount(session.accounts, selectedAccountId);
+		if (!account) return logger.warn('Unable to launch game, account was not found.');
+		const { accountId, displayName } = account;
+		const isWindows = bolt.platform === Platform.Windows;
+		const isLinux = bolt.platform === Platform.Linux;
+		switch (game) {
 			case Game.osrs:
-				switch ($selectedPlay.client) {
-					case Client.osrs:
-						launchOfficialClient(
-							$platform === 'windows',
-							true,
-							<string>$selectedPlay.credentials?.session_id,
-							<string>$selectedPlay.character?.accountId,
-							<string>$selectedPlay.character?.displayName
-						);
+				switch (client) {
+					case Client.official:
+						launchOfficialClient(isWindows, true, session_id, accountId, displayName);
 						break;
-					case Client.runeLite:
-						launchRuneLite(
-							<string>$selectedPlay.credentials?.session_id,
-							<string>$selectedPlay.character?.accountId,
-							<string>$selectedPlay.character?.displayName
-						);
+					case Client.runelite:
+						launchRuneLite(session_id, accountId, displayName, false);
 						break;
 					case Client.hdos:
-						launchHdos(
-							<string>$selectedPlay.credentials?.session_id,
-							<string>$selectedPlay.character?.accountId,
-							<string>$selectedPlay.character?.displayName
-						);
+						launchHdos(session_id, accountId, displayName);
 						break;
 				}
 				break;
 			case Game.rs3:
-				if ($platform === 'linux') {
-					launchRS3Linux(
-						<string>$selectedPlay.credentials?.session_id,
-						<string>$selectedPlay.character?.accountId,
-						<string>$selectedPlay.character?.displayName
-					);
+				if (isLinux) {
+					launchRS3Linux(session_id, accountId, displayName);
 				} else {
-					launchOfficialClient(
-						$platform === 'windows',
-						false,
-						<string>$selectedPlay.credentials?.session_id,
-						<string>$selectedPlay.character?.accountId,
-						<string>$selectedPlay.character?.displayName
-					);
+					launchOfficialClient(isWindows, false, session_id, accountId, displayName);
 				}
 				break;
 		}
 	}
 
-	afterUpdate(() => {
-		if ($selectedPlay.game == Game.osrs && $selectedPlay.client) {
-			clientSelect.selectedIndex = $selectedPlay.client;
+	function handleAccountChange(e: Event) {
+		const value = (e.target as HTMLSelectElement).value;
+		if (!selectedUserId) return;
+		const details = $config.userDetails[selectedUserId];
+		if (details) {
+			details.account_id = value;
+			$config.userDetails[selectedUserId] = details;
+		} else {
+			$config.userDetails[selectedUserId] = {
+				account_id: value
+			};
 		}
-		if ($selectedPlay.account && $config.selected_characters?.has($selectedPlay.account.userId)) {
-			for (let i = 0; i < characterSelect.options.length; i++) {
-				if (
-					characterSelect[i].getAttribute('data-id') ==
-					$config.selected_characters.get($selectedPlay.account.userId)
-				) {
-					characterSelect.selectedIndex = i;
-					const key: string = <string>(
-						characterSelect[characterSelect.selectedIndex].getAttribute('data-id')
-					);
-					$selectedPlay.character = $selectedPlay.account.characters.get(key);
-				}
-			}
-		}
-	});
-
-	onMount(() => {
-		if ($config.selected_game_index == Game.osrs) {
-			clientSelect.selectedIndex = <number>$config.selected_client_index;
-			$selectedPlay.client = clientSelect.selectedIndex;
-		}
-	});
+	}
 </script>
 
+{#if bolt.hasBoltPlugins}
+	<PluginModal bind:this={pluginModal}></PluginModal>
+{/if}
+
 <div class="bg-grad flex h-full flex-col border-slate-300 p-5 duration-200 dark:border-slate-800">
-	<img
-		src="svgs/rocket-solid.svg"
-		alt="Launch icon"
-		class="mx-auto mb-5 w-24 rounded-3xl bg-gradient-to-br from-rose-500 to-violet-500 p-5"
-	/>
-	<button
-		class="mx-auto mb-2 w-52 rounded-lg bg-emerald-500 p-2 font-bold text-black duration-200 hover:opacity-75"
-		on:click={play_clicked}
-	>
-		Play
-	</button>
-	<div class="mx-auto my-2">
-		{#if $selectedPlay.game == Game.osrs}
-			<label for="game_client_select" class="text-sm">Game Client</label>
-			<br />
-			<select
-				id="game_client_select"
-				class="mx-auto w-52 cursor-pointer rounded-lg border-2 border-slate-300 bg-inherit p-2 text-inherit duration-200 hover:opacity-75 dark:border-slate-800"
-				bind:this={clientSelect}
-				on:change={clientChanged}
-			>
-				{#if $platform !== 'linux'}
-					<option data-id={Client.osrs} class="dark:bg-slate-900">OSRS Client</option>
-				{/if}
-				<option data-id={Client.runeLite} class="dark:bg-slate-900">RuneLite</option>
-				<option data-id={Client.hdos} class="dark:bg-slate-900">HDOS</option>
-			</select>
-		{:else if $selectedPlay.game == Game.rs3}
+	<div class="flex flex-col items-center gap-4">
+		<img
+			src="svgs/rocket-solid.svg"
+			alt="Launch icon"
+			class="mb-3 w-24 rounded-3xl bg-gradient-to-br from-rose-500 to-violet-500 p-5"
+		/>
+		<button
+			class="w-52 rounded-lg bg-emerald-500 p-2 font-bold text-black duration-200 hover:opacity-75"
+			on:click={() => launch($config.selected.game, $config.selected.client)}
+		>
+			Play
+		</button>
+		{#if $config.selected.game == Game.osrs}
+			<label class="flex flex-col">
+				<span class="text-sm">Game Client</span>
+				<select
+					id="game_client_select"
+					class="w-52 cursor-pointer rounded-lg border-2 border-slate-300 bg-inherit p-2 text-inherit duration-200 hover:opacity-75 dark:border-slate-800"
+					bind:value={$config.selected.client}
+				>
+					{#each clientMap[$config.selected.game] as client}
+						<option
+							class="dark:bg-slate-900"
+							disabled={client === Client.official && bolt.platform == Platform.Linux}
+							value={client}>{client}</option
+						>
+					{/each}
+				</select>
+			</label>
+		{:else if $config.selected.game === Game.rs3}
 			<button
-				disabled={!get(hasBoltPlugins)}
-				title={get(hasBoltPlugins) ? null : 'Coming soon...'}
-				class="mx-auto mb-2 w-52 rounded-lg p-2 font-bold text-black duration-200 enabled:bg-blue-500 enabled:hover:opacity-75 disabled:bg-gray-500"
+				disabled={!bolt.hasBoltPlugins}
+				title={bolt.hasBoltPlugins ? null : 'Coming soon...'}
+				class="w-52 rounded-lg p-2 font-bold text-black duration-200 enabled:bg-blue-500 enabled:hover:opacity-75 disabled:bg-gray-500"
 				on:click={() => {
-					showPluginMenu = get(hasBoltPlugins) ?? false;
+					pluginModal.open();
 				}}
 			>
 				Plugin menu
 			</button>
 		{/if}
-	</div>
-	<div class="mx-auto my-2">
-		<label for="character_select" class="text-sm"> Character</label>
-		<br />
-		<select
-			id="character_select"
-			class="mx-auto w-52 cursor-pointer rounded-lg border-2 border-slate-300 bg-inherit p-2 text-inherit duration-200 hover:opacity-75 dark:border-slate-800"
-			bind:this={characterSelect}
-			on:change={() => characterChanged()}
-		>
-			{#if $selectedPlay.account}
-				{#each $selectedPlay.account.characters as character}
-					<option data-id={character[1].accountId} class="dark:bg-slate-900">
-						{#if character[1].displayName}
-							{character[1].displayName}
+		<label class="flex flex-col">
+			<span class="text-sm">Character</span>
+			<select
+				id="character_select"
+				class="mx-auto w-52 cursor-pointer rounded-lg border-2 border-slate-300 bg-inherit p-2 text-inherit duration-200 hover:opacity-75 dark:border-slate-800"
+				disabled={$config.selected.user_id === null}
+				value={selectedAccountId}
+				on:change={handleAccountChange}
+			>
+				<option value={undefined} disabled class="dark:bg-slate-900">Select an account</option>
+				{#each accounts as account}
+					<option value={account.accountId} class="dark:bg-slate-900">
+						{#if account.displayName}
+							{account.displayName}
 						{:else}
 							New Character
 						{/if}
 					</option>
+				{:else}
+					<option class="dark:bg-slate-900" disabled selected>No characters</option>
 				{/each}
-			{/if}
-		</select>
+			</select>
+		</label>
 	</div>
 </div>

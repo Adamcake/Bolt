@@ -1,288 +1,187 @@
-import App from '@/App.svelte';
-import {
-	messageList,
-	clientListPromise,
-	config,
-	platform,
-	internalUrl,
-	credentials,
-	hasBoltPlugins,
-	isConfigDirty,
-	pendingOauth,
-	pendingGameAuth,
-	bolt,
-	accountList,
-	selectedPlay,
-	showDisclaimer
-} from '$lib/Util/store';
-import { get, type Unsubscriber } from 'svelte/store';
-import {
-	getNewClientListPromise,
-	parseCredentials,
-	handleLogin,
-	saveAllCreds,
-	handleNewSessionId,
-	checkRenewCreds,
-	loadTheme as loadTheme,
-	saveConfig,
-	removePendingGameAuth
-} from '$lib/Util/functions';
-import type {
-	Bolt,
-	Account,
-	Auth,
-	Config,
-	Credentials,
-	Message,
-	SelectedPlay
-} from '$lib/Util/interfaces';
-import { unwrap } from '$lib/Util/interfaces';
+import { AuthService, type AuthTokens } from '$lib/Services/AuthService';
+import { BoltService } from '$lib/Services/BoltService';
+import { type Session } from '$lib/Services/UserService';
+import { Platform, bolt } from '$lib/State/Bolt';
+import { GlobalState } from '$lib/State/GlobalState';
+import { initConfig } from '$lib/Util/Config';
+import { getNewClientListPromise } from '$lib/Util/functions';
+import { type BoltMessage } from '$lib/Util/interfaces';
+import { logger } from '$lib/Util/Logger';
+import { clientListPromise } from '$lib/Util/store';
+import AuthApp from '@/AuthApp.svelte';
+import BoltApp from '@/BoltApp.svelte';
+import { get } from 'svelte/store';
 
-const app = new App({
-	target: document.getElementById('app')!
-});
+let app: BoltApp | AuthApp;
+const appConfig = {
+	target: document.getElementById('app') as HTMLElement
+};
+
+// TODO: instead of rendering different apps here, we should have separate .html files.
+// For eg, index.html, and authenticate.html
+// window.opener is set when the current window is a popup (the auth window)
+// id_token is set after sending the consent request, aka the user is still authenticating
+if (window.opener || window.location.search.includes('&id_token')) {
+	app = new AuthApp(appConfig);
+} else {
+	initBolt();
+	initConfig();
+	addMessageListeners();
+	refreshStoredSessions();
+	app = new BoltApp(appConfig);
+}
 
 export default app;
 
-// store access, subscribers, and unsubscribers array
-const unsubscribers: Array<Unsubscriber> = [];
+function initBolt() {
+	const params = new URLSearchParams(window.location.search);
+	bolt.platform = params.get('platform') as Platform | null;
+	bolt.isFlathub = params.get('flathub') === '1';
+	bolt.rs3DebInstalledHash = params.get('rs3_deb_installed_hash');
+	bolt.rs3ExeInstalledHash = params.get('rs3_exe_installed_hash');
+	bolt.rs3AppInstalledHash = params.get('rs3_app_installed_hash');
+	bolt.osrsExeInstalledHash = params.get('osrs_exe_installed_hash');
+	bolt.osrsAppInstalledHash = params.get('osrs_app_installed_hash');
+	bolt.runeLiteInstalledId = params.get('runelite_installed_id');
+	bolt.hdosInstalledVersion = params.get('hdos_installed_version');
 
-const internalUrlSub = get(internalUrl);
-
-export let boltSub: Bolt;
-unsubscribers.push(bolt.subscribe((data) => (boltSub = data)));
-export let configSub: Config;
-unsubscribers.push(config.subscribe((data) => (configSub = data)));
-export let platformSub: string;
-unsubscribers.push(platform.subscribe((data) => (platformSub = data as string)));
-export let credentialsSub: Map<string, Credentials>;
-unsubscribers.push(credentials.subscribe((data) => (credentialsSub = data)));
-export let hasBoltPluginsSub: boolean;
-unsubscribers.push(hasBoltPlugins.subscribe((data) => (hasBoltPluginsSub = data ?? false)));
-export let pendingOauthSub: Auth;
-unsubscribers.push(pendingOauth.subscribe((data) => (pendingOauthSub = <Auth>data)));
-export let pendingGameAuthSub: Array<Auth>;
-unsubscribers.push(pendingGameAuth.subscribe((data) => (pendingGameAuthSub = data)));
-export let messageListSub: Array<Message>;
-unsubscribers.push(messageList.subscribe((data) => (messageListSub = data)));
-export let accountListSub: Map<string, Account>;
-unsubscribers.push(accountList.subscribe((data) => (accountListSub = data)));
-export let selectedPlaySub: SelectedPlay;
-unsubscribers.push(selectedPlay.subscribe((data) => (selectedPlaySub = data)));
-
-// body's onload function
-function start(): void {
-	const sOrigin = atob(boltSub.origin);
-	const clientId = atob(boltSub.clientid);
-	const exchangeUrl = sOrigin.concat('/oauth2/token');
-
-	if (credentialsSub.size == 0) {
-		showDisclaimer.set(true);
+	const plugins = params.get('plugins');
+	bolt.hasBoltPlugins = plugins !== null;
+	if (plugins !== null) {
+		try {
+			bolt.pluginList = JSON.parse(plugins);
+		} catch (e) {
+			logger.error('Unable to parse plugin list');
+		}
 	}
 
-	loadTheme();
+	const sessionsParam = params.get('credentials');
+	if (sessionsParam) {
+		try {
+			const sessions = JSON.parse(sessionsParam) as Session[];
+			const validConfig = sessions.every((session) => {
+				return (
+					typeof session.session_id === 'string' &&
+					typeof session.tokens === 'object' &&
+					typeof session.accounts === 'object' &&
+					typeof session.user === 'object'
+				);
+			});
 
-	// support legacy config name, selected_game_accounts; load it into the new one
-	if (configSub.selected_game_accounts && configSub.selected_game_accounts?.size > 0) {
-		config.update((data) => {
-			data.selected_characters = data.selected_game_accounts;
-			data.selected_game_accounts?.clear();
-			return data;
-		});
+			if (validConfig) {
+				GlobalState.sessions.set(sessions);
+			} else {
+				GlobalState.sessions.set([]);
+				BoltService.saveCredentials();
+				logger.warn('Credentials saved on disk are out of date. Please sign in again.');
+			}
+			GlobalState.sessions.set(validConfig ? sessions : []);
+		} catch (e) {
+			GlobalState.sessions.set([]);
+			BoltService.saveCredentials();
+			logger.error('Unable to parse saved credentials. Please sign in again.');
+		}
 	}
+}
 
-	const allowedOrigins = [internalUrlSub, sOrigin, atob(boltSub.origin_2fa)];
-	window.addEventListener('message', (event: MessageEvent) => {
+function addMessageListeners(): void {
+	const { origin, origin_2fa } = bolt.env;
+
+	const allowedOrigins = [window.location.origin, origin, origin_2fa];
+	let tokens: AuthTokens | null = null;
+	window.addEventListener('message', async (event: MessageEvent<BoltMessage>) => {
 		if (!allowedOrigins.includes(event.origin)) {
-			msg(`discarding window message from origin ${event.origin}`);
+			logger.info(`discarding window message from origin ${event.origin}`);
 			return;
 		}
-		let pending: Auth | undefined = pendingOauthSub;
-		const xml = new XMLHttpRequest();
 		switch (event.data.type) {
-			case 'authCode':
-				if (pending) {
-					pendingOauth.set({});
-					const post_data = new URLSearchParams({
-						grant_type: 'authorization_code',
-						client_id: atob(boltSub.clientid),
-						code: event.data.code,
-						code_verifier: <string>pending.verifier,
-						redirect_uri: atob(boltSub.redirect)
-					});
-					xml.onreadystatechange = () => {
-						if (xml.readyState == 4) {
-							if (xml.status == 200) {
-								const result = parseCredentials(xml.response);
-								const creds = unwrap(result);
-								if (creds) {
-									handleLogin(<Window>pending?.win, creds).then((x) => {
-										if (x) {
-											credentials.update((data) => {
-												data.set(creds.sub, creds);
-												return data;
-											});
-											saveAllCreds();
-										}
-									});
-								} else {
-									err(`Error: invalid credentials received`, false);
-									pending!.win!.close();
-								}
-							} else {
-								err(`Error: from ${exchangeUrl}: ${xml.status}: ${xml.response}`, false);
-								pending!.win!.close();
-							}
-						}
-					};
-					xml.open('POST', exchangeUrl, true);
-					xml.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-					xml.setRequestHeader('Accept', 'application/json');
-					xml.send(post_data);
-				}
+			case 'authTokenUpdate': {
+				tokens = event.data.tokens;
 				break;
-			case 'externalUrl':
+			}
+			case 'authSessionUpdate': {
+				if (tokens === null) {
+					return logger.error('auth is null. Please try again.');
+				}
+				const session_id = event.data.sessionId;
+				const loginResult = await BoltService.login(tokens, session_id);
+				if (!loginResult.ok) {
+					logger.error(`Unable to add new user. Please try again. ${loginResult.error}`);
+				} else {
+					logger.info(`Added new user '${loginResult.value.user.displayName}'`);
+				}
+				BoltService.saveCredentials();
+				AuthService.pendingLoginWindow = null;
+				tokens = null;
+				break;
+			}
+			case 'authFailed': {
+				logger.error(`Unable to authenticate: ${event.data.reason}`);
+				AuthService.pendingLoginWindow = null;
+				tokens = null;
+				break;
+			}
+			case 'externalUrl': {
+				const xml = new XMLHttpRequest();
 				xml.onreadystatechange = () => {
 					if (xml.readyState == 4) {
-						msg(`External URL status: '${xml.responseText.trim()}'`);
+						logger.info(`External URL status: '${xml.responseText.trim()}'`);
 					}
 				};
 				xml.open('POST', '/open-external-url', true);
 				xml.send(event.data.url);
 				break;
-			case 'gameSessionServerAuth':
-				pending = pendingGameAuthSub.find((x: Auth) => {
-					return event.data.state == x.state;
-				});
-				if (pending) {
-					removePendingGameAuth(pending, true);
-					const sections = event.data.id_token.split('.');
-					if (sections.length !== 3) {
-						err(`Malformed id_token: ${sections.length} sections, expected 3`, false);
-						break;
-					}
-					const header = JSON.parse(atob(sections[0]));
-					if (header.typ !== 'JWT') {
-						err(`Bad id_token header: typ ${header.typ}, expected JWT`, false);
-						break;
-					}
-					const payload = JSON.parse(atob(sections[1]));
-					if (atob(payload.nonce) !== pending.nonce) {
-						err('Incorrect nonce in id_token', false);
-						break;
-					}
-					const sessionsUrl = atob(boltSub.auth_api).concat('/sessions');
-					xml.onreadystatechange = () => {
-						if (xml.readyState == 4) {
-							if (xml.status == 200) {
-								const accountsUrl = atob(boltSub.auth_api).concat('/accounts');
-								pending!.creds!.session_id = JSON.parse(xml.response).sessionId;
-								handleNewSessionId(
-									<Credentials>pending!.creds,
-									accountsUrl,
-									<Promise<Account>>pending!.account_info_promise
-								).then((x) => {
-									if (x) {
-										credentials.update((data) => {
-											data.set(<string>pending?.creds?.sub, <Credentials>pending!.creds);
-											return data;
-										});
-										saveAllCreds();
-									}
-								});
-							} else {
-								err(`Error: from ${sessionsUrl}: ${xml.status}: ${xml.response}`, false);
-							}
-						}
-					};
-					xml.open('POST', sessionsUrl, true);
-					xml.setRequestHeader('Content-Type', 'application/json');
-					xml.setRequestHeader('Accept', 'application/json');
-					xml.send(`{"idToken": "${event.data.id_token}"}`);
-				}
-				break;
+			}
 			case 'gameClientListUpdate':
 				clientListPromise.set(getNewClientListPromise());
 				break;
-			default:
-				msg('Unknown message type: '.concat(event.data.type));
+			default: {
+				const type = (event.data as { type: string | undefined })?.type ?? 'no type provided';
+				logger.info(`Unknown message type: ${type}`);
 				break;
+			}
 		}
 	});
+}
 
-	(async () => {
-		if (credentialsSub.size > 0) {
-			credentialsSub.forEach(async (value) => {
-				const result = await checkRenewCreds(value, exchangeUrl, clientId);
-				if (result !== null && result !== 0) {
-					err(`Discarding expired login for #${value.sub}`, false);
-					credentials.update((data) => {
-						data.delete(value.sub);
-						return data;
-					});
-					saveAllCreds();
-				}
-				let checkedCred: Record<string, Credentials | boolean>;
-				if (result === null && (await handleLogin(null, value))) {
-					checkedCred = { creds: value, valid: true };
-				} else {
-					checkedCred = { creds: value, valid: result === 0 };
-				}
-				if (checkedCred.valid) {
-					const creds = <Credentials>value;
-					credentials.update((data) => {
-						data.set(creds.sub, creds);
-						return data;
-					});
-					saveAllCreds();
-				}
-			});
+async function refreshStoredSessions() {
+	const sessions = get(GlobalState.sessions);
+	const expiredTokens: string[] = [];
+
+	for (const session of sessions) {
+		const tokensResult = await AuthService.refreshOAuthToken(session.tokens);
+		if (!tokensResult.ok) {
+			if (tokensResult.error === 0) {
+				logger.error(
+					`Unable to verify saved login, status: ${tokensResult.error}. Do you have an internet connection? Please relaunch Bolt to try again.`
+				);
+			} else {
+				logger.error(
+					`Discarding expired login, status: ${tokensResult.error}. Please sign in again.`
+				);
+				expiredTokens.push(session.tokens.sub);
+			}
+			continue;
 		}
-		isConfigDirty.set(false); // overrides all cases where this gets set to "true" due to loading existing config values
-	})();
-}
 
-// adds a message to the message list
-export function msg(str: string) {
-	console.log(str);
-	const message: Message = {
-		isError: false,
-		text: str,
-		time: new Date(Date.now())
-	};
-	messageList.update((list: Array<Message>) => {
-		list.unshift(message);
-		return list;
-	});
-}
+		const tokens = tokensResult.value;
+		session.tokens = tokens;
 
-// adds an error message to the message list
-// if do_throw is true, throws the error message
-export function err(str: string, doThrow: boolean) {
-	const message: Message = {
-		isError: true,
-		text: str,
-		time: new Date(Date.now())
-	};
-	messageList.update((list: Array<Message>) => {
-		list.unshift(message);
-		return list;
+		const loginResult = await BoltService.login(tokens, session.session_id);
+		if (!loginResult.ok) {
+			logger.error(
+				`Unable to sign into saved user '${session.user.displayName}' - please sign in again. ${loginResult.error}`
+			);
+			expiredTokens.push(session.tokens.sub);
+		} else {
+			logger.info(`Signed into saved user '${loginResult.value.user.displayName}'`);
+		}
+	}
+
+	expiredTokens.forEach((sub) => {
+		BoltService.logout(sub);
 	});
 
-	if (!doThrow) {
-		console.error(str);
-	} else {
-		throw new Error(str);
-	}
+	GlobalState.sessions.set(sessions);
+	BoltService.saveCredentials();
 }
-
-declare const s: () => Bolt;
-bolt.set(s());
-
-onload = () => start();
-onunload = () => {
-	for (const i in unsubscribers) {
-		delete unsubscribers[i];
-	}
-	saveConfig();
-};
