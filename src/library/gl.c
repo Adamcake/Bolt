@@ -115,9 +115,9 @@ static struct GLContext contexts[CONTEXTS_CAPACITY];
 // Win32 and POSIX both define that the initial value will be 0 on all threads, current and future.
 #if defined(_WIN32)
 #include <Windows.h>
-DWORD current_context_tls;
+static DWORD current_context_tls;
 #else
-pthread_key_t current_context_tls;
+static pthread_key_t current_context_tls;
 #endif
 
 struct PluginSurfaceUserdata {
