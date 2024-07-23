@@ -4,6 +4,10 @@
 #include <iostream>
 #include <shellapi.h>
 
+#if defined(BOLT_PLUGINS)
+#include "../library/dll/stub_inject.hxx"
+#endif
+
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<CefRequest> request, std::string_view query) {
 	const char* data = "Elf binaries are not supported on this platform\n";
 	return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
@@ -117,13 +121,18 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Exe(CefRefPtr<C
 	ZeroMemory(&si, sizeof(si));
 	si.cb = sizeof(si);
 
+	DWORD creation_flags = CREATE_UNICODE_ENVIRONMENT;
+#if defined(BOLT_PLUGINS)
+	if (plugin_loader) creation_flags |= CREATE_SUSPENDED;
+#endif
+
 	if (!CreateProcessW(
 		NULL,
 		&command_line[0],
 		NULL,
 		NULL,
 		false,
-		CREATE_UNICODE_ENVIRONMENT, // CREATE_SUSPENDED goes here
+		creation_flags,
 		new_env,
 		NULL,
 		&si,
@@ -136,6 +145,15 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Exe(CefRefPtr<C
 	}
 	delete[] new_env;
 
+#if defined(BOLT_PLUGINS)
+	if (plugin_loader) {
+		InjectStub(pi.hProcess);
+		ResumeThread(pi.hThread);
+	}
+#endif
+
+	CloseHandle(pi.hProcess);
+	CloseHandle(pi.hThread);
 	if (has_hash) {
 		std::wofstream file(this->rs3_exe_hash_path, std::ios::out | std::ios::binary);
 		if (file.fail()) {
