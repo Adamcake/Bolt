@@ -244,6 +244,42 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Tell git to ignore everything in the new build directory
 file(GENERATE OUTPUT .gitignore CONTENT "*")
 
+# Build plugin library
+if(NOT BOLT_SKIP_LIBRARIES)
+    if(UNIX AND NOT APPLE)
+        add_library(${BOLT_PLUGIN_LIB_NAME} SHARED src/library/so/main.c src/library/plugin/plugin.c src/library/gl.c
+        src/library/rwlock/rwlock_posix.c src/library/ipc_posix.c src/library/plugin/plugin_posix.c modules/hashmap/hashmap.c
+        src/miniz/miniz.c modules/spng/spng/spng.c)
+        target_link_libraries(${BOLT_PLUGIN_LIB_NAME} luajit-5.1)
+        target_include_directories(${BOLT_PLUGIN_LIB_NAME} PUBLIC "${BOLT_LUAJIT_INCLUDE_DIR}")
+        install(TARGETS ${BOLT_PLUGIN_LIB_NAME} DESTINATION "${BOLT_LIBDIR}")
+    endif()
+    if (WIN32)
+        add_library(stub SHARED src/library/dll/stub.c)
+        add_executable(stub_inject_generator src/library/dll/stub_inject_generator.cxx)
+        set_target_properties(stub_inject_generator PROPERTIES CXX_STANDARD 20 CXX_EXTENSIONS OFF)
+        set(BOLT_STUB_INJECT_CXX "stub_inject_cmake_gen.cxx")
+        add_custom_command(
+            OUTPUT "${BOLT_STUB_INJECT_CXX}"
+            DEPENDS stub stub_inject_generator
+            COMMAND stub_inject_generator $<TARGET_FILE:stub> ">${BOLT_STUB_INJECT_CXX}"
+        )
+
+        add_library(${BOLT_PLUGIN_LIB_NAME} SHARED src/library/dll/main.c src/library/plugin/plugin.c src/library/gl.c
+        src/library/rwlock/rwlock_win32.c src/library/ipc_win32.c src/library/plugin/plugin_win32.c modules/hashmap/hashmap.c
+        src/miniz/miniz.c modules/spng/spng/spng.c)
+        target_link_libraries(${BOLT_PLUGIN_LIB_NAME} PUBLIC "${BOLT_LUAJIT_DIR}/lua51.lib")
+        target_include_directories(${BOLT_PLUGIN_LIB_NAME} PUBLIC "${BOLT_LUAJIT_DIR}" "${BOLT_ZLIB_DIR}")
+        install(TARGETS ${BOLT_PLUGIN_LIB_NAME} DESTINATION "${BOLT_CEF_INSTALLDIR}/bolt-launcher")
+        install(FILES "${BOLT_LUAJIT_DIR}/lua51.dll" DESTINATION "${BOLT_CEF_INSTALLDIR}/bolt-launcher")
+    endif()
+    target_include_directories(${BOLT_PLUGIN_LIB_NAME} PUBLIC "${CEF_ROOT}" "${CMAKE_CURRENT_SOURCE_DIR}/src/miniz")
+    target_compile_definitions(${BOLT_PLUGIN_LIB_NAME} PUBLIC SPNG_STATIC=1 SPNG_USE_MINIZ=1)
+    if(MSVC)
+        target_compile_definitions(${BOLT_PLUGIN_LIB_NAME} PUBLIC _USE_MATH_DEFINES=1)
+    endif()
+endif()
+
 # source html directory
 if(NOT BOLT_HTML_DIR)
     set(BOLT_HTML_DIR "${CMAKE_CURRENT_SOURCE_DIR}/app/dist")
@@ -300,10 +336,13 @@ add_executable(bolt
     modules/fmt/src/format.cc src/main.cxx src/browser.cxx src/browser/app.cxx src/browser/client.cxx
     ${CLIENT_OS_SPECIFIC} src/browser/resource_handler.cxx src/browser/window_launcher.cxx
     ${WINDOW_LAUNCHER_OS_SPECIFIC} src/mime.cxx src/file_manager/directory.cxx client_cmake_gen.cxx
-    ${LIB_IPC_OS_SPECIFIC} ${BOLT_FILE_MANAGER_LAUNCHER_GEN}
+    ${LIB_IPC_OS_SPECIFIC} ${BOLT_FILE_MANAGER_LAUNCHER_GEN} ${BOLT_STUB_INJECT_CXX}
 )
 
 # Various build properties
+if(NOT BOLT_SKIP_LIBRARIES)
+    target_compile_definitions(bolt PUBLIC BOLT_LIB_NAME="${BOLT_PLUGIN_LIB_NAME}" BOLT_PLUGINS=1)
+endif()
 target_include_directories(bolt PUBLIC ${CEF_ROOT} modules/fmt/include)
 set_target_properties(bolt PROPERTIES CXX_STANDARD 20 CXX_EXTENSIONS OFF)
 target_link_libraries(bolt PUBLIC libcef_dll_wrapper)
@@ -352,33 +391,6 @@ if(APPLE)
 else()
     install(TARGETS bolt DESTINATION "${BOLT_CEF_INSTALLDIR}/bolt-launcher")
     install(DIRECTORY "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/" "${CEF_ROOT}/Resources/" DESTINATION "${BOLT_CEF_INSTALLDIR}/bolt-launcher" USE_SOURCE_PERMISSIONS)
-endif()
-
-# Build plugin library
-if(NOT BOLT_SKIP_LIBRARIES)
-    if(UNIX AND NOT APPLE)
-        add_library(${BOLT_PLUGIN_LIB_NAME} SHARED src/library/so/main.c src/library/plugin/plugin.c src/library/gl.c
-        src/library/rwlock/rwlock_posix.c src/library/ipc_posix.c src/library/plugin/plugin_posix.c modules/hashmap/hashmap.c
-        src/miniz/miniz.c modules/spng/spng/spng.c)
-        target_link_libraries(${BOLT_PLUGIN_LIB_NAME} luajit-5.1)
-        target_include_directories(${BOLT_PLUGIN_LIB_NAME} PUBLIC "${BOLT_LUAJIT_INCLUDE_DIR}")
-        install(TARGETS ${BOLT_PLUGIN_LIB_NAME} DESTINATION "${BOLT_LIBDIR}")
-    endif()
-    if (WIN32)
-        add_library(${BOLT_PLUGIN_LIB_NAME} SHARED src/library/dll/main.c src/library/plugin/plugin.c src/library/gl.c
-        src/library/rwlock/rwlock_win32.c src/library/ipc_win32.c src/library/plugin/plugin_win32.c modules/hashmap/hashmap.c
-        src/miniz/miniz.c modules/spng/spng/spng.c)
-        target_link_libraries(${BOLT_PLUGIN_LIB_NAME} PUBLIC "${BOLT_LUAJIT_DIR}/lua51.lib")
-        target_include_directories(${BOLT_PLUGIN_LIB_NAME} PUBLIC "${BOLT_LUAJIT_DIR}" "${BOLT_ZLIB_DIR}")
-        install(TARGETS ${BOLT_PLUGIN_LIB_NAME} DESTINATION "${BOLT_CEF_INSTALLDIR}/bolt-launcher")
-        install(FILES "${BOLT_LUAJIT_DIR}/lua51.dll" DESTINATION "${BOLT_CEF_INSTALLDIR}/bolt-launcher")
-    endif()
-    target_include_directories(${BOLT_PLUGIN_LIB_NAME} PUBLIC "${CEF_ROOT}" "${CMAKE_CURRENT_SOURCE_DIR}/src/miniz")
-    target_compile_definitions(${BOLT_PLUGIN_LIB_NAME} PUBLIC SPNG_STATIC=1 SPNG_USE_MINIZ=1)
-    target_compile_definitions(bolt PUBLIC BOLT_LIB_NAME="${BOLT_PLUGIN_LIB_NAME}" BOLT_PLUGINS=1)
-    if(MSVC)
-        target_compile_definitions(${BOLT_PLUGIN_LIB_NAME} PUBLIC _USE_MATH_DEFINES=1)
-    endif()
 endif()
 
 # Finally, install shell script and metadata
