@@ -262,7 +262,7 @@ if(NOT BOLT_SKIP_LIBRARIES)
         add_custom_command(
             OUTPUT "${BOLT_STUB_INJECT_CXX}"
             DEPENDS stub stub_inject_generator
-            COMMAND stub_inject_generator $<TARGET_FILE:stub> ">${BOLT_STUB_INJECT_CXX}"
+            COMMAND stub_inject_generator $<TARGET_FILE:stub> "${CMAKE_CURRENT_SOURCE_DIR}/src/library/dll/stub_inject.hxx" ">${BOLT_STUB_INJECT_CXX}"
         )
 
         add_library(${BOLT_PLUGIN_LIB_NAME} SHARED src/library/dll/main.c src/library/plugin/plugin.c src/library/gl.c
