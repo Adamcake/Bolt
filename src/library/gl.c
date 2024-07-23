@@ -16,12 +16,6 @@
 #define LOG(...)
 #endif
 
-#if defined(_MSC_VER)
-#define thread_local __declspec(thread)
-#else
-#define thread_local _Thread_local
-#endif
-
 static unsigned int gl_width;
 static unsigned int gl_height;
 
@@ -114,7 +108,17 @@ static void _bolt_gl_plugin_surface_drawtosurface(void* userdata, void* target, 
 #define CONTEXTS_CAPACITY 64 // not growable so we just have to hard-code a number and hope it's enough forever
 #define GAME_MINIMAP_BIG_SIZE 2048
 static struct GLContext contexts[CONTEXTS_CAPACITY];
-thread_local struct GLContext* current_context = NULL;
+
+// since GL contexts are bound only to the thread that binds them, we use thread-local storage (TLS)
+// to keep track of which context struct is relevant to each thread. One TLS slot can store exactly
+// one pointer, which happens to be exactly what we need to store.
+// Win32 and POSIX both define that the initial value will be 0 on all threads, current and future.
+#if defined(_WIN32)
+#include <Windows.h>
+DWORD current_context_tls;
+#else
+pthread_key_t current_context_tls;
+#endif
 
 struct PluginSurfaceUserdata {
     unsigned int width;
@@ -124,7 +128,19 @@ struct PluginSurfaceUserdata {
 };
 
 struct GLContext* _bolt_context() {
-    return current_context;
+#if defined(_WIN32)
+    return (struct GLContext*)TlsGetValue(current_context_tls);
+#else
+    return (struct GLContext*)pthread_getspecific(current_context_tls);
+#endif
+}
+
+static void _bolt_set_context(struct GLContext* context) {
+#if defined(_WIN32)
+    TlsSetValue(current_context_tls, (LPVOID)context);
+#else
+    pthread_setspecific(current_context_tls, context);
+#endif
 }
 
 size_t _bolt_context_count() {
@@ -445,7 +461,13 @@ static void _bolt_gl_surface_destroy_buffers(struct PluginSurfaceUserdata* userd
     lgl->DeleteTextures(1, &userdata->renderbuffer);
 }
 
-void _bolt_gl_load(void* (*GetProcAddress)(const char*)) {
+// this function is called at the earliest possible opportunity, and is never undone
+static void _bolt_gl_load(void* (*GetProcAddress)(const char*)) {
+#if defined(_WIN32)
+    current_context_tls = TlsAlloc();
+#else
+    pthread_key_create(&current_context_tls, NULL);
+#endif
 #define INIT_GL_FUNC(NAME) gl.NAME = GetProcAddress("gl"#NAME);
     INIT_GL_FUNC(ActiveTexture)
     INIT_GL_FUNC(AttachShader)
@@ -500,7 +522,9 @@ void _bolt_gl_load(void* (*GetProcAddress)(const char*)) {
 #undef INIT_GL_FUNC
 }
 
-void _bolt_gl_init() {
+// this function is called when the "main" gl context gets created, and is undone by _bolt_gl_close()
+// when all the contexts are destroyed.
+static void _bolt_gl_init() {
     unsigned int direct_screen_vs = gl.CreateShader(GL_VERTEX_SHADER);
     gl.ShaderSource(direct_screen_vs, 1, &program_direct_screen_vs, NULL);
     gl.CompileShader(direct_screen_vs);
@@ -1129,18 +1153,19 @@ void _bolt_gl_onCreateContext(void* context, void* shared_context, const struct 
 }
 
 void _bolt_gl_onMakeCurrent(void* context) {
+    struct GLContext* const current_context = _bolt_context();
     if (current_context) {
         current_context->is_attached = 0;
         if (current_context->deferred_destroy) _bolt_destroy_context(current_context);
     }
     if (!context) {
-        current_context = 0;
+        _bolt_set_context(NULL);
         return;
     }
     for (size_t i = 0; i < CONTEXTS_CAPACITY; i += 1) {
-        struct GLContext* ptr = &contexts[i];
+        struct GLContext* const ptr = &contexts[i];
         if (ptr->id == (uintptr_t)context) {
-            current_context = ptr;
+            _bolt_set_context(ptr);
             break;
         }
     }
