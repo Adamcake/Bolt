@@ -244,6 +244,11 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Tell git to ignore everything in the new build directory
 file(GENERATE OUTPUT .gitignore CONTENT "*")
 
+# Tell MSVC what CRT it should target
+if (MSVC)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
 # Build plugin library
 if(NOT BOLT_SKIP_LIBRARIES)
     if(UNIX AND NOT APPLE)
@@ -353,8 +358,6 @@ if(UNIX AND NOT APPLE)
     target_link_libraries(bolt PUBLIC "xcb")
     target_link_libraries(bolt PUBLIC "archive")
 elseif(WIN32)
-    # note: this probably only works when targeting visual studio and msvc and only in release? I hate windows.
-    target_compile_options(bolt PUBLIC $<$<CONFIG:Debug>:/MTd> $<$<CONFIG:Release>:/MT>)
     set_target_properties(bolt PROPERTIES WIN32_EXECUTABLE TRUE)
     target_link_libraries(bolt PUBLIC "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/libcef.lib")
     target_link_libraries(bolt PUBLIC "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/cef_sandbox.lib")
