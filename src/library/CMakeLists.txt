@@ -19,12 +19,13 @@ if (WIN32)
     add_executable(stub_inject_generator dll/stub_inject_generator.cxx)
     target_compile_definitions(stub_inject_generator PUBLIC BOLT_STUB_ENTRYORDINAL=${BOLT_STUB_ENTRYORDINAL})
     set_target_properties(stub_inject_generator PROPERTIES CXX_STANDARD 20 CXX_EXTENSIONS OFF)
-    set(BOLT_STUB_INJECT_CXX "stub_inject_cmake_gen.cxx" PARENT_SCOPE)
     add_custom_command(
-        OUTPUT "${BOLT_STUB_INJECT_CXX}"
+        OUTPUT stub_inject_cmake_gen.cxx
         DEPENDS stub stub_inject_generator
-        COMMAND stub_inject_generator $<TARGET_FILE:stub> "${CMAKE_CURRENT_SOURCE_DIR}/dll/stub_inject.hxx" ">${BOLT_STUB_INJECT_CXX}"
+        COMMAND stub_inject_generator $<TARGET_FILE:stub> "${CMAKE_CURRENT_SOURCE_DIR}/dll/stub_inject.hxx" ">stub_inject_cmake_gen.cxx"
     )
+    add_custom_target(BOLT_STUB_INJECT_DEPENDENCY DEPENDS stub_inject_cmake_gen.cxx)
+    set(BOLT_STUB_INJECT_CXX "${CMAKE_CURRENT_BINARY_DIR}/stub_inject_cmake_gen.cxx" PARENT_SCOPE)
 
     add_library(${BOLT_PLUGIN_LIB_NAME} SHARED dll/main.c plugin/plugin.c gl.c
     rwlock/rwlock_win32.c ipc_win32.c plugin/plugin_win32.c ../../modules/hashmap/hashmap.c

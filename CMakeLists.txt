@@ -304,6 +304,9 @@ add_executable(bolt
     ${WINDOW_LAUNCHER_OS_SPECIFIC} src/mime.cxx src/file_manager/directory.cxx client_cmake_gen.cxx
     ${LIB_IPC_OS_SPECIFIC} ${BOLT_FILE_MANAGER_LAUNCHER_GEN} ${BOLT_STUB_INJECT_CXX}
 )
+if(BOLT_STUB_INJECT_CXX)
+    add_dependencies(bolt BOLT_STUB_INJECT_DEPENDENCY)
+endif()
 
 # Various build properties
 if(BOLT_PLUGIN_LIB_NAME)
