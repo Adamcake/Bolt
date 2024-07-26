@@ -1,9 +1,6 @@
 cmake_minimum_required(VERSION 3.21) # Minimum CEF requirement, but building with the latest cmake is strongly recommended
 project(Bolt VERSION 0.9 LANGUAGES C CXX)
 
-# e.g. becomes "libbolt-plugin.so" on linux
-set(BOLT_PLUGIN_LIB_NAME "bolt-plugin")
-
 if(NOT WIN32)
     # name of application in metadata, defaulting to "BoltLauncher", but usually overridden to "com.adamcake.Bolt" by flatpak for example
     if(NOT BOLT_META_NAME)
@@ -246,44 +243,7 @@ file(GENERATE OUTPUT .gitignore CONTENT "*")
 
 # Build plugin library
 if(NOT BOLT_SKIP_LIBRARIES)
-    if(UNIX AND NOT APPLE)
-        add_library(${BOLT_PLUGIN_LIB_NAME} SHARED src/library/so/main.c src/library/plugin/plugin.c src/library/gl.c
-        src/library/rwlock/rwlock_posix.c src/library/ipc_posix.c src/library/plugin/plugin_posix.c modules/hashmap/hashmap.c
-        src/miniz/miniz.c modules/spng/spng/spng.c)
-        target_link_libraries(${BOLT_PLUGIN_LIB_NAME} luajit-5.1)
-        target_include_directories(${BOLT_PLUGIN_LIB_NAME} PUBLIC "${BOLT_LUAJIT_INCLUDE_DIR}")
-        install(TARGETS ${BOLT_PLUGIN_LIB_NAME} DESTINATION "${BOLT_LIBDIR}")
-    endif()
-    if (WIN32)
-        add_library(stub SHARED src/library/dll/stub.c)
-        add_executable(stub_inject_generator src/library/dll/stub_inject_generator.cxx)
-        set_target_properties(stub_inject_generator PROPERTIES CXX_STANDARD 20 CXX_EXTENSIONS OFF)
-        set(BOLT_STUB_INJECT_CXX "stub_inject_cmake_gen.cxx")
-        add_custom_command(
-            OUTPUT "${BOLT_STUB_INJECT_CXX}"
-            DEPENDS stub stub_inject_generator
-            COMMAND stub_inject_generator $<TARGET_FILE:stub> "${CMAKE_CURRENT_SOURCE_DIR}/src/library/dll/stub_inject.hxx" ">${BOLT_STUB_INJECT_CXX}"
-        )
-
-        add_library(${BOLT_PLUGIN_LIB_NAME} SHARED src/library/dll/main.c src/library/plugin/plugin.c src/library/gl.c
-        src/library/rwlock/rwlock_win32.c src/library/ipc_win32.c src/library/plugin/plugin_win32.c modules/hashmap/hashmap.c
-        src/miniz/miniz.c modules/spng/spng/spng.c)
-        target_link_libraries(${BOLT_PLUGIN_LIB_NAME} PUBLIC "${BOLT_LUAJIT_DIR}/lua51.lib")
-        target_include_directories(${BOLT_PLUGIN_LIB_NAME} PUBLIC "${BOLT_LUAJIT_DIR}" "${BOLT_ZLIB_DIR}")
-        install(TARGETS ${BOLT_PLUGIN_LIB_NAME} DESTINATION "${BOLT_CEF_INSTALLDIR}/bolt-launcher")
-        install(FILES "${BOLT_LUAJIT_DIR}/lua51.dll" DESTINATION "${BOLT_CEF_INSTALLDIR}/bolt-launcher")
-
-        if(MSVC)
-            set_property(TARGET stub PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
-            set_property(TARGET stub_inject_generator PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
-            set_property(TARGET ${BOLT_PLUGIN_LIB_NAME} PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
-        endif()
-    endif()
-    target_include_directories(${BOLT_PLUGIN_LIB_NAME} PUBLIC "${CEF_ROOT}" "${CMAKE_CURRENT_SOURCE_DIR}/src/miniz")
-    target_compile_definitions(${BOLT_PLUGIN_LIB_NAME} PUBLIC SPNG_STATIC=1 SPNG_USE_MINIZ=1)
-    if(MSVC)
-        target_compile_definitions(${BOLT_PLUGIN_LIB_NAME} PUBLIC _USE_MATH_DEFINES=1)
-    endif()
+    add_subdirectory(src/library)
 endif()
 
 # source html directory
@@ -346,8 +306,8 @@ add_executable(bolt
 )
 
 # Various build properties
-if(NOT BOLT_SKIP_LIBRARIES)
-    target_compile_definitions(bolt PUBLIC BOLT_LIB_NAME="${BOLT_PLUGIN_LIB_NAME}" BOLT_PLUGINS=1)
+if(BOLT_PLUGIN_LIB_NAME)
+    target_compile_definitions(bolt PUBLIC BOLT_LIB_NAME="${BOLT_PLUGIN_LIB_NAME}" BOLT_PLUGINS)
 endif()
 target_include_directories(bolt PUBLIC ${CEF_ROOT} modules/fmt/include)
 set_target_properties(bolt PROPERTIES CXX_STANDARD 20 CXX_EXTENSIONS OFF)
