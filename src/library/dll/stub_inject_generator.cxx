@@ -122,6 +122,9 @@ int wmain(int argc, const wchar_t **argv) {
                     execp ? PAGE_EXECUTE : PAGE_NOACCESS;
         std::cout << "VirtualProtectEx(process, (LPVOID)((LPBYTE)dll + " << stub_section_header[i].VirtualAddress << "), " << stub_section_header[i].Misc.VirtualSize << ", " << permission << ", &oldp);" << std::endl;
     }
+    // invoke entrypoint
+    std::cout << "HANDLE remote_thread = CreateRemoteThread(process, NULL, 0, (LPTHREAD_START_ROUTINE)((LPBYTE)dll + " << entry_point_rva << "), nullptr, 0, NULL);" << std::endl;
+    std::cout << "WaitForSingleObject(remote_thread, INFINITE);" << std::endl;
 
     std::cout << "}" << std::endl;
 
