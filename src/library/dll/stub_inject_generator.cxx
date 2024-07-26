@@ -72,17 +72,17 @@ int wmain(int argc, const wchar_t **argv) {
 
     std::cout << "void InjectStub(HANDLE process) {" << std::endl;
     // allocate memory in the remote process
-    std::cout << "PVOID dll = VirtualAllocEx(process, nullptr, " << stub_nt_headers->OptionalHeader.SizeOfImage << ", MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);" << std::endl;
+    std::cout << "LPBYTE dll = (LPBYTE)VirtualAllocEx(process, nullptr, " << stub_nt_headers->OptionalHeader.SizeOfImage << ", MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);" << std::endl;
     // copy DLL headers to the target process
     std::cout << "WriteProcessMemory(process, dll, (PVOID)dll_headers, " << stub_nt_headers->OptionalHeader.SizeOfHeaders << ", nullptr);" << std::endl;
     // copy each section to the target process
     for (size_t i = 0; i < stub_nt_headers->FileHeader.NumberOfSections; i += 1) {
-        std::cout << "WriteProcessMemory(process, (PVOID)((LPBYTE)dll + " << stub_section_header[i].VirtualAddress << "), (PVOID)section" << i << ", " << stub_section_header[i].SizeOfRawData << ", nullptr);" << std::endl;
+        std::cout << "WriteProcessMemory(process, (PVOID)(dll + " << stub_section_header[i].VirtualAddress << "), (PVOID)section" << i << ", " << stub_section_header[i].SizeOfRawData << ", nullptr);" << std::endl;
     }
     // fix relocations
     std::cout <<
-        "const ptrdiff_t reloc_delta = (ptrdiff_t)((LPBYTE)dll - " << stub_nt_headers->OptionalHeader.ImageBase << ");"
-        "PIMAGE_BASE_RELOCATION remote_reloc_address = (PIMAGE_BASE_RELOCATION)((LPBYTE)dll + " << stub_nt_headers->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC].VirtualAddress << ");"
+        "const ptrdiff_t reloc_delta = (ptrdiff_t)(dll - " << stub_nt_headers->OptionalHeader.ImageBase << ");"
+        "PIMAGE_BASE_RELOCATION remote_reloc_address = (PIMAGE_BASE_RELOCATION)(dll + " << stub_nt_headers->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC].VirtualAddress << ");"
         "WORD offset;"
         "DWORD ptr;"
         "while (true) {"
@@ -94,7 +94,7 @@ int wmain(int argc, const wchar_t **argv) {
             "for (size_t i = 0; i < (remote_reloc.SizeOfBlock - sizeof(remote_reloc)) / sizeof(WORD); i += 1) {"
               "ReadProcessMemory(process, (LPCVOID)(list + i), (LPVOID)&offset, sizeof(offset), nullptr);"
               "if (!offset) continue;"
-              "LPVOID remote_ptr_address = (LPVOID)((LPBYTE)dll + remote_reloc.VirtualAddress + (offset & 0xFFF));"
+              "LPVOID remote_ptr_address = (LPVOID)(dll + remote_reloc.VirtualAddress + (offset & 0xFFF));"
               "ReadProcessMemory(process, (LPCVOID)remote_ptr_address, (LPVOID)&ptr, sizeof(ptr), nullptr);"
               "ptr += reloc_delta;"
               "WriteProcessMemory(process, remote_ptr_address, (LPCVOID)&ptr, sizeof(ptr), nullptr);"
@@ -120,10 +120,10 @@ int wmain(int argc, const wchar_t **argv) {
                     execp ? PAGE_EXECUTE_WRITECOPY : PAGE_WRITECOPY
                 :
                     execp ? PAGE_EXECUTE : PAGE_NOACCESS;
-        std::cout << "VirtualProtectEx(process, (LPVOID)((LPBYTE)dll + " << stub_section_header[i].VirtualAddress << "), " << stub_section_header[i].Misc.VirtualSize << ", " << permission << ", &oldp);" << std::endl;
+        std::cout << "VirtualProtectEx(process, (LPVOID)(dll + " << stub_section_header[i].VirtualAddress << "), " << stub_section_header[i].Misc.VirtualSize << ", " << permission << ", &oldp);" << std::endl;
     }
     // invoke entrypoint
-    std::cout << "HANDLE remote_thread = CreateRemoteThread(process, NULL, 0, (LPTHREAD_START_ROUTINE)((LPBYTE)dll + " << entry_point_rva << "), nullptr, 0, NULL);" << std::endl;
+    std::cout << "HANDLE remote_thread = CreateRemoteThread(process, NULL, 0, (LPTHREAD_START_ROUTINE)(dll + " << entry_point_rva << "), nullptr, 0, NULL);" << std::endl;
     std::cout << "WaitForSingleObject(remote_thread, INFINITE);" << std::endl;
 
     std::cout << "}" << std::endl;
