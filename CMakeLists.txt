@@ -244,11 +244,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Tell git to ignore everything in the new build directory
 file(GENERATE OUTPUT .gitignore CONTENT "*")
 
-# Tell MSVC what CRT it should target
-if (MSVC)
-    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-endif()
-
 # Build plugin library
 if(NOT BOLT_SKIP_LIBRARIES)
     if(UNIX AND NOT APPLE)
@@ -277,6 +272,12 @@ if(NOT BOLT_SKIP_LIBRARIES)
         target_include_directories(${BOLT_PLUGIN_LIB_NAME} PUBLIC "${BOLT_LUAJIT_DIR}" "${BOLT_ZLIB_DIR}")
         install(TARGETS ${BOLT_PLUGIN_LIB_NAME} DESTINATION "${BOLT_CEF_INSTALLDIR}/bolt-launcher")
         install(FILES "${BOLT_LUAJIT_DIR}/lua51.dll" DESTINATION "${BOLT_CEF_INSTALLDIR}/bolt-launcher")
+
+        if(MSVC)
+            set_property(TARGET stub PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+            set_property(TARGET stub_inject_generator PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+            set_property(TARGET ${BOLT_PLUGIN_LIB_NAME} PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+        endif()
     endif()
     target_include_directories(${BOLT_PLUGIN_LIB_NAME} PUBLIC "${CEF_ROOT}" "${CMAKE_CURRENT_SOURCE_DIR}/src/miniz")
     target_compile_definitions(${BOLT_PLUGIN_LIB_NAME} PUBLIC SPNG_STATIC=1 SPNG_USE_MINIZ=1)
@@ -361,6 +362,9 @@ elseif(WIN32)
     set_target_properties(bolt PROPERTIES WIN32_EXECUTABLE TRUE)
     target_link_libraries(bolt PUBLIC "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/libcef.lib")
     target_link_libraries(bolt PUBLIC "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/cef_sandbox.lib")
+    if(MSVC)
+        set_property(TARGET bolt PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
 elseif(APPLE)
     # TODO: mac support
 endif()
