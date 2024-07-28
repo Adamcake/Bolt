@@ -69,6 +69,8 @@ int wmain(int argc, const wchar_t **argv) {
         }
         std::cout << "};" << std::endl;
     }
+    // embed the amount of zeroes we'll need (WriteProcessMemory needs actual memory to copy from)
+    std::cout << "static const uint8_t zeroes[" << stub_nt_headers->OptionalHeader.SizeOfHeaders << "];" << std::endl;
 
     std::cout << "void InjectStub(HANDLE process) {" << std::endl;
     // allocate memory in the remote process
@@ -123,8 +125,15 @@ int wmain(int argc, const wchar_t **argv) {
         std::cout << "VirtualProtectEx(process, (LPVOID)(dll + " << stub_section_header[i].VirtualAddress << "), " << stub_section_header[i].Misc.VirtualSize << ", " << permission << ", &oldp);" << std::endl;
     }
     // invoke entrypoint
-    std::cout << "HANDLE remote_thread = CreateRemoteThread(process, NULL, 0, (LPTHREAD_START_ROUTINE)(dll + " << entry_point_rva << "), nullptr, 0, NULL);" << std::endl;
+    std::cout << "StubInjectParams params = {.kernel32=GetModuleHandleW(L\"kernel32.dll\"), .pGetModuleHandleW=GetModuleHandleW, .pGetProcAddress=GetProcAddress};" << std::endl;
+    std::cout << "StubInjectParams* remote_params = (StubInjectParams*)VirtualAllocEx(process, nullptr, sizeof(StubInjectParams), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);" << std::endl;
+    std::cout << "WriteProcessMemory(process, remote_params, &params, sizeof(params), nullptr);" << std::endl;
+    std::cout << "HANDLE remote_thread = CreateRemoteThread(process, NULL, 0, (LPTHREAD_START_ROUTINE)(dll + " << entry_point_rva << "), remote_params, 0, NULL);" << std::endl;
     std::cout << "WaitForSingleObject(remote_thread, INFINITE);" << std::endl;
+    std::cout << "VirtualFreeEx(process, remote_params, 0, MEM_RELEASE);" << std::endl;
+
+    // wipe dll headers from remote process
+    std::cout << "WriteProcessMemory(process, dll, (PVOID)zeroes, " << stub_nt_headers->OptionalHeader.SizeOfHeaders << ", nullptr);" << std::endl;
 
     std::cout << "}" << std::endl;
 
