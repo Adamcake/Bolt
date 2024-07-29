@@ -70,7 +70,7 @@ int wmain(int argc, const wchar_t **argv) {
         std::cout << "};" << std::endl;
     }
     // embed the amount of zeroes we'll need (WriteProcessMemory needs actual memory to copy from)
-    std::cout << "static const uint8_t zeroes[" << stub_nt_headers->OptionalHeader.SizeOfHeaders << "];" << std::endl;
+    std::cout << "static constexpr uint8_t zeroes[" << stub_nt_headers->OptionalHeader.SizeOfHeaders << "] = {0};" << std::endl;
 
     std::cout << "void InjectStub(HANDLE process) {" << std::endl;
     // allocate memory in the remote process
