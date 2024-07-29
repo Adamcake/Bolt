@@ -241,6 +241,12 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Tell git to ignore everything in the new build directory
 file(GENERATE OUTPUT .gitignore CONTENT "*")
 
+# define extra build and link args for windows non-msvc builds
+if(WIN32)
+    list(APPEND BOLT_WINDOWS_NONMSVC_OPTIONS "-municode" "-mwin32")
+    list(APPEND BOLT_WINDOWS_NONMSVC_LINKOPTIONS ${BOLT_WINDOWS_NONMSVC_OPTIONS} "-s")
+endif()
+
 # Build plugin library
 if(NOT BOLT_SKIP_LIBRARIES)
     add_subdirectory(src/library)
@@ -327,6 +333,9 @@ elseif(WIN32)
     target_link_libraries(bolt PUBLIC "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/cef_sandbox.lib")
     if(MSVC)
         set_property(TARGET bolt PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    else()
+        target_compile_options(bolt PUBLIC ${BOLT_WINDOWS_NONMSVC_OPTIONS})
+        target_link_options(bolt PUBLIC ${BOLT_WINDOWS_NONMSVC_LINKOPTIONS})
     endif()
 elseif(APPLE)
     # TODO: mac support
