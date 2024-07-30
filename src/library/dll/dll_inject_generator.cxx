@@ -1,6 +1,7 @@
 #include "stub_inject.h"
-#include <algorithm>
 #include <iostream>
+
+#define MAX(A, B) (((A) > (B)) ? (A) : (B))
 
 DWORD perms_for_characteristics(DWORD characteristics) {
     const bool readp = (characteristics & IMAGE_SCN_MEM_READ);
@@ -121,7 +122,7 @@ int wmain(int argc, const wchar_t **argv) {
     }
     // embed the amount of zeroes we'll need (WriteProcessMemory needs actual memory to copy from)
     std::cout << "static const uint8_t zeroes["
-        << max(plugin_nt_headers->OptionalHeader.SizeOfHeaders, luajit_nt_headers->OptionalHeader.SizeOfHeaders)
+        << MAX(plugin_nt_headers->OptionalHeader.SizeOfHeaders, luajit_nt_headers->OptionalHeader.SizeOfHeaders)
         << "] = {0};" << std::endl;
 
     std::cout << "void InjectPluginDll(HANDLE process, HMODULE kernel32, HMODULE(__stdcall* pGetModuleHandleW)(LPCWSTR), FARPROC(__stdcall* pGetProcAddress)(HMODULE, LPCSTR)) {" << std::endl;
