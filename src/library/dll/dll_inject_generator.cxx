@@ -204,7 +204,15 @@ int wmain(int argc, const wchar_t **argv) {
         std::cout << "pVirtualProtectEx(process, (LPVOID)(dll_lua + " << luajit_section_header[i].VirtualAddress << "), " << luajit_section_header[i].Misc.VirtualSize << ", " << permission << ", &oldp);" << std::endl;
     }
     // invoke entrypoint
-    std::cout << "struct PluginInjectParams params = {.kernel32=kernel32, .pGetModuleHandleW=pGetModuleHandleW, .pGetProcAddress=pGetProcAddress};" << std::endl;
+    std::cout << "struct PluginInjectParams params = {"
+        ".kernel32=kernel32,"
+        ".pGetModuleHandleW=pGetModuleHandleW,"
+        ".pGetProcAddress=pGetProcAddress,"
+        ".plugin=(HMODULE)dll_plugin,"
+        ".luajit=(HMODULE)dll_lua,"
+        ".plugin_import_directory=(PIMAGE_IMPORT_DESCRIPTOR)(dll_plugin + " << plugin_nt_headers->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress << "),"
+        ".luajit_import_directory=(PIMAGE_IMPORT_DESCRIPTOR)(dll_lua + " << luajit_nt_headers->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress << ")"
+    "};" << std::endl;
     std::cout << "struct PluginInjectParams* remote_params = (struct PluginInjectParams*)pVirtualAllocEx(process, NULL, sizeof(params), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);" << std::endl;
     std::cout << "pWriteProcessMemory(process, remote_params, &params, sizeof(params), NULL);" << std::endl;
     std::cout << "HANDLE remote_thread = pCreateRemoteThread(process, NULL, 0, (LPTHREAD_START_ROUTINE)(dll_plugin + " << entry_point_rva << "), remote_params, 0, NULL);" << std::endl;
