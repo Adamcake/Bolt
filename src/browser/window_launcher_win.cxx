@@ -5,7 +5,7 @@
 #include <shellapi.h>
 
 #if defined(BOLT_PLUGINS)
-#include "../library/dll/stub_inject.hxx"
+#include "../library/dll/stub_inject.h"
 #endif
 
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<CefRequest> request, std::string_view query) {
