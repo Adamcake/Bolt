@@ -1,4 +1,4 @@
-#include "stub_inject.hxx"
+#include "stub_inject.h"
 #include <iostream>
 
 /// This program is run by the build system on Windows. It manually maps the stub DLL, then outputs some C++ code which

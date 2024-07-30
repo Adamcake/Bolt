@@ -1,5 +1,6 @@
-#include <windows.h>
+#include <Windows.h>
+#include "dll_inject.h"
 
-BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
-
+DWORD __stdcall BOLT_STUB_ENTRYNAME(struct PluginInjectParams* data) {
+    return 0;
 }

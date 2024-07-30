@@ -1,17 +1,16 @@
-#include "stub_inject.hxx"
+#include "stub_inject.h"
+#include "dll_inject.h"
 
-//typedef HANDLE(__stdcall* CREATEFILEW)(LPCWSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES, DWORD, DWORD, HANDLE);
-//typedef FARPROC(__stdcall* CLOSEHANDLE)(HANDLE);
-//typedef BOOL(__stdcall* WRITEFILE)(HANDLE, LPCVOID, DWORD, LPDWORD, LPOVERLAPPED);
 typedef BOOL(__stdcall* CREATEPROCESSW)(LPCWSTR, LPWSTR, LPSECURITY_ATTRIBUTES, LPSECURITY_ATTRIBUTES, BOOL, DWORD, LPVOID, LPCWSTR, LPSTARTUPINFOW, LPPROCESS_INFORMATION);
 typedef BOOL(__stdcall* VIRTUALPROTECT)(LPVOID, SIZE_T, DWORD, PDWORD);
+typedef DWORD(__stdcall* RESUMETHREAD)(HANDLE);
 
-//static CREATEFILEW real_CreateFileW;
-//static CLOSEHANDLE real_CloseHandle;
-//static WRITEFILE real_WriteFile;
+static RESUMETHREAD real_ResumeThread;
 
 static CREATEPROCESSW real_CreateProcessW;
 BOOL hook_CreateProcessW(LPCWSTR, LPWSTR, LPSECURITY_ATTRIBUTES, LPSECURITY_ATTRIBUTES, BOOL, DWORD, LPVOID, LPCWSTR, LPSTARTUPINFOW, LPPROCESS_INFORMATION);
+
+struct StubInjectParams params;
 
 // true if match, false if not, for case-insensitive mode a2 must be all lowercase
 BOOL bolt_cmp(const char* a1, const char* a2, BOOL case_sensitive) {
@@ -33,10 +32,9 @@ BOOL bolt_cmp(const char* a1, const char* a2, BOOL case_sensitive) {
 // process passes us its function pointers for GetModuleHandleW and GetProcAddress. using those, we
 // can find the game's imported modules and use them for ourselves.
 DWORD __stdcall BOLT_STUB_ENTRYNAME(struct StubInjectParams* data) {
+    params = *data;
     VIRTUALPROTECT pVirtualProtect = (VIRTUALPROTECT)data->pGetProcAddress(data->kernel32, "VirtualProtect");
-    //real_CreateFileW = (CREATEFILEW)data->pGetProcAddress(data->kernel32, "CreateFileW");
-    //real_CloseHandle = (CLOSEHANDLE)data->pGetProcAddress(data->kernel32, "CloseHandle");
-    //real_WriteFile = (WRITEFILE)data->pGetProcAddress(data->kernel32, "WriteFile");
+    real_ResumeThread = (RESUMETHREAD)data->pGetProcAddress(data->kernel32, "ResumeThread");
 
     HMODULE main_module = data->pGetModuleHandleW(NULL);
     PIMAGE_DOS_HEADER dos_header = (PIMAGE_DOS_HEADER)main_module;
@@ -78,17 +76,24 @@ BOOL hook_CreateProcessW(
     LPSTARTUPINFOW        lpStartupInfo,
     LPPROCESS_INFORMATION lpProcessInformation
 ) {
-    // CreateProcessW hook, check if we're starting rs2client and if so, inject bolt-plugin.dll
-    return real_CreateProcessW(
+    // CreateProcessW hook - the game launcher downloads a new version of the game client, if any,
+    // then runs it using CreateProcessW. it's the only time it uses this function, so we don't need
+    // to check what the child process is. just inject the plugin loader into it.
+    const BOOL is_already_suspended = dwCreationFlags & CREATE_SUSPENDED ? TRUE : FALSE;
+    BOOL ret = real_CreateProcessW(
         lpApplicationName,
         lpCommandLine,
         lpProcessAttributes,
         lpThreadAttributes,
         bInheritHandles,
-        dwCreationFlags,
+        dwCreationFlags | CREATE_SUSPENDED,
         lpEnvironment,
         lpCurrentDirectory,
         lpStartupInfo,
         lpProcessInformation
     );
+    if (!ret) return 0;
+    InjectPluginDll(lpProcessInformation->hProcess, params.kernel32, params.pGetModuleHandleW, params.pGetProcAddress);
+    if (!is_already_suspended) real_ResumeThread(lpProcessInformation->hThread);
+    return ret;
 }
