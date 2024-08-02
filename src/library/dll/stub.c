@@ -50,10 +50,10 @@ DWORD __stdcall BOLT_STUB_ENTRYNAME(struct StubInjectParams* data) {
                 PIMAGE_IMPORT_BY_NAME fname = (PIMAGE_IMPORT_BY_NAME)((LPBYTE)main_module + lookup_table->u1.AddressOfData);
                 if (bolt_cmp(fname->Name, "CreateProcessW", 1)) {
                     DWORD oldp;
-                    pVirtualProtect((LPVOID)(&address_table->u1.Function), 8, PAGE_READWRITE, &oldp);
+                    pVirtualProtect((LPVOID)(&address_table->u1.Function), sizeof(address_table->u1.Function), PAGE_READWRITE, &oldp);
                     real_CreateProcessW = (CREATEPROCESSW)address_table->u1.Function;
                     address_table->u1.Function = (ULONGLONG)hook_CreateProcessW;
-                    pVirtualProtect((LPVOID)(&address_table->u1.Function), 8, oldp, &oldp);
+                    pVirtualProtect((LPVOID)(&address_table->u1.Function), sizeof(address_table->u1.Function), oldp, &oldp);
                 }
             }
             lookup_table += 1;
