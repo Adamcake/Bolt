@@ -1,4 +1,5 @@
 #include "stub_inject.h"
+#include "common.h"
 #include "dll_inject.h"
 
 typedef BOOL(__stdcall* CREATEPROCESSW)(LPCWSTR, LPWSTR, LPSECURITY_ATTRIBUTES, LPSECURITY_ATTRIBUTES, BOOL, DWORD, LPVOID, LPCWSTR, LPSTARTUPINFOW, LPPROCESS_INFORMATION);
@@ -11,19 +12,6 @@ static CREATEPROCESSW real_CreateProcessW;
 BOOL hook_CreateProcessW(LPCWSTR, LPWSTR, LPSECURITY_ATTRIBUTES, LPSECURITY_ATTRIBUTES, BOOL, DWORD, LPVOID, LPCWSTR, LPSTARTUPINFOW, LPPROCESS_INFORMATION);
 
 struct StubInjectParams params;
-
-// true if match, false if not, for case-insensitive mode a2 must be all lowercase
-BOOL bolt_cmp(const char* a1, const char* a2, BOOL case_sensitive) {
-    while (1) {
-        if (*a1 != *a2) {
-            if (case_sensitive || (*a2 < 'a' || *a2 > 'z')) return 0;
-            if (*a1 != *a2 - ('a' - 'A')) return 0;
-        }
-        if (!*a1) return 1;
-        a1 += 1;
-        a2 += 1;
-    }
-}
 
 // this function is invoked via CreateRemoteThread by the manual map injector (see stub_inject)
 // after it injects it into the process.

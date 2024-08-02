@@ -1,24 +1,8 @@
 #include "stub_inject.h"
+#include "common.h"
 #include <iostream>
 
 #define MAX(A, B) (((A) > (B)) ? (A) : (B))
-
-DWORD perms_for_characteristics(DWORD characteristics) {
-    const bool readp = (characteristics & IMAGE_SCN_MEM_READ);
-    const bool writep = (characteristics & IMAGE_SCN_MEM_WRITE);
-    const bool execp = (characteristics & IMAGE_SCN_MEM_EXECUTE);
-    return
-        readp ?
-            writep ?
-                execp ? PAGE_EXECUTE_READWRITE : PAGE_READWRITE
-            :
-                execp ? PAGE_EXECUTE_READ : PAGE_READONLY
-        :
-            writep ?
-                execp ? PAGE_EXECUTE_WRITECOPY : PAGE_WRITECOPY
-            :
-                execp ? PAGE_EXECUTE : PAGE_NOACCESS;
-}
 
 /// This program is run by the build system on Windows. It manually maps the plugin DLL, then outputs some C code which
 /// writes that DLL into a target process, invokes the payload on a remote thread, and blocks until that thread returns.

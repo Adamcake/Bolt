@@ -16,14 +16,14 @@ if (WIN32)
     file(GENERATE OUTPUT stub.def CONTENT "LIBRARY STUB\nEXPORTS\n${BOLT_STUB_ENTRYNAME} @${BOLT_STUB_ENTRYORDINAL}\n")
     file(GENERATE OUTPUT plugin.def CONTENT "LIBRARY BOLT-PLUGIN\nEXPORTS\n${BOLT_STUB_ENTRYNAME} @${BOLT_STUB_ENTRYORDINAL}\n")
 
-    add_library(${BOLT_PLUGIN_LIB_NAME} SHARED dll/main.c plugin/plugin.c gl.c
+    add_library(${BOLT_PLUGIN_LIB_NAME} SHARED dll/main.c dll/common.c plugin/plugin.c gl.c
     rwlock/rwlock_win32.c ipc_win32.c plugin/plugin_win32.c ../../modules/hashmap/hashmap.c
     ../miniz/miniz.c ../../modules/spng/spng/spng.c "${CMAKE_CURRENT_BINARY_DIR}/plugin.def")
     target_compile_definitions(${BOLT_PLUGIN_LIB_NAME} PUBLIC BOLT_STUB_ENTRYNAME=${BOLT_STUB_ENTRYNAME})
     target_link_libraries(${BOLT_PLUGIN_LIB_NAME} PUBLIC "${BOLT_LUAJIT_DIR}/lua51.lib")
     target_include_directories(${BOLT_PLUGIN_LIB_NAME} PUBLIC "${BOLT_LUAJIT_DIR}" "${BOLT_ZLIB_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/../miniz")
     
-    add_executable(dll_inject_generator dll/dll_inject_generator.cxx)
+    add_executable(dll_inject_generator dll/dll_inject_generator.cxx dll/common.c)
     target_compile_definitions(dll_inject_generator PUBLIC BOLT_STUB_ENTRYORDINAL=${BOLT_STUB_ENTRYORDINAL})
     set_target_properties(dll_inject_generator PROPERTIES CXX_STANDARD 20 CXX_EXTENSIONS OFF)
     add_custom_command(
@@ -32,9 +32,9 @@ if (WIN32)
         COMMAND dll_inject_generator $<TARGET_FILE:${BOLT_PLUGIN_LIB_NAME}> "${BOLT_LUAJIT_DIR}/lua51.dll" "${CMAKE_CURRENT_SOURCE_DIR}/dll/dll_inject.h" ">dll_inject_cmake_gen.c"
     )
 
-    add_library(stub SHARED dll/stub.c dll_inject_cmake_gen.c "${CMAKE_CURRENT_BINARY_DIR}/stub.def")
+    add_library(stub SHARED dll/stub.c dll/common.c dll_inject_cmake_gen.c "${CMAKE_CURRENT_BINARY_DIR}/stub.def")
     target_compile_definitions(stub PUBLIC BOLT_STUB_ENTRYNAME=${BOLT_STUB_ENTRYNAME})
-    add_executable(stub_inject_generator dll/stub_inject_generator.cxx)
+    add_executable(stub_inject_generator dll/stub_inject_generator.cxx dll/common.c)
     target_compile_definitions(stub_inject_generator PUBLIC BOLT_STUB_ENTRYORDINAL=${BOLT_STUB_ENTRYORDINAL})
     add_custom_command(
         OUTPUT stub_inject_cmake_gen.cxx

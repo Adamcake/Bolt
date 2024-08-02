@@ -1,4 +1,5 @@
 #include "stub_inject.h"
+#include "common.h"
 #include <iostream>
 
 /// This program is run by the build system on Windows. It manually maps the stub DLL, then outputs some C++ code which
@@ -108,20 +109,7 @@ int wmain(int argc, const wchar_t **argv) {
     // set rwx permissions for each section
     std::cout << "DWORD oldp;" << std::endl;
     for (size_t i = 0; i < stub_nt_headers->FileHeader.NumberOfSections; i += 1) {
-        const bool readp =(stub_section_header[i].Characteristics & IMAGE_SCN_MEM_READ);
-        const bool writep =(stub_section_header[i].Characteristics & IMAGE_SCN_MEM_WRITE);
-        const bool execp =(stub_section_header[i].Characteristics & IMAGE_SCN_MEM_EXECUTE);
-        const DWORD permission =
-            readp ?
-                writep ?
-                    execp ? PAGE_EXECUTE_READWRITE : PAGE_READWRITE
-                :
-                    execp ? PAGE_EXECUTE_READ : PAGE_READONLY
-            :
-                writep ?
-                    execp ? PAGE_EXECUTE_WRITECOPY : PAGE_WRITECOPY
-                :
-                    execp ? PAGE_EXECUTE : PAGE_NOACCESS;
+        const DWORD permission = perms_for_characteristics(stub_section_header[i].Characteristics);
         std::cout << "VirtualProtectEx(process, (LPVOID)(dll + " << stub_section_header[i].VirtualAddress << "), " << stub_section_header[i].Misc.VirtualSize << ", " << permission << ", &oldp);" << std::endl;
     }
     // invoke entrypoint
