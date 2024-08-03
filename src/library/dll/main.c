@@ -17,6 +17,7 @@ typedef HGLRC(WINAPI* WGLCREATECONTEXT)(HDC);
 typedef BOOL(WINAPI* WGLDELETECONTEXT)(HGLRC);
 typedef PROC(WINAPI* WGLGETPROCADDRESS)(LPCSTR);
 typedef BOOL(WINAPI* WGLMAKECURRENT)(HDC, HGLRC);
+typedef BOOL(WINAPI* SWAPBUFFERS)(HDC);
 
 typedef HGLRC(__stdcall* WGLCREATECONTEXTATTRIBSARB)(HDC, HGLRC, const int*);
 
@@ -24,6 +25,7 @@ static WGLCREATECONTEXT real_wglCreateContext;
 static WGLDELETECONTEXT real_wglDeleteContext;
 static WGLGETPROCADDRESS real_wglGetProcAddress;
 static WGLMAKECURRENT real_wglMakeCurrent;
+static SWAPBUFFERS real_SwapBuffers;
 
 static WGLCREATECONTEXTATTRIBSARB real_wglCreateContextAttribsARB;
 
@@ -31,6 +33,15 @@ static HGLRC WINAPI hook_wglCreateContext(HDC);
 static BOOL WINAPI hook_wglDeleteContext(HGLRC);
 static PROC WINAPI hook_wglGetProcAddress(LPCSTR);
 static BOOL WINAPI hook_wglMakeCurrent(HDC, HGLRC);
+static BOOL WINAPI hook_SwapBuffers(HDC);
+static void hook_glGenTextures(GLsizei, GLuint*);
+static void hook_glDrawElements(GLenum, GLsizei, GLenum, const void*);
+static void hook_glDrawArrays(GLenum, GLint, GLsizei);
+static void hook_glBindTexture(GLenum, GLuint);
+static void hook_glTexSubImage2D(GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, const void*);
+static void hook_glDeleteTextures(GLsizei, const GLuint*);
+static void hook_glClear(GLbitfield);
+static void hook_glViewport(GLint, GLint, GLsizei, GLsizei);
 
 static HGLRC __stdcall hook_wglCreateContextAttribsARB(HDC, HGLRC, const int*);
 
@@ -79,10 +90,6 @@ DWORD __stdcall BOLT_STUB_ENTRYNAME(struct PluginInjectParams* data) {
     libgl.TexParameteri = (void(*)(GLenum, GLenum, GLfloat))data->pGetProcAddress(libgl_module, "glTexParameteri");
     libgl.TexSubImage2D = (void(*)(GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, const void*))data->pGetProcAddress(libgl_module, "glTexSubImage2D");
     libgl.Viewport = (void(*)(GLint, GLint, GLsizei, GLsizei))data->pGetProcAddress(libgl_module, "glViewport");
-    real_wglCreateContext = (WGLCREATECONTEXT)data->pGetProcAddress(libgl_module, "wglCreateContext");
-    real_wglDeleteContext = (WGLDELETECONTEXT)data->pGetProcAddress(libgl_module, "wglDeleteContext");
-    real_wglGetProcAddress = (WGLGETPROCADDRESS)data->pGetProcAddress(libgl_module, "wglGetProcAddress");
-    real_wglMakeCurrent = (WGLMAKECURRENT)data->pGetProcAddress(libgl_module, "wglMakeCurrent");
 
     // write our function hooks to the main module import table...
     DWORD oldp;
@@ -97,12 +104,24 @@ DWORD __stdcall BOLT_STUB_ENTRYNAME(struct PluginInjectParams* data) {
         while (lookup_table->u1.AddressOfData) {
             if((lookup_table->u1.AddressOfData & IMAGE_ORDINAL_FLAG) == 0) {
                 PIMAGE_IMPORT_BY_NAME fname = (PIMAGE_IMPORT_BY_NAME)((LPBYTE)main_module + lookup_table->u1.AddressOfData);
-#define FNHOOK(NAME, FTYPE) if(bolt_cmp(fname->Name, #NAME, 1)) { pVirtualProtect((LPVOID)(&address_table->u1.Function), sizeof(address_table->u1.Function), PAGE_READWRITE, &oldp); address_table->u1.Function = (ULONGLONG)hook_##NAME; pVirtualProtect((LPVOID)(&address_table->u1.Function), sizeof(address_table->u1.Function), oldp, &oldp); }
+#define FNHOOK(NAME) if(bolt_cmp(fname->Name, #NAME, 1)) { pVirtualProtect((LPVOID)(&address_table->u1.Function), sizeof(address_table->u1.Function), PAGE_READWRITE, &oldp); address_table->u1.Function = (ULONGLONG)hook_##NAME; pVirtualProtect((LPVOID)(&address_table->u1.Function), sizeof(address_table->u1.Function), oldp, &oldp); }
+#define FNHOOKA(NAME, TYPE) if(bolt_cmp(fname->Name, #NAME, 1)) { pVirtualProtect((LPVOID)(&address_table->u1.Function), sizeof(address_table->u1.Function), PAGE_READWRITE, &oldp); real_##NAME = (TYPE)address_table->u1.Function; address_table->u1.Function = (ULONGLONG)hook_##NAME; pVirtualProtect((LPVOID)(&address_table->u1.Function), sizeof(address_table->u1.Function), oldp, &oldp); }
                 if (bolt_cmp(module_name, "opengl32.dll", 0)) {
-                    FNHOOK(wglCreateContext, WGLCREATECONTEXT)
-                    FNHOOK(wglDeleteContext, WGLDELETECONTEXT)
-                    FNHOOK(wglGetProcAddress, WGLGETPROCADDRESS)
-                    FNHOOK(wglMakeCurrent, WGLMAKECURRENT)
+                    FNHOOKA(wglCreateContext, WGLCREATECONTEXT)
+                    FNHOOKA(wglDeleteContext, WGLDELETECONTEXT)
+                    FNHOOKA(wglGetProcAddress, WGLGETPROCADDRESS)
+                    FNHOOKA(wglMakeCurrent, WGLMAKECURRENT)
+                    FNHOOK(glGenTextures)
+                    FNHOOK(glBindTexture)
+                    FNHOOK(glDrawElements)
+                    FNHOOK(glDrawArrays)
+                    FNHOOK(glTexSubImage2D)
+                    FNHOOK(glDeleteTextures)
+                    FNHOOK(glClear)
+                    FNHOOK(glViewport)
+                }
+                if (bolt_cmp(module_name, "gdi32.dll", 0)) {
+                    FNHOOKA(SwapBuffers, SWAPBUFFERS)
                 }
 #undef FNHOOK
             }
@@ -166,6 +185,70 @@ static BOOL WINAPI hook_wglMakeCurrent(HDC hdc, HGLRC hglrc) {
     }
     LOG("wglMakeCurrent(%llu) -> %i\n", (ULONGLONG)hglrc, (int)ret);
     return ret;
+}
+
+static BOOL WINAPI hook_SwapBuffers(HDC hdc) {
+    LOG("SwapBuffers\n");
+    _bolt_gl_onSwapBuffers(800, 608); // TODO:
+    BOOL ret = real_SwapBuffers(hdc);
+    LOG("SwapBuffers -> %i\n", (int)ret);
+    return ret;
+}
+
+static void hook_glGenTextures(GLsizei n, GLuint* textures) {
+    LOG("glGenTextures(%i...)\n", n);
+    libgl.GenTextures(n, textures);
+    _bolt_gl_onGenTextures(n, textures);
+    LOG("glGenTextures end\n", n);
+}
+
+static void hook_glDrawElements(GLenum mode, GLsizei count, GLenum type, const void* indices) {
+    LOG("glDrawElements\n");
+    libgl.DrawElements(mode, count, type, indices);
+    _bolt_gl_onDrawElements(mode, count, type, indices);
+    LOG("glDrawElements end\n");
+}
+
+static void hook_glDrawArrays(GLenum mode, GLint first, GLsizei count) {
+    LOG("glDrawArrays\n");
+    libgl.DrawArrays(mode, first, count);
+    _bolt_gl_onDrawArrays(mode, first, count);
+    LOG("glDrawArrays end\n");
+}
+
+static void hook_glBindTexture(GLenum target, GLuint texture) {
+    LOG("glBindTexture(%u, %u)\n", target, texture);
+    libgl.BindTexture(target, texture);
+    _bolt_gl_onBindTexture(target, texture);
+    LOG("glBindTexture end\n");
+}
+
+static void hook_glTexSubImage2D(GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void* pixels) {
+    LOG("glTexSubImage2D\n");
+    libgl.TexSubImage2D(target, level, xoffset, yoffset, width, height, format, type, pixels);
+    _bolt_gl_onTexSubImage2D(target, level, xoffset, yoffset, width, height, format, type, pixels);
+    LOG("glTexSubImage2D end\n");
+}
+
+static void hook_glDeleteTextures(GLsizei n, const GLuint* textures) {
+    LOG("glDeleteTextures\n");
+    libgl.DeleteTextures(n, textures);
+    _bolt_gl_onDeleteTextures(n, textures);
+    LOG("glDeleteTextures end\n");
+}
+
+static void hook_glClear(GLbitfield mask) {
+    LOG("glClear\n");
+    libgl.Clear(mask);
+    _bolt_gl_onClear(mask);
+    LOG("glClear end\n");
+}
+
+static void hook_glViewport(GLint x, GLint y, GLsizei width, GLsizei height) {
+    LOG("glViewport\n");
+    libgl.Viewport(x, y, width, height);
+    _bolt_gl_onViewport(x, y, width, height);
+    LOG("glViewport end\n");
 }
 
 static HGLRC __stdcall hook_wglCreateContextAttribsARB(HDC hdc, HGLRC hglrc, const int* attribList) {
