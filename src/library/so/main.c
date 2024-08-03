@@ -348,7 +348,7 @@ void* eglCreateContext(void* display, void* config, void* share_context, const v
     void* ret = real_eglCreateContext(display, config, share_context, attrib_list);
     if (ret) {
         pthread_mutex_lock(&egl_lock);
-        _bolt_gl_onCreateContext(ret, share_context, &libgl, real_eglGetProcAddress);
+        _bolt_gl_onCreateContext(ret, share_context, &libgl, real_eglGetProcAddress, true);
         pthread_mutex_unlock(&egl_lock);
     }
     LOG("eglCreateContext end (returned %lu)\n", (uintptr_t)ret);
