@@ -8,74 +8,96 @@
 struct hashmap;
 struct SurfaceFunctions;
 
+/* types from gl.h */
+typedef unsigned int GLenum;
+typedef unsigned char GLboolean;
+typedef unsigned int GLbitfield;
+typedef signed char GLbyte;
+typedef short GLshort;
+typedef int GLint;
+typedef int GLsizei;
+typedef unsigned char GLubyte;
+typedef unsigned short GLushort;
+typedef unsigned int GLuint;
+typedef float GLfloat;
+typedef float GLclampf;
+typedef double GLdouble;
+typedef double GLclampd;
+typedef void GLvoid;
+
+/* types from extensions, not actually defined in any header yet still referenced frequently in docs */
+typedef char GLchar;
+typedef intptr_t GLintptr;
+typedef uintptr_t GLsizeiptr;
+
 /// Struct representing all the OpenGL functions of interest to us that the game gets from GetProcAddress
 struct GLProcFunctions {
-    void (*ActiveTexture)(uint32_t);
-    void (*AttachShader)(unsigned int, unsigned int);
-    void (*BindAttribLocation)(unsigned int, unsigned int, const char*);
-    void (*BindBuffer)(uint32_t, unsigned int);
-    void (*BindFramebuffer)(uint32_t, unsigned int);
-    void (*BindVertexArray)(uint32_t);
-    void (*BlitFramebuffer)(int, int, int, int, int, int, int, int, uint32_t, uint32_t);
-    void (*BufferData)(uint32_t, uintptr_t, const void*, uint32_t);
-    void (*BufferStorage)(unsigned int, uintptr_t, const void*, uintptr_t);
-    void (*BufferSubData)(uint32_t, intptr_t, uintptr_t, const void*);
-    void (*CompileShader)(unsigned int);
-    void (*CompressedTexSubImage2D)(uint32_t, int, int, int, unsigned int, unsigned int, uint32_t, unsigned int, const void*);
-    void (*CopyImageSubData)(unsigned int, uint32_t, int, int, int, int, unsigned int, uint32_t, int, int, int, int, unsigned int, unsigned int, unsigned int);
-    unsigned int (*CreateProgram)();
-    unsigned int (*CreateShader)(uint32_t);
-    void (*DeleteBuffers)(unsigned int, const unsigned int*);
-    void (*DeleteFramebuffers)(uint32_t, unsigned int*);
-    void (*DeleteProgram)(unsigned int);
-    void (*DeleteShader)(unsigned int);
-    void (*DeleteVertexArrays)(uint32_t, const unsigned int*);
-    void (*DisableVertexAttribArray)(unsigned int);
-    void (*DrawElements)(uint32_t, unsigned int, uint32_t, const void*);
-    void (*EnableVertexAttribArray)(unsigned int);
-    void (*FlushMappedBufferRange)(uint32_t, intptr_t, uintptr_t);
-    void (*FramebufferTexture)(uint32_t, uint32_t, unsigned int, int);
-    void (*FramebufferTextureLayer)(uint32_t, uint32_t, unsigned int, int, int);
-    void (*GenBuffers)(uint32_t, unsigned int*);
-    void (*GenFramebuffers)(uint32_t, unsigned int*);
-    void (*GenVertexArrays)(uint32_t, unsigned int*);
-    void (*GetActiveUniformBlockiv)(unsigned int, unsigned int, uint32_t, int*);
-    void (*GetActiveUniformsiv)(unsigned int, uint32_t, const unsigned int*, uint32_t, int*);
-    void (*GetFramebufferAttachmentParameteriv)(uint32_t, uint32_t, uint32_t, int*);
-    void (*GetIntegeri_v)(uint32_t, unsigned int, int*);
-    void (*GetIntegerv)(uint32_t, int*);
-    unsigned int (*GetUniformBlockIndex)(uint32_t, const char*);
-    void (*GetUniformfv)(unsigned int, int, float*);
-    void (*GetUniformIndices)(uint32_t, uint32_t, const char**, unsigned int*);
-    void (*GetUniformiv)(unsigned int, int, int*);
-    int (*GetUniformLocation)(unsigned int, const char*);
-    void (*LinkProgram)(unsigned int);
-    void* (*MapBufferRange)(uint32_t, intptr_t, uintptr_t, uint32_t);
-    void (*MultiDrawElements)(uint32_t, uint32_t*, uint32_t, const void**, uint32_t);
-    void (*ShaderSource)(unsigned int, uint32_t, const char**, const int*);
-    void (*TexStorage2D)(uint32_t, int, uint32_t, unsigned int, unsigned int);
-    void (*Uniform1i)(int, int);
-    void (*Uniform4i)(int, int, int, int, int);
-    void (*UniformMatrix4fv)(int, unsigned int, uint8_t, const float*);
-    uint8_t (*UnmapBuffer)(uint32_t);
-    void (*UseProgram)(unsigned int);
-    void (*VertexAttribPointer)(unsigned int, int, uint32_t, uint8_t, unsigned int, const void*);
+    void (*ActiveTexture)(GLenum);
+    void (*AttachShader)(GLuint, GLuint);
+    void (*BindAttribLocation)(GLuint, GLuint, const GLchar*);
+    void (*BindBuffer)(GLenum, GLuint);
+    void (*BindFramebuffer)(GLenum, GLuint);
+    void (*BindVertexArray)(GLuint);
+    void (*BlitFramebuffer)(GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLbitfield, GLenum);
+    void (*BufferData)(GLenum, GLsizeiptr, const void*, GLenum);
+    void (*BufferStorage)(GLenum, GLsizeiptr, const void*, GLbitfield);
+    void (*BufferSubData)(GLenum, GLintptr, GLsizeiptr, const void*);
+    void (*CompileShader)(GLuint);
+    void (*CompressedTexSubImage2D)(GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLsizei, const void*);
+    void (*CopyImageSubData)(GLuint, GLenum, GLint, GLint, GLint, GLint, GLuint, GLenum, GLint, GLint, GLint, GLint, GLsizei, GLsizei, GLsizei);
+    GLuint (*CreateProgram)(void);
+    GLuint (*CreateShader)(GLenum);
+    void (*DeleteBuffers)(GLsizei, const GLuint*);
+    void (*DeleteFramebuffers)(GLsizei, const GLuint*);
+    void (*DeleteProgram)(GLuint);
+    void (*DeleteShader)(GLuint);
+    void (*DeleteVertexArrays)(GLsizei, const GLuint*);
+    void (*DisableVertexAttribArray)(GLuint);
+    void (*DrawElements)(GLenum, GLsizei, GLenum, const void*);
+    void (*EnableVertexAttribArray)(GLuint);
+    void (*FlushMappedBufferRange)(GLenum, GLintptr, GLsizeiptr);
+    void (*FramebufferTexture)(GLenum, GLenum, GLuint, GLint);
+    void (*FramebufferTextureLayer)(GLenum, GLenum, GLuint, GLint, GLint);
+    void (*GenBuffers)(GLsizei, GLuint*);
+    void (*GenFramebuffers)(GLsizei, GLuint*);
+    void (*GenVertexArrays)(GLsizei, GLuint*);
+    void (*GetActiveUniformBlockiv)(GLuint, GLuint, GLenum, GLint*);
+    void (*GetActiveUniformsiv)(GLuint, GLsizei, const GLuint*, GLenum, GLint*);
+    void (*GetFramebufferAttachmentParameteriv)(GLenum, GLenum, GLenum, GLint*);
+    void (*GetIntegeri_v)(GLenum, GLuint, GLint*);
+    void (*GetIntegerv)(GLenum, GLint*);
+    GLuint (*GetUniformBlockIndex)(GLuint, const GLchar*);
+    void (*GetUniformfv)(GLuint, GLint, GLfloat*);
+    void (*GetUniformIndices)(GLuint, GLsizei, const GLchar**, GLuint*);
+    void (*GetUniformiv)(GLuint, GLint, GLint*);
+    GLint (*GetUniformLocation)(GLuint, const GLchar*);
+    void (*LinkProgram)(GLuint);
+    void* (*MapBufferRange)(GLenum, GLintptr, GLsizeiptr, GLbitfield);
+    void (*MultiDrawElements)(GLenum, const GLsizei*, GLenum, const void* const*, GLsizei);
+    void (*ShaderSource)(GLuint, GLsizei, const GLchar**, const GLint*);
+    void (*TexStorage2D)(GLenum, GLsizei, GLenum, GLsizei, GLsizei);
+    void (*Uniform1i)(GLint, GLint);
+    void (*Uniform4i)(GLint, GLint, GLint, GLint, GLint);
+    void (*UniformMatrix4fv)(GLint, GLsizei, GLboolean, const GLfloat*);
+    GLboolean (*UnmapBuffer)(GLenum);
+    void (*UseProgram)(GLuint);
+    void (*VertexAttribPointer)(GLuint, GLint, GLenum, GLboolean, GLsizei, const void*);
 };
 
 /// Struct representing all the OpenGL functions of interest to us that the game gets from static or dynamic linkage
 struct GLLibFunctions {
-    void (*BindTexture)(uint32_t, unsigned int);
-    void (*Clear)(uint32_t);
-    void (*ClearColor)(float, float, float, float);
-    void (*DeleteTextures)(unsigned int, const unsigned int*);
-    void (*DrawArrays)(uint32_t, int, unsigned int);
-    void (*DrawElements)(uint32_t, unsigned int, uint32_t, const void*);
-    void (*Flush)();
-    void (*GenTextures)(uint32_t, unsigned int*);
-    uint32_t (*GetError)();
-    void (*TexParameteri)(uint32_t, uint32_t, int);
-    void (*TexSubImage2D)(uint32_t, int, int, int, unsigned int, unsigned int, uint32_t, uint32_t, const void*);
-    void (*Viewport)(int, int, unsigned int, unsigned int);
+    void (*BindTexture)(GLenum, GLuint);
+    void (*Clear)(GLbitfield);
+    void (*ClearColor)(GLfloat, GLfloat, GLfloat, GLfloat);
+    void (*DeleteTextures)(GLsizei, const GLuint*);
+    void (*DrawArrays)(GLenum, GLint, GLsizei);
+    void (*DrawElements)(GLenum, GLsizei, GLenum, const void*);
+    void (*Flush)(void);
+    void (*GenTextures)(GLsizei, GLuint*);
+    GLenum (*GetError)(void);
+    void (*TexParameteri)(GLenum, GLenum, GLfloat);
+    void (*TexSubImage2D)(GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, const void*);
+    void (*Viewport)(GLint, GLint, GLsizei, GLsizei);
 };
 
 /* consts used from libgl */
@@ -248,11 +270,12 @@ void* _bolt_gl_GetProcAddress(const char*);
 void _bolt_gl_onSwapBuffers(uint32_t window_width, uint32_t window_height);
 
 /// Call this in response to eglCreateContext or equivalent, if the call is successful (returns nonzero).
-/// Provide a pointer returned by the OS, which will be used to identify this context, the shared context,
-/// if any. Protect onCreateContext, onMakeCurrent and onDestroyContext with a mutex.
+/// Provide a pointer returned by the OS, which will be used to identify this context. Provide the shared
+/// context if any. Protect onCreateContext, onMakeCurrent and onDestroyContext with a mutex.
 /// Also provide your libgl functions struct, which you should have already populated by now.
 /// Finally, provide the generic GetProcAddress function.
-void _bolt_gl_onCreateContext(void*, void*, const struct GLLibFunctions*, void* (*)(const char*));
+/// The "is_important" boolean indicates whether or not this could be the main context.
+void _bolt_gl_onCreateContext(void*, void*, const struct GLLibFunctions*, void* (*)(const char*), bool is_important);
 
 /// Call this in response to eglMakeCurrent or equivalent, if the call is successful (returns nonzero).
 /// Protect onCreateContext, onMakeCurrent and onDestroyContext with a mutex.

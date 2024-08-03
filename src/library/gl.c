@@ -41,7 +41,7 @@ static unsigned int buffer_vertices_square;
 
 // "direct" program is basically a blit but with transparency.
 // there are different vertex shaders for targeting the screen vs targeting a surface.
-static const char* program_direct_screen_vs = "#version 330 core\n"
+static const GLchar program_direct_screen_vs[] = "#version 330 core\n"
 "layout (location = 0) in vec2 aPos;"
 "out vec2 vPos;"
 "uniform ivec4 d_xywh;"
@@ -50,7 +50,7 @@ static const char* program_direct_screen_vs = "#version 330 core\n"
   "vPos = aPos;"
   "gl_Position = vec4(((((aPos * d_xywh.pq) + d_xywh.st) * vec2(2.0, 2.0) / src_wh_dest_wh.pq) - vec2(1.0, 1.0)) * vec2(1.0, -1.0), 0.0, 1.0);"
 "}";
-static const char* program_direct_surface_vs = "#version 330 core\n"
+static const GLchar program_direct_surface_vs[] = "#version 330 core\n"
 "layout (location = 0) in vec2 aPos;"
 "out vec2 vPos;"
 "uniform ivec4 d_xywh;"
@@ -59,7 +59,7 @@ static const char* program_direct_surface_vs = "#version 330 core\n"
   "vPos = aPos;"
   "gl_Position = vec4(((((aPos * d_xywh.pq) + d_xywh.st) * vec2(2.0, 2.0) / src_wh_dest_wh.pq) - vec2(1.0, 1.0)), 0.0, 1.0);"
 "}";
-static const char* program_direct_fs = "#version 330 core\n"
+static const GLchar program_direct_fs[] = "#version 330 core\n"
 "in vec2 vPos;"
 "layout (location = 0) out vec4 col;"
 "uniform sampler2D tex;"
@@ -525,16 +525,24 @@ static void _bolt_gl_load(void* (*GetProcAddress)(const char*)) {
 // this function is called when the "main" gl context gets created, and is undone by _bolt_gl_close()
 // when all the contexts are destroyed.
 static void _bolt_gl_init() {
+    GLint size;
+    const GLchar* source;
     unsigned int direct_screen_vs = gl.CreateShader(GL_VERTEX_SHADER);
-    gl.ShaderSource(direct_screen_vs, 1, &program_direct_screen_vs, NULL);
+    source = &program_direct_screen_vs[0];
+    size = sizeof(program_direct_screen_vs) - sizeof(*program_direct_screen_vs);
+    gl.ShaderSource(direct_screen_vs, 1, &source, &size);
     gl.CompileShader(direct_screen_vs);
 
     unsigned int direct_surface_vs = gl.CreateShader(GL_VERTEX_SHADER);
-    gl.ShaderSource(direct_surface_vs, 1, &program_direct_surface_vs, NULL);
+    source = &program_direct_surface_vs[0];
+    size = sizeof(program_direct_surface_vs) - sizeof(*program_direct_surface_vs);
+    gl.ShaderSource(direct_surface_vs, 1, &source, &size);
     gl.CompileShader(direct_surface_vs);
 
     unsigned int direct_fs = gl.CreateShader(GL_FRAGMENT_SHADER);
-    gl.ShaderSource(direct_fs, 1, &program_direct_fs, NULL);
+    source = &program_direct_fs[0];
+    size = sizeof(program_direct_fs) - sizeof(*program_direct_fs);
+    gl.ShaderSource(direct_fs, 1, &source, &size);
     gl.CompileShader(direct_fs);
 
     program_direct_screen = gl.CreateProgram();
@@ -563,8 +571,8 @@ static void _bolt_gl_init() {
     gl.BindVertexArray(program_direct_vao);
     gl.GenBuffers(1, &buffer_vertices_square);
     gl.BindBuffer(GL_ARRAY_BUFFER, buffer_vertices_square);
-    const float square[] = {0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f};
-    gl.BufferData(GL_ARRAY_BUFFER, sizeof(float) * 8, square, GL_STATIC_DRAW);
+    const GLfloat square[] = {0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f};
+    gl.BufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * 8, square, GL_STATIC_DRAW);
     gl.EnableVertexAttribArray(0);
     gl.VertexAttribPointer(0, 2, GL_FLOAT, 0, 2 * sizeof(float), NULL);
     gl.BindVertexArray(0);
@@ -1138,8 +1146,8 @@ void _bolt_gl_onSwapBuffers(uint32_t window_width, uint32_t window_height) {
     if (_bolt_plugin_is_inited()) _bolt_plugin_process_windows(window_width, window_height);
 }
 
-void _bolt_gl_onCreateContext(void* context, void* shared_context, const struct GLLibFunctions* libgl, void* (*GetProcAddress)(const char*)) {
-    if (!shared_context) {
+void _bolt_gl_onCreateContext(void* context, void* shared_context, const struct GLLibFunctions* libgl, void* (*GetProcAddress)(const char*), bool is_important) {
+    if (!shared_context && is_important) {
         lgl = libgl;
         if (egl_init_count == 0) {
             _bolt_gl_load(GetProcAddress);
