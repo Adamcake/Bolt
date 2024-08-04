@@ -157,19 +157,19 @@ struct GLLibFunctions {
 /* bolt re-implementation of some gl objects, storing only the things we need */
 
 struct GLArrayBuffer {
-    unsigned int id;
+    GLuint id;
     void* data;
     uint8_t* mapping;
-    int32_t mapping_offset;
-    uint32_t mapping_len;
-    uint32_t mapping_access_type;
+    GLintptr mapping_offset;
+    GLsizeiptr mapping_len;
+    GLbitfield mapping_access_type;
 };
 
 struct GLTexture2D {
-    unsigned int id;
-    unsigned char* data;
-    unsigned int width;
-    unsigned int height;
+    GLuint id;
+    uint8_t* data;
+    GLsizei width;
+    GLsizei height;
     double minimap_center_x;
     double minimap_center_y;
     uint8_t is_minimap_tex_big;
@@ -177,27 +177,27 @@ struct GLTexture2D {
 };
 
 struct GLProgram {
-    unsigned int id;
-    unsigned int loc_aVertexPosition2D;
-    unsigned int loc_aVertexColour;
-    unsigned int loc_aTextureUV;
-    unsigned int loc_aTextureUVAtlasMin;
-    unsigned int loc_aTextureUVAtlasExtents;
-    unsigned int loc_aMaterialSettingsSlotXY_TilePositionXZ;
-    unsigned int loc_aVertexPosition_BoneLabel;
-    int loc_uProjectionMatrix;
-    int loc_uDiffuseMap;
-    int loc_uTextureAtlas;
-    int loc_uTextureAtlasSettings;
-    int loc_uAtlasMeta;
-    int loc_uModelMatrix;
-    int loc_uGridSize;
-    int loc_uVertexScale;
-    int loc_sSceneHDRTex;
-    int loc_sSourceTex;
-    int block_index_ViewTransforms;
-    int offset_uCameraPosition;
-    int offset_uViewProjMatrix;
+    GLuint id;
+    GLint loc_aVertexPosition2D;
+    GLint loc_aVertexColour;
+    GLint loc_aTextureUV;
+    GLint loc_aTextureUVAtlasMin;
+    GLint loc_aTextureUVAtlasExtents;
+    GLint loc_aMaterialSettingsSlotXY_TilePositionXZ;
+    GLint loc_aVertexPosition_BoneLabel;
+    GLint loc_uProjectionMatrix;
+    GLint loc_uDiffuseMap;
+    GLint loc_uTextureAtlas;
+    GLint loc_uTextureAtlasSettings;
+    GLint loc_uAtlasMeta;
+    GLint loc_uModelMatrix;
+    GLint loc_uGridSize;
+    GLint loc_uVertexScale;
+    GLint loc_sSceneHDRTex;
+    GLint loc_sSourceTex;
+    GLuint block_index_ViewTransforms;
+    GLint offset_uCameraPosition;
+    GLint offset_uViewProjMatrix;
     uint8_t is_minimap;
     uint8_t is_2d;
     uint8_t is_3d;
@@ -214,7 +214,7 @@ struct GLAttrBinding {
 };
 
 struct GLVertexArray {
-    unsigned int id;
+    GLuint id;
     struct GLAttrBinding attributes[16];
 };
 
@@ -236,26 +236,26 @@ struct GLContext {
     struct GLTexture2D** texture_units;
     struct GLProgram* bound_program;
     struct GLVertexArray* bound_vao;
-    unsigned int active_texture;
-    unsigned int current_draw_framebuffer;
-    unsigned int current_read_framebuffer;
-    unsigned int game_view_framebuffer;
-    unsigned int game_view_tex;
-    unsigned int game_view_tex_front;
-    int target_3d_tex;
-    int target_minimap_tex;
-    int game_view_x;
-    int game_view_y;
-    int game_view_w;
-    int game_view_h;
+    GLenum active_texture;
+    GLuint current_draw_framebuffer;
+    GLuint current_read_framebuffer;
+    GLuint game_view_framebuffer;
+    GLuint game_view_tex;
+    GLuint game_view_tex_front;
+    GLint target_3d_tex;
+    GLint target_minimap_tex;
+    GLint game_view_x;
+    GLint game_view_y;
+    GLint game_view_w;
+    GLint game_view_h;
     uint8_t is_attached;
     uint8_t deferred_destroy;
     uint8_t is_shared_owner;
     uint8_t need_3d_tex;
-    int viewport_x;
-    int viewport_y;
-    unsigned int viewport_w;
-    unsigned int viewport_h;
+    GLint viewport_x;
+    GLint viewport_y;
+    GLsizei viewport_w;
+    GLsizei viewport_h;
 };
 
 void _bolt_gl_close();
@@ -288,28 +288,28 @@ void _bolt_gl_onMakeCurrent(void*);
 void* _bolt_gl_onDestroyContext(void*);
 
 /// Call this in response to glGenTextures, which needs to be hooked from libgl.
-void _bolt_gl_onGenTextures(uint32_t, unsigned int*);
+void _bolt_gl_onGenTextures(GLsizei, GLuint*);
 
 /// Call this in response to glDrawElements, which needs to be hooked from libgl.
-void _bolt_gl_onDrawElements(uint32_t, unsigned int, uint32_t, const void*);
+void _bolt_gl_onDrawElements(GLenum, GLsizei, GLenum, const void*);
 
 /// Call this in response to glDrawArrays, which needs to be hooked from libgl.
-void _bolt_gl_onDrawArrays(uint32_t, int, unsigned int);
+void _bolt_gl_onDrawArrays(GLenum, GLint, GLsizei);
 
 /// Call this in response to glBindTexture, which needs to be hooked from libgl.
-void _bolt_gl_onBindTexture(uint32_t, unsigned int);
+void _bolt_gl_onBindTexture(GLenum, GLuint);
 
 /// Call this in response to glTexSubImage2D, which needs to be hooked from libgl.
-void _bolt_gl_onTexSubImage2D(uint32_t, int, int, int, unsigned int, unsigned int, uint32_t, uint32_t, const void*);
+void _bolt_gl_onTexSubImage2D(GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, const void*);
 
 // Call this in response to glDeleteTextures, which needs to be hooked from libgl.
-void _bolt_gl_onDeleteTextures(unsigned int, const unsigned int*);
+void _bolt_gl_onDeleteTextures(GLsizei, const GLuint*);
 
 /// Call this in response to glClear, which needs to be hooked from libgl.
-void _bolt_gl_onClear(uint32_t);
+void _bolt_gl_onClear(GLbitfield);
 
 /// Call this in response to glViewport, which needs to be hooked from libgl.
-void _bolt_gl_onViewport(int, int, unsigned int, unsigned int);
+void _bolt_gl_onViewport(GLint, GLint, GLsizei, GLsizei);
 
 /* plugin library interop stuff */
 

@@ -26,18 +26,18 @@ static uint8_t egl_main_context_makecurrent_pending = 0;
 
 static struct GLProcFunctions gl = {0};
 static const struct GLLibFunctions* lgl = NULL;
-static unsigned int program_direct_screen;
-static int program_direct_screen_sampler;
-static int program_direct_screen_d_xywh;
-static int program_direct_screen_s_xywh;
-static int program_direct_screen_src_wh_dest_wh;
-static unsigned int program_direct_surface;
-static int program_direct_surface_sampler;
-static int program_direct_surface_d_xywh;
-static int program_direct_surface_s_xywh;
-static int program_direct_surface_src_wh_dest_wh;
-static unsigned int program_direct_vao;
-static unsigned int buffer_vertices_square;
+static GLuint program_direct_screen;
+static GLint program_direct_screen_sampler;
+static GLint program_direct_screen_d_xywh;
+static GLint program_direct_screen_s_xywh;
+static GLint program_direct_screen_src_wh_dest_wh;
+static GLuint program_direct_surface;
+static GLint program_direct_surface_sampler;
+static GLint program_direct_surface_d_xywh;
+static GLint program_direct_surface_s_xywh;
+static GLint program_direct_surface_src_wh_dest_wh;
+static GLuint program_direct_vao;
+static GLuint buffer_vertices_square;
 
 // "direct" program is basically a blit but with transparency.
 // there are different vertex shaders for targeting the screen vs targeting a surface.
@@ -69,10 +69,10 @@ static const GLchar program_direct_fs[] = "#version 330 core\n"
   "col = texture(tex, ((vPos * s_xywh.pq) + s_xywh.st) / src_wh_dest_wh.st);"
 "}";
 
-static struct GLProgram* _bolt_context_get_program(struct GLContext*, unsigned int);
-static struct GLArrayBuffer* _bolt_context_get_buffer(struct GLContext*, unsigned int);
-static struct GLTexture2D* _bolt_context_get_texture(struct GLContext*, unsigned int);
-static struct GLVertexArray* _bolt_context_get_vao(struct GLContext*, unsigned int);
+static struct GLProgram* _bolt_context_get_program(struct GLContext*, GLuint);
+static struct GLArrayBuffer* _bolt_context_get_buffer(struct GLContext*, GLuint);
+static struct GLTexture2D* _bolt_context_get_texture(struct GLContext*, GLuint);
+static struct GLVertexArray* _bolt_context_get_vao(struct GLContext*, GLuint);
 static void _bolt_glcontext_init(struct GLContext*, void*, void*);
 static void _bolt_glcontext_free(struct GLContext*);
 
@@ -297,12 +297,12 @@ uint8_t _bolt_get_attr_binding_int(struct GLContext* c, const struct GLAttrBindi
 }
 
 static int _bolt_hashmap_compare(const void* a, const void* b, void* udata) {
-    return (**(unsigned int**)a) - (**(unsigned int**)b);
+    return (**(GLuint**)a) - (**(GLuint**)b);
 }
 
 static uint64_t _bolt_hashmap_hash(const void* item, uint64_t seed0, uint64_t seed1) {
-    const unsigned int* const* const id = item;
-    return hashmap_sip(*id, sizeof(unsigned int), seed0, seed1);
+    const GLuint* const* const id = item;
+    return hashmap_sip(*id, sizeof(GLuint), seed0, seed1);
 }
 
 static void _bolt_hashmap_init(struct HashMap* map, size_t cap) {
@@ -365,7 +365,7 @@ static void _bolt_glcontext_free(struct GLContext* context) {
     }
 }
 
-uint32_t _bolt_binding_for_buffer(uint32_t target) {
+static GLenum _bolt_binding_for_buffer(GLuint target) {
     switch (target) {
         case GL_ARRAY_BUFFER:
             return GL_ARRAY_BUFFER_BINDING;
@@ -379,9 +379,9 @@ uint32_t _bolt_binding_for_buffer(uint32_t target) {
     }
 }
 
-static struct GLProgram* _bolt_context_get_program(struct GLContext* c, unsigned int index) {
+static struct GLProgram* _bolt_context_get_program(struct GLContext* c, GLuint index) {
     struct HashMap* map = c->programs;
-    const unsigned int* index_ptr = &index;
+    const GLuint* index_ptr = &index;
     _bolt_rwlock_lock_read(&map->rwlock);
     struct GLProgram** program = (struct GLProgram**)hashmap_get(map->map, &index_ptr);
     struct GLProgram* ret = program ? *program : NULL;
@@ -389,9 +389,9 @@ static struct GLProgram* _bolt_context_get_program(struct GLContext* c, unsigned
     return ret;
 }
 
-static struct GLArrayBuffer* _bolt_context_get_buffer(struct GLContext* c, unsigned int index) {
+static struct GLArrayBuffer* _bolt_context_get_buffer(struct GLContext* c, GLuint index) {
     struct HashMap* map = c->buffers;
-    const unsigned int* index_ptr = &index;
+    const GLuint* index_ptr = &index;
     _bolt_rwlock_lock_read(&map->rwlock);
     struct GLArrayBuffer** buffer = (struct GLArrayBuffer**)hashmap_get(map->map, &index_ptr);
     struct GLArrayBuffer* ret = buffer ? *buffer : NULL;
@@ -399,9 +399,9 @@ static struct GLArrayBuffer* _bolt_context_get_buffer(struct GLContext* c, unsig
     return ret;
 }
 
-static struct GLTexture2D* _bolt_context_get_texture(struct GLContext* c, unsigned int index) {
+static struct GLTexture2D* _bolt_context_get_texture(struct GLContext* c, GLuint index) {
     struct HashMap* map = c->textures;
-    const unsigned int* index_ptr = &index;
+    const GLuint* index_ptr = &index;
     _bolt_rwlock_lock_read(&map->rwlock);
     struct GLTexture2D** tex = (struct GLTexture2D**)hashmap_get(map->map, &index_ptr);
     struct GLTexture2D* ret = tex ? *tex : NULL;
@@ -409,9 +409,9 @@ static struct GLTexture2D* _bolt_context_get_texture(struct GLContext* c, unsign
     return ret;
 }
 
-static struct GLVertexArray* _bolt_context_get_vao(struct GLContext* c, unsigned int index) {
+static struct GLVertexArray* _bolt_context_get_vao(struct GLContext* c, GLuint index) {
     struct HashMap* map = c->vaos;
-    const unsigned int* index_ptr = &index;
+    const GLuint* index_ptr = &index;
     _bolt_rwlock_lock_read(&map->rwlock);
     struct GLVertexArray** vao = (struct GLVertexArray**)hashmap_get(map->map, &index_ptr);
     struct GLVertexArray* ret = vao ? *vao : NULL;
@@ -527,19 +527,19 @@ static void _bolt_gl_load(void* (*GetProcAddress)(const char*)) {
 static void _bolt_gl_init() {
     GLint size;
     const GLchar* source;
-    unsigned int direct_screen_vs = gl.CreateShader(GL_VERTEX_SHADER);
+    GLuint direct_screen_vs = gl.CreateShader(GL_VERTEX_SHADER);
     source = &program_direct_screen_vs[0];
     size = sizeof(program_direct_screen_vs) - sizeof(*program_direct_screen_vs);
     gl.ShaderSource(direct_screen_vs, 1, &source, &size);
     gl.CompileShader(direct_screen_vs);
 
-    unsigned int direct_surface_vs = gl.CreateShader(GL_VERTEX_SHADER);
+    GLuint direct_surface_vs = gl.CreateShader(GL_VERTEX_SHADER);
     source = &program_direct_surface_vs[0];
     size = sizeof(program_direct_surface_vs) - sizeof(*program_direct_surface_vs);
     gl.ShaderSource(direct_surface_vs, 1, &source, &size);
     gl.CompileShader(direct_surface_vs);
 
-    unsigned int direct_fs = gl.CreateShader(GL_FRAGMENT_SHADER);
+    GLuint direct_fs = gl.CreateShader(GL_FRAGMENT_SHADER);
     source = &program_direct_fs[0];
     size = sizeof(program_direct_fs) - sizeof(*program_direct_fs);
     gl.ShaderSource(direct_fs, 1, &source, &size);
@@ -586,9 +586,9 @@ void _bolt_gl_close() {
     _bolt_destroy_context((void*)egl_main_context);
 }
 
-unsigned int _bolt_glCreateProgram() {
+static GLuint _bolt_glCreateProgram() {
     LOG("glCreateProgram\n");
-    unsigned int id = gl.CreateProgram();
+    GLuint id = gl.CreateProgram();
     struct GLContext* c = _bolt_context();
     struct GLProgram* program = malloc(sizeof(struct GLProgram));
     program->id = id;
@@ -621,7 +621,7 @@ unsigned int _bolt_glCreateProgram() {
     return id;
 }
 
-void _bolt_glDeleteProgram(unsigned int program) {
+static void _bolt_glDeleteProgram(GLuint program) {
     LOG("glDeleteProgram\n");
     gl.DeleteProgram(program);
     struct GLContext* c = _bolt_context();
@@ -633,7 +633,7 @@ void _bolt_glDeleteProgram(unsigned int program) {
     LOG("glDeleteProgram end\n");
 }
 
-void _bolt_glBindAttribLocation(unsigned int program, unsigned int index, const char* name) {
+static void _bolt_glBindAttribLocation(GLuint program, GLuint index, const GLchar* name) {
     LOG("glBindAttribLocation\n");
     gl.BindAttribLocation(program, index, name);
     struct GLContext* c = _bolt_context();
@@ -650,28 +650,28 @@ void _bolt_glBindAttribLocation(unsigned int program, unsigned int index, const 
     LOG("glBindAttribLocation end\n");
 }
 
-void _bolt_glLinkProgram(unsigned int program) {
+static void _bolt_glLinkProgram(GLuint program) {
     LOG("glLinkProgram\n");
     gl.LinkProgram(program);
     struct GLContext* c = _bolt_context();
     struct GLProgram* p = _bolt_context_get_program(c, program);
-    const int uDiffuseMap = gl.GetUniformLocation(program, "uDiffuseMap");
-    const int uProjectionMatrix = gl.GetUniformLocation(program, "uProjectionMatrix");
-    const int uTextureAtlas = gl.GetUniformLocation(program, "uTextureAtlas");
-    const int uTextureAtlasSettings = gl.GetUniformLocation(program, "uTextureAtlasSettings");
-    const int uAtlasMeta = gl.GetUniformLocation(program, "uAtlasMeta");
-    const int loc_uModelMatrix = gl.GetUniformLocation(program, "uModelMatrix");
-    const int loc_uGridSize = gl.GetUniformLocation(program, "uGridSize");
-    const int loc_uVertexScale = gl.GetUniformLocation(program, "uVertexScale");
+    const GLint uDiffuseMap = gl.GetUniformLocation(program, "uDiffuseMap");
+    const GLint uProjectionMatrix = gl.GetUniformLocation(program, "uProjectionMatrix");
+    const GLint uTextureAtlas = gl.GetUniformLocation(program, "uTextureAtlas");
+    const GLint uTextureAtlasSettings = gl.GetUniformLocation(program, "uTextureAtlasSettings");
+    const GLint uAtlasMeta = gl.GetUniformLocation(program, "uAtlasMeta");
+    const GLint loc_uModelMatrix = gl.GetUniformLocation(program, "uModelMatrix");
+    const GLint loc_uGridSize = gl.GetUniformLocation(program, "uGridSize");
+    const GLint loc_uVertexScale = gl.GetUniformLocation(program, "uVertexScale");
     p->loc_sSceneHDRTex = gl.GetUniformLocation(program, "sSceneHDRTex");
     p->loc_sSourceTex = gl.GetUniformLocation(program, "sSourceTex");
 
-    const char* view_var_names[] = {"uCameraPosition", "uViewProjMatrix"};
-    const int block_index_ViewTransforms = gl.GetUniformBlockIndex(program, "ViewTransforms");
-    unsigned int ubo_indices[2];
-    int view_offsets[2];
-    int viewport_offset;
-    if (block_index_ViewTransforms != -1) {
+    const GLchar* view_var_names[] = {"uCameraPosition", "uViewProjMatrix"};
+    const GLuint block_index_ViewTransforms = gl.GetUniformBlockIndex(program, "ViewTransforms");
+    GLuint ubo_indices[2];
+    GLint view_offsets[2];
+    GLint viewport_offset;
+    if ((GLint)block_index_ViewTransforms != -1) {
         gl.GetUniformIndices(program, 2, view_var_names, ubo_indices);
         gl.GetActiveUniformsiv(program, 2, ubo_indices, GL_UNIFORM_OFFSET, view_offsets);
     }
@@ -703,7 +703,7 @@ void _bolt_glLinkProgram(unsigned int program) {
     LOG("glLinkProgram end\n");
 }
 
-void _bolt_glUseProgram(unsigned int program) {
+static void _bolt_glUseProgram(GLuint program) {
     LOG("glUseProgram\n");
     gl.UseProgram(program);
     struct GLContext* c = _bolt_context();
@@ -711,7 +711,7 @@ void _bolt_glUseProgram(unsigned int program) {
     LOG("glUseProgram end\n");
 }
 
-void _bolt_glTexStorage2D(uint32_t target, int levels, uint32_t internalformat, unsigned int width, unsigned int height) {
+static void _bolt_glTexStorage2D(GLenum target, GLsizei levels, GLenum internalformat, GLsizei width, GLsizei height) {
     LOG("glTexStorage2D\n");
     gl.TexStorage2D(target, levels, internalformat, width, height);
     struct GLContext* c = _bolt_context();
@@ -725,22 +725,22 @@ void _bolt_glTexStorage2D(uint32_t target, int levels, uint32_t internalformat, 
     LOG("glTexStorage2D end\n");
 }
 
-void _bolt_glVertexAttribPointer(unsigned int index, int size, uint32_t type, uint8_t normalised, unsigned int stride, const void* pointer) {
+static void _bolt_glVertexAttribPointer(GLuint index, GLint size, GLenum type, GLboolean normalised, GLsizei stride, const void* pointer) {
     LOG("glVertexAttribPointer\n");
     gl.VertexAttribPointer(index, size, type, normalised, stride, pointer);
     struct GLContext* c = _bolt_context();
-    int array_binding;
+    GLint array_binding;
     gl.GetIntegerv(GL_ARRAY_BUFFER_BINDING, &array_binding);
     _bolt_set_attr_binding(c, &c->bound_vao->attributes[index], array_binding, size, pointer, stride, type, normalised);
     LOG("glVertexAttribPointer end\n");
 }
 
-void _bolt_glGenBuffers(uint32_t n, unsigned int* buffers) {
+static void _bolt_glGenBuffers(GLsizei n, GLuint* buffers) {
     LOG("glGenBuffers\n");
     gl.GenBuffers(n, buffers);
     struct GLContext* c = _bolt_context();
     _bolt_rwlock_lock_write(&c->buffers->rwlock);
-    for (size_t i = 0; i < n; i += 1) {
+    for (GLsizei i = 0; i < n; i += 1) {
         struct GLArrayBuffer* buffer = calloc(1, sizeof(struct GLArrayBuffer));
         buffer->id = buffers[i];
         hashmap_set(c->buffers->map, &buffer);
@@ -749,13 +749,13 @@ void _bolt_glGenBuffers(uint32_t n, unsigned int* buffers) {
     LOG("glGenBuffers end\n");
 }
 
-void _bolt_glBufferData(uint32_t target, uintptr_t size, const void* data, uint32_t usage) {
+static void _bolt_glBufferData(GLenum target, GLsizeiptr size, const void* data, GLenum usage) {
     LOG("glBufferData\n");
     gl.BufferData(target, size, data, usage);
     struct GLContext* c = _bolt_context();
-    uint32_t binding_type = _bolt_binding_for_buffer(target);
+    GLenum binding_type = _bolt_binding_for_buffer(target);
     if (binding_type != -1) {
-        int buffer_id;
+        GLint buffer_id;
         gl.GetIntegerv(binding_type, &buffer_id);
         void* buffer_content = malloc(size);
         if (data) memcpy(buffer_content, data, size);
@@ -766,13 +766,13 @@ void _bolt_glBufferData(uint32_t target, uintptr_t size, const void* data, uint3
     LOG("glBufferData end\n");
 }
 
-void _bolt_glDeleteBuffers(unsigned int n, const unsigned int* buffers) {
+static void _bolt_glDeleteBuffers(GLsizei n, const GLuint* buffers) {
     LOG("glDeleteBuffers\n");
     gl.DeleteBuffers(n, buffers);
     struct GLContext* c = _bolt_context();
     _bolt_rwlock_lock_write(&c->buffers->rwlock);
-    for (unsigned int i = 0; i < n; i += 1) {
-        const unsigned int* ptr = &buffers[i];
+    for (GLsizei i = 0; i < n; i += 1) {
+        const GLuint* ptr = &buffers[i];
         struct GLArrayBuffer* const* buffer = hashmap_delete(c->buffers->map, &ptr);
         free((*buffer)->data);
         free((*buffer)->mapping);
@@ -782,8 +782,8 @@ void _bolt_glDeleteBuffers(unsigned int n, const unsigned int* buffers) {
     LOG("glDeleteBuffers end\n");
 }
 
-void _bolt_glBindFramebuffer(uint32_t target, unsigned int framebuffer) {
-    LOG("glBindFramebuffer\n", (uintptr_t)gl.BindFramebuffer);
+static void _bolt_glBindFramebuffer(GLenum target, GLuint framebuffer) {
+    LOG("glBindFramebuffer\n");
     gl.BindFramebuffer(target, framebuffer);
     struct GLContext* c = _bolt_context();
     switch (target) {
@@ -802,19 +802,19 @@ void _bolt_glBindFramebuffer(uint32_t target, unsigned int framebuffer) {
 }
 
 // https://www.khronos.org/opengl/wiki/S3_Texture_Compression
-void _bolt_glCompressedTexSubImage2D(uint32_t target, int level, int xoffset, int yoffset, unsigned int width, unsigned int height, uint32_t format, unsigned int imageSize, const void* data) {
+static void _bolt_glCompressedTexSubImage2D(GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLsizei imageSize, const void* data) {
     LOG("glCompressedTexSubImage2D\n");
     gl.CompressedTexSubImage2D(target, level, xoffset, yoffset, width, height, format, imageSize, data);
-    if (target != GL_TEXTURE_2D || level != 0) return;
+    if (target != GL_TEXTURE_2D || level != 0 || width <= 0 || height <= 0) return;
     const uint8_t is_dxt1 = (format == GL_COMPRESSED_RGB_S3TC_DXT1_EXT || format == GL_COMPRESSED_RGBA_S3TC_DXT1_EXT || format == GL_COMPRESSED_SRGB_S3TC_DXT1_EXT || format == GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT);
     const uint8_t is_srgb = (format == GL_COMPRESSED_SRGB_S3TC_DXT1_EXT || format == GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT || format == GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT || format == GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT);
     const size_t input_stride = is_dxt1 ? 8 : 16;
     void (*const unpack565)(uint16_t, uint8_t*) = is_srgb ? _bolt_unpack_srgb565 : _bolt_unpack_rgb565;
     struct GLContext* c = _bolt_context();
     struct GLTexture2D* tex = c->texture_units[c->active_texture];
-    int out_xoffset = xoffset;
-    int out_yoffset = yoffset;
-    for (size_t ii = 0; ii < (width * height); ii += input_stride) {
+    GLint out_xoffset = xoffset;
+    GLint out_yoffset = yoffset;
+    for (size_t ii = 0; ii < ((size_t)width * (size_t)height); ii += input_stride) {
         const uint8_t* ptr = (uint8_t*)data + ii;
         const uint8_t* cptr = is_dxt1 ? ptr : (ptr + 8);
         uint8_t* out_ptr = tex->data + (out_yoffset * tex->width * 4) + (out_xoffset * 4);
@@ -927,23 +927,25 @@ void _bolt_glCompressedTexSubImage2D(uint32_t target, int level, int xoffset, in
     LOG("glCompressedTexSubImage2D end\n");
 }
 
-void _bolt_glCopyImageSubData(unsigned int srcName, uint32_t srcTarget, int srcLevel, int srcX, int srcY, int srcZ,
-                              unsigned int dstName, uint32_t dstTarget, int dstLevel, int dstX, int dstY, int dstZ,
-                              unsigned int srcWidth, unsigned int srcHeight, unsigned int srcDepth) {
+static void _bolt_glCopyImageSubData(
+    GLuint srcName, GLenum srcTarget, GLint srcLevel, GLint srcX, GLint srcY, GLint srcZ,
+    GLuint dstName, GLenum dstTarget, GLint dstLevel, GLint dstX, GLint dstY, GLint dstZ,
+    GLsizei srcWidth, GLsizei srcHeight, GLsizei srcDepth
+) {
     LOG("glCopyImageSubData\n");
     gl.CopyImageSubData(srcName, srcTarget, srcLevel, srcX, srcY, srcZ, dstName, dstTarget, dstLevel, dstX, dstY, dstZ, srcWidth, srcHeight, srcDepth);
     struct GLContext* c = _bolt_context();
     if (srcTarget == GL_TEXTURE_2D && dstTarget == GL_TEXTURE_2D && srcLevel == 0 && dstLevel == 0) {
         struct GLTexture2D* src = _bolt_context_get_texture(c, srcName);
         struct GLTexture2D* dst = _bolt_context_get_texture(c, dstName);
-        for (size_t i = 0; i < srcHeight; i += 1) {
+        for (GLsizei i = 0; i < srcHeight; i += 1) {
             memcpy(dst->data + (dstY * dst->width * 4) + (dstX * 4), src->data + (srcY * src->width * 4) + (srcX * 4), srcWidth * 4);
         }
     }
     LOG("glCopyImageSubData end\n");
 }
 
-void _bolt_glEnableVertexAttribArray(unsigned int index) {
+static void _bolt_glEnableVertexAttribArray(GLuint index) {
     LOG("glEnableVertexAttribArray\n");
     gl.EnableVertexAttribArray(index);
     struct GLContext* c = _bolt_context();
@@ -951,7 +953,7 @@ void _bolt_glEnableVertexAttribArray(unsigned int index) {
     LOG("glEnableVertexAttribArray end\n");
 }
 
-void _bolt_glDisableVertexAttribArray(unsigned int index) {
+static void _bolt_glDisableVertexAttribArray(GLuint index) {
     LOG("glDisableVertexAttribArray\n");
     gl.EnableVertexAttribArray(index);
     struct GLContext* c = _bolt_context();
@@ -959,12 +961,12 @@ void _bolt_glDisableVertexAttribArray(unsigned int index) {
     LOG("glDisableVertexAttribArray end\n");
 }
 
-void* _bolt_glMapBufferRange(uint32_t target, intptr_t offset, uintptr_t length, uint32_t access) {
+static void* _bolt_glMapBufferRange(GLenum target, GLintptr offset, GLsizeiptr length, GLbitfield access) {
     LOG("glMapBufferRange\n");
     struct GLContext* c = _bolt_context();
-    uint32_t binding_type = _bolt_binding_for_buffer(target);
+    GLenum binding_type = _bolt_binding_for_buffer(target);
     if (binding_type != -1) {
-        int buffer_id;
+        GLint buffer_id;
         gl.GetIntegerv(binding_type, &buffer_id);
         struct GLArrayBuffer* buffer = _bolt_context_get_buffer(c, buffer_id);
         buffer->mapping = malloc(length);
@@ -980,12 +982,12 @@ void* _bolt_glMapBufferRange(uint32_t target, intptr_t offset, uintptr_t length,
     }
 }
 
-uint8_t _bolt_glUnmapBuffer(uint32_t target) {
+static GLboolean _bolt_glUnmapBuffer(GLuint target) {
     LOG("glUnmapBuffer\n");
     struct GLContext* c = _bolt_context();
-    uint32_t binding_type = _bolt_binding_for_buffer(target);
+    GLenum binding_type = _bolt_binding_for_buffer(target);
     if (binding_type != -1) {
-        int buffer_id;
+        GLint buffer_id;
         gl.GetIntegerv(binding_type, &buffer_id);
         struct GLArrayBuffer* buffer = _bolt_context_get_buffer(c, buffer_id);
         free(buffer->mapping);
@@ -993,19 +995,19 @@ uint8_t _bolt_glUnmapBuffer(uint32_t target) {
         LOG("glUnmapBuffer end (intercepted)\n");
         return 1;
     } else {
-        uint8_t ret = gl.UnmapBuffer(target);
+        GLboolean ret = gl.UnmapBuffer(target);
         LOG("glUnmapBuffer end (not intercepted)\n");
         return ret;
     }
 }
 
-void _bolt_glBufferStorage(uint32_t target, uintptr_t size, const void* data, uintptr_t flags) {
+static void _bolt_glBufferStorage(GLenum target, GLsizeiptr size, const void* data, GLbitfield flags) {
     LOG("glBufferStorage\n");
     gl.BufferStorage(target, size, data, flags);
     struct GLContext* c = _bolt_context();
-    uint32_t binding_type = _bolt_binding_for_buffer(target);
+    GLenum binding_type = _bolt_binding_for_buffer(target);
     if (binding_type != -1) {
-        int buffer_id;
+        GLint buffer_id;
         gl.GetIntegerv(binding_type, &buffer_id);
         void* buffer_content = malloc(size);
         if (data) memcpy(buffer_content, data, size);
@@ -1016,12 +1018,12 @@ void _bolt_glBufferStorage(uint32_t target, uintptr_t size, const void* data, ui
     LOG("glBufferStorage end (%s)\n", binding_type == -1 ? "not intercepted" : "intercepted");
 }
 
-void _bolt_glFlushMappedBufferRange(uint32_t target, intptr_t offset, uintptr_t length) {
+static void _bolt_glFlushMappedBufferRange(GLenum target, GLintptr offset, GLsizeiptr length) {
     LOG("glFlushMappedBufferRange\n");
     struct GLContext* c = _bolt_context();
-    uint32_t binding_type = _bolt_binding_for_buffer(target);
+    GLenum binding_type = _bolt_binding_for_buffer(target);
     if (binding_type != -1) {
-        int buffer_id;
+        GLint buffer_id;
         gl.GetIntegerv(binding_type, &buffer_id);
         struct GLArrayBuffer* buffer = _bolt_context_get_buffer(c, buffer_id);
         gl.BufferSubData(target, buffer->mapping_offset + offset, length, buffer->mapping + offset);
@@ -1032,7 +1034,7 @@ void _bolt_glFlushMappedBufferRange(uint32_t target, intptr_t offset, uintptr_t 
     LOG("glFlushMappedBufferRange end (%s)\n", binding_type == -1 ? "not intercepted" : "intercepted");
 }
 
-void _bolt_glActiveTexture(uint32_t texture) {
+static void _bolt_glActiveTexture(GLenum texture) {
     LOG("glActiveTexture\n");
     gl.ActiveTexture(texture);
     struct GLContext* c = _bolt_context();
@@ -1040,21 +1042,21 @@ void _bolt_glActiveTexture(uint32_t texture) {
     LOG("glActiveTexture end\n");
 }
 
-void _bolt_glMultiDrawElements(uint32_t mode, uint32_t* count, uint32_t type, const void** indices, size_t drawcount) {
+static void _bolt_glMultiDrawElements(GLenum mode, const GLsizei* count, GLenum type, const void* const* indices, GLsizei drawcount) {
     LOG("glMultiDrawElements\n");
     gl.MultiDrawElements(mode, count, type, indices, drawcount);
-    for (size_t i = 0; i < drawcount; i += 1) {
+    for (GLsizei i = 0; i < drawcount; i += 1) {
         _bolt_gl_onDrawElements(mode, count[i], type, indices[i]);
     }
     LOG("glMultiDrawElements end\n");
 }
 
-void _bolt_glGenVertexArrays(uint32_t n, unsigned int* arrays) {
+static void _bolt_glGenVertexArrays(GLsizei n, GLuint* arrays) {
     LOG("glGenVertexArrays\n");
     gl.GenVertexArrays(n, arrays);
     struct GLContext* c = _bolt_context();
     _bolt_rwlock_lock_write(&c->vaos->rwlock);
-    for (size_t i = 0; i < n; i += 1) {
+    for (GLsizei i = 0; i < n; i += 1) {
         struct GLVertexArray* array = calloc(1, sizeof(struct GLVertexArray));
         array->id = arrays[i];
         hashmap_set(c->vaos->map, &array);
@@ -1063,13 +1065,13 @@ void _bolt_glGenVertexArrays(uint32_t n, unsigned int* arrays) {
     LOG("glGenVertexArrays end\n");
 }
 
-void _bolt_glDeleteVertexArrays(uint32_t n, const unsigned int* arrays) {
+static void _bolt_glDeleteVertexArrays(GLsizei n, const GLuint* arrays) {
     LOG("glDeleteVertexArrays\n");
     gl.DeleteVertexArrays(n, arrays);
     struct GLContext* c = _bolt_context();
     _bolt_rwlock_lock_write(&c->vaos->rwlock);
-    for (size_t i = 0; i < n; i += 1) {
-        const unsigned int* ptr = &arrays[i];
+    for (GLsizei i = 0; i < n; i += 1) {
+        const GLuint* ptr = &arrays[i];
         struct GLVertexArray* const* vao = hashmap_delete(c->vaos->map, &ptr);
         free(*vao);
     }
@@ -1077,7 +1079,7 @@ void _bolt_glDeleteVertexArrays(uint32_t n, const unsigned int* arrays) {
     LOG("glDeleteVertexArrays end\n");
 }
 
-void _bolt_glBindVertexArray(uint32_t array) {
+static void _bolt_glBindVertexArray(GLuint array) {
     LOG("glBindVertexArray\n");
     gl.BindVertexArray(array);
     struct GLContext* c = _bolt_context();
@@ -1085,7 +1087,7 @@ void _bolt_glBindVertexArray(uint32_t array) {
     LOG("glBindVertexArray end\n");
 }
 
-void _bolt_glBlitFramebuffer(int srcX0, int srcY0, int srcX1, int srcY1, int dstX0, int dstY0, int dstX1, int dstY1, uint32_t mask, uint32_t filter) {
+static void _bolt_glBlitFramebuffer(GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1, GLbitfield mask, GLenum filter) {
     LOG("glBlitFramebuffer\n");
     gl.BlitFramebuffer(srcX0, srcY0, srcX1, srcY1, dstX0, dstY0, dstX1, dstY1, mask, filter);
     struct GLContext* c = _bolt_context();
@@ -1203,10 +1205,10 @@ void* _bolt_gl_onDestroyContext(void* context) {
     return do_destroy_main ? (void*)egl_main_context : NULL;
 }
 
-void _bolt_gl_onGenTextures(uint32_t n, unsigned int* textures) {
+void _bolt_gl_onGenTextures(GLsizei n, GLuint* textures) {
     struct GLContext* c = _bolt_context();
     _bolt_rwlock_lock_write(&c->textures->rwlock);
-    for (size_t i = 0; i < n; i += 1) {
+    for (GLsizei i = 0; i < n; i += 1) {
         struct GLTexture2D* tex = calloc(1, sizeof(struct GLTexture2D));
         tex->id = textures[i];
         tex->is_minimap_tex_big = 0;
@@ -1216,19 +1218,19 @@ void _bolt_gl_onGenTextures(uint32_t n, unsigned int* textures) {
     _bolt_rwlock_unlock_write(&c->textures->rwlock);
 }
 
-void _bolt_gl_onDrawElements(uint32_t mode, unsigned int count, uint32_t type, const void* indices_offset) {
+void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void* indices_offset) {
     struct GLContext* c = _bolt_context();
     struct GLAttrBinding* attributes = c->bound_vao->attributes;
-    int element_binding;
+    GLint element_binding;
     gl.GetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &element_binding);
     struct GLArrayBuffer* element_buffer = _bolt_context_get_buffer(c, element_binding);
     const unsigned short* indices = (unsigned short*)((uint8_t*)element_buffer->data + (uintptr_t)indices_offset);
     if (type == GL_UNSIGNED_SHORT && mode == GL_TRIANGLES && count > 0 && c->bound_program->is_2d && !c->bound_program->is_minimap) {
-        int diffuse_map;
+        GLint diffuse_map;
         gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uDiffuseMap, &diffuse_map);
-        float projection_matrix[16];
+        GLfloat projection_matrix[16];
         gl.GetUniformfv(c->bound_program->id, c->bound_program->loc_uProjectionMatrix, projection_matrix);
-        int draw_tex;
+        GLint draw_tex;
         gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
         struct GLTexture2D* tex = c->texture_units[diffuse_map];
         struct GLTexture2D* tex_target = _bolt_context_get_texture(c, draw_tex);
@@ -1239,8 +1241,8 @@ void _bolt_gl_onDrawElements(uint32_t mode, unsigned int count, uint32_t type, c
                 // get XY and UV of first two vertices
                 const struct GLAttrBinding* tex_uv = &attributes[c->bound_program->loc_aTextureUV];
                 const struct GLAttrBinding* position_2d = &attributes[c->bound_program->loc_aVertexPosition2D];
-                int pos0[2];
-                int pos1[2];
+                int32_t pos0[2];
+                int32_t pos1[2];
                 float uv0[2];
                 float uv1[2];
                 _bolt_get_attr_binding_int(c, position_2d, indices[0], 2, pos0);
@@ -1334,11 +1336,11 @@ void _bolt_gl_onDrawElements(uint32_t mode, unsigned int count, uint32_t type, c
         }
     }
     if (type == GL_UNSIGNED_SHORT && mode == GL_TRIANGLES && c->bound_program->is_3d) {
-        int draw_tex;
+        GLint draw_tex;
         gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
         if (draw_tex == c->target_3d_tex) {
-            int atlas, settings_atlas, ubo_binding, ubo_view_index, ubo_viewport_index;
-            float atlas_meta[4];
+            GLint atlas, settings_atlas, ubo_binding, ubo_view_index, ubo_viewport_index;
+            GLfloat atlas_meta[4];
             gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uTextureAtlas, &atlas);
             gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uTextureAtlasSettings, &settings_atlas);
             gl.GetUniformfv(c->bound_program->id, c->bound_program->loc_uAtlasMeta, atlas_meta);
@@ -1389,22 +1391,22 @@ void _bolt_gl_onDrawElements(uint32_t mode, unsigned int count, uint32_t type, c
     }
 }
 
-void _bolt_gl_onDrawArrays(uint32_t mode, int first, unsigned int count) {
+void _bolt_gl_onDrawArrays(GLenum mode, GLint first, GLsizei count) {
     struct GLContext* c = _bolt_context();
-    int draw_tex;
+    GLint draw_tex;
     gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
     struct GLTexture2D* tex = _bolt_context_get_texture(c, draw_tex);
     if (c->bound_program->is_minimap && tex->width == GAME_MINIMAP_BIG_SIZE && tex->height == GAME_MINIMAP_BIG_SIZE) {
-        int ubo_binding, ubo_view_index;
+        GLint ubo_binding, ubo_view_index;
         gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ViewTransforms, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
-        gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_view_index);
+        gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, (GLuint)ubo_binding, &ubo_view_index);
         const float* camera_position = (float*)((uint8_t*)(_bolt_context_get_buffer(c, ubo_view_index)->data) + c->bound_program->offset_uCameraPosition);
         tex->is_minimap_tex_big = 1;
         tex->minimap_center_x = camera_position[0];
         tex->minimap_center_y = camera_position[2];
     } else if (mode == GL_TRIANGLE_STRIP && count == 4) {
         if (c->bound_program->loc_sSceneHDRTex != -1) {
-            int game_view_tex;
+            GLint game_view_tex;
             gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_sSceneHDRTex, &game_view_tex);
             if (c->current_draw_framebuffer == 0 && c->game_view_tex_front != c->texture_units[game_view_tex]->id) {
                 c->game_view_tex = c->texture_units[game_view_tex]->id;
@@ -1421,7 +1423,7 @@ void _bolt_gl_onDrawArrays(uint32_t mode, int first, unsigned int count) {
             }
         } else if (c->bound_program->loc_sSourceTex != -1) {
             if (c->need_3d_tex == 1 && draw_tex == c->game_view_tex) {
-                int game_view_tex;
+                GLint game_view_tex;
                 gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_sSourceTex, &game_view_tex);
                 c->game_view_tex = c->texture_units[game_view_tex]->id;
                 printf("updated direct game_view_tex to %u...\n", c->game_view_tex);
@@ -1432,20 +1434,20 @@ void _bolt_gl_onDrawArrays(uint32_t mode, int first, unsigned int count) {
     }
 }
 
-void _bolt_gl_onBindTexture(uint32_t target, unsigned int texture) {
+void _bolt_gl_onBindTexture(GLenum target, GLuint texture) {
     if (target == GL_TEXTURE_2D) {
         struct GLContext* c = _bolt_context();
         c->texture_units[c->active_texture] = _bolt_context_get_texture(c, texture);
     }
 }
 
-void _bolt_gl_onTexSubImage2D(uint32_t target, int level, int xoffset, int yoffset, unsigned int width, unsigned int height, uint32_t format, uint32_t type, const void* pixels) {
+void _bolt_gl_onTexSubImage2D(GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void* pixels) {
     struct GLContext* c = _bolt_context();
     if (target == GL_TEXTURE_2D && level == 0 && format == GL_RGBA) {
         struct GLTexture2D* tex = c->texture_units[c->active_texture];
         if (tex && !(xoffset < 0 || yoffset < 0 || xoffset + width > tex->width || yoffset + height > tex->height)) {
-            for (unsigned int y = 0; y < height; y += 1) {
-                unsigned char* dest_ptr = tex->data + ((tex->width * (y + yoffset)) + xoffset) * 4;
+            for (GLsizei y = 0; y < height; y += 1) {
+                uint8_t* dest_ptr = tex->data + ((tex->width * (y + yoffset)) + xoffset) * 4;
                 const uint8_t* src_ptr = (uint8_t*)pixels + (width * y * 4);
                 memcpy(dest_ptr, src_ptr, width * 4);
             }
@@ -1453,11 +1455,11 @@ void _bolt_gl_onTexSubImage2D(uint32_t target, int level, int xoffset, int yoffs
     }
 }
 
-void _bolt_gl_onDeleteTextures(unsigned int n, const unsigned int* textures) {
+void _bolt_gl_onDeleteTextures(GLsizei n, const GLuint* textures) {
     struct GLContext* c = _bolt_context();
     _bolt_rwlock_lock_write(&c->textures->rwlock);
-    for (unsigned int i = 0; i < n; i += 1) {
-        const unsigned int* ptr = &textures[i];
+    for (GLsizei i = 0; i < n; i += 1) {
+        const GLuint* ptr = &textures[i];
         struct GLTexture2D* const* texture = hashmap_delete(c->textures->map, &ptr);
         free((*texture)->data);
         free(*texture);
@@ -1465,10 +1467,10 @@ void _bolt_gl_onDeleteTextures(unsigned int n, const unsigned int* textures) {
     _bolt_rwlock_unlock_write(&c->textures->rwlock);
 }
 
-void _bolt_gl_onClear(uint32_t mask) {
+void _bolt_gl_onClear(GLbitfield mask) {
     struct GLContext* c = _bolt_context();
     if (mask & GL_COLOR_BUFFER_BIT) {
-        int draw_tex;
+        GLint draw_tex;
         gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
         struct GLTexture2D* tex = _bolt_context_get_texture(c, draw_tex);
         if (tex) {
@@ -1477,7 +1479,7 @@ void _bolt_gl_onClear(uint32_t mask) {
     }
 }
 
-void _bolt_gl_onViewport(int x, int y, unsigned int width, unsigned int height) {
+void _bolt_gl_onViewport(GLint x, GLint y, GLsizei width, GLsizei height) {
     struct GLContext* c = _bolt_context();
     c->viewport_x = x;
     c->viewport_y = y;

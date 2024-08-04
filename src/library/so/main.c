@@ -273,56 +273,56 @@ static void _bolt_init_functions() {
     inited = 1;
 }
 
-void glGenTextures(uint32_t n, unsigned int* textures) {
+void glGenTextures(GLsizei n, GLuint* textures) {
     LOG("glGenTextures\n");
     libgl.GenTextures(n, textures);
     _bolt_gl_onGenTextures(n, textures);
     LOG("glGenTextures end\n");
 }
 
-void glDrawElements(uint32_t mode, unsigned int count, uint32_t type, const void* indices_offset) {
+void glDrawElements(GLenum mode, GLsizei count, GLenum type, const void* indices_offset) {
     LOG("glDrawElements\n");
     libgl.DrawElements(mode, count, type, indices_offset);
     _bolt_gl_onDrawElements(mode, count, type, indices_offset);
     LOG("glDrawElements end\n");
 }
 
-void glDrawArrays(uint32_t mode, int first, unsigned int count) {
+void glDrawArrays(GLenum mode, GLint first, GLsizei count) {
     LOG("glDrawArrays\n");
     libgl.DrawArrays(mode, first, count);
     _bolt_gl_onDrawArrays(mode, first, count);
     LOG("glDrawArrays end\n");
 }
 
-void glBindTexture(uint32_t target, unsigned int texture) {
+void glBindTexture(GLenum target, GLuint texture) {
     LOG("glBindTexture\n");
     libgl.BindTexture(target, texture);
     _bolt_gl_onBindTexture(target, texture);
     LOG("glBindTexture end\n");
 }
 
-void glTexSubImage2D(uint32_t target, int level, int xoffset, int yoffset, unsigned int width, unsigned int height, uint32_t format, uint32_t type, const void* pixels) {
+void glTexSubImage2D(GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void* pixels) {
     LOG("glTexSubImage2D\n");
     libgl.TexSubImage2D(target, level, xoffset, yoffset, width, height, format, type, pixels);
     _bolt_gl_onTexSubImage2D(target, level, xoffset, yoffset, width, height, format, type, pixels);
     LOG("glTexSubImage2D end\n");
 }
 
-void glDeleteTextures(unsigned int n, const unsigned int* textures) {
+void glDeleteTextures(GLsizei n, const GLuint* textures) {
     LOG("glDeleteTextures\n");
     libgl.DeleteTextures(n, textures);
     _bolt_gl_onDeleteTextures(n, textures);
     LOG("glDeleteTextures end\n");
 }
 
-void glClear(uint32_t mask) {
+void glClear(GLbitfield mask) {
     LOG("glClear\n");
     libgl.Clear(mask);
     _bolt_gl_onClear(mask);
     LOG("glClear end\n");
 }
 
-void glViewport(int x, int y, unsigned int width, unsigned int height) {
+void glViewport(GLint x, GLint y, GLsizei width, GLsizei height) {
     LOG("glViewport\n");
     libgl.Viewport(x, y, width, height);
     _bolt_gl_onViewport(x, y, width, height);
