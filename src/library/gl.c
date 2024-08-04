@@ -955,7 +955,7 @@ static void _bolt_glEnableVertexAttribArray(GLuint index) {
 
 static void _bolt_glDisableVertexAttribArray(GLuint index) {
     LOG("glDisableVertexAttribArray\n");
-    gl.EnableVertexAttribArray(index);
+    gl.DisableVertexAttribArray(index);
     struct GLContext* c = _bolt_context();
     c->bound_vao->attributes[index].enabled = 0;
     LOG("glDisableVertexAttribArray end\n");
