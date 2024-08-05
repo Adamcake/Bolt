@@ -18,6 +18,10 @@
 #include <fmt/core.h>
 
 void Browser::Client::IPCBind() {
+#if defined(_WIN32)
+    WSADATA wsa_data;
+    WSAStartup(MAKEWORD(2, 2), &wsa_data);
+#endif
 	struct sockaddr_un addr;
 	addr.sun_family = AF_UNIX;
 	snprintf(addr.sun_path, sizeof(addr.sun_path) - 1, OSPATH_PRINTF_STR "/ipc-0", this->runtime_dir.c_str());
