@@ -102,13 +102,20 @@ void Browser::Client::IPCRun() {
 		shutdown(i->fd, SHUT_RDWR);
 		close(i->fd);
 	}
+#if !defined(_WIN32)
+	// with winsock, the socket would've already been closed by this point
 	close(pfds[0].fd);
+#endif
 }
 
 void Browser::Client::IPCStop() {
 	shutdown(this->ipc_fd, SHUT_RDWR);
-	this->ipc_thread.join();
+#if defined(_WIN32)
+	// required to do this for winsock's poll function to exit, unlike with a real unix socket,
+	// where we allow the thread to close() it because it would be UB to do it any sooner than that
 	close(this->ipc_fd);
+#endif
+	this->ipc_thread.join();
 }
 
 #endif
