@@ -6,12 +6,12 @@
 #define poll WSAPoll
 #define close closesocket
 #define SHUT_RDWR SD_BOTH
-#define OSPATH_PRINTF_STR "%ls"
+#define OSPATH_PRINTF_STR "%ls\\"
 #else
 #include <poll.h>
 #include <sys/socket.h>
 #include <sys/un.h>
-#define OSPATH_PRINTF_STR "%s"
+#define OSPATH_PRINTF_STR "%s/"
 #endif
 
 #include <algorithm>
@@ -24,9 +24,14 @@ void Browser::Client::IPCBind() {
 #endif
 	struct sockaddr_un addr;
 	addr.sun_family = AF_UNIX;
-	snprintf(addr.sun_path, sizeof(addr.sun_path) - 1, OSPATH_PRINTF_STR "/ipc-0", this->runtime_dir.c_str());
+	snprintf(addr.sun_path, sizeof(addr.sun_path) - 1, OSPATH_PRINTF_STR "ipc-0", this->runtime_dir.c_str());
 	this->ipc_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+#if defined(_WIN32)
+	// MSDN says we should use "DeleteFile or any other file delete API" instead of unlink
+	DeleteFileA(addr.sun_path);
+#else
 	unlink(addr.sun_path);
+#endif
 	if (bind(this->ipc_fd, (struct sockaddr*)&addr, sizeof(addr)) == -1) {
 		fmt::print("[B] error: IPC bind({}, {}) returned {}\n", this->ipc_fd, addr.sun_path, errno);
 	} else if (listen(this->ipc_fd, 16) == -1) {
