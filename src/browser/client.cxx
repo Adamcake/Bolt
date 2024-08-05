@@ -1,18 +1,17 @@
 #include "client.hxx"
 
+#if defined(BOLT_PLUGINS)
+#include "include/cef_parser.h"
+#include <cstring>
+#define BOLT_IPC_URL "https://bolt-blankpage/"
+#endif
+
 #include "include/cef_life_span_handler.h"
 #include "include/cef_app.h"
 #include "include/cef_values.h"
 #include "include/internal/cef_types.h"
 #include "resource_handler.hxx"
 #include "window_launcher.hxx"
-
-#if defined(BOLT_PLUGINS)
-#include "include/cef_parser.h"
-#include "../library/ipc.h"
-#include <cstring>
-#define BOLT_IPC_URL "https://bolt-blankpage/"
-#endif
 
 #include <algorithm>
 #include <fcntl.h>

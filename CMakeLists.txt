@@ -268,16 +268,8 @@ add_subdirectory(${CEF_LIBCEF_DLL_WRAPPER_PATH} libcef_dll_wrapper)
 # select implementations for OS-specific behaviour
 if(WIN32)
     set(WINDOW_LAUNCHER_OS_SPECIFIC src/browser/window_launcher_win.cxx)
-    set(CLIENT_OS_SPECIFIC src/browser/client_win32.cxx)
-    if(NOT BOLT_SKIP_LIBRARIES)
-        set(LIB_IPC_OS_SPECIFIC src/library/ipc_win32.c)
-    endif()
 else()
     set(WINDOW_LAUNCHER_OS_SPECIFIC src/browser/window_launcher_posix.cxx)
-    set(CLIENT_OS_SPECIFIC src/browser/client_posix.cxx)
-    if(NOT BOLT_SKIP_LIBRARIES)
-        set(LIB_IPC_OS_SPECIFIC src/library/ipc_posix.c)
-    endif()
 endif()
 
 # compile an auto-generator, then use it to auto-generate a C++ file containing icon data
@@ -306,9 +298,9 @@ endif()
 # This line needs to be updated manually with any new/deleted object files; cmake discourages GLOBbing source files
 add_executable(bolt
     modules/fmt/src/format.cc src/main.cxx src/browser.cxx src/browser/app.cxx src/browser/client.cxx
-    ${CLIENT_OS_SPECIFIC} src/browser/resource_handler.cxx src/browser/window_launcher.cxx
+    src/browser/client_posix.cxx src/browser/resource_handler.cxx src/browser/window_launcher.cxx
     ${WINDOW_LAUNCHER_OS_SPECIFIC} src/mime.cxx src/file_manager/directory.cxx client_cmake_gen.cxx
-    ${LIB_IPC_OS_SPECIFIC} ${BOLT_FILE_MANAGER_LAUNCHER_GEN} ${BOLT_STUB_INJECT_CXX}
+    src/library/ipc_posix.c ${BOLT_FILE_MANAGER_LAUNCHER_GEN} ${BOLT_STUB_INJECT_CXX}
 )
 if(BOLT_STUB_INJECT_CXX)
     add_dependencies(bolt BOLT_STUB_INJECT_DEPENDENCY)
@@ -336,6 +328,9 @@ elseif(WIN32)
     else()
         target_compile_options(bolt PUBLIC ${BOLT_WINDOWS_NONMSVC_OPTIONS})
         target_link_options(bolt PUBLIC ${BOLT_WINDOWS_NONMSVC_LINKOPTIONS})
+    endif()
+    if(NOT BOLT_SKIP_LIBRARIES)
+        target_link_libraries(bolt PUBLIC "Ws2_32.lib")
     endif()
 elseif(APPLE)
     # TODO: mac support

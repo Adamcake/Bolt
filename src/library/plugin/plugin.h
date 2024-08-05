@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "../ipc.h"
 #include "../rwlock/rwlock.h"
 
 struct RenderBatch2D;
@@ -239,10 +240,10 @@ void _bolt_plugin_process_windows(uint32_t, uint32_t);
 void _bolt_plugin_close();
 
 /// Opens the IPC channel. (OS-specific)
-void _bolt_plugin_ipc_init(int*);
+void _bolt_plugin_ipc_init(BoltSocketType*);
 
 /// Closes the IPC channel. (OS-specific)
-void _bolt_plugin_ipc_close(int);
+void _bolt_plugin_ipc_close(BoltSocketType);
 
 /// Gets a reference to the global WindowInfo struct
 struct WindowInfo* _bolt_plugin_windowinfo();

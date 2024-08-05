@@ -1,5 +1,5 @@
-#include "gl.h"
 #include "plugin/plugin.h"
+#include "gl.h"
 
 #include <math.h>
 #include <stdio.h>

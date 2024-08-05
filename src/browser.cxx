@@ -1,5 +1,5 @@
-#include "browser.hxx"
 #include "browser/client.hxx"
+#include "browser.hxx"
 #include "include/views/cef_window.h"
 
 #include <algorithm>

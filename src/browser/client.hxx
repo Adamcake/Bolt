@@ -1,5 +1,10 @@
 #ifndef _BOLT_CLIENT_HXX_
 #define _BOLT_CLIENT_HXX_
+#if defined(BOLT_PLUGINS)
+#include "../library/ipc.h"
+#include <thread>
+#endif
+
 #include "include/cef_client.h"
 #include "include/cef_life_span_handler.h"
 #include "include/views/cef_window_delegate.h"
@@ -12,10 +17,6 @@
 
 #if defined(CEF_X11)
 #include <xcb/xcb.h>
-#endif
-
-#if defined(BOLT_PLUGINS)
-#include <thread>
 #endif
 
 #if defined(BOLT_DEV_LAUNCHER_DIRECTORY)
@@ -167,7 +168,7 @@ namespace Browser {
 				char* identity;
 			};
 			std::thread ipc_thread;
-			int ipc_fd;
+			BoltSocketType ipc_fd;
 			CefRefPtr<CefBrowserView> ipc_view;
 			CefRefPtr<CefWindow> ipc_window;
 			CefRefPtr<CefBrowser> ipc_browser;

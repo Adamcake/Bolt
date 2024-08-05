@@ -1,5 +1,18 @@
 #ifndef _BOLT_LIBRARY_IPC_H_
 #define _BOLT_LIBRARY_IPC_H_
+
+// winsock2.h has to be included before windows.h and both before afunix.h if applicable.
+// this design is evil, and can cause some really confusing linker errors if windows.h happens to be
+// somewhere in your include chain before this file. so generally, this file should be #included
+// right at the top of any file it's in.
+#if defined(_WIN32)
+#include <winsock2.h>
+#include <Windows.h>
+typedef SOCKET BoltSocketType;
+#else
+typedef int BoltSocketType;
+#endif
+
 #include <stdint.h>
 #include <stddef.h>
 
@@ -39,15 +52,15 @@ extern "C" {
 #endif
 
 /// Sends the given bytes on the IPC channel and returns zero on success or non-zero on failure.
-uint8_t _bolt_ipc_send(int fd, const void* data, size_t len);
+uint8_t _bolt_ipc_send(BoltSocketType fd, const void* data, size_t len);
 
 /// Receives the given number of bytes from the IPC socket, blocking until the full amount has been
 /// received. Use plugin_ipc_poll to check if this will block. Returns zero on success or non-zero
 /// on failure.
-uint8_t _bolt_ipc_receive(int fd, void* data, size_t len);
+uint8_t _bolt_ipc_receive(BoltSocketType fd, void* data, size_t len);
 
 /// Checks whether ipc_receive would return immediately (1) or block (0) or return an error (0).
-uint8_t _bolt_ipc_poll(int fd);
+uint8_t _bolt_ipc_poll(BoltSocketType fd);
 
 #if defined(__cplusplus)
 }

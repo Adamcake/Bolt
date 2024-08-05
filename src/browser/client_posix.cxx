@@ -1,16 +1,26 @@
 #if defined(BOLT_PLUGINS)
 #include "client.hxx"
 
-#include <algorithm>
-#include <fmt/core.h>
+#if defined(_WIN32)
+#include <afunix.h>
+#define poll WSAPoll
+#define close closesocket
+#define SHUT_RDWR SD_BOTH
+#define OSPATH_PRINTF_STR "%ls"
+#else
 #include <poll.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#define OSPATH_PRINTF_STR "%s"
+#endif
+
+#include <algorithm>
+#include <fmt/core.h>
 
 void Browser::Client::IPCBind() {
 	struct sockaddr_un addr;
 	addr.sun_family = AF_UNIX;
-	snprintf(addr.sun_path, sizeof(addr.sun_path) - 1, "%s/ipc-0", this->runtime_dir.c_str());
+	snprintf(addr.sun_path, sizeof(addr.sun_path) - 1, OSPATH_PRINTF_STR "/ipc-0", this->runtime_dir.c_str());
 	this->ipc_fd = socket(AF_UNIX, SOCK_STREAM, 0);
 	unlink(addr.sun_path);
 	if (bind(this->ipc_fd, (struct sockaddr*)&addr, sizeof(addr)) == -1) {
@@ -36,7 +46,12 @@ void Browser::Client::IPCRun() {
 
 		// check pfds[0] for new client connections
 		if (pfds[0].revents == POLLIN) {
-			int client_fd = accept4(this->ipc_fd, nullptr, nullptr, SOCK_CLOEXEC);
+			BoltSocketType client_fd = 
+#if defined(_WIN32)
+				accept(this->ipc_fd, nullptr, nullptr);
+#else
+				accept4(this->ipc_fd, nullptr, nullptr, SOCK_CLOEXEC);
+#endif
 			if (client_fd == -1) {
 				fmt::print("[I] IPC thread exiting due to accept error {}\n", errno);
 				break;

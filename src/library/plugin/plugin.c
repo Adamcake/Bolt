@@ -79,7 +79,7 @@ static struct WindowInfo windows;
 static bool inited = false;
 static int _bolt_api_init(lua_State* state);
 
-static int fd = 0;
+static BoltSocketType fd = 0;
 
 // a currently-running plugin.
 // note strings are not null terminated, and "path" must always be converted to use '/' as path-separators

@@ -1,19 +1,20 @@
+#if defined(_WIN32)
+#if defined(BOLT_PLUGINS)
+#include <winsock2.h>
+#endif
+#include <windows.h>
+#elif defined(BOLT_PLUGINS)
+#include <sys/un.h>
+#include <sys/socket.h>
+#include "library/ipc.h"
+#endif
+
 #include <filesystem>
 #include <fmt/core.h>
 
 #include "browser.hxx"
 #include "browser/app.hxx"
 #include "browser/client.hxx"
-
-#if defined(BOLT_PLUGINS) && !defined(_WIN32)
-#include <sys/un.h>
-#include <sys/socket.h>
-#include "library/ipc.h"
-#endif
-
-#if defined(_WIN32)
-#include <windows.h>
-#endif
 
 #if defined(__linux__)
 #include <fcntl.h>

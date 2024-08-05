@@ -1,14 +1,24 @@
-#include "plugin.h"
+#include "../ipc.h"
 
+#if defined(_WIN32)
+#include <afunix.h>
+#else
 #include <errno.h>
 #include <poll.h>
-#include <stdlib.h>
-#include <stdio.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
+#endif
 
-void _bolt_plugin_ipc_init(int* fd) {
+#include "plugin.h"
+#include <stdlib.h>
+#include <stdio.h>
+
+void _bolt_plugin_ipc_init(BoltSocketType* fd) {
+#if defined(_WIN32)
+    WSADATA wsa_data;
+    WSAStartup(MAKEWORD(2, 2), &wsa_data);
+#endif
     const int olderr = errno;
     struct sockaddr_un addr = {.sun_family = AF_UNIX};
     *fd = socket(addr.sun_family, SOCK_STREAM, 0);
@@ -21,7 +31,7 @@ void _bolt_plugin_ipc_init(int* fd) {
     errno = olderr;
 }
 
-void _bolt_plugin_ipc_close(int fd) {
+void _bolt_plugin_ipc_close(BoltSocketType fd) {
     const int olderr = errno;
     close(fd);
     errno = olderr;

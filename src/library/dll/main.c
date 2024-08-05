@@ -1,11 +1,10 @@
-#include <Windows.h>
+#include "../plugin/plugin.h"
 
 #include <stdio.h>
 #include <string.h>
 
 #include "common.h"
 #include "dll_inject.h"
-#include "../plugin/plugin.h"
 #include "../gl.h"
 
 typedef HMODULE(WINAPI* LOADLIBRARYW)(LPCWSTR);
@@ -49,7 +48,7 @@ static HGLRC __stdcall hook_wglCreateContextAttribsARB(HDC, HGLRC, const int*);
 
 static struct GLLibFunctions libgl = {0};
 
-#define VERBOSE
+//#define VERBOSE
 
 #if defined(VERBOSE)
 static FILE* logfile = 0;
