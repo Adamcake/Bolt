@@ -2,6 +2,7 @@
 
 #if defined(_WIN32)
 #include <afunix.h>
+#define close closesocket
 #else
 #include <errno.h>
 #include <poll.h>
