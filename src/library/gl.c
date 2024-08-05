@@ -1055,10 +1055,13 @@ static void _bolt_glGenVertexArrays(GLsizei n, GLuint* arrays) {
     LOG("glGenVertexArrays\n");
     gl.GenVertexArrays(n, arrays);
     struct GLContext* c = _bolt_context();
+    GLint attrib_count;
+    gl.GetIntegerv(GL_MAX_VERTEX_ATTRIBS, &attrib_count);
     _bolt_rwlock_lock_write(&c->vaos->rwlock);
     for (GLsizei i = 0; i < n; i += 1) {
-        struct GLVertexArray* array = calloc(1, sizeof(struct GLVertexArray));
+        struct GLVertexArray* array = malloc(sizeof(struct GLVertexArray));
         array->id = arrays[i];
+        array->attributes = calloc(attrib_count, sizeof(struct GLAttrBinding));
         hashmap_set(c->vaos->map, &array);
     }
     _bolt_rwlock_unlock_write(&c->vaos->rwlock);
@@ -1073,6 +1076,7 @@ static void _bolt_glDeleteVertexArrays(GLsizei n, const GLuint* arrays) {
     for (GLsizei i = 0; i < n; i += 1) {
         const GLuint* ptr = &arrays[i];
         struct GLVertexArray* const* vao = hashmap_delete(c->vaos->map, &ptr);
+        free((*vao)->attributes);
         free(*vao);
     }
     _bolt_rwlock_unlock_write(&c->vaos->rwlock);

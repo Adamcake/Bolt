@@ -153,6 +153,7 @@ struct GLLibFunctions {
 #define GL_RGBA8 32856
 #define GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE 36048
 #define GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME 36049
+#define GL_MAX_VERTEX_ATTRIBS 34921
 
 /* bolt re-implementation of some gl objects, storing only the things we need */
 
@@ -215,7 +216,7 @@ struct GLAttrBinding {
 
 struct GLVertexArray {
     GLuint id;
-    struct GLAttrBinding attributes[16];
+    struct GLAttrBinding* attributes;
 };
 
 struct HashMap {
