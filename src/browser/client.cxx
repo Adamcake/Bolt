@@ -357,7 +357,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Client::ListGameClients() {
 	this->game_clients_lock.lock();
 	for (const GameClient& g: this->game_clients) {
 		CefRefPtr<CefDictionaryValue> inner_dict = CefDictionaryValue::Create();
-		snprintf(buf, 256, "%lu", g.uid);
+		snprintf(buf, 256, "%llu", (unsigned long long)g.uid);
 		if (g.identity) {
 			inner_dict->SetString("identity", g.identity);
 		}
