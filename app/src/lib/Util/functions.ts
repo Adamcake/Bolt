@@ -314,7 +314,14 @@ export async function launchOfficialClient(
 		if (jx_session_id) params.jx_session_id = jx_session_id;
 		if (jx_character_id) params.jx_character_id = jx_character_id;
 		if (jx_display_name) params.jx_display_name = jx_display_name;
-		if (!osrs && get(GlobalState.config).rs_plugin_loader) params.plugin_loader = '1';
+		if (!osrs) {
+			const config = get(GlobalState.config);
+			if (config.rs_plugin_loader) params.plugin_loader = '1';
+			params.config_uri =
+				config.use_custom_rs_config_uri && config.rs_config_uri
+					? config.rs_config_uri
+					: bolt.env.default_config_uri;
+		}
 		const response = await fetch(
 			`/launch-${osrs ? 'osrs' : 'rs3'}-${windows ? 'exe' : 'app'}?${new URLSearchParams(params).toString()}`,
 			{
