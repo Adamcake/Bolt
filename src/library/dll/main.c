@@ -157,11 +157,64 @@ DWORD __stdcall BOLT_STUB_ENTRYNAME(struct PluginInjectParams* data) {
     return 0;
 }
 
+static uint8_t point_in_rect(int x, int y, int rx, int ry, int rw, int rh) {
+    return rx <= x && rx + rw > x && ry <= y && ry + rh > y;
+}
+
+static void winapi_to_mouseevent(int x, int y, WPARAM param, struct MouseEvent* out) {
+    out->x = x;
+    out->y = y;
+    out->ctrl = param & MK_CONTROL ? 1 : 0;
+    out->shift = param & MK_SHIFT ? 1 : 0;
+    out->meta = (GetKeyState(VK_LWIN) & (1 << 15)) || (GetKeyState(VK_RWIN) & (1 << 15));
+    out->alt = GetKeyState(VK_MENU) & (1 << 15) ? 1 : 0;
+    out->capslock = GetKeyState(VK_CAPITAL) & 1;
+    out->numlock = GetKeyState(VK_NUMLOCK) & 1;
+    out->mb_left = param & MK_LBUTTON ? 1 : 0;
+    out->mb_right = param & MK_RBUTTON ? 1 : 0;
+    out->mb_middle = param & MK_MBUTTON ? 1 : 0;
+}
+
+static BOOL handle_mouse_event(WPARAM wParam, LPARAM lParam, ptrdiff_t bool_offset, ptrdiff_t event_offset) {
+    const int x = GET_X_LPARAM(lParam);
+    const int y = GET_Y_LPARAM(lParam);
+    struct WindowInfo* windows = _bolt_plugin_windowinfo();
+    uint8_t ret = true;
+    _bolt_rwlock_lock_read(&windows->lock);
+    size_t iter = 0;
+    void* item;
+    while (hashmap_iter(windows->map, &iter, &item)) {
+        struct EmbeddedWindow** window = item;
+        _bolt_rwlock_lock_read(&(*window)->lock);
+        if (point_in_rect(x, y, (*window)->metadata.x, (*window)->metadata.y, (*window)->metadata.width, (*window)->metadata.height)) {
+            ret = false;
+        }
+        _bolt_rwlock_unlock_read(&(*window)->lock);
+
+        if (!ret) {
+            _bolt_rwlock_lock_write(&(*window)->input_lock);
+            *(uint8_t*)(((LPBYTE)&(*window)->input) + bool_offset) = 1;
+            winapi_to_mouseevent(x - (*window)->metadata.x, y - (*window)->metadata.y, wParam, (struct MouseEvent*)(((LPBYTE)&(*window)->input) + event_offset));
+            _bolt_rwlock_unlock_write(&(*window)->input_lock);
+            break;
+        }
+    }
+    _bolt_rwlock_unlock_read(&windows->lock);
+
+    if (!ret) return 0;
+    _bolt_rwlock_lock_write(&windows->input_lock);
+    *(uint8_t*)(((LPBYTE)&windows->input) + bool_offset) = 1;
+    winapi_to_mouseevent(x, y, wParam, (struct MouseEvent*)(((LPBYTE)&windows->input) + event_offset));
+    _bolt_rwlock_unlock_write(&windows->input_lock);
+    return 1;
+}
+
 // middle-man function for WNDPROC. when the game window gets an event, we intercept it here, act on
 // any information that's relevant to us, then invoke the actual game's WNDPROC if we want to.
 // an example of a case when we wouldn't want to pass it to the game would be a mouse-click event
 // which got captured by an embedded plugin window.
 LRESULT hook_wndproc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+    LOG("WNDPROC(%u, %llu, %llu)\n", uMsg, (ULONGLONG)wParam, (ULONGLONG)wParam);
     switch (uMsg) {
         case WM_WINDOWPOSCHANGING:
         case WM_WINDOWPOSCHANGED: {
@@ -172,12 +225,21 @@ LRESULT hook_wndproc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
             }
             break;
         }
-        case WM_MOUSEMOVE: {
-            const int x = GET_X_LPARAM(lParam);
-            const int y = GET_Y_LPARAM(lParam);
-            // TODO
+        case WM_MOUSEMOVE:
+            if (!handle_mouse_event(wParam, lParam, offsetof(struct WindowPendingInput, mouse_motion), offsetof(struct WindowPendingInput, mouse_motion_event))) return 0;
             break;
-        }
+        case WM_LBUTTONDOWN:
+        case WM_LBUTTONDBLCLK:
+            if (!handle_mouse_event(wParam, lParam, offsetof(struct WindowPendingInput, mouse_left), offsetof(struct WindowPendingInput, mouse_left_event))) return 0;
+            break;
+        case WM_RBUTTONDOWN:
+        case WM_RBUTTONDBLCLK:
+            if (!handle_mouse_event(wParam, lParam, offsetof(struct WindowPendingInput, mouse_right), offsetof(struct WindowPendingInput, mouse_right_event))) return 0;
+            break;
+        case WM_MBUTTONDOWN:
+        case WM_MBUTTONDBLCLK:
+            if (!handle_mouse_event(wParam, lParam, offsetof(struct WindowPendingInput, mouse_middle), offsetof(struct WindowPendingInput, mouse_middle_event))) return 0;
+            break;
     }
     return game_wnd_proc(hWnd, uMsg, wParam, lParam);
 }
