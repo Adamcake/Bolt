@@ -54,7 +54,7 @@ void Browser::Client::IPCRun() {
 		}
 
 		// check pfds[0] for new client connections
-		if (pfds[0].revents == POLLIN) {
+		if (pfds[0].revents & POLLIN) {
 			BoltSocketType client_fd = 
 #if defined(_WIN32)
 				accept(this->ipc_fd, nullptr, nullptr);
