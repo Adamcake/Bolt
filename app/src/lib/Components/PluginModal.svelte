@@ -8,13 +8,19 @@
 
 	let modal: Modal;
 
+	const platformFileSep = bolt.platform === 'windows' ? '\\' : '/';
+	const configFileName = 'bolt.json';
+	const sepConfigFileName = platformFileSep.concat(configFileName);
+
 	export function open() {
 		modal.open();
 	}
 
 	const getPluginConfigPromise = (dirpath: string): Promise<PluginConfig> => {
 		return new Promise((resolve, reject) => {
-			const path: string = dirpath.concat(dirpath.endsWith('/') ? 'bolt.json' : '/bolt.json');
+			const path: string = dirpath.concat(
+				dirpath.endsWith(platformFileSep) ? configFileName : sepConfigFileName
+			);
 			var xml = new XMLHttpRequest();
 			xml.onreadystatechange = () => {
 				if (xml.readyState == 4) {
@@ -68,13 +74,14 @@
 				disableButtons = false;
 				// if the user closes the file picker without selecting a file, status here is 204
 				if (xml.status == 200) {
-					const path: string =
-						bolt.platform === 'windows' ? xml.responseText.replaceAll('\\', '/') : xml.responseText;
-					if (path.endsWith('/bolt.json')) {
-						const subpath: string = path.substring(0, path.length - 9);
-						handleNewPlugin(subpath, path);
+					if (xml.responseText.endsWith(sepConfigFileName)) {
+						const subpath: string = xml.responseText.substring(
+							0,
+							xml.responseText.length - sepConfigFileName.length
+						);
+						handleNewPlugin(subpath, xml.responseText);
 					} else {
-						console.log(`Selection '${path}' is not named bolt.json; ignored`);
+						console.log(`Selection '${xml.responseText}' is not named bolt.json; ignored`);
 					}
 				}
 			}
@@ -239,7 +246,7 @@
 									startPlugin(
 										selectedClientId,
 										selectedPlugin,
-										bolt.pluginList[selectedPlugin].path ?? '',
+										(bolt.pluginList[selectedPlugin].path ?? '').replaceAll('\\', '/'),
 										plugin.main ?? ''
 									)}
 							>
