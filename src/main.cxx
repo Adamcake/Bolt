@@ -1,6 +1,9 @@
 #if defined(_WIN32)
 #if defined(BOLT_PLUGINS)
 #include <winsock2.h>
+#include <afunix.h>
+#define close closesocket
+#define SHUT_RDWR SD_BOTH
 #endif
 #include <windows.h>
 #elif defined(BOLT_PLUGINS)
@@ -117,12 +120,19 @@ int BoltRunBrowserProcess(CefMainArgs main_args, CefRefPtr<Browser::App> cef_app
 
 // called after we fail to obtain the lockfile, likely meaning an instance of Bolt is already running
 void BoltFailToObtainLockfile(std::filesystem::path tempdir) {
-	// TODO: do this for windows
-#if defined(BOLT_PLUGINS) && !defined(_WIN32)
+	tempdir.append("ipc-0");
+#if defined(BOLT_PLUGINS)
+#if defined(_WIN32)
+	WSADATA wsa_data;
+    WSAStartup(MAKEWORD(2, 2), &wsa_data);
+	std::string ipc_path_str = tempdir.string();
+	const char* ipc_path = ipc_path_str.c_str();
+#else
+	const char* ipc_path = tempdir.c_str();
+#endif
 	struct sockaddr_un addr = {.sun_family = AF_UNIX};
     int fd = socket(addr.sun_family, SOCK_STREAM, 0);
-	tempdir.append("ipc-0");
-	strncpy(addr.sun_path, tempdir.c_str(), sizeof(addr.sun_path));
+	strncpy(addr.sun_path, ipc_path, sizeof(addr.sun_path));
     if (connect(fd, (const struct sockaddr*)&addr, sizeof(addr)) != -1) {
 		struct BoltIPCMessageToHost message {.message_type = IPC_MSG_DUPLICATEPROCESS};
         bool success = !_bolt_ipc_send(fd, &message, sizeof(message));
