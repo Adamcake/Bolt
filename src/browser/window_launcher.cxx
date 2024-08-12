@@ -325,7 +325,9 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 				const char* data = "Bad request\n";
 				return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
 			}
-			std::ifstream file(CefURIDecode(std::string(query.substr(5, -1)), true, (cef_uri_unescape_rule_t)(UU_SPACES | UU_PATH_SEPARATORS | UU_REPLACE_PLUS_WITH_SPACE)).ToString(), std::ios::in | std::ios::binary);
+			const cef_uri_unescape_rule_t unescape_rule = (cef_uri_unescape_rule_t)(UU_SPACES | UU_PATH_SEPARATORS | UU_URL_SPECIAL_CHARS_EXCEPT_PATH_SEPARATORS | UU_REPLACE_PLUS_WITH_SPACE);
+			const std::string uri_decoded = CefURIDecode(std::string(query.substr(5, -1)), true, unescape_rule).ToString();
+			std::ifstream file(uri_decoded, std::ios::in | std::ios::binary);
 			if (!file.fail()) {
 				std::stringstream ss;
 				ss << file.rdbuf();
@@ -394,7 +396,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 					}
 					client_id = (client_id * 10) + (*it - '0');
 				}
-				const cef_uri_unescape_rule_t rule = (cef_uri_unescape_rule_t)(UU_SPACES | UU_PATH_SEPARATORS | UU_REPLACE_PLUS_WITH_SPACE);
+				const cef_uri_unescape_rule_t rule = (cef_uri_unescape_rule_t)(UU_SPACES | UU_PATH_SEPARATORS | UU_URL_SPECIAL_CHARS_EXCEPT_PATH_SEPARATORS | UU_REPLACE_PLUS_WITH_SPACE);
 				this->client->StartPlugin(
 					client_id,
 					CefURIDecode(std::string(id), true, rule).ToString(),
