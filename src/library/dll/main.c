@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <Windowsx.h>
 
 #include "common.h"
 #include "dll_inject.h"
@@ -11,6 +12,9 @@ typedef HMODULE(WINAPI* LOADLIBRARYW)(LPCWSTR);
 typedef HMODULE(WINAPI* GETMODULEHANDLEW)(LPCWSTR);
 typedef FARPROC(WINAPI* GETPROCADDRESS)(HMODULE, LPCSTR);
 typedef BOOL(WINAPI* VIRTUALPROTECT)(LPVOID, SIZE_T, DWORD, PDWORD);
+typedef HWND(WINAPI* CREATEWINDOWEXA)(DWORD, LPCSTR, LPCSTR, DWORD, int, int, int, int, HWND, HMENU, HINSTANCE, LPVOID);
+typedef LONG_PTR(WINAPI* SETWINDOWLONGPTRA)(HWND, int, LONG_PTR);
+typedef LONG_PTR(WINAPI* GETWINDOWLONGPTRW)(HWND, int);
 
 typedef HGLRC(WINAPI* WGLCREATECONTEXT)(HDC);
 typedef BOOL(WINAPI* WGLDELETECONTEXT)(HGLRC);
@@ -25,6 +29,9 @@ static WGLDELETECONTEXT real_wglDeleteContext;
 static WGLGETPROCADDRESS real_wglGetProcAddress;
 static WGLMAKECURRENT real_wglMakeCurrent;
 static SWAPBUFFERS real_SwapBuffers;
+static CREATEWINDOWEXA real_CreateWindowExA;
+static SETWINDOWLONGPTRA real_SetWindowLongPtrA;
+static GETWINDOWLONGPTRW real_GetWindowLongPtrW;
 
 static WGLCREATECONTEXTATTRIBSARB real_wglCreateContextAttribsARB;
 
@@ -33,6 +40,9 @@ static BOOL WINAPI hook_wglDeleteContext(HGLRC);
 static PROC WINAPI hook_wglGetProcAddress(LPCSTR);
 static BOOL WINAPI hook_wglMakeCurrent(HDC, HGLRC);
 static BOOL WINAPI hook_SwapBuffers(HDC);
+static HWND WINAPI hook_CreateWindowExA(DWORD, LPCSTR, LPCSTR, DWORD, int, int, int, int, HWND, HMENU, HINSTANCE, LPVOID);
+static LONG_PTR WINAPI hook_SetWindowLongPtrA(HWND, int, LONG_PTR);
+static LONG_PTR WINAPI hook_GetWindowLongPtrW(HWND, int);
 static void hook_glGenTextures(GLsizei, GLuint*);
 static void hook_glDrawElements(GLenum, GLsizei, GLenum, const void*);
 static void hook_glDrawArrays(GLenum, GLint, GLsizei);
@@ -44,9 +54,15 @@ static void hook_glViewport(GLint, GLint, GLsizei, GLsizei);
 
 static HGLRC __stdcall hook_wglCreateContextAttribsARB(HDC, HGLRC, const int*);
 
- CRITICAL_SECTION wgl_lock;
+CRITICAL_SECTION wgl_lock;
 
 static struct GLLibFunctions libgl = {0};
+
+static HWND game_parent_hwnd = 0;
+static HWND game_hwnd = 0;
+static WNDPROC game_wnd_proc = 0;
+static int game_width = 0;
+static int game_height = 0;
 
 //#define VERBOSE
 
@@ -122,6 +138,11 @@ DWORD __stdcall BOLT_STUB_ENTRYNAME(struct PluginInjectParams* data) {
                 if (bolt_cmp(module_name, "gdi32.dll", 0)) {
                     FNHOOKA(SwapBuffers, SWAPBUFFERS)
                 }
+                if (bolt_cmp(module_name, "user32.dll", 0)) {
+                    FNHOOKA(CreateWindowExA, CREATEWINDOWEXA)
+                    FNHOOKA(GetWindowLongPtrW, GETWINDOWLONGPTRW)
+                    FNHOOKA(SetWindowLongPtrA, SETWINDOWLONGPTRA)
+                }
 #undef FNHOOK
             }
             lookup_table += 1;
@@ -134,6 +155,31 @@ DWORD __stdcall BOLT_STUB_ENTRYNAME(struct PluginInjectParams* data) {
     _bolt_plugin_on_startup();
 
     return 0;
+}
+
+// middle-man function for WNDPROC. when the game window gets an event, we intercept it here, act on
+// any information that's relevant to us, then invoke the actual game's WNDPROC if we want to.
+// an example of a case when we wouldn't want to pass it to the game would be a mouse-click event
+// which got captured by an embedded plugin window.
+LRESULT hook_wndproc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+    switch (uMsg) {
+        case WM_WINDOWPOSCHANGING:
+        case WM_WINDOWPOSCHANGED: {
+            const LPWINDOWPOS pos = (LPWINDOWPOS)lParam;
+            if (!(pos->flags & SWP_NOSIZE)) {
+                game_width = pos->cx;
+                game_height = pos->cy;
+            }
+            break;
+        }
+        case WM_MOUSEMOVE: {
+            const int x = GET_X_LPARAM(lParam);
+            const int y = GET_Y_LPARAM(lParam);
+            // TODO
+            break;
+        }
+    }
+    return game_wnd_proc(hWnd, uMsg, wParam, lParam);
 }
 
 static void* bolt_GetProcAddress(const char* proc) {
@@ -188,9 +234,49 @@ static BOOL WINAPI hook_wglMakeCurrent(HDC hdc, HGLRC hglrc) {
 
 static BOOL WINAPI hook_SwapBuffers(HDC hdc) {
     LOG("SwapBuffers\n");
-    _bolt_gl_onSwapBuffers(800, 608); // TODO:
+    if (game_width > 0 && game_height > 0) {
+        _bolt_gl_onSwapBuffers((uint32_t)game_width, (uint32_t)game_height);
+    }
     BOOL ret = real_SwapBuffers(hdc);
     LOG("SwapBuffers -> %i\n", (int)ret);
+    return ret;
+}
+
+static HWND WINAPI hook_CreateWindowExA(DWORD dwExStyle, LPCSTR lpClassName, LPCSTR lpWindowName, DWORD dwStyle, int X, int Y, int nWidth, int nHeight, HWND hWndParent, HMENU hMenu, HINSTANCE hInstance, LPVOID lpParam) {
+#if defined(VERBOSE)
+    if (!logfile) _wfopen_s(&logfile, L"bolt-log.txt", L"wb");
+#endif
+    LOG("CreateWindowExA(class=\"%s\", name=\"%s\", x=%i, y=%i, w=%i, h=%i)\n", lpClassName, lpWindowName, X, Y, nWidth, nHeight);
+    HWND ret = real_CreateWindowExA(dwExStyle, lpClassName, lpWindowName, dwStyle, X, Y, nWidth, nHeight, hWndParent, hMenu, hInstance, lpParam);
+    if (!game_parent_hwnd) {
+        game_parent_hwnd = ret;
+    } else if (!game_hwnd && (hWndParent == game_parent_hwnd)) {
+        game_hwnd = ret;
+        game_wnd_proc = (WNDPROC)real_SetWindowLongPtrA(ret, GWLP_WNDPROC, (LONG_PTR)hook_wndproc);
+        game_width = nWidth;
+        game_height = nHeight;
+    }
+    return ret;
+}
+
+static LONG_PTR WINAPI hook_SetWindowLongPtrA(HWND hWnd, int nIndex, LONG_PTR dwNewLong) {
+    if (nIndex != GWLP_WNDPROC || (game_parent_hwnd != hWnd)) return real_SetWindowLongPtrA(hWnd, nIndex, dwNewLong);
+    LONG_PTR ret;
+    const WNDPROC old_game_wndproc = game_wnd_proc;
+    if (dwNewLong == 0) {
+        game_wnd_proc = 0;
+        ret = real_SetWindowLongPtrA(hWnd, nIndex, dwNewLong);
+    } else {
+        game_wnd_proc = (WNDPROC)dwNewLong;
+        ret = real_SetWindowLongPtrA(hWnd, nIndex, (LONG_PTR)hook_wndproc);
+    }
+    if (ret == (LONG_PTR)hook_wndproc) return (LONG_PTR)old_game_wndproc;
+    return ret;
+}
+
+static LONG_PTR WINAPI hook_GetWindowLongPtrW(HWND hWnd, int nIndex) {
+    const LONG_PTR ret = real_GetWindowLongPtrW(hWnd, nIndex);
+    if (game_parent_hwnd == hWnd && ret == (LONG_PTR)hook_wndproc) return (LONG_PTR)game_wnd_proc;
     return ret;
 }
 
