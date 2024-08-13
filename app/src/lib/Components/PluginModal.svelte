@@ -100,12 +100,12 @@
 
 	// function to start a plugin
 	const startPlugin = (client: string, id: string, path: string, main: string) => {
-		const origPath: string = bolt.pluginList[selectedPlugin].path ?? '';
+		const origPath: string = bolt.pluginList[selectedPlugin].path;
 		const pathWithCorrectSeps: string =
 			bolt.platform === 'windows' ? origPath.replaceAll('\\', '/') : origPath;
 		const newPath = pathWithCorrectSeps.endsWith(platformFileSep)
 			? pathWithCorrectSeps
-			: pathWithCorrectSeps.concat(platformFileSep);
+			: pathWithCorrectSeps.concat('/');
 
 		var xml = new XMLHttpRequest();
 		xml.onreadystatechange = () => {
@@ -253,7 +253,7 @@
 									startPlugin(
 										selectedClientId,
 										selectedPlugin,
-										(bolt.pluginList[selectedPlugin].path ?? '').replaceAll('\\', '/'),
+										bolt.pluginList[selectedPlugin].path ?? '',
 										plugin.main ?? ''
 									)}
 							>
