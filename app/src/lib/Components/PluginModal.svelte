@@ -8,9 +8,9 @@
 
 	let modal: Modal;
 
-	const platformFileSep = bolt.platform === 'windows' ? '\\' : '/';
-	const configFileName = 'bolt.json';
-	const sepConfigFileName = platformFileSep.concat(configFileName);
+	const platformFileSep: string = bolt.platform === 'windows' ? '\\' : '/';
+	const configFileName: string = 'bolt.json';
+	const sepConfigFileName: string = platformFileSep.concat(configFileName);
 
 	export function open() {
 		modal.open();
@@ -77,7 +77,7 @@
 					if (xml.responseText.endsWith(sepConfigFileName)) {
 						const subpath: string = xml.responseText.substring(
 							0,
-							xml.responseText.length - sepConfigFileName.length
+							xml.responseText.length - configFileName.length
 						);
 						handleNewPlugin(subpath, xml.responseText);
 					} else {
@@ -100,6 +100,13 @@
 
 	// function to start a plugin
 	const startPlugin = (client: string, id: string, path: string, main: string) => {
+		const origPath: string = bolt.pluginList[selectedPlugin].path ?? '';
+		const pathWithCorrectSeps: string =
+			bolt.platform === 'windows' ? origPath.replaceAll('\\', '/') : origPath;
+		const newPath = pathWithCorrectSeps.endsWith(platformFileSep)
+			? pathWithCorrectSeps
+			: pathWithCorrectSeps.concat(platformFileSep);
+
 		var xml = new XMLHttpRequest();
 		xml.onreadystatechange = () => {
 			if (xml.readyState == 4) {
@@ -108,7 +115,7 @@
 		};
 		xml.open(
 			'GET',
-			'/start-plugin?'.concat(new URLSearchParams({ client, id, path, main }).toString()),
+			'/start-plugin?'.concat(new URLSearchParams({ client, id, path: newPath, main }).toString()),
 			true
 		);
 		xml.send();
