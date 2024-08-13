@@ -25,10 +25,12 @@
 <dialog
 	bind:this={dialog}
 	on:keydown={(e) => {
-		if (e.key === 'Escape' && !canSelfClose) e.preventDefault();
+		if (e.key !== 'Escape') return;
+		e.preventDefault();
+		if (canSelfClose) close();
 	}}
 	on:mousedown|self={() => {
-		if (canSelfClose) dialog.close();
+		if (canSelfClose) close();
 	}}
 	class:backdrop:cursor-pointer={canSelfClose}
 	class="{className} backdrop max-h-[90%] max-w-[90%] overflow-auto rounded-xl text-inherit focus-visible:outline-none"
@@ -36,7 +38,7 @@
 	{#if canSelfClose}
 		<button
 			class="absolute right-3 top-3 rounded-full bg-rose-500 p-[2px] shadow-lg duration-200 hover:rotate-90 hover:opacity-75"
-			on:click={() => dialog.close()}
+			on:click={close}
 		>
 			<img src="svgs/xmark-solid.svg" class="h-5 w-5" alt="Close" />
 		</button>
