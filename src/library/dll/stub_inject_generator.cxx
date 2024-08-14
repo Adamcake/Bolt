@@ -87,7 +87,7 @@ int wmain(int argc, const wchar_t **argv) {
         "const ptrdiff_t reloc_delta = (ptrdiff_t)(dll - " << stub_nt_headers->OptionalHeader.ImageBase << ");"
         "PIMAGE_BASE_RELOCATION remote_reloc_address = (PIMAGE_BASE_RELOCATION)(dll + " << stub_nt_headers->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC].VirtualAddress << ");"
         "WORD offset;"
-        "DWORD ptr;"
+        "LPBYTE ptr;"
         "while (true) {"
           "IMAGE_BASE_RELOCATION remote_reloc;"
           "ReadProcessMemory(process, (LPCVOID)remote_reloc_address, (LPVOID)&remote_reloc, sizeof(remote_reloc), nullptr);"
