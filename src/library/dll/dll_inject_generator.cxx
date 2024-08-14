@@ -195,7 +195,8 @@ int wmain(int argc, const wchar_t **argv) {
         ".plugin=(HMODULE)dll_plugin,"
         ".luajit=(HMODULE)dll_lua,"
         ".plugin_import_directory=(PIMAGE_IMPORT_DESCRIPTOR)(dll_plugin + " << plugin_nt_headers->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress << "),"
-        ".luajit_import_directory=(PIMAGE_IMPORT_DESCRIPTOR)(dll_lua + " << luajit_nt_headers->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress << ")"
+        ".luajit_import_directory=(PIMAGE_IMPORT_DESCRIPTOR)(dll_lua + " << luajit_nt_headers->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress << "),"
+        ".luajit_export_directory=(PIMAGE_EXPORT_DIRECTORY)(dll_lua + " << luajit_nt_headers->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress << ")"
     "};" << std::endl;
     std::cout << "struct PluginInjectParams* remote_params = (struct PluginInjectParams*)pVirtualAllocEx(process, NULL, sizeof(params), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);" << std::endl;
     std::cout << "pWriteProcessMemory(process, remote_params, &params, sizeof(params), NULL);" << std::endl;
