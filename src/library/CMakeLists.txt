@@ -2,6 +2,9 @@
 set(BOLT_PLUGIN_LIB_NAME "bolt-plugin")
 set(BOLT_PLUGIN_LIB_NAME ${BOLT_PLUGIN_LIB_NAME} PARENT_SCOPE)
 
+# OS-specific IPC stuff is not actually needed, as windows supports AF_UNIX sockets since windows 10, build 17093.
+set(LIBRARY_IPC_OS_SPECIFIC "${CMAKE_CURRENT_SOURCE_DIR}/ipc_posix.c" PARENT_SCOPE)
+
 if(UNIX AND NOT APPLE)
     add_library(${BOLT_PLUGIN_LIB_NAME} SHARED so/main.c plugin/plugin.c gl.c
     rwlock/rwlock_posix.c ipc_posix.c plugin/plugin_posix.c ../../modules/hashmap/hashmap.c
