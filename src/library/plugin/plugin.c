@@ -644,6 +644,7 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     API_ADD_SUB(plugin->state, alt, mouseevent);
     API_ADD_SUB(plugin->state, capslock, mouseevent);
     API_ADD_SUB(plugin->state, numlock, mouseevent);
+    API_ADD_SUB(plugin->state, mousebuttons, mouseevent);
     lua_settable(plugin->state, -3);
     lua_settable(plugin->state, LUA_REGISTRYINDEX);
 
@@ -659,6 +660,7 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     API_ADD_SUB(plugin->state, alt, mouseevent);
     API_ADD_SUB(plugin->state, capslock, mouseevent);
     API_ADD_SUB(plugin->state, numlock, mouseevent);
+    API_ADD_SUB(plugin->state, mousebuttons, mouseevent);
     API_ADD_SUB(plugin->state, button, mousebutton);
     lua_settable(plugin->state, -3);
     lua_settable(plugin->state, LUA_REGISTRYINDEX);
@@ -675,6 +677,7 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     API_ADD_SUB(plugin->state, alt, mouseevent);
     API_ADD_SUB(plugin->state, capslock, mouseevent);
     API_ADD_SUB(plugin->state, numlock, mouseevent);
+    API_ADD_SUB(plugin->state, mousebuttons, mouseevent);
     API_ADD_SUB(plugin->state, direction, scroll);
     lua_settable(plugin->state, -3);
     lua_settable(plugin->state, LUA_REGISTRYINDEX);
@@ -1387,6 +1390,15 @@ static int api_mouseevent_numlock(lua_State* state) {
     struct MouseEvent** event = lua_touserdata(state, 1);
     lua_pushinteger(state, (*event)->numlock);
     return 1;
+}
+
+static int api_mouseevent_mousebuttons(lua_State* state) {
+    _bolt_check_argc(state, 1, "mouseevent_mousebuttons");
+    struct MouseEvent** event = lua_touserdata(state, 1);
+    lua_pushinteger(state, (*event)->mb_left);
+    lua_pushinteger(state, (*event)->mb_right);
+    lua_pushinteger(state, (*event)->mb_middle);
+    return 3;
 }
 
 static int api_mousebutton_button(lua_State* state) {

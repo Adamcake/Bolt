@@ -553,6 +553,11 @@ static int api_mouseevent_capslock(lua_State*);
 static int api_mouseevent_numlock(lua_State*);
 
 /// [-1, +1, -]
+/// Returns three boolean values indicating whether each primary mouse button was held when this
+/// event fired, in the order: left, right, middle.
+static int api_mouseevent_mousebuttons(lua_State*);
+
+/// [-1, +1, -]
 /// Returns an integer representing the mouse button that was pressed. Possible values are 1 for
 /// the left mouse button, 2 for the right mouse button, and 3 for the middle mouse button
 /// (clicking the mouse wheel).
