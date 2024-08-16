@@ -175,9 +175,7 @@ static void winapi_to_mouseevent(int x, int y, WPARAM param, struct MouseEvent* 
     out->mb_middle = param & MK_MBUTTON ? 1 : 0;
 }
 
-static BOOL handle_mouse_event(WPARAM wParam, LPARAM lParam, ptrdiff_t bool_offset, ptrdiff_t event_offset) {
-    const int x = GET_X_LPARAM(lParam);
-    const int y = GET_Y_LPARAM(lParam);
+static BOOL handle_mouse_event(WPARAM wParam, POINTS point, ptrdiff_t bool_offset, ptrdiff_t event_offset) {
     struct WindowInfo* windows = _bolt_plugin_windowinfo();
     uint8_t ret = true;
     _bolt_rwlock_lock_read(&windows->lock);
@@ -186,7 +184,7 @@ static BOOL handle_mouse_event(WPARAM wParam, LPARAM lParam, ptrdiff_t bool_offs
     while (hashmap_iter(windows->map, &iter, &item)) {
         struct EmbeddedWindow** window = item;
         _bolt_rwlock_lock_read(&(*window)->lock);
-        if (point_in_rect(x, y, (*window)->metadata.x, (*window)->metadata.y, (*window)->metadata.width, (*window)->metadata.height)) {
+        if (point_in_rect(point.x, point.y, (*window)->metadata.x, (*window)->metadata.y, (*window)->metadata.width, (*window)->metadata.height)) {
             ret = false;
         }
         _bolt_rwlock_unlock_read(&(*window)->lock);
@@ -194,7 +192,7 @@ static BOOL handle_mouse_event(WPARAM wParam, LPARAM lParam, ptrdiff_t bool_offs
         if (!ret) {
             _bolt_rwlock_lock_write(&(*window)->input_lock);
             *(uint8_t*)(((LPBYTE)&(*window)->input) + bool_offset) = 1;
-            winapi_to_mouseevent(x - (*window)->metadata.x, y - (*window)->metadata.y, wParam, (struct MouseEvent*)(((LPBYTE)&(*window)->input) + event_offset));
+            winapi_to_mouseevent(point.x - (*window)->metadata.x, point.y - (*window)->metadata.y, wParam, (struct MouseEvent*)(((LPBYTE)&(*window)->input) + event_offset));
             _bolt_rwlock_unlock_write(&(*window)->input_lock);
             break;
         }
@@ -204,7 +202,7 @@ static BOOL handle_mouse_event(WPARAM wParam, LPARAM lParam, ptrdiff_t bool_offs
     if (!ret) return 0;
     _bolt_rwlock_lock_write(&windows->input_lock);
     *(uint8_t*)(((LPBYTE)&windows->input) + bool_offset) = 1;
-    winapi_to_mouseevent(x, y, wParam, (struct MouseEvent*)(((LPBYTE)&windows->input) + event_offset));
+    winapi_to_mouseevent(point.x, point.y, wParam, (struct MouseEvent*)(((LPBYTE)&windows->input) + event_offset));
     _bolt_rwlock_unlock_write(&windows->input_lock);
     return 1;
 }
@@ -214,7 +212,7 @@ static BOOL handle_mouse_event(WPARAM wParam, LPARAM lParam, ptrdiff_t bool_offs
 // an example of a case when we wouldn't want to pass it to the game would be a mouse-click event
 // which got captured by an embedded plugin window.
 LRESULT hook_wndproc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-    LOG("WNDPROC(%u, %llu, %llu)\n", uMsg, (ULONGLONG)wParam, (ULONGLONG)wParam);
+    LOG("WNDPROC(%u, %llu, %llu)\n", uMsg, (ULONGLONG)wParam, (ULONGLONG)lParam);
     switch (uMsg) {
         case WM_WINDOWPOSCHANGING:
         case WM_WINDOWPOSCHANGED: {
@@ -226,20 +224,36 @@ LRESULT hook_wndproc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
             break;
         }
         case WM_MOUSEMOVE:
-            if (!handle_mouse_event(wParam, lParam, offsetof(struct WindowPendingInput, mouse_motion), offsetof(struct WindowPendingInput, mouse_motion_event))) return 0;
+            if (!handle_mouse_event(wParam, MAKEPOINTS(lParam), offsetof(struct WindowPendingInput, mouse_motion), offsetof(struct WindowPendingInput, mouse_motion_event))) return 0;
             break;
         case WM_LBUTTONDOWN:
         case WM_LBUTTONDBLCLK:
-            if (!handle_mouse_event(wParam, lParam, offsetof(struct WindowPendingInput, mouse_left), offsetof(struct WindowPendingInput, mouse_left_event))) return 0;
+            if (!handle_mouse_event(wParam, MAKEPOINTS(lParam), offsetof(struct WindowPendingInput, mouse_left), offsetof(struct WindowPendingInput, mouse_left_event))) return 0;
             break;
         case WM_RBUTTONDOWN:
         case WM_RBUTTONDBLCLK:
-            if (!handle_mouse_event(wParam, lParam, offsetof(struct WindowPendingInput, mouse_right), offsetof(struct WindowPendingInput, mouse_right_event))) return 0;
+            if (!handle_mouse_event(wParam, MAKEPOINTS(lParam), offsetof(struct WindowPendingInput, mouse_right), offsetof(struct WindowPendingInput, mouse_right_event))) return 0;
             break;
         case WM_MBUTTONDOWN:
         case WM_MBUTTONDBLCLK:
-            if (!handle_mouse_event(wParam, lParam, offsetof(struct WindowPendingInput, mouse_middle), offsetof(struct WindowPendingInput, mouse_middle_event))) return 0;
+            if (!handle_mouse_event(wParam, MAKEPOINTS(lParam), offsetof(struct WindowPendingInput, mouse_middle), offsetof(struct WindowPendingInput, mouse_middle_event))) return 0;
             break;
+        case WM_MOUSEWHEEL: {
+            const WORD keys = GET_KEYSTATE_WPARAM(wParam);
+            const SHORT delta = (SHORT)GET_WHEEL_DELTA_WPARAM(wParam);
+            POINTS points = MAKEPOINTS(lParam);
+            POINT point = {.x = points.x, .y = points.y};
+            ScreenToClient(hWnd, &point);
+            if (point.x > 0xFFFF || point.y > 0xFFFF) break;
+            points.x = (SHORT)point.x;
+            points.y = (SHORT)point.y;
+            if (delta > 0) {
+                if (!handle_mouse_event(keys, points, offsetof(struct WindowPendingInput, mouse_scroll_up), offsetof(struct WindowPendingInput, mouse_scroll_up_event))) return 0;
+            } else {
+                if (!handle_mouse_event(keys, points, offsetof(struct WindowPendingInput, mouse_scroll_down), offsetof(struct WindowPendingInput, mouse_scroll_down_event))) return 0;
+            }
+            break;
+        }
     }
     return game_wnd_proc(hWnd, uMsg, wParam, lParam);
 }
