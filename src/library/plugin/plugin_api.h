@@ -208,7 +208,7 @@ static int api_setcallbackminimap(lua_State*);
 ///
 /// The callback will be called with one param, that being a mouse motion object. All of the member
 /// functions of that object can be found in this file, prefixed with "api_mouseevent_".
-static int setcallbackmousemotion(lua_State*);
+static int api_setcallbackmousemotion(lua_State*);
 
 /// [-1, +0, -]
 /// Sets a callback function for mouse button events, overwriting the previous callback, if any.
@@ -221,7 +221,7 @@ static int setcallbackmousemotion(lua_State*);
 /// The callback will be called with one param, that being a mouse-button object. All of the member
 /// functions of that object can be found in this file, prefixed with "api_mouseevent_" and
 /// "api_mousebutton_".
-static int setcallbackmousebutton(lua_State*);
+static int api_setcallbackmousebutton(lua_State*);
 
 /// [-1, +0, -]
 /// Sets a callback function for mouse scroll events, overwriting the previous callback, if any.
@@ -234,7 +234,7 @@ static int setcallbackmousebutton(lua_State*);
 /// The callback will be called with one param, that being a mouse-scroll object. All of the member
 /// functions of that object can be found in this file, prefixed with "api_mouseevent_" and
 /// "api_scroll_".
-static int setcallbackscroll(lua_State*);
+static int api_setcallbackscroll(lua_State*);
 
 /// [-1, +1, -]
 /// Returns the number of vertices in a 2D batch object.
