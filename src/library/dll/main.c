@@ -150,6 +150,11 @@ DWORD __stdcall BOLT_STUB_ENTRYNAME(struct PluginInjectParams* data) {
         }
     }
 
+#if defined(_WIN64)
+    // call RtlAddFunctionTable for luajit dll because it implements error handling using SEH
+    RtlAddFunctionTable(data->luajit_exception_directory, data->luajit_rtl_entrycount, (DWORD64)data->luajit);
+#endif
+
     // init stuff
     InitializeCriticalSection(&wgl_lock);
     _bolt_plugin_on_startup();

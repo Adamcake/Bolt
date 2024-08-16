@@ -188,12 +188,17 @@ int wmain(int argc, const wchar_t **argv) {
         std::cout << "pVirtualProtectEx(process, (LPVOID)(dll_lua + " << luajit_section_header[i].VirtualAddress << "), " << luajit_section_header[i].Misc.VirtualSize << ", " << permission << ", &oldp);" << std::endl;
     }
     // invoke entrypoint
+    const IMAGE_DATA_DIRECTORY luajit_exception_dir = luajit_nt_headers->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXCEPTION];
     std::cout << "struct PluginInjectParams params = {"
         ".kernel32=kernel32,"
         ".pGetModuleHandleW=pGetModuleHandleW,"
         ".pGetProcAddress=pGetProcAddress,"
         ".plugin=(HMODULE)dll_plugin,"
         ".luajit=(HMODULE)dll_lua,"
+#if defined(_WIN64)
+        ".luajit_exception_directory=(PIMAGE_RUNTIME_FUNCTION_ENTRY)(dll_lua + " << luajit_exception_dir.VirtualAddress << "),"
+        ".luajit_rtl_entrycount=" << (luajit_exception_dir.Size / sizeof(IMAGE_RUNTIME_FUNCTION_ENTRY)) << ","
+#endif
         ".plugin_import_directory=(PIMAGE_IMPORT_DESCRIPTOR)(dll_plugin + " << plugin_nt_headers->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress << "),"
         ".luajit_import_directory=(PIMAGE_IMPORT_DESCRIPTOR)(dll_lua + " << luajit_nt_headers->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress << "),"
         ".luajit_export_directory=(PIMAGE_EXPORT_DIRECTORY)(dll_lua + " << luajit_nt_headers->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress << ")"
