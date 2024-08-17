@@ -1386,51 +1386,51 @@ static int api_mouseevent_xy(lua_State* state) {
 static int api_mouseevent_ctrl(lua_State* state) {
     _bolt_check_argc(state, 1, "mouseevent_ctrl");
     struct MouseEvent** event = lua_touserdata(state, 1);
-    lua_pushinteger(state, (*event)->ctrl);
+    lua_pushboolean(state, (*event)->ctrl);
     return 1;
 }
 
 static int api_mouseevent_shift(lua_State* state) {
     _bolt_check_argc(state, 1, "mouseevent_shift");
     struct MouseEvent** event = lua_touserdata(state, 1);
-    lua_pushinteger(state, (*event)->shift);
+    lua_pushboolean(state, (*event)->shift);
     return 1;
 }
 
 static int api_mouseevent_meta(lua_State* state) {
     _bolt_check_argc(state, 1, "mouseevent_meta");
     struct MouseEvent** event = lua_touserdata(state, 1);
-    lua_pushinteger(state, (*event)->meta);
+    lua_pushboolean(state, (*event)->meta);
     return 1;
 }
 
 static int api_mouseevent_alt(lua_State* state) {
     _bolt_check_argc(state, 1, "mouseevent_alt");
     struct MouseEvent** event = lua_touserdata(state, 1);
-    lua_pushinteger(state, (*event)->alt);
+    lua_pushboolean(state, (*event)->alt);
     return 1;
 }
 
 static int api_mouseevent_capslock(lua_State* state) {
     _bolt_check_argc(state, 1, "mouseevent_capslock");
     struct MouseEvent** event = lua_touserdata(state, 1);
-    lua_pushinteger(state, (*event)->capslock);
+    lua_pushboolean(state, (*event)->capslock);
     return 1;
 }
 
 static int api_mouseevent_numlock(lua_State* state) {
     _bolt_check_argc(state, 1, "mouseevent_numlock");
     struct MouseEvent** event = lua_touserdata(state, 1);
-    lua_pushinteger(state, (*event)->numlock);
+    lua_pushboolean(state, (*event)->numlock);
     return 1;
 }
 
 static int api_mouseevent_mousebuttons(lua_State* state) {
     _bolt_check_argc(state, 1, "mouseevent_mousebuttons");
     struct MouseEvent** event = lua_touserdata(state, 1);
-    lua_pushinteger(state, (*event)->mb_left);
-    lua_pushinteger(state, (*event)->mb_right);
-    lua_pushinteger(state, (*event)->mb_middle);
+    lua_pushboolean(state, (*event)->mb_left);
+    lua_pushboolean(state, (*event)->mb_right);
+    lua_pushboolean(state, (*event)->mb_middle);
     return 3;
 }
 
