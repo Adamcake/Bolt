@@ -243,6 +243,15 @@ LRESULT hook_wndproc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
         case WM_MBUTTONDBLCLK:
             if (!handle_mouse_event(wParam, MAKEPOINTS(lParam), offsetof(struct WindowPendingInput, mouse_middle), offsetof(struct WindowPendingInput, mouse_middle_event))) return 0;
             break;
+        case WM_LBUTTONUP:
+            if (!handle_mouse_event(wParam, MAKEPOINTS(lParam), offsetof(struct WindowPendingInput, mouse_left_up), offsetof(struct WindowPendingInput, mouse_left_up_event))) return 0;
+            break;
+        case WM_RBUTTONUP:
+            if (!handle_mouse_event(wParam, MAKEPOINTS(lParam), offsetof(struct WindowPendingInput, mouse_right_up), offsetof(struct WindowPendingInput, mouse_right_up_event))) return 0;
+            break;
+        case WM_MBUTTONUP:
+            if (!handle_mouse_event(wParam, MAKEPOINTS(lParam), offsetof(struct WindowPendingInput, mouse_middle_up), offsetof(struct WindowPendingInput, mouse_middle_up_event))) return 0;
+            break;
         case WM_MOUSEWHEEL: {
             const WORD keys = GET_KEYSTATE_WPARAM(wParam);
             const SHORT delta = (SHORT)GET_WHEEL_DELTA_WPARAM(wParam);

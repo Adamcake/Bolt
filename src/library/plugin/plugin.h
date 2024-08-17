@@ -152,12 +152,18 @@ struct WindowPendingInput {
     uint8_t mouse_left;
     uint8_t mouse_right;
     uint8_t mouse_middle;
+    uint8_t mouse_left_up;
+    uint8_t mouse_right_up;
+    uint8_t mouse_middle_up;
     uint8_t mouse_scroll_down;
     uint8_t mouse_scroll_up;
     struct MouseEvent mouse_motion_event;
     struct MouseEvent mouse_left_event;
     struct MouseEvent mouse_right_event;
     struct MouseEvent mouse_middle_event;
+    struct MouseEvent mouse_left_up_event;
+    struct MouseEvent mouse_right_up_event;
+    struct MouseEvent mouse_middle_up_event;
     struct MouseEvent mouse_scroll_down_event;
     struct MouseEvent mouse_scroll_up_event;
 };

@@ -481,7 +481,7 @@ static uint8_t _bolt_handle_xcb_event(xcb_connection_t* c, xcb_generic_event_t* 
             break;
         }
         case XCB_BUTTON_PRESS: { // when pressing a mouse button that's received by the game window
-            xcb_button_release_event_t* event = (xcb_button_release_event_t*)e;
+            xcb_button_press_event_t* event = (xcb_button_release_event_t*)e;
             if (event->event != main_window_xcb) return true;
             switch (event->detail) {
                 case 1:
@@ -494,6 +494,39 @@ static uint8_t _bolt_handle_xcb_event(xcb_connection_t* c, xcb_generic_event_t* 
                     return _bolt_handle_mouse_event(event->event_x, event->event_y, event->state, offsetof(struct WindowPendingInput, mouse_scroll_up), offsetof(struct WindowPendingInput, mouse_scroll_up_event));
                 case 5:
                     return _bolt_handle_mouse_event(event->event_x, event->event_y, event->state, offsetof(struct WindowPendingInput, mouse_scroll_down), offsetof(struct WindowPendingInput, mouse_scroll_down_event));
+            }
+            break;
+        }
+        case XCB_BUTTON_RELEASE: { // when releasing a mouse button for which the press was received by the game window
+            xcb_button_release_event_t* event = (xcb_button_release_event_t*)e;
+            if (event->event != main_window_xcb) return true;
+            switch (event->detail) {
+                case 1:
+                    return _bolt_handle_mouse_event(event->event_x, event->event_y, event->state, offsetof(struct WindowPendingInput, mouse_left_up), offsetof(struct WindowPendingInput, mouse_left_up_event));
+                case 2:
+                    return _bolt_handle_mouse_event(event->event_x, event->event_y, event->state, offsetof(struct WindowPendingInput, mouse_middle_up), offsetof(struct WindowPendingInput, mouse_middle_up_event));
+                case 3:
+                    return _bolt_handle_mouse_event(event->event_x, event->event_y, event->state, offsetof(struct WindowPendingInput, mouse_right_up), offsetof(struct WindowPendingInput, mouse_right_up_event));
+                case 4:
+                case 5: {
+                    // for mousewheel-up events, we don't need to do anything with them, but we do
+                    // still need to figure out if they should go to the game window or not.
+                    struct WindowInfo* windows = _bolt_plugin_windowinfo();
+                    uint8_t ret = true;
+                    _bolt_rwlock_lock_read(&windows->lock);
+                    size_t iter = 0;
+                    void* item;
+                    while (hashmap_iter(windows->map, &iter, &item)) {
+                        struct EmbeddedWindow** window = item;
+                        _bolt_rwlock_lock_read(&(*window)->lock);
+                        const uint8_t in_window = _bolt_point_in_rect(event->event_x, event->event_y, (*window)->metadata.x, (*window)->metadata.y, (*window)->metadata.width, (*window)->metadata.height);
+                        _bolt_rwlock_unlock_read(&(*window)->lock);
+                        ret &= !in_window;
+                        if (!ret) break;
+                    }
+                    _bolt_rwlock_unlock_read(&windows->lock);
+                    return ret;
+                }
             }
             break;
         }

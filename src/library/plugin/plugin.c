@@ -36,6 +36,7 @@ LARGE_INTEGER performance_frequency;
 #define RESIZE_META_REGISTRYNAME "resizemeta"
 #define MOUSEMOTION_META_REGISTRYNAME "mousemotionmeta"
 #define MOUSEBUTTON_META_REGISTRYNAME "mousebuttonmeta"
+#define MOUSEBUTTONUP_META_REGISTRYNAME MOUSEBUTTON_META_REGISTRYNAME
 #define SCROLL_META_REGISTRYNAME "scrollmeta"
 #define WINDOW_META_REGISTRYNAME "windowmeta"
 #define SWAPBUFFERS_CB_REGISTRYNAME "swapbufferscb"
@@ -44,12 +45,14 @@ LARGE_INTEGER performance_frequency;
 #define MINIMAP_CB_REGISTRYNAME "minimapcb"
 #define MOUSEMOTION_CB_REGISTRYNAME "mousemotioncb"
 #define MOUSEBUTTON_CB_REGISTRYNAME "mousebuttoncb"
+#define MOUSEBUTTONUP_CB_REGISTRYNAME "mousebuttonupcb"
 #define SCROLL_CB_REGISTRYNAME "scrollcb"
 
 enum {
     WINDOW_ONRESIZE,
     WINDOW_ONMOUSEMOTION,
     WINDOW_ONMOUSEBUTTON,
+    WINDOW_ONMOUSEBUTTONUP,
     WINDOW_ONSCROLL,
     WINDOW_EVENT_ENUM_SIZE, // last member of enum
 };
@@ -95,9 +98,11 @@ struct Plugin {
 static void _bolt_plugin_window_onresize(struct EmbeddedWindow*, struct ResizeEvent*);
 static void _bolt_plugin_window_onmousemotion(struct EmbeddedWindow*, struct MouseMotionEvent*);
 static void _bolt_plugin_window_onmousebutton(struct EmbeddedWindow*, struct MouseButtonEvent*);
+static void _bolt_plugin_window_onmousebuttonup(struct EmbeddedWindow*, struct MouseButtonEvent*);
 static void _bolt_plugin_window_onscroll(struct EmbeddedWindow*, struct MouseScrollEvent*);
 static void _bolt_plugin_handle_mousemotion(struct MouseMotionEvent*);
 static void _bolt_plugin_handle_mousebutton(struct MouseButtonEvent*);
+static void _bolt_plugin_handle_mousebuttonup(struct MouseButtonEvent*);
 static void _bolt_plugin_handle_scroll(struct MouseScrollEvent*);
 
 void _bolt_plugin_free(struct Plugin* const* plugin) {
@@ -283,6 +288,7 @@ static int _bolt_api_init(lua_State* state) {
     API_ADD(setcallbackswapbuffers)
     API_ADD(setcallbackmousemotion)
     API_ADD(setcallbackmousebutton)
+    API_ADD(setcallbackmousebuttonup)
     API_ADD(setcallbackscroll)
     API_ADD(createsurface)
     API_ADD(createsurfacefromrgba)
@@ -321,6 +327,18 @@ void _bolt_plugin_process_windows(uint32_t window_width, uint32_t window_height)
     if (inputs.mouse_middle) {
         struct MouseButtonEvent event = {.details = &inputs.mouse_middle_event, .button = MBMiddle};
         _bolt_plugin_handle_mousebutton(&event);
+    }
+    if (inputs.mouse_left_up) {
+        struct MouseButtonEvent event = {.details = &inputs.mouse_left_up_event, .button = MBLeft};
+        _bolt_plugin_handle_mousebuttonup(&event);
+    }
+    if (inputs.mouse_right_up) {
+        struct MouseButtonEvent event = {.details = &inputs.mouse_right_up_event, .button = MBRight};
+        _bolt_plugin_handle_mousebuttonup(&event);
+    }
+    if (inputs.mouse_middle_up) {
+        struct MouseButtonEvent event = {.details = &inputs.mouse_middle_up_event, .button = MBMiddle};
+        _bolt_plugin_handle_mousebuttonup(&event);
     }
     if (inputs.mouse_scroll_up) {
         struct MouseScrollEvent event = {.details = &inputs.mouse_scroll_up_event, .direction = 1};
@@ -388,6 +406,18 @@ void _bolt_plugin_process_windows(uint32_t window_width, uint32_t window_height)
         if (inputs.mouse_middle) {
             struct MouseButtonEvent event = {.details = &inputs.mouse_middle_event, .button = MBMiddle};
             _bolt_plugin_window_onmousebutton(window, &event);
+        }
+        if (inputs.mouse_left_up) {
+            struct MouseButtonEvent event = {.details = &inputs.mouse_left_up_event, .button = MBLeft};
+            _bolt_plugin_window_onmousebuttonup(window, &event);
+        }
+        if (inputs.mouse_right_up) {
+            struct MouseButtonEvent event = {.details = &inputs.mouse_right_up_event, .button = MBRight};
+            _bolt_plugin_window_onmousebuttonup(window, &event);
+        }
+        if (inputs.mouse_middle_up) {
+            struct MouseButtonEvent event = {.details = &inputs.mouse_middle_up_event, .button = MBMiddle};
+            _bolt_plugin_window_onmousebuttonup(window, &event);
         }
         if (inputs.mouse_scroll_up) {
             struct MouseScrollEvent event = {.details = &inputs.mouse_scroll_up_event, .direction = 1};
@@ -616,6 +646,7 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     API_ADD_SUB(plugin->state, onresize, window)
     API_ADD_SUB(plugin->state, onmousemotion, window)
     API_ADD_SUB(plugin->state, onmousebutton, window)
+    API_ADD_SUB(plugin->state, onmousebuttonup, window)
     API_ADD_SUB(plugin->state, onscroll, window)
     lua_settable(plugin->state, -3);
     PUSHSTRING(plugin->state, "__gc");
@@ -717,10 +748,12 @@ DEFINE_CALLBACK(3d, RENDER3D, Render3D)
 DEFINE_CALLBACK(minimap, MINIMAP, RenderMinimapEvent)
 DEFINE_CALLBACK(mousemotion, MOUSEMOTION, MouseMotionEvent)
 DEFINE_CALLBACK(mousebutton, MOUSEBUTTON, MouseButtonEvent)
+DEFINE_CALLBACK(mousebuttonup, MOUSEBUTTONUP, MouseButtonEvent)
 DEFINE_CALLBACK(scroll, SCROLL, MouseScrollEvent)
 DEFINE_WINDOWEVENT(resize, RESIZE, ResizeEvent)
 DEFINE_WINDOWEVENT(mousemotion, MOUSEMOTION, MouseMotionEvent)
 DEFINE_WINDOWEVENT(mousebutton, MOUSEBUTTON, MouseButtonEvent)
+DEFINE_WINDOWEVENT(mousebuttonup, MOUSEBUTTONUP, MouseButtonEvent)
 DEFINE_WINDOWEVENT(scroll, SCROLL, MouseScrollEvent)
 
 static int api_apiversion(lua_State* state) {

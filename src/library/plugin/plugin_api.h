@@ -224,6 +224,20 @@ static int api_setcallbackmousemotion(lua_State*);
 static int api_setcallbackmousebutton(lua_State*);
 
 /// [-1, +0, -]
+/// Sets a callback function for mouse button release events, overwriting the previous callback, if
+/// any. Passing a non-function (ideally `nil`) will restore the default setting, which is to have
+/// no handler for mouse button events.
+///
+/// This callback generally applies to mouse button releases for which the click was received by
+/// the game view. For example, if a user clicks their left mouse button, drags the mouse outside
+/// the game window, then releases that button, this event will still be fired.
+///
+/// The callback will be called with one param, that being a mouse-button object. All of the member
+/// functions of that object can be found in this file, prefixed with "api_mouseevent_" and
+/// "api_mousebutton_".
+static int api_setcallbackmousebuttonup(lua_State*);
+
+/// [-1, +0, -]
 /// Sets a callback function for mouse scroll events, overwriting the previous callback, if any.
 /// Passing a non-function (ideally `nil`) will restore the default setting, which is to have no
 /// handler for mouse scroll events.
@@ -419,6 +433,13 @@ static int api_window_onmousemotion(lua_State*);
 /// function, it will not be called, and therefore the plugin will not be notified of mouse-button
 /// events.
 static int api_window_onmousebutton(lua_State*);
+
+/// [-2, +0, -]
+/// Sets an event handler for this window for mouse button release events. If the value is a
+/// function, it will be called with one parameter, that being a mouse-button object. If the value
+/// is not a function, it will not be called, and therefore the plugin will not be notified of
+/// mouse-button release events.
+static int api_window_onmousebuttonup(lua_State*);
 
 /// [-2, +0, -]
 /// Sets an event handler for this window for mouse scroll events. If the value is a function, it
