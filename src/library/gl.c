@@ -1336,7 +1336,7 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
             batch.texture_functions.compare = _bolt_gl_plugin_texture_compare;
             batch.texture_functions.data = _bolt_gl_plugin_texture_data;
 
-            _bolt_plugin_handle_2d(&batch);
+            _bolt_plugin_handle_render2d(&batch);
         }
     }
     if (type == GL_UNSIGNED_SHORT && mode == GL_TRIANGLES && c->bound_program->is_3d) {
@@ -1390,7 +1390,7 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
             render.matrix_functions.to_screen_space = _bolt_gl_plugin_matrix3d_toscreenspace;
             render.matrix_functions.world_pos = _bolt_gl_plugin_matrix3d_worldpos;
 
-            _bolt_plugin_handle_3d(&render);
+            _bolt_plugin_handle_render3d(&render);
         }
     }
 }

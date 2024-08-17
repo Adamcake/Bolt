@@ -271,10 +271,10 @@ void _bolt_plugin_stop(char* id, uint32_t id_length);
 void _bolt_plugin_handle_swapbuffers(struct SwapBuffersEvent*);
 
 /// Sends a RenderBatch2D to all plugins.
-void _bolt_plugin_handle_2d(struct RenderBatch2D*);
+void _bolt_plugin_handle_render2d(struct RenderBatch2D*);
 
 /// Sends a Render3D to all plugins.
-void _bolt_plugin_handle_3d(struct Render3D*);
+void _bolt_plugin_handle_render3d(struct Render3D*);
 
 /// Sends a RenderMinimap to all plugins.
 void _bolt_plugin_handle_minimap(struct RenderMinimapEvent*);

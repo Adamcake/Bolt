@@ -133,7 +133,7 @@ static uint64_t _bolt_plugin_map_hash(const void* item, uint64_t seed0, uint64_t
 
 static struct hashmap* plugins;
 
-// macro for defining callback functions "_bolt_plugin_handle_*" and "api_setcallback*"
+// macro for defining callback functions "_bolt_plugin_handle_*" and "api_on*"
 // e.g. DEFINE_CALLBACK(swapbuffers, SWAPBUFFERS, SwapBuffersEvent)
 #define DEFINE_CALLBACK(APINAME, REGNAME, STRUCTNAME) \
 void _bolt_plugin_handle_##APINAME(struct STRUCTNAME* e) { \
@@ -163,8 +163,8 @@ void _bolt_plugin_handle_##APINAME(struct STRUCTNAME* e) { \
         } \
     } \
 } \
-static int api_setcallback##APINAME(lua_State* state) { \
-    _bolt_check_argc(state, 1, "setcallback" #APINAME); \
+static int api_on##APINAME(lua_State* state) { \
+    _bolt_check_argc(state, 1, "on" #APINAME); \
     PUSHSTRING(state, REGNAME##_CB_REGISTRYNAME); \
     if (lua_isfunction(state, 1)) { \
         lua_pushvalue(state, 1); \
@@ -282,14 +282,14 @@ static int _bolt_api_init(lua_State* state) {
     API_ADD(time)
     API_ADD(datetime)
     API_ADD(weekday)
-    API_ADD(setcallback2d)
-    API_ADD(setcallback3d)
-    API_ADD(setcallbackminimap)
-    API_ADD(setcallbackswapbuffers)
-    API_ADD(setcallbackmousemotion)
-    API_ADD(setcallbackmousebutton)
-    API_ADD(setcallbackmousebuttonup)
-    API_ADD(setcallbackscroll)
+    API_ADD(onrender2d)
+    API_ADD(onrender3d)
+    API_ADD(onminimap)
+    API_ADD(onswapbuffers)
+    API_ADD(onmousemotion)
+    API_ADD(onmousebutton)
+    API_ADD(onmousebuttonup)
+    API_ADD(onscroll)
     API_ADD(createsurface)
     API_ADD(createsurfacefromrgba)
     API_ADD(createsurfacefrompng)
@@ -743,8 +743,8 @@ static void _bolt_check_argc(lua_State* state, int expected_argc, const char* fu
 }
 
 DEFINE_CALLBACK(swapbuffers, SWAPBUFFERS, SwapBuffersEvent)
-DEFINE_CALLBACK(2d, BATCH2D, RenderBatch2D)
-DEFINE_CALLBACK(3d, RENDER3D, Render3D)
+DEFINE_CALLBACK(render2d, BATCH2D, RenderBatch2D)
+DEFINE_CALLBACK(render3d, RENDER3D, Render3D)
 DEFINE_CALLBACK(minimap, MINIMAP, RenderMinimapEvent)
 DEFINE_CALLBACK(mousemotion, MOUSEMOTION, MouseMotionEvent)
 DEFINE_CALLBACK(mousebutton, MOUSEBUTTON, MouseButtonEvent)

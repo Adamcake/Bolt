@@ -17,7 +17,7 @@
  * --...
  * ```
  *
- * After that, pass Lua functions to the `bolt.setcallback...` functions to set event callbacks.
+ * After that, pass Lua functions to the `bolt.on...` functions to set event callbacks.
  *
  * The 2D rendering pipeline is fairly simple. Images are drawn in large batches of vertices,
  * usually 6 vertices per icon (three per triangle, two triangles.) Plugins should call the
@@ -146,7 +146,7 @@ static int api_createwindow(lua_State*);
 ///
 /// The callback will be called every frame - that's anywhere from 5 to 150+ times per second - so
 /// avoid using it for anything time-consuming.
-static int api_setcallbackswapbuffers(lua_State*);
+static int api_onswapbuffers(lua_State*);
 
 /// [-1, +0, -]
 /// Sets a callback function for rendering of 2D images, overwriting the previous callback, if any.
@@ -161,7 +161,7 @@ static int api_setcallbackswapbuffers(lua_State*);
 /// The callback will be called an extremely high amount of times per second, so great care should
 /// be taken to determine as quickly as possible whether any image is of interest or not, such as
 /// by checking each image's width and height.
-static int api_setcallback2d(lua_State*);
+static int api_onrender2d(lua_State*);
 
 /// [-1, +0, -]
 /// Sets a callback function for rendering of 3D models, overwriting the previous callback, if any.
@@ -176,7 +176,7 @@ static int api_setcallback2d(lua_State*);
 /// The callback will be called an extremely high amount of times per second, so great care should
 /// be taken to determine as quickly as possible whether any image is of interest or not, such as
 /// by checking the model's vertex count.
-static int api_setcallback3d(lua_State*);
+static int api_onrender3d(lua_State*);
 
 /// [-1, +0, -]
 /// Sets a callback function for rendering of a minimap background image, overwriting the previous
@@ -193,7 +193,7 @@ static int api_setcallback3d(lua_State*);
 ///
 /// The pixel contents cannot be examined directly, however it's possible to query the image angle,
 /// image scale (zoom level), and a rough estimate of the tile position it's centered on.
-static int api_setcallbackminimap(lua_State*);
+static int api_onminimap(lua_State*);
 
 /// [-1, +0, -]
 /// Sets a callback function for mouse motion events, overwriting the previous callback, if any.
@@ -208,7 +208,7 @@ static int api_setcallbackminimap(lua_State*);
 ///
 /// The callback will be called with one param, that being a mouse motion object. All of the member
 /// functions of that object can be found in this file, prefixed with "api_mouseevent_".
-static int api_setcallbackmousemotion(lua_State*);
+static int api_onmousemotion(lua_State*);
 
 /// [-1, +0, -]
 /// Sets a callback function for mouse button events, overwriting the previous callback, if any.
@@ -221,7 +221,7 @@ static int api_setcallbackmousemotion(lua_State*);
 /// The callback will be called with one param, that being a mouse-button object. All of the member
 /// functions of that object can be found in this file, prefixed with "api_mouseevent_" and
 /// "api_mousebutton_".
-static int api_setcallbackmousebutton(lua_State*);
+static int api_onmousebutton(lua_State*);
 
 /// [-1, +0, -]
 /// Sets a callback function for mouse button release events, overwriting the previous callback, if
@@ -235,7 +235,7 @@ static int api_setcallbackmousebutton(lua_State*);
 /// The callback will be called with one param, that being a mouse-button object. All of the member
 /// functions of that object can be found in this file, prefixed with "api_mouseevent_" and
 /// "api_mousebutton_".
-static int api_setcallbackmousebuttonup(lua_State*);
+static int api_onmousebuttonup(lua_State*);
 
 /// [-1, +0, -]
 /// Sets a callback function for mouse scroll events, overwriting the previous callback, if any.
@@ -248,7 +248,7 @@ static int api_setcallbackmousebuttonup(lua_State*);
 /// The callback will be called with one param, that being a mouse-scroll object. All of the member
 /// functions of that object can be found in this file, prefixed with "api_mouseevent_" and
 /// "api_scroll_".
-static int api_setcallbackscroll(lua_State*);
+static int api_onscroll(lua_State*);
 
 /// [-1, +1, -]
 /// Returns the number of vertices in a 2D batch object.
