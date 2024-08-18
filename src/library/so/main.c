@@ -18,7 +18,7 @@
 
 // don't change this part, change the line above this instead
 #if defined(VERBOSE)
-#define LOG printf
+#define LOG(...) if(printf(__VA_ARGS__)) fflush(stdout)
 #else
 #define LOG(...)
 #endif
