@@ -252,7 +252,14 @@ static int _bolt_dl_iterate_callback(struct dl_phdr_info* info, size_t size, voi
 
     // checks if the currently-iterated module name ends with '/'+name
     // and if it does, calls the init function for that module, then returns 0
-#define FILENAME_EQ_INIT(NAME) { size_t lib_name_len = strlen(NAME##_name); if (name_len > lib_name_len && info->dlpi_name[name_len - lib_name_len - 1] == '/' && !strcmp(info->dlpi_name + name_len - lib_name_len, NAME##_name)) { _bolt_init_##NAME(info->dlpi_addr, gnu_hash_table, hash_table, string_table, symbol_table); return 0; } }
+#define FILENAME_EQ_INIT(NAME) { \
+    const size_t lib_name_len = strlen(NAME##_name); \
+    if (name_len > lib_name_len && info->dlpi_name[name_len - lib_name_len - 1] == '/' && !strcmp(info->dlpi_name + name_len - lib_name_len, NAME##_name)) { \
+        if (NAME##_addr == (void*)info->dlpi_addr) return 0; \
+        _bolt_init_##NAME(info->dlpi_addr, gnu_hash_table, hash_table, string_table, symbol_table); \
+        return 0; \
+    } \
+}
     FILENAME_EQ_INIT(libc);
     FILENAME_EQ_INIT(libegl);
     FILENAME_EQ_INIT(libxcb);
@@ -646,43 +653,11 @@ void* dlopen(const char* filename, int flags) {
     INIT();
     void* ret = real_dlopen(filename, flags);
     LOG("dlopen('%s', %i) -> %lu\n", filename, flags, (unsigned long)ret);
-    if (filename) {
-        if (!libegl_addr && !strcmp(filename, libegl_name)) {
-            libegl_addr = ret;
-            if (!libegl_addr) return NULL;
-            real_eglGetProcAddress = real_dlsym(ret, "eglGetProcAddress");
-            real_eglSwapBuffers = real_dlsym(ret, "eglSwapBuffers");
-            real_eglMakeCurrent = real_dlsym(ret, "eglMakeCurrent");
-            real_eglDestroyContext = real_dlsym(ret, "eglDestroyContext");
-            real_eglInitialize = real_dlsym(ret, "eglInitialize");
-            real_eglCreateContext = real_dlsym(ret, "eglCreateContext");
-            real_eglTerminate = real_dlsym(ret, "eglTerminate");
-        }
-        if (!libgl_addr && !strcmp(filename, libgl_name)) {
-            libgl_addr = ret;
-            if (!libgl_addr) return NULL;
-            libgl.BindTexture = real_dlsym(ret, "glBindTexture");
-            libgl.Clear = real_dlsym(ret, "glClear");
-            libgl.ClearColor = real_dlsym(ret, "glClearColor");
-            libgl.DeleteTextures = real_dlsym(ret, "glDeleteTextures");
-            libgl.DrawArrays = real_dlsym(ret, "glDrawArrays");
-            libgl.DrawElements = real_dlsym(ret, "glDrawElements");
-            libgl.Flush = real_dlsym(ret, "glFlush");
-            libgl.GenTextures = real_dlsym(ret, "glGenTextures");
-            libgl.GetError = real_dlsym(ret, "glGetError");
-            libgl.TexParameteri = real_dlsym(ret, "glTexParameteri");
-            libgl.TexSubImage2D = real_dlsym(ret, "glTexSubImage2D");
-            libgl.Viewport = real_dlsym(ret, "glViewport");
-        }
-        if (!libxcb_addr && !strcmp(filename, libxcb_name)) {
-            libxcb_addr = ret;
-            if (!libxcb_addr) return NULL;
-            real_xcb_poll_for_event = real_dlsym(ret, "xcb_poll_for_event");
-            real_xcb_poll_for_queued_event = real_dlsym(ret, "xcb_poll_for_queued_event");
-            real_xcb_wait_for_event = real_dlsym(ret, "xcb_wait_for_event");
-            real_xcb_get_geometry_reply = real_dlsym(ret, "xcb_get_geometry_reply");
-        }
-    }
+    // recheck if any of the modules we want to hook are now in our address space.
+    // we can't strcmp filename, because it might not be something of interest but depend on something
+    // of interest. for example, filename might be "libX11.so.6", which isn't of interest to bolt, but
+    // it imports "libxcb.so.1", which is.
+    dl_iterate_phdr(_bolt_dl_iterate_callback, NULL);
     return ret;
 }
 
