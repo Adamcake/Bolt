@@ -305,8 +305,8 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 	const std::string user_home = this->data_dir.string();
 
 	// parse query
-	std::string rl_path;
-	bool has_rl_path = false;
+	std::string jar_path;
+	bool has_jar_path = false;
 	std::string id;
 	bool has_id = false;
 	std::string jx_session_id;
@@ -316,7 +316,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 	std::string jx_display_name;
 	bool has_jx_display_name = false;
 	this->ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
-		PQCHECK(rl_path)
+		PQCHECK(jar_path)
 		PQCHECK(id)
 		PQCHECK(jx_session_id)
 		PQCHECK(jx_character_id)
@@ -325,11 +325,11 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 
 	// path to runelite.jar will either be a user-provided one or one in our data folder,
 	// which we may need to overwrite with a new user-provided file
-	std::filesystem::path jar_path;
-	if (has_rl_path) {
-		jar_path.assign(rl_path);
+	std::filesystem::path rl_path;
+	if (has_jar_path) {
+		rl_path.assign(jar_path);
 	} else {
-		jar_path = this->runelite_path;
+		rl_path = this->runelite_path;
 
 		// if there was an "id" in the query string, we need to save the new jar and hash
 		if (has_id) {
@@ -347,7 +347,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 			vec[0]->GetBytes(jar_size, jar);
 
 			size_t written = 0;
-			int file = open(jar_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0755);
+			int file = open(rl_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0755);
 			if (file == -1) {
 				// failed to open game binary file on disk - probably in use or a permissions issue
 				delete[] jar;
@@ -370,7 +370,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 	}
 	std::string arg_home = "-Duser.home=" + user_home;
 	std::string arg_jvm_argument_home = "-J" + arg_home;
-	std::string path_str = jar_path.string();
+	std::string path_str = rl_path.string();
 	char arg_jar[] = "-jar";
 	char arg_configure[] = "--configure";
 	char* argv[] = {
