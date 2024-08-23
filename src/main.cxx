@@ -85,6 +85,9 @@ int BoltRunBrowserProcess(CefMainArgs main_args, CefRefPtr<Browser::App> cef_app
 	settings.log_severity = LOGSEVERITY_WARNING; // Print warnings and errors only
 	settings.command_line_args_disabled = false; // Needed because we append args
 	settings.uncaught_exception_stack_size = 8;  // Number of call stack frames given in unhandled exception events
+#if defined(BOLT_PLUGINS)
+	settings.windowless_rendering_enabled = true; // Needed for embedded plugin browsers
+#endif
 
 	// Give CEF a place to put its cache stuff - default location is next to the exe which is not OK
 	std::filesystem::path cef_cache_path = data_dir;
