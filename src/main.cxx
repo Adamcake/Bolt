@@ -93,7 +93,7 @@ int BoltRunBrowserProcess(CefMainArgs main_args, CefRefPtr<Browser::App> cef_app
 	std::filesystem::path cef_cache_path = data_dir;
 	cef_cache_path.append("CefCache");
 	std::filesystem::create_directories(cef_cache_path);
-#if defined(WIN32)
+#if defined(_WIN32)
 	const wchar_t* cache_path = cef_cache_path.c_str();
 	cef_string_from_wide(cache_path, wcslen(cache_path), &settings.cache_path);
 #else
