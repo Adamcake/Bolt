@@ -104,6 +104,7 @@ struct GLLibFunctions {
 #define GL_TEXTURE 5890
 #define GL_TEXTURE_2D 3553
 #define GL_RGBA 6408
+#define GL_BGRA 32993
 #define GL_UNSIGNED_BYTE 5121
 #define GL_UNSIGNED_SHORT 5123
 #define GL_UNSIGNED_INT 5125

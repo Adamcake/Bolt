@@ -128,6 +128,9 @@ struct SurfaceFunctions {
     /// Equivalent to glClearColor(r, g, b, a) & glClear().
     void (*clear)(void* userdata, double r, double g, double b, double a);
 
+    /// Updates a rectangular subsection of the surface with the given RGBA or BGRA pixels.
+    void (*subimage)(void* userdata, int x, int y, int w, int h, const void* pixels, uint8_t is_bgra);
+
     /// Draws a rectangle from the surface, indicated by sx,sy,sw,sh, to a rectangle on the backbuffer,
     /// indicated by dx,dy,dw,dh. All values are in pixels.
     void (*draw_to_screen)(void* userdata, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh);

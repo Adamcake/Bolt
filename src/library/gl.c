@@ -97,6 +97,7 @@ static void _bolt_gl_plugin_surface_init(struct SurfaceFunctions* out, unsigned 
 static void _bolt_gl_plugin_surface_destroy(void* userdata);
 static void _bolt_gl_plugin_surface_resize(void* userdata, unsigned int width, unsigned int height);
 static void _bolt_gl_plugin_surface_clear(void* userdata, double r, double g, double b, double a);
+static void _bolt_gl_plugin_surface_subimage(void* userdata, int x, int y, int w, int h, const void* pixels, uint8_t is_bgra);
 static void _bolt_gl_plugin_surface_drawtoscreen(void* userdata, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh);
 static void _bolt_gl_plugin_surface_drawtosurface(void* userdata, void* target, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh);
 
@@ -1674,6 +1675,7 @@ static void _bolt_gl_plugin_surface_init(struct SurfaceFunctions* functions, uns
     }
     functions->userdata = userdata;
     functions->clear = _bolt_gl_plugin_surface_clear;
+    functions->subimage = _bolt_gl_plugin_surface_subimage;
     functions->draw_to_screen = _bolt_gl_plugin_surface_drawtoscreen;
     functions->draw_to_surface = _bolt_gl_plugin_surface_drawtosurface;
 
@@ -1705,6 +1707,15 @@ static void _bolt_gl_plugin_surface_clear(void* _userdata, double r, double g, d
     lgl->ClearColor(r, g, b, a);
     lgl->Clear(GL_COLOR_BUFFER_BIT);
     gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, c->current_draw_framebuffer);
+}
+
+static void _bolt_gl_plugin_surface_subimage(void* _userdata, int x, int y, int w, int h, const void* pixels, uint8_t is_bgra) {
+    struct PluginSurfaceUserdata* userdata = _userdata;
+    struct GLContext* c = _bolt_context();
+    lgl->BindTexture(GL_TEXTURE_2D, userdata->renderbuffer);
+    lgl->TexSubImage2D(GL_TEXTURE_2D, 0, x, y, w, h, is_bgra ? GL_BGRA : GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    const struct GLTexture2D* original_tex = c->texture_units[c->active_texture];
+    lgl->BindTexture(GL_TEXTURE_2D, original_tex ? original_tex->id : 0);
 }
 
 static void _bolt_gl_plugin_surface_drawtoscreen(void* _userdata, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh) {

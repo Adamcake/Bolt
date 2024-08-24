@@ -518,9 +518,7 @@ void _bolt_plugin_handle_messages() {
                     if (needs_remap || !(*window)->browser_shm.file) {
                         _bolt_plugin_shm_remap(&(*window)->browser_shm, width * height * 4);
                     }
-                    // TODO: SubImage2D instead of this
-                    managed_functions.surface_destroy((*window)->surface_functions.userdata);
-                    managed_functions.surface_init(&(*window)->surface_functions, width, height, (*window)->browser_shm.file);
+                    (*window)->surface_functions.subimage((*window)->surface_functions.userdata, 0, 0, width, height, (*window)->browser_shm.file, 1);
                 }
 
                 struct BoltIPCMessageToHost message = {.message_type = IPC_MSG_OSRUPDATE_ACK};
@@ -669,8 +667,9 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     PUSHSTRING(plugin->state, SURFACE_META_REGISTRYNAME);
     lua_newtable(plugin->state);
     PUSHSTRING(plugin->state, "__index");
-    lua_createtable(plugin->state, 0, 4);
+    lua_createtable(plugin->state, 0, 5);
     API_ADD_SUB(plugin->state, clear, surface)
+    API_ADD_SUB(plugin->state, subimage, surface)
     API_ADD_SUB(plugin->state, drawtoscreen, surface)
     API_ADD_SUB(plugin->state, drawtosurface, surface)
     API_ADD_SUB(plugin->state, drawtowindow, surface)
@@ -684,10 +683,11 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     PUSHSTRING(plugin->state, WINDOW_META_REGISTRYNAME);
     lua_newtable(plugin->state);
     PUSHSTRING(plugin->state, "__index");
-    lua_createtable(plugin->state, 0, 8);
+    lua_createtable(plugin->state, 0, 9);
     API_ADD_SUB(plugin->state, id, window)
     API_ADD_SUB(plugin->state, size, window)
     API_ADD_SUB(plugin->state, clear, window)
+    API_ADD_SUB(plugin->state, subimage, window)
     API_ADD_SUB(plugin->state, onresize, window)
     API_ADD_SUB(plugin->state, onmousemotion, window)
     API_ADD_SUB(plugin->state, onmousebutton, window)
@@ -1262,6 +1262,30 @@ static int api_surface_clear(lua_State* state) {
     return 0;
 }
 
+static int api_surface_subimage(lua_State* state) {
+    _bolt_check_argc(state, 6, "surface_subimage");
+    const struct SurfaceFunctions* functions = lua_touserdata(state, 1);
+    const lua_Integer x = lua_tointeger(state, 2);
+    const lua_Integer y = lua_tointeger(state, 3);
+    const lua_Integer w = lua_tointeger(state, 4);
+    const lua_Integer h = lua_tointeger(state, 5);
+    const size_t req_length = w * h * 4;
+    size_t length;
+    const void* rgba = lua_tolstring(state, 6, &length);
+    if (length >= req_length) {
+        functions->subimage(functions->userdata, x, y, w, h, rgba, 0);
+    } else {
+        uint8_t* ud = lua_newuserdata(state, req_length);
+        memcpy(ud, rgba, length);
+        memset(ud + length, 0, req_length - length);
+        functions->subimage(functions->userdata, x, y, w, h, (const void*)ud, 0);
+        lua_pop(state, 1);
+    }
+    lua_getfield(state, LUA_REGISTRYINDEX, SURFACE_META_REGISTRYNAME);
+    lua_setmetatable(state, -2);
+    return 1;
+}
+
 static int api_surface_drawtoscreen(lua_State* state) {
     _bolt_check_argc(state, 9, "surface_drawtoscreen");
     const struct SurfaceFunctions* functions = lua_touserdata(state, 1);
@@ -1358,6 +1382,30 @@ static int api_window_size(lua_State* state) {
     lua_pushinteger(state, window->metadata.height);
     _bolt_rwlock_unlock_read(&window->lock);
     return 2;
+}
+
+static int api_window_subimage(lua_State* state) {
+    _bolt_check_argc(state, 6, "window_subimage");
+    const struct EmbeddedWindow* window = lua_touserdata(state, 1);
+    const lua_Integer x = lua_tointeger(state, 2);
+    const lua_Integer y = lua_tointeger(state, 3);
+    const lua_Integer w = lua_tointeger(state, 4);
+    const lua_Integer h = lua_tointeger(state, 5);
+    const size_t req_length = w * h * 4;
+    size_t length;
+    const void* rgba = lua_tolstring(state, 6, &length);
+    if (length >= req_length) {
+        window->surface_functions.subimage(window->surface_functions.userdata, x, y, w, h, rgba, 0);
+    } else {
+        uint8_t* ud = lua_newuserdata(state, req_length);
+        memcpy(ud, rgba, length);
+        memset(ud + length, 0, req_length - length);
+        window->surface_functions.subimage(window->surface_functions.userdata, x, y, w, h, (const void*)ud, 0);
+        lua_pop(state, 1);
+    }
+    lua_getfield(state, LUA_REGISTRYINDEX, SURFACE_META_REGISTRYNAME);
+    lua_setmetatable(state, -2);
+    return 1;
 }
 
 static int api_render3d_vertexcount(lua_State* state) {

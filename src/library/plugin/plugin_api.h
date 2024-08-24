@@ -394,6 +394,17 @@ static int api_minimap_position(lua_State*);
 /// with the red, green and blue values undefined.
 static int api_surface_clear(lua_State*);
 
+/// [-6, +0, -]
+/// Updates a rectangular subsection of this surface with the given RGBA pixel data.
+///
+/// The parameters are X,Y,W,H in pixels, followed by the RGBA data (string).
+///
+/// There are four bytes in an RGBA pixel, so the number of bytes in the string is expected to be
+/// 4 * width * height. If fewer bytes than that are provided, the data will be padded with zeroes.
+/// If too many bytes are provided, the excess data will be unused. The data will be interpreted in
+/// row-major order with the first pixel being in the top-left.
+static int api_surface_subimage(lua_State*);
+
 /// [-9, +0, -]
 /// Draws a section of the surface directly onto a section of the screen's backbuffer. If used
 /// outside a swapbuffers event, this is unlikely to have any visible effect.
@@ -425,6 +436,11 @@ static int api_window_size(lua_State*);
 /// Deletes any previous contents of the window and sets it to contain a single colour and alpha.
 /// See surface_clear for usage.
 static int api_window_clear(lua_State*);
+
+/// [-6, +0, -]
+/// Updates a rectangular subsection of this window with the given RGBA pixel data. See
+/// surface_subimage for usage.
+static int api_window_subimage(lua_State*);
 
 /// [-2, +0, -]
 /// Sets an event handler for this window for resize events. If the value is a function, it will be
