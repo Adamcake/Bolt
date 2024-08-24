@@ -186,6 +186,7 @@ namespace Browser {
 			uint64_t next_client_uid;
 			std::mutex game_clients_lock;
 			std::vector<GameClient> game_clients;
+			CefRefPtr<Browser::WindowOSR> GetWindowFromFDAndID(BoltSocketType fd, uint64_t id);
 #endif
 
 			// Mutex-locked vector - may be accessed from either UI thread (most of the time) or IO thread (GetResourceRequestHandler)

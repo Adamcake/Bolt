@@ -3,6 +3,7 @@
 
 #if defined(BOLT_PLUGINS)
 #include "window_osr.hxx"
+#include "../library/event.h"
 #include "include/cef_parser.h"
 #include <cstring>
 #define BOLT_IPC_URL "https://bolt-blankpage/"
@@ -322,6 +323,22 @@ void Browser::Client::IPCHandleClosed(int fd) {
 	}
 }
 
+// convenience function, assumes the mutex is already locked
+CefRefPtr<Browser::WindowOSR> Browser::Client::GetWindowFromFDAndID(BoltSocketType fd, uint64_t id) {
+	for (GameClient& g: this->game_clients) {
+		if (g.fd == fd) {
+			for (ActivePlugin& p: g.plugins) {
+				for (CefRefPtr<Browser::WindowOSR>& w: p.windows_osr) {
+					if (w->ID() == id) {
+						return w;
+					}
+				}
+			}
+		}
+	}
+	return nullptr;
+}
+
 bool Browser::Client::IPCHandleMessage(int fd) {
 	BoltIPCMessageToHost message;
 	if (_bolt_ipc_receive(fd, &message, sizeof(message))) {
@@ -387,19 +404,63 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 			uint64_t plugin_window_id;
 			_bolt_ipc_receive(fd, &plugin_window_id, sizeof(plugin_window_id));
 			this->game_clients_lock.lock();
-			for (GameClient& g: this->game_clients) {
-				if (g.fd == fd) {
-					for (ActivePlugin& p: g.plugins) {
-						for (CefRefPtr<Browser::WindowOSR>& w: p.windows_osr) {
-							if (w->ID() == plugin_window_id) {
-								w->HandleAck();
-								goto exit_osrupdate_ack;
-							}
-						}
-					}
-				}
-			}
-			exit_osrupdate_ack:
+			CefRefPtr<Browser::WindowOSR> window = this->GetWindowFromFDAndID(fd, plugin_window_id);
+			if (window) window->HandleAck();
+			this->game_clients_lock.unlock();
+			break;
+		}
+		case IPC_MSG_EVRESIZE: {
+			uint64_t plugin_window_id;
+			ResizeEvent event;
+			_bolt_ipc_receive(fd, &plugin_window_id, sizeof(plugin_window_id));
+			_bolt_ipc_receive(fd, &event, sizeof(event));
+			this->game_clients_lock.lock();
+			CefRefPtr<Browser::WindowOSR> window = this->GetWindowFromFDAndID(fd, plugin_window_id);
+			if (window) window->HandleResize(&event);
+			this->game_clients_lock.unlock();
+			break;
+		}
+		case IPC_MSG_EVMOUSEMOTION: {
+			uint64_t plugin_window_id;
+			MouseMotionEvent event;
+			_bolt_ipc_receive(fd, &plugin_window_id, sizeof(plugin_window_id));
+			_bolt_ipc_receive(fd, &event, sizeof(event));
+			this->game_clients_lock.lock();
+			CefRefPtr<Browser::WindowOSR> window = this->GetWindowFromFDAndID(fd, plugin_window_id);
+			if (window) window->HandleMouseMotion(&event);
+			this->game_clients_lock.unlock();
+			break;
+		}
+		case IPC_MSG_EVMOUSEBUTTON: {
+			uint64_t plugin_window_id;
+			MouseButtonEvent event;
+			_bolt_ipc_receive(fd, &plugin_window_id, sizeof(plugin_window_id));
+			_bolt_ipc_receive(fd, &event, sizeof(event));
+			this->game_clients_lock.lock();
+			CefRefPtr<Browser::WindowOSR> window = this->GetWindowFromFDAndID(fd, plugin_window_id);
+			if (window) window->HandleMouseButton(&event);
+			this->game_clients_lock.unlock();
+			break;
+		}
+		case IPC_MSG_EVMOUSEBUTTONUP: {
+			uint64_t plugin_window_id;
+			MouseButtonEvent event;
+			_bolt_ipc_receive(fd, &plugin_window_id, sizeof(plugin_window_id));
+			_bolt_ipc_receive(fd, &event, sizeof(event));
+			this->game_clients_lock.lock();
+			CefRefPtr<Browser::WindowOSR> window = this->GetWindowFromFDAndID(fd, plugin_window_id);
+			if (window) window->HandleMouseButtonUp(&event);
+			this->game_clients_lock.unlock();
+			break;
+		}
+		case IPC_MSG_EVSCROLL: {
+			uint64_t plugin_window_id;
+			MouseScrollEvent event;
+			_bolt_ipc_receive(fd, &plugin_window_id, sizeof(plugin_window_id));
+			_bolt_ipc_receive(fd, &event, sizeof(event));
+			this->game_clients_lock.lock();
+			CefRefPtr<Browser::WindowOSR> window = this->GetWindowFromFDAndID(fd, plugin_window_id);
+			if (window) window->HandleScroll(&event);
 			this->game_clients_lock.unlock();
 			break;
 		}
