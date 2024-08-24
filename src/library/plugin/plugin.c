@@ -514,11 +514,24 @@ void _bolt_plugin_handle_messages() {
                 _bolt_rwlock_lock_read(&windows.lock);
                 struct EmbeddedWindow** window = (struct EmbeddedWindow**)hashmap_get(windows.map, &window_id_ptr);
                 _bolt_rwlock_unlock_read(&windows.lock);
-                if (window) {
-                    if (needs_remap || !(*window)->browser_shm.file) {
-                        _bolt_plugin_shm_remap(&(*window)->browser_shm, width * height * 4);
+                if (window && (needs_remap || !(*window)->browser_shm.file)) {
+                    _bolt_plugin_shm_remap(&(*window)->browser_shm, width * height * 4);
+                }
+                for (uint32_t i = 0; i < message.items; i += 1) {
+                    int dmgx, dmgy, dmgw, dmgh;
+                    _bolt_ipc_receive(fd, &dmgx, sizeof(dmgx));
+                    _bolt_ipc_receive(fd, &dmgy, sizeof(dmgy));
+                    _bolt_ipc_receive(fd, &dmgw, sizeof(dmgw));
+                    _bolt_ipc_receive(fd, &dmgh, sizeof(dmgh));
+                    if (window) {
+                        // the backend needs contiguous pixels for the rectangle, so here we ignore
+                        // the width of the damage and instead update every row of pixels in the
+                        // damage area. that way we have contiguous pixels straight out of the shm file.
+                        // would it be faster to allocate and build a contiguous pixel rect and use
+                        // that as the subimage? probably not.
+                        const void* data_ptr = (const void*)((uint8_t*)(*window)->browser_shm.file + (width * dmgy * 4));
+                        (*window)->surface_functions.subimage((*window)->surface_functions.userdata, 0, dmgy, width, dmgh, data_ptr, 1);
                     }
-                    (*window)->surface_functions.subimage((*window)->surface_functions.userdata, 0, 0, width, height, (*window)->browser_shm.file, 1);
                 }
 
                 struct BoltIPCMessageToHost message = {.message_type = IPC_MSG_OSRUPDATE_ACK};
