@@ -14,13 +14,22 @@
 #include <fmt/core.h>
 #include "client.hxx"
 
-static void SendUpdateMsg(BoltSocketType fd, uint64_t id, int width, int height, bool needs_remap) {
-	uint8_t buf[sizeof(BoltIPCMessageToClient) + sizeof(uint64_t) + (2 *sizeof(int)) + 1];
+static void SendUpdateMsg(BoltSocketType fd, uint64_t id, int width, int height, bool needs_remap, const CefRect* rects, uint32_t rect_count) {
+	uint8_t buf[sizeof(BoltIPCMessageToClient) + sizeof(uint64_t) + (2 *sizeof(int)) + (rect_count * sizeof(int) * 4) + 1];
 	((BoltIPCMessageToClient*)buf)->message_type = IPC_MSG_OSRUPDATE;
+	((BoltIPCMessageToClient*)buf)->items = rect_count;
 	*(uint64_t*)(buf + sizeof(BoltIPCMessageToClient)) = id;
 	*(uint8_t*)(buf + sizeof(BoltIPCMessageToClient) + sizeof(uint64_t)) = needs_remap ? 1 : 0;
 	*(int*)(buf + sizeof(BoltIPCMessageToClient) + sizeof(uint64_t) + 1) = width;
 	*(int*)(buf + sizeof(BoltIPCMessageToClient) + sizeof(uint64_t) + sizeof(int) + 1) = height;
+	int* rect_data = (int*)(buf + sizeof(BoltIPCMessageToClient) + sizeof(uint64_t) + (sizeof(int) * 2) + 1);
+	for (uint32_t i = 0; i < rect_count; i += 1) {
+		*rect_data = rects[i].x;
+		*(rect_data + 1) = rects[i].y;
+		*(rect_data + 2) = rects[i].width;
+		*(rect_data + 3) = rects[i].height;
+		rect_data += 4;
+	}
 	_bolt_ipc_send(fd, buf, sizeof(buf));
 }
 
@@ -74,7 +83,7 @@ void Browser::WindowOSR::HandleAck() {
 			this->mapping_size = length;
 		}
 		memcpy(this->file, this->stored, length);
-		SendUpdateMsg(this->client_fd, this->window_id, this->stored_width, this->stored_height, needs_remap);
+		SendUpdateMsg(this->client_fd, this->window_id, this->stored_width, this->stored_height, needs_remap, &this->stored_damage, 1);
 		free(this->stored);
 		this->stored = nullptr;
 	} else {
@@ -96,7 +105,7 @@ void Browser::WindowOSR::GetViewRect(CefRefPtr<CefBrowser> browser, CefRect& rec
 }
 
 void Browser::WindowOSR::OnPaint(CefRefPtr<CefBrowser> browser, PaintElementType type, const RectList& dirtyRects, const void* buffer, int width, int height) {
-	if (this->deleted) return;
+	if (this->deleted || dirtyRects.empty()) return;
 
 	const off_t length = width * height * 4;
 	this->stored_lock.lock();
@@ -117,14 +126,33 @@ void Browser::WindowOSR::OnPaint(CefRefPtr<CefBrowser> browser, PaintElementType
 				}
 			}
 		}
-		SendUpdateMsg(this->client_fd, this->window_id, width, height, needs_remap);
+		SendUpdateMsg(this->client_fd, this->window_id, width, height, needs_remap, dirtyRects.data(), dirtyRects.size());
 		this->remote_is_idle = false;
 	} else {
-		free(this->stored);
+		const bool is_damage_stored = this->stored != nullptr;
+		if (is_damage_stored) free(this->stored);
 		this->stored = malloc(length);
 		memcpy(this->stored, buffer, length);
 		this->stored_width = width;
 		this->stored_height = height;
+
+		if (!is_damage_stored) this->stored_damage = dirtyRects[0];
+		for (size_t i = is_damage_stored ? 0 : 1; i < dirtyRects.size(); i += 1) {
+			if (dirtyRects[i].x < this->stored_damage.x) {
+				this->stored_damage.width += this->stored_damage.x - dirtyRects[i].x;
+				this->stored_damage.x = dirtyRects[i].x;
+			}
+			if (dirtyRects[i].y < this->stored_damage.y) {
+				this->stored_damage.height += this->stored_damage.y - dirtyRects[i].y;
+				this->stored_damage.y = dirtyRects[i].y;
+			}
+			if ((dirtyRects[i].x + dirtyRects[i].width) > (this->stored_damage.x + this->stored_damage.width)) {
+				this->stored_damage.width += (dirtyRects[i].x + dirtyRects[i].width) - (this->stored_damage.x + this->stored_damage.width);
+			}
+			if ((dirtyRects[i].y + dirtyRects[i].height) > (this->stored_damage.y + this->stored_damage.height)) {
+				this->stored_damage.height += (dirtyRects[i].y + dirtyRects[i].height) - (this->stored_damage.y + this->stored_damage.height);
+			}
+		}
 	}
 	this->stored_lock.unlock();
 }

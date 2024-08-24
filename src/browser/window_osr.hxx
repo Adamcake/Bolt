@@ -48,6 +48,7 @@ namespace Browser {
 			void* stored;
 			int stored_width;
 			int stored_height;
+			CefRect stored_damage;
 			uint8_t remote_is_idle;
 
 			IMPLEMENT_REFCOUNTING(WindowOSR);
