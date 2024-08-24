@@ -19,10 +19,13 @@ typedef int BoltSocketType;
 enum BoltMessageTypeToHost {
     IPC_MSG_DUPLICATEPROCESS,
     IPC_MSG_IDENTIFY,
+    IPC_MSG_CREATEBROWSER_OSR,
+    IPC_MSG_OSRUPDATE_ACK,
 };
 
 enum BoltMessageTypeToClient {
     IPC_MSG_STARTPLUGINS,
+    IPC_MSG_OSRUPDATE,
 };
 
 /// A generic message. The host process will always assume incoming data is an instance of this

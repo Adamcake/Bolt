@@ -4,7 +4,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "../ipc.h"
 #include "../rwlock/rwlock.h"
 
 struct RenderBatch2D;
@@ -168,6 +167,18 @@ struct WindowPendingInput {
     struct MouseEvent mouse_scroll_up_event;
 };
 
+struct BoltSHM {
+#if defined(_WIN32)
+    // ?
+#else
+    int fd;
+#endif
+    void* file;
+    size_t map_length;
+    const char* tag;
+    uint64_t id;
+};
+
 struct EmbeddedWindowMetadata {
     int x;
     int y;
@@ -183,6 +194,8 @@ struct EmbeddedWindow {
     struct EmbeddedWindowMetadata metadata;
     RWLock input_lock; // applies to the pending inputs
     struct WindowPendingInput input;
+    uint8_t is_browser;
+    struct BoltSHM browser_shm; // set and initialised only if is_browser
 };
 
 struct WindowInfo {
@@ -245,12 +258,6 @@ void _bolt_plugin_process_windows(uint32_t, uint32_t);
 /// Close the plugin library.
 void _bolt_plugin_close();
 
-/// Opens the IPC channel. (OS-specific)
-void _bolt_plugin_ipc_init(BoltSocketType*);
-
-/// Closes the IPC channel. (OS-specific)
-void _bolt_plugin_ipc_close(BoltSocketType);
-
 /// Gets a reference to the global WindowInfo struct
 struct WindowInfo* _bolt_plugin_windowinfo();
 
@@ -266,6 +273,26 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin);
 
 /// Stops a plugin via its unique ID, as passed to `_bolt_plugin_add`.
 void _bolt_plugin_stop(char* id, uint32_t id_length);
+
+/// Create an inbound SHM handle with a tag and ID. This pairing of tag and ID must not have been
+/// used for any SHM object previously during this run of the plugin loader. This is usually
+/// achieved by assigning ID values incrementally, starting at 1. The tag should be short - usually
+/// two letters. "inbound" means it will be opened in read-only mode, and typically the host will
+/// open it in write-only mode.
+///
+/// The `tag` pointer will be retained indefinitely, so it must be a hard-coded string value, not
+/// something that will ever go out of scope. It must also be null-terminated.
+uint8_t _bolt_plugin_shm_open_inbound(struct BoltSHM* shm, const char* tag, uint64_t id);
+
+/// Close and delete an SHM object. The library needs to ensure that the browser host process has
+/// been informed and won't try to use this SHM object anymore, before calling this function on it.
+void _bolt_plugin_shm_close(struct BoltSHM* shm);
+
+/// Resize an outbound SHM object
+void _bolt_plugin_shm_resize(struct BoltSHM* shm, size_t length);
+
+/// Update mapping of an inbound SHM object according to its new size
+void _bolt_plugin_shm_remap(struct BoltSHM* shm, size_t length);
 
 /// Sends a SwapBuffers event to all plugins.
 void _bolt_plugin_handle_swapbuffers(struct SwapBuffersEvent*);

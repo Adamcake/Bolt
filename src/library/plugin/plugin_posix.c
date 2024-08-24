@@ -1,45 +1,46 @@
-#include "../ipc.h"
-
-#if defined(_WIN32)
-#include <afunix.h>
-#define close closesocket
-#else
-#include <errno.h>
-#include <poll.h>
-#include <sys/socket.h>
-#include <sys/un.h>
+#define _GNU_SOURCE 1
 #include <unistd.h>
-#endif
+#include <sys/mman.h>
 
 #include "plugin.h"
-#include <stdlib.h>
-#include <stdio.h>
 
-void _bolt_plugin_ipc_init(BoltSocketType* fd) {
-#if defined(_WIN32)
-    WSADATA wsa_data;
-    WSAStartup(MAKEWORD(2, 2), &wsa_data);
-#endif
-    const int olderr = errno;
-    struct sockaddr_un addr = {.sun_family = AF_UNIX};
-    *fd = socket(addr.sun_family, SOCK_STREAM, 0);
-#if defined(_WIN32)
-    const char* runtime_dir = getenv("appdata");
-    snprintf(addr.sun_path, sizeof(addr.sun_path) - 1, "%s\\bolt-launcher\\run\\ipc-0", runtime_dir);
-#else
-    const char* runtime_dir = getenv("XDG_RUNTIME_DIR");
-    const char* prefix = (runtime_dir && *runtime_dir) ? runtime_dir : "/tmp";
-    snprintf(addr.sun_path, sizeof(addr.sun_path) - 1, "%s/bolt-launcher/ipc-0", prefix);
-#endif
-    if (connect(*fd, (const struct sockaddr*)&addr, sizeof(addr)) == -1) {
-        printf("error: IPC connect() error %i\n", errno);
-        exit(1);
+#include <errno.h>
+#include <stdio.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
+uint8_t _bolt_plugin_shm_open_inbound(struct BoltSHM* shm, const char* tag, uint64_t id) {
+    char buf[256];
+    snprintf(buf, sizeof(buf), "/bolt-%i-%s-%lu", getpid(), tag, id);
+    shm->fd = shm_open(buf, O_RDONLY | O_CREAT | O_TRUNC, 0644);
+    if (shm->fd == -1) {
+        printf("failed to create shm object '%s': %i\n", buf, errno);
+        return 0;
     }
-    errno = olderr;
+    shm->file = NULL;
+    shm->tag = tag;
+    shm->id = id;
+    return 1;
 }
 
-void _bolt_plugin_ipc_close(BoltSocketType fd) {
-    const int olderr = errno;
-    close(fd);
-    errno = olderr;
+void _bolt_plugin_shm_close(struct BoltSHM* shm) {
+    char buf[256];
+    close(shm->fd);
+    snprintf(buf, sizeof(buf), "/bolt-%i-%s-%lu", getpid(), shm->tag, shm->id);
+    shm_unlink(buf);
+}
+
+void _bolt_plugin_shm_resize(struct BoltSHM* shm, size_t length) {
+    if (ftruncate(shm->fd, length)) {
+        printf("failed to truncate shm object to size %llu: %i\n", (unsigned long long)length, errno);
+    }
+}
+
+void _bolt_plugin_shm_remap(struct BoltSHM* shm, size_t length) {
+    if (!shm->file) {
+        shm->file = mmap(NULL, length, PROT_READ, MAP_SHARED, shm->fd, 0);
+    } else {
+        shm->file = mremap(shm->file, shm->map_length, length, MREMAP_MAYMOVE);
+    }
+    shm->map_length = length;
 }

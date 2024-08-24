@@ -20,7 +20,7 @@ if (WIN32)
     file(GENERATE OUTPUT plugin.def CONTENT "LIBRARY BOLT-PLUGIN\nEXPORTS\n${BOLT_STUB_ENTRYNAME} @${BOLT_STUB_ENTRYORDINAL}\n")
 
     add_library(${BOLT_PLUGIN_LIB_NAME} SHARED dll/main.c dll/common.c plugin/plugin.c gl.c
-    rwlock/rwlock_win32.c ipc_posix.c plugin/plugin_posix.c ../../modules/hashmap/hashmap.c
+    rwlock/rwlock_win32.c ipc_posix.c plugin/plugin_win32.c ../../modules/hashmap/hashmap.c
     ../miniz/miniz.c ../../modules/spng/spng/spng.c "${CMAKE_CURRENT_BINARY_DIR}/plugin.def")
     target_compile_definitions(${BOLT_PLUGIN_LIB_NAME} PUBLIC BOLT_STUB_ENTRYNAME=${BOLT_STUB_ENTRYNAME})
     target_link_libraries(${BOLT_PLUGIN_LIB_NAME} PUBLIC "${BOLT_LUAJIT_DIR}/lua51.lib" "Ws2_32.lib")

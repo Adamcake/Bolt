@@ -1,7 +1,7 @@
-#include "plugin.h"
-
-#include "plugin_api.h"
 #include "../ipc.h"
+
+#include "plugin.h"
+#include "plugin_api.h"
 #include "../../../modules/hashmap/hashmap.h"
 #include "../../../modules/spng/spng/spng.h"
 
@@ -13,8 +13,15 @@
 #include <time.h>
 
 #if defined(_WIN32)
-#include <windows.h>
+#include <afunix.h>
+#define close closesocket
 LARGE_INTEGER performance_frequency;
+#else
+#include <errno.h>
+#include <poll.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <unistd.h>
 #endif
 
 #define API_VERSION_MAJOR 1
@@ -39,6 +46,7 @@ LARGE_INTEGER performance_frequency;
 #define MOUSEBUTTONUP_META_REGISTRYNAME MOUSEBUTTON_META_REGISTRYNAME
 #define SCROLL_META_REGISTRYNAME "scrollmeta"
 #define WINDOW_META_REGISTRYNAME "windowmeta"
+#define EMBEDDEDBROWSER_META_REGISTRYNAME "embeddedbrowsermeta"
 #define SWAPBUFFERS_CB_REGISTRYNAME "swapbufferscb"
 #define BATCH2D_CB_REGISTRYNAME "batch2dcb"
 #define RENDER3D_CB_REGISTRYNAME "render3dcb"
@@ -94,6 +102,9 @@ struct Plugin {
     uint32_t id_length;
     uint32_t path_length;
 };
+
+static void _bolt_plugin_ipc_init(BoltSocketType*);
+static void _bolt_plugin_ipc_close(BoltSocketType);
 
 static void _bolt_plugin_window_onresize(struct EmbeddedWindow*, struct ResizeEvent*);
 static void _bolt_plugin_window_onmousemotion(struct EmbeddedWindow*, struct MouseMotionEvent*);
@@ -196,6 +207,7 @@ static int api_window_on##APINAME(lua_State* state) { \
 } \
 void _bolt_plugin_window_on##APINAME(struct EmbeddedWindow* window, struct EVNAME* event) { \
     lua_State* state = window->plugin; \
+    if (window->is_browser) return; \
     lua_getfield(state, LUA_REGISTRYINDEX, WINDOWS_REGISTRYNAME); /*stack: window table*/ \
     lua_pushinteger(state, window->id); /*stack: window table, window id*/ \
     lua_gettable(state, -2); /*stack: window table, event table*/ \
@@ -229,6 +241,11 @@ static int surface_gc(lua_State* state) {
 
 static int window_gc(lua_State* state) {
     struct EmbeddedWindow* window = lua_touserdata(state, 1);
+
+    if (window->is_browser) {
+        // destroy shm object
+        _bolt_plugin_shm_close(&window->browser_shm);
+    }
 
     // destroy the public hashmap entry and clean up the struct itself
     _bolt_rwlock_lock_write(&windows.lock);
@@ -276,7 +293,7 @@ void _bolt_plugin_init(const struct PluginManagedFunctions* functions) {
 }
 
 static int _bolt_api_init(lua_State* state) {
-    lua_createtable(state, 0, 13);
+    lua_createtable(state, 0, 18);
     API_ADD(apiversion)
     API_ADD(checkversion)
     API_ADD(time)
@@ -294,6 +311,7 @@ static int _bolt_api_init(lua_State* state) {
     API_ADD(createsurfacefromrgba)
     API_ADD(createsurfacefrompng)
     API_ADD(createwindow)
+    API_ADD(createembeddedbrowser)
     return 1;
 }
 
@@ -483,6 +501,33 @@ void _bolt_plugin_handle_messages() {
                 }
                 break;
             }
+            case IPC_MSG_OSRUPDATE: {
+                uint64_t window_id;
+                uint8_t needs_remap;
+                int width, height;
+                _bolt_ipc_receive(fd, &window_id, sizeof(window_id));
+                _bolt_ipc_receive(fd, &needs_remap, sizeof(needs_remap));
+                _bolt_ipc_receive(fd, &width, sizeof(width));
+                _bolt_ipc_receive(fd, &height, sizeof(height));
+                
+                uint64_t* window_id_ptr = &window_id;
+                _bolt_rwlock_lock_read(&windows.lock);
+                struct EmbeddedWindow** window = (struct EmbeddedWindow**)hashmap_get(windows.map, &window_id_ptr);
+                _bolt_rwlock_unlock_read(&windows.lock);
+                if (window) {
+                    if (needs_remap || !(*window)->browser_shm.file) {
+                        _bolt_plugin_shm_remap(&(*window)->browser_shm, width * height * 4);
+                    }
+                    // TODO: SubImage2D instead of this
+                    managed_functions.surface_destroy((*window)->surface_functions.userdata);
+                    managed_functions.surface_init(&(*window)->surface_functions, width, height, (*window)->browser_shm.file);
+                }
+
+                struct BoltIPCMessageToHost message = {.message_type = IPC_MSG_OSRUPDATE_ACK};
+                _bolt_ipc_send(fd, &message, sizeof(message));
+                _bolt_ipc_send(fd, &window_id, sizeof(window_id));
+                break;
+            }
             default:
                 printf("unknown message type %u\n", message.message_type);
                 break;
@@ -583,7 +628,7 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     PUSHSTRING(plugin->state, RENDER3D_META_REGISTRYNAME);
     lua_newtable(plugin->state);
     PUSHSTRING(plugin->state, "__index");
-    lua_createtable(plugin->state, 0, 13);
+    lua_createtable(plugin->state, 0, 14);
     API_ADD_SUB(plugin->state, vertexcount, render3d)
     API_ADD_SUB(plugin->state, vertexxyz, render3d)
     API_ADD_SUB(plugin->state, vertexmeta, render3d)
@@ -635,11 +680,11 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     lua_settable(plugin->state, -3);
     lua_settable(plugin->state, LUA_REGISTRYINDEX);
 
-    // create both of the metatables for Window objects
+    // create the metatable for all Window objects
     PUSHSTRING(plugin->state, WINDOW_META_REGISTRYNAME);
     lua_newtable(plugin->state);
     PUSHSTRING(plugin->state, "__index");
-    lua_createtable(plugin->state, 0, 7);
+    lua_createtable(plugin->state, 0, 8);
     API_ADD_SUB(plugin->state, id, window)
     API_ADD_SUB(plugin->state, size, window)
     API_ADD_SUB(plugin->state, clear, window)
@@ -648,6 +693,18 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     API_ADD_SUB(plugin->state, onmousebutton, window)
     API_ADD_SUB(plugin->state, onmousebuttonup, window)
     API_ADD_SUB(plugin->state, onscroll, window)
+    lua_settable(plugin->state, -3);
+    PUSHSTRING(plugin->state, "__gc");
+    lua_pushcfunction(plugin->state, window_gc);
+    lua_settable(plugin->state, -3);
+    lua_settable(plugin->state, LUA_REGISTRYINDEX);
+
+    // create both of the metatables for all EmbeddedBrowser objects
+    PUSHSTRING(plugin->state, EMBEDDEDBROWSER_META_REGISTRYNAME);
+    lua_newtable(plugin->state);
+    PUSHSTRING(plugin->state, "__index");
+    lua_createtable(plugin->state, 0, 0);
+    // API_ADD_SUB...
     lua_settable(plugin->state, -3);
     PUSHSTRING(plugin->state, "__gc");
     lua_pushcfunction(plugin->state, window_gc);
@@ -667,7 +724,7 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     PUSHSTRING(plugin->state, MOUSEMOTION_META_REGISTRYNAME);
     lua_newtable(plugin->state);
     PUSHSTRING(plugin->state, "__index");
-    lua_createtable(plugin->state, 0, 7);
+    lua_createtable(plugin->state, 0, 8);
     API_ADD_SUB(plugin->state, xy, mouseevent)
     API_ADD_SUB(plugin->state, ctrl, mouseevent);
     API_ADD_SUB(plugin->state, shift, mouseevent);
@@ -683,7 +740,7 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     PUSHSTRING(plugin->state, MOUSEBUTTON_META_REGISTRYNAME);
     lua_newtable(plugin->state);
     PUSHSTRING(plugin->state, "__index");
-    lua_createtable(plugin->state, 0, 8);
+    lua_createtable(plugin->state, 0, 9);
     API_ADD_SUB(plugin->state, xy, mouseevent)
     API_ADD_SUB(plugin->state, ctrl, mouseevent);
     API_ADD_SUB(plugin->state, shift, mouseevent);
@@ -700,7 +757,7 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     PUSHSTRING(plugin->state, SCROLL_META_REGISTRYNAME);
     lua_newtable(plugin->state);
     PUSHSTRING(plugin->state, "__index");
-    lua_createtable(plugin->state, 0, 8);
+    lua_createtable(plugin->state, 0, 9);
     API_ADD_SUB(plugin->state, xy, mouseevent)
     API_ADD_SUB(plugin->state, ctrl, mouseevent);
     API_ADD_SUB(plugin->state, shift, mouseevent);
@@ -740,6 +797,35 @@ static void _bolt_check_argc(lua_State* state, int expected_argc, const char* fu
         SNPUSHSTRING(state, "incorrect argument count to '%s': expected %i, got %i", function_name, expected_argc, argc);
         lua_error(state);
     }
+}
+
+void _bolt_plugin_ipc_init(BoltSocketType* fd) {
+#if defined(_WIN32)
+    WSADATA wsa_data;
+    WSAStartup(MAKEWORD(2, 2), &wsa_data);
+#endif
+    const int olderr = errno;
+    struct sockaddr_un addr = {.sun_family = AF_UNIX};
+    *fd = socket(addr.sun_family, SOCK_STREAM, 0);
+#if defined(_WIN32)
+    const char* runtime_dir = getenv("appdata");
+    snprintf(addr.sun_path, sizeof(addr.sun_path) - 1, "%s\\bolt-launcher\\run\\ipc-0", runtime_dir);
+#else
+    const char* runtime_dir = getenv("XDG_RUNTIME_DIR");
+    const char* prefix = (runtime_dir && *runtime_dir) ? runtime_dir : "/tmp";
+    snprintf(addr.sun_path, sizeof(addr.sun_path) - 1, "%s/bolt-launcher/ipc-0", prefix);
+#endif
+    if (connect(*fd, (const struct sockaddr*)&addr, sizeof(addr)) == -1) {
+        printf("error: IPC connect() error %i\n", errno);
+        exit(1);
+    }
+    errno = olderr;
+}
+
+void _bolt_plugin_ipc_close(BoltSocketType fd) {
+    const int olderr = errno;
+    close(fd);
+    errno = olderr;
 }
 
 DEFINE_CALLBACK(swapbuffers, SWAPBUFFERS, SwapBuffersEvent)
@@ -914,6 +1000,7 @@ static int api_createwindow(lua_State* state) {
     
     // push a window onto the stack as the return value, then initialise it
     struct EmbeddedWindow* window = lua_newuserdata(state, sizeof(struct EmbeddedWindow));
+    window->is_browser = false;
     window->id = next_window_id;
     window->plugin = state;
     _bolt_rwlock_init(&window->lock);
@@ -934,6 +1021,56 @@ static int api_createwindow(lua_State* state) {
     lua_createtable(state, WINDOW_EVENT_ENUM_SIZE, 0);
     lua_settable(state, -3);
     lua_pop(state, 1);
+
+    // set this window in the hashmap, which is accessible by backends
+    _bolt_rwlock_lock_write(&windows.lock);
+    hashmap_set(windows.map, &window);
+    _bolt_rwlock_unlock_write(&windows.lock);
+    return 1;
+}
+
+static int api_createembeddedbrowser(lua_State* state) {
+    _bolt_check_argc(state, 5, "createembeddedbrowser");
+
+    // push a window onto the stack as the return value, then initialise it
+    struct EmbeddedWindow* window = lua_newuserdata(state, sizeof(struct EmbeddedWindow));
+    if (!_bolt_plugin_shm_open_inbound(&window->browser_shm, "eb", next_window_id)) {
+        PUSHSTRING(state, "createembeddedbrowser: failed to create shm object");
+        lua_error(state);
+    }
+    window->is_browser = true;
+    window->id = next_window_id;
+    window->plugin = state;
+    _bolt_rwlock_init(&window->lock);
+    _bolt_rwlock_init(&window->input_lock);
+    window->metadata.x = lua_tointeger(state, 1);
+    window->metadata.y = lua_tointeger(state, 2);
+    window->metadata.width = lua_tointeger(state, 3);
+    window->metadata.height = lua_tointeger(state, 4);
+    memset(&window->input, 0, sizeof(window->input));
+    managed_functions.surface_init(&window->surface_functions, window->metadata.width, window->metadata.height, NULL);
+    lua_getfield(state, LUA_REGISTRYINDEX, EMBEDDEDBROWSER_META_REGISTRYNAME);
+    lua_setmetatable(state, -2);
+    next_window_id += 1;
+
+    // send an IPC message to the host to create an OSR browser
+    const int pid = getpid();
+    lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME);
+    const struct Plugin* plugin = lua_touserdata(state, -1);
+    lua_pop(state, 1);
+    size_t url_length;
+    const char* url = lua_tolstring(state, 5, &url_length);
+    struct BoltIPCMessageToHost message = {.message_type = IPC_MSG_CREATEBROWSER_OSR, .items = 1};
+    const uint32_t url_length32 = (uint32_t)url_length;
+    _bolt_ipc_send(fd, &message, sizeof(message));
+    _bolt_ipc_send(fd, &pid, sizeof(pid));
+    _bolt_ipc_send(fd, &window->metadata.width, sizeof(window->metadata.width));
+    _bolt_ipc_send(fd, &window->metadata.height, sizeof(window->metadata.height));
+    _bolt_ipc_send(fd, &window->id, sizeof(window->id));
+    _bolt_ipc_send(fd, &plugin->id_length, sizeof(plugin->id_length));
+    _bolt_ipc_send(fd, &url_length32, sizeof(url_length32));
+    _bolt_ipc_send(fd, plugin->id, plugin->id_length);
+    _bolt_ipc_send(fd, url, url_length32);
 
     // set this window in the hashmap, which is accessible by backends
     _bolt_rwlock_lock_write(&windows.lock);

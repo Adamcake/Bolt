@@ -135,6 +135,21 @@ static int api_createsurfacefrompng(lua_State*);
 /// "api_window_".
 static int api_createwindow(lua_State*);
 
+/// [-5, +1, -]
+/// Creates an embedded browser window with the given initial values for x, y, width, height, and
+/// URL. If the URL begins with "file://", it will be interpreted as a file path relative to the
+/// root directory of this plugin, and must use "/" as file separators (if any). Otherwise, it will
+/// be treated as a URL of an internet website.
+///
+/// Embedded browsers behave similarly to embedded windows, except that browsers' window events are
+/// handled internally, so the plugin cannot receive callbacks for them.
+///
+/// A browser cannot be changed from embedded to external, nor vice versa, after creation.
+///
+/// All of the member functions of browser objects can be found in this file, prefixed with
+/// "api_embeddedbrowser_".
+static int api_createembeddedbrowser(lua_State*);
+
 /// [-1, +0, -]
 /// Sets a callback function for SwapBuffers events, overwriting the previous callback, if any.
 /// Passing a non-function (ideally `nil`) will restore the default setting, which is to have no
