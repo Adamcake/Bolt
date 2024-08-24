@@ -24,10 +24,7 @@ uint8_t _bolt_plugin_shm_open_inbound(struct BoltSHM* shm, const char* tag, uint
 }
 
 void _bolt_plugin_shm_close(struct BoltSHM* shm) {
-    char buf[256];
     close(shm->fd);
-    snprintf(buf, sizeof(buf), "/bolt-%i-%s-%lu", getpid(), shm->tag, shm->id);
-    shm_unlink(buf);
 }
 
 void _bolt_plugin_shm_resize(struct BoltSHM* shm, size_t length) {
