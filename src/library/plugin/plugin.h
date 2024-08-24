@@ -1,35 +1,14 @@
 #ifndef _BOLT_LIBRARY_PLUGIN_H_
 #define _BOLT_LIBRARY_PLUGIN_H_
-
 #include <stddef.h>
 #include <stdint.h>
 
 #include "../rwlock/rwlock.h"
+#include "../event.h"
 
 struct RenderBatch2D;
 struct Plugin;
 struct lua_State;
-
-enum PluginMouseButton {
-    MBLeft = 1,
-    MBRight = 2,
-    MBMiddle = 3,
-};
-
-// having MouseEvent has the first member of structs allows for generalisation with pointers
-struct MouseEvent {
-    int16_t x;
-    int16_t y;
-    uint8_t ctrl;
-    uint8_t shift;
-    uint8_t meta;
-    uint8_t alt;
-    uint8_t capslock;
-    uint8_t numlock;
-    uint8_t mb_left;
-    uint8_t mb_right;
-    uint8_t mb_middle;
-};
 
 /// Struct containing "vtable" callback information for RenderBatch2D's list of vertices.
 /// Unless stated otherwise, functions will be called with three params: the index, the specified

@@ -65,23 +65,6 @@ enum {
     WINDOW_EVENT_ENUM_SIZE, // last member of enum
 };
 
-struct ResizeEvent {
-    uint16_t width;
-    uint16_t height;
-};
-
-struct MouseMotionEvent {
-    struct MouseEvent* details;
-};
-struct MouseButtonEvent {
-    struct MouseEvent* details;
-    uint8_t button; // 1 left, 2 right, 3 middle
-};
-struct MouseScrollEvent {
-    struct MouseEvent* details;
-    uint8_t direction; // 0 down, 1 up
-};
-
 static struct PluginManagedFunctions managed_functions;
 
 static uint64_t next_window_id;
@@ -207,7 +190,13 @@ static int api_window_on##APINAME(lua_State* state) { \
 } \
 void _bolt_plugin_window_on##APINAME(struct EmbeddedWindow* window, struct EVNAME* event) { \
     lua_State* state = window->plugin; \
-    if (window->is_browser) return; \
+    if (window->is_browser) { \
+        struct BoltIPCMessageToHost message = {.message_type = IPC_MSG_EV##REGNAME}; \
+        _bolt_ipc_send(fd, &message, sizeof(message)); \
+        _bolt_ipc_send(fd, &window->id, sizeof(window->id)); \
+        _bolt_ipc_send(fd, event, sizeof(struct EVNAME)); \
+        return; \
+    } \
     lua_getfield(state, LUA_REGISTRYINDEX, WINDOWS_REGISTRYNAME); /*stack: window table*/ \
     lua_pushinteger(state, window->id); /*stack: window table, window id*/ \
     lua_gettable(state, -2); /*stack: window table, event table*/ \
@@ -331,39 +320,39 @@ void _bolt_plugin_process_windows(uint32_t window_width, uint32_t window_height)
     _bolt_rwlock_unlock_write(&windows->input_lock);
 
     if (inputs.mouse_motion) {
-        struct MouseMotionEvent event = {.details = &inputs.mouse_motion_event};
+        struct MouseMotionEvent event = {.details = inputs.mouse_motion_event};
         _bolt_plugin_handle_mousemotion(&event);
     }
     if (inputs.mouse_left) {
-        struct MouseButtonEvent event = {.details = &inputs.mouse_left_event, .button = MBLeft};
+        struct MouseButtonEvent event = {.details = inputs.mouse_left_event, .button = MBLeft};
         _bolt_plugin_handle_mousebutton(&event);
     }
     if (inputs.mouse_right) {
-        struct MouseButtonEvent event = {.details = &inputs.mouse_right_event, .button = MBRight};
+        struct MouseButtonEvent event = {.details = inputs.mouse_right_event, .button = MBRight};
         _bolt_plugin_handle_mousebutton(&event);
     }
     if (inputs.mouse_middle) {
-        struct MouseButtonEvent event = {.details = &inputs.mouse_middle_event, .button = MBMiddle};
+        struct MouseButtonEvent event = {.details = inputs.mouse_middle_event, .button = MBMiddle};
         _bolt_plugin_handle_mousebutton(&event);
     }
     if (inputs.mouse_left_up) {
-        struct MouseButtonEvent event = {.details = &inputs.mouse_left_up_event, .button = MBLeft};
+        struct MouseButtonEvent event = {.details = inputs.mouse_left_up_event, .button = MBLeft};
         _bolt_plugin_handle_mousebuttonup(&event);
     }
     if (inputs.mouse_right_up) {
-        struct MouseButtonEvent event = {.details = &inputs.mouse_right_up_event, .button = MBRight};
+        struct MouseButtonEvent event = {.details = inputs.mouse_right_up_event, .button = MBRight};
         _bolt_plugin_handle_mousebuttonup(&event);
     }
     if (inputs.mouse_middle_up) {
-        struct MouseButtonEvent event = {.details = &inputs.mouse_middle_up_event, .button = MBMiddle};
+        struct MouseButtonEvent event = {.details = inputs.mouse_middle_up_event, .button = MBMiddle};
         _bolt_plugin_handle_mousebuttonup(&event);
     }
     if (inputs.mouse_scroll_up) {
-        struct MouseScrollEvent event = {.details = &inputs.mouse_scroll_up_event, .direction = 1};
+        struct MouseScrollEvent event = {.details = inputs.mouse_scroll_up_event, .direction = 1};
         _bolt_plugin_handle_scroll(&event);
     }
     if (inputs.mouse_scroll_down) {
-        struct MouseScrollEvent event = {.details = &inputs.mouse_scroll_down_event, .direction = 0};
+        struct MouseScrollEvent event = {.details = inputs.mouse_scroll_down_event, .direction = 0};
         _bolt_plugin_handle_scroll(&event);
     }
 
@@ -410,39 +399,39 @@ void _bolt_plugin_process_windows(uint32_t window_width, uint32_t window_height)
         }
 
         if (inputs.mouse_motion) {
-            struct MouseMotionEvent event = {.details = &inputs.mouse_motion_event};
+            struct MouseMotionEvent event = {.details = inputs.mouse_motion_event};
             _bolt_plugin_window_onmousemotion(window, &event);
         }
         if (inputs.mouse_left) {
-            struct MouseButtonEvent event = {.details = &inputs.mouse_left_event, .button = MBLeft};
+            struct MouseButtonEvent event = {.details = inputs.mouse_left_event, .button = MBLeft};
             _bolt_plugin_window_onmousebutton(window, &event);
         }
         if (inputs.mouse_right) {
-            struct MouseButtonEvent event = {.details = &inputs.mouse_right_event, .button = MBRight};
+            struct MouseButtonEvent event = {.details = inputs.mouse_right_event, .button = MBRight};
             _bolt_plugin_window_onmousebutton(window, &event);
         }
         if (inputs.mouse_middle) {
-            struct MouseButtonEvent event = {.details = &inputs.mouse_middle_event, .button = MBMiddle};
+            struct MouseButtonEvent event = {.details = inputs.mouse_middle_event, .button = MBMiddle};
             _bolt_plugin_window_onmousebutton(window, &event);
         }
         if (inputs.mouse_left_up) {
-            struct MouseButtonEvent event = {.details = &inputs.mouse_left_up_event, .button = MBLeft};
+            struct MouseButtonEvent event = {.details = inputs.mouse_left_up_event, .button = MBLeft};
             _bolt_plugin_window_onmousebuttonup(window, &event);
         }
         if (inputs.mouse_right_up) {
-            struct MouseButtonEvent event = {.details = &inputs.mouse_right_up_event, .button = MBRight};
+            struct MouseButtonEvent event = {.details = inputs.mouse_right_up_event, .button = MBRight};
             _bolt_plugin_window_onmousebuttonup(window, &event);
         }
         if (inputs.mouse_middle_up) {
-            struct MouseButtonEvent event = {.details = &inputs.mouse_middle_up_event, .button = MBMiddle};
+            struct MouseButtonEvent event = {.details = inputs.mouse_middle_up_event, .button = MBMiddle};
             _bolt_plugin_window_onmousebuttonup(window, &event);
         }
         if (inputs.mouse_scroll_up) {
-            struct MouseScrollEvent event = {.details = &inputs.mouse_scroll_up_event, .direction = 1};
+            struct MouseScrollEvent event = {.details = inputs.mouse_scroll_up_event, .direction = 1};
             _bolt_plugin_window_onscroll(window, &event);
         }
         if (inputs.mouse_scroll_down) {
-            struct MouseScrollEvent event = {.details = &inputs.mouse_scroll_down_event, .direction = 0};
+            struct MouseScrollEvent event = {.details = inputs.mouse_scroll_down_event, .direction = 0};
             _bolt_plugin_window_onscroll(window, &event);
         }
 
@@ -1575,60 +1564,60 @@ static int api_resizeevent_size(lua_State* state) {
 
 static int api_mouseevent_xy(lua_State* state) {
     _bolt_check_argc(state, 1, "mouseevent_xy");
-    struct MouseEvent** event = lua_touserdata(state, 1);
-    lua_pushinteger(state, (*event)->x);
-    lua_pushinteger(state, (*event)->y);
+    struct MouseEvent* event = lua_touserdata(state, 1);
+    lua_pushinteger(state, event->x);
+    lua_pushinteger(state, event->y);
     return 2;
 }
 
 static int api_mouseevent_ctrl(lua_State* state) {
     _bolt_check_argc(state, 1, "mouseevent_ctrl");
-    struct MouseEvent** event = lua_touserdata(state, 1);
-    lua_pushboolean(state, (*event)->ctrl);
+    struct MouseEvent* event = lua_touserdata(state, 1);
+    lua_pushboolean(state, event->ctrl);
     return 1;
 }
 
 static int api_mouseevent_shift(lua_State* state) {
     _bolt_check_argc(state, 1, "mouseevent_shift");
-    struct MouseEvent** event = lua_touserdata(state, 1);
-    lua_pushboolean(state, (*event)->shift);
+    struct MouseEvent* event = lua_touserdata(state, 1);
+    lua_pushboolean(state, event->shift);
     return 1;
 }
 
 static int api_mouseevent_meta(lua_State* state) {
     _bolt_check_argc(state, 1, "mouseevent_meta");
-    struct MouseEvent** event = lua_touserdata(state, 1);
-    lua_pushboolean(state, (*event)->meta);
+    struct MouseEvent* event = lua_touserdata(state, 1);
+    lua_pushboolean(state, event->meta);
     return 1;
 }
 
 static int api_mouseevent_alt(lua_State* state) {
     _bolt_check_argc(state, 1, "mouseevent_alt");
-    struct MouseEvent** event = lua_touserdata(state, 1);
-    lua_pushboolean(state, (*event)->alt);
+    struct MouseEvent* event = lua_touserdata(state, 1);
+    lua_pushboolean(state, event->alt);
     return 1;
 }
 
 static int api_mouseevent_capslock(lua_State* state) {
     _bolt_check_argc(state, 1, "mouseevent_capslock");
-    struct MouseEvent** event = lua_touserdata(state, 1);
-    lua_pushboolean(state, (*event)->capslock);
+    struct MouseEvent* event = lua_touserdata(state, 1);
+    lua_pushboolean(state, event->capslock);
     return 1;
 }
 
 static int api_mouseevent_numlock(lua_State* state) {
     _bolt_check_argc(state, 1, "mouseevent_numlock");
-    struct MouseEvent** event = lua_touserdata(state, 1);
-    lua_pushboolean(state, (*event)->numlock);
+    struct MouseEvent* event = lua_touserdata(state, 1);
+    lua_pushboolean(state, event->numlock);
     return 1;
 }
 
 static int api_mouseevent_mousebuttons(lua_State* state) {
     _bolt_check_argc(state, 1, "mouseevent_mousebuttons");
-    struct MouseEvent** event = lua_touserdata(state, 1);
-    lua_pushboolean(state, (*event)->mb_left);
-    lua_pushboolean(state, (*event)->mb_right);
-    lua_pushboolean(state, (*event)->mb_middle);
+    struct MouseEvent* event = lua_touserdata(state, 1);
+    lua_pushboolean(state, event->mb_left);
+    lua_pushboolean(state, event->mb_right);
+    lua_pushboolean(state, event->mb_middle);
     return 3;
 }
 
