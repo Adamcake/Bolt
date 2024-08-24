@@ -31,6 +31,7 @@ Browser::WindowOSR::WindowOSR(CefString url, int width, int height, BoltSocketTy
 	char buf[256];
 	snprintf(buf, sizeof(buf), "/bolt-%i-eb-%lu", pid, window_id);
 	this->shm = shm_open(buf, O_RDWR, 644);
+	shm_unlink(buf);
 	const off_t shm_len = (off_t)width * (off_t)height * 4;
 	if (ftruncate(this->shm, shm_len)) {
 		fmt::print("[B] WindowOSR(): ftruncate error {}\n", errno);
