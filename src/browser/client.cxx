@@ -1,6 +1,8 @@
 #include "client.hxx"
+#include "include/internal/cef_string.h"
 
 #if defined(BOLT_PLUGINS)
+#include "window_osr.hxx"
 #include "include/cef_parser.h"
 #include <cstring>
 #define BOLT_IPC_URL "https://bolt-blankpage/"
@@ -311,6 +313,11 @@ void Browser::Client::IPCHandleClosed(int fd) {
 	auto it = std::find_if(this->game_clients.begin(), this->game_clients.end(), [fd](const GameClient& g) { return g.fd == fd; });
 	if (it != this->game_clients.end()) {
 		delete[] it->identity;
+		for (ActivePlugin& p: it->plugins) {
+			for (CefRefPtr<WindowOSR>& w: p.windows_osr) {
+				w->Close();
+			}
+		}
 		this->game_clients.erase(it);
 	}
 }
@@ -337,6 +344,63 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 			}
 			this->game_clients_lock.unlock();
 			this->IPCHandleClientListUpdate();
+			break;
+		}
+		case IPC_MSG_CREATEBROWSER_OSR: {
+			int pid, w, h;
+			uint64_t plugin_window_id;
+			uint32_t id_length;
+			uint32_t url_length;
+			_bolt_ipc_receive(fd, &pid, sizeof(pid));
+			_bolt_ipc_receive(fd, &w, sizeof(w));
+			_bolt_ipc_receive(fd, &h, sizeof(h));
+			_bolt_ipc_receive(fd, &plugin_window_id, sizeof(plugin_window_id));
+			_bolt_ipc_receive(fd, &id_length, sizeof(id_length));
+			_bolt_ipc_receive(fd, &url_length, sizeof(url_length));
+			char* plugin_id = new char[id_length + url_length];
+			char* url = plugin_id + id_length;
+			_bolt_ipc_receive(fd, plugin_id, id_length);
+			_bolt_ipc_receive(fd, url, url_length);
+
+			this->game_clients_lock.lock();
+			ActivePlugin* plugin = nullptr;
+			for (GameClient& g: this->game_clients) {
+				if (g.fd == fd) {
+					for (ActivePlugin& p: g.plugins) {
+						if (!strncmp(p.id.c_str(), plugin_id, id_length)) {
+							plugin = &p;
+							break;
+						}
+					}
+				}
+			}
+
+			if (plugin) {
+				CefRefPtr<Browser::WindowOSR> window = new Browser::WindowOSR(CefString(url), w, h, fd, this, pid, plugin_window_id);
+				plugin->windows_osr.push_back(window);
+			}
+			this->game_clients_lock.unlock();
+			delete[] plugin_id;
+			break;
+		}
+		case IPC_MSG_OSRUPDATE_ACK: {
+			uint64_t plugin_window_id;
+			_bolt_ipc_receive(fd, &plugin_window_id, sizeof(plugin_window_id));
+			this->game_clients_lock.lock();
+			for (GameClient& g: this->game_clients) {
+				if (g.fd == fd) {
+					for (ActivePlugin& p: g.plugins) {
+						for (CefRefPtr<Browser::WindowOSR>& w: p.windows_osr) {
+							if (w->ID() == plugin_window_id) {
+								w->HandleAck();
+								goto exit_osrupdate_ack;
+							}
+						}
+					}
+				}
+			}
+			exit_osrupdate_ack:
+			this->game_clients_lock.unlock();
 			break;
 		}
 		default: {
@@ -372,8 +436,18 @@ CefRefPtr<CefResourceRequestHandler> Browser::Client::ListGameClients() {
 
 void Browser::Client::StartPlugin(uint64_t client_id, std::string id, std::string path, std::string main) {
 	this->game_clients_lock.lock();
-	for (const GameClient& g: this->game_clients) {
+	for (GameClient& g: this->game_clients) {
 		if (g.uid == client_id) {
+			for (auto it = g.plugins.begin(); it != g.plugins.end(); it++) {
+				if (it->id != id) continue;
+				for (CefRefPtr<WindowOSR>& w: it->windows_osr) {
+					w->Close();
+				}
+				g.plugins.erase(it);
+				break;
+			}
+			g.plugins.push_back(ActivePlugin {.id = id});
+
 			const size_t message_size = sizeof(BoltIPCMessageToClient) + (sizeof(uint32_t) * 3) + id.size() + path.size() + main.size();
 			uint8_t* message = new uint8_t[message_size];
 			*(BoltIPCMessageToClient*)message = {.message_type = IPC_MSG_STARTPLUGINS, .items = 1};
@@ -393,6 +467,25 @@ void Browser::Client::StartPlugin(uint64_t client_id, std::string id, std::strin
 			delete[] message;
 			break;
 		}
+	}
+	this->game_clients_lock.unlock();
+}
+
+void Browser::Client::CleanupClientPlugins(int fd) {
+	this->game_clients_lock.lock();
+	for (GameClient& g: this->game_clients) {
+		if (g.fd != fd) continue;
+		for (ActivePlugin& p: g.plugins) {
+			p.windows_osr.erase(
+				std::remove_if(
+					p.windows_osr.begin(),
+					p.windows_osr.end(),
+					[](const CefRefPtr<WindowOSR>& window){ return window->IsDeleted(); }
+				),
+				p.windows_osr.end()
+			);
+		}
+		break;
 	}
 	this->game_clients_lock.unlock();
 }

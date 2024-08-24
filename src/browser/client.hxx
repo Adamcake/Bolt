@@ -1,6 +1,7 @@
 #ifndef _BOLT_CLIENT_HXX_
 #define _BOLT_CLIENT_HXX_
 #if defined(BOLT_PLUGINS)
+#include "window_osr.hxx"
 #include "../library/ipc.h"
 #include <thread>
 #endif
@@ -91,6 +92,10 @@ namespace Browser {
 		/// Sends an IPC message to the named client to start a plugin.
 		void StartPlugin(uint64_t client_id, std::string id, std::string path, std::string main);
 
+		/// Filters the list of plugins and their associated browsers for the client identified by the given fd,
+		/// to remove deleted plugins and browsers. Usually called when a browser is closed.
+		void CleanupClientPlugins(int fd);
+
 		/* CefWindowDelegate overrides */
 		void OnWindowCreated(CefRefPtr<CefWindow>) override;
 #endif
@@ -161,11 +166,17 @@ namespace Browser {
 #endif
 
 #if defined(BOLT_PLUGINS)
+			struct ActivePlugin {
+				std::string id;
+				std::vector<CefRefPtr<Browser::WindowOSR>> windows_osr;
+			};
 			struct GameClient {
 				uint64_t uid;
 				int fd;
 				// identity may be null if game hasn't reported its identity yet or display name is unset
 				char* identity;
+
+				std::vector<ActivePlugin> plugins;
 			};
 			std::thread ipc_thread;
 			BoltSocketType ipc_fd;
