@@ -11,6 +11,11 @@
 
 #include <mutex>
 
+struct ResizeEvent;
+struct MouseMotionEvent;
+struct MouseButtonEvent;
+struct MouseScrollEvent;
+
 namespace Browser {
 	struct Client;
 
@@ -22,10 +27,16 @@ namespace Browser {
 		void Close();
 
 		void HandleAck();
+		void HandleResize(const ResizeEvent*);
+		void HandleMouseMotion(const MouseMotionEvent*);
+		void HandleMouseButton(const MouseButtonEvent*);
+		void HandleMouseButtonUp(const MouseButtonEvent*);
+		void HandleScroll(const MouseScrollEvent*);
 
 		uint64_t ID();
 
 		CefRefPtr<CefRenderHandler> GetRenderHandler() override;
+		CefRefPtr<CefLifeSpanHandler> GetLifeSpanHandler() override;
 		void GetViewRect(CefRefPtr<CefBrowser> browser, CefRect& rect) override;
 		void OnPaint(CefRefPtr<CefBrowser> browser, PaintElementType type, const RectList& dirtyRects, const void* buffer, int width, int height) override;
 
@@ -36,6 +47,7 @@ namespace Browser {
 			bool deleted;
 			bool pending_delete;
 			BoltSocketType client_fd;
+			std::mutex size_lock;
 			int width, height;
 			int shm;
 			void* file;

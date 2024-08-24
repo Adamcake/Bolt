@@ -1,4 +1,5 @@
 #include "window_osr.hxx"
+#include "include/internal/cef_types.h"
 
 #if defined(BOLT_PLUGINS)
 #if defined(_WIN32)
@@ -13,6 +14,7 @@
 
 #include <fmt/core.h>
 #include "client.hxx"
+#include "../library/event.h"
 
 static void SendUpdateMsg(BoltSocketType fd, uint64_t id, int width, int height, bool needs_remap, const CefRect* rects, uint32_t rect_count) {
 	uint8_t buf[sizeof(BoltIPCMessageToClient) + sizeof(uint64_t) + (2 *sizeof(int)) + (rect_count * sizeof(int) * 4) + 1];
@@ -72,6 +74,10 @@ void Browser::WindowOSR::Close() {
 	}
 }
 
+uint64_t Browser::WindowOSR::ID() {
+	return this->window_id;
+}
+
 void Browser::WindowOSR::HandleAck() {
 	if (this->deleted) return;
 	this->stored_lock.lock();
@@ -79,7 +85,7 @@ void Browser::WindowOSR::HandleAck() {
 		const int length = this->stored_width * this->stored_height * 4;
 		const bool needs_remap = length != this->mapping_size;
 		if (needs_remap) {
-			this->file = mremap(nullptr, this->mapping_size, length, MAP_SHARED);
+			this->file = mremap(this->file, this->mapping_size, length, MREMAP_MAYMOVE);
 			this->mapping_size = length;
 		}
 		memcpy(this->file, this->stored, length);
@@ -92,16 +98,78 @@ void Browser::WindowOSR::HandleAck() {
 	this->stored_lock.unlock();
 }
 
-uint64_t Browser::WindowOSR::ID() {
-	return this->window_id;
+void Browser::WindowOSR::HandleResize(const ResizeEvent* event) {
+	this->size_lock.lock();
+	this->width = event->width;
+	this->height = event->height;
+	this->size_lock.unlock();
+	if (this->browser) this->browser->GetHost()->WasResized();
 }
+
+static void MouseEventToCef(const MouseEvent* in, CefMouseEvent* out) {
+	out->x = in->x;
+	out->y = in->y;
+	out->modifiers =
+		in->capslock ? EVENTFLAG_CAPS_LOCK_ON : 0 |
+		in->shift ? EVENTFLAG_SHIFT_DOWN : 0 |
+		in->ctrl ? EVENTFLAG_CONTROL_DOWN : 0 |
+		in->alt ? EVENTFLAG_ALT_DOWN : 0 |
+		in->mb_left ? EVENTFLAG_LEFT_MOUSE_BUTTON : 0 |
+		in->mb_middle ? EVENTFLAG_MIDDLE_MOUSE_BUTTON : 0 |
+		in->mb_right ? EVENTFLAG_RIGHT_MOUSE_BUTTON : 0 |
+		in->meta ? EVENTFLAG_COMMAND_DOWN : 0 |
+		in->numlock ? EVENTFLAG_NUM_LOCK_ON : 0;
+}
+
+static cef_mouse_button_type_t MouseButtonToCef(uint8_t in) {
+	switch (in) {
+		default:
+		case 1:
+			return MBT_LEFT;
+		case 2:
+			return MBT_RIGHT;
+		case 3:
+			return MBT_MIDDLE;
+	}
+}
+
+void Browser::WindowOSR::HandleMouseMotion(const MouseMotionEvent* event) {
+	CefMouseEvent e;
+	MouseEventToCef(&event->details, &e);
+	if (this->browser) this->browser->GetHost()->SendMouseMoveEvent(e, false);
+}
+
+void Browser::WindowOSR::HandleMouseButton(const MouseButtonEvent* event) {
+	CefMouseEvent e;
+	MouseEventToCef(&event->details, &e);
+	if (this->browser) this->browser->GetHost()->SendMouseClickEvent(e, MouseButtonToCef(event->button), false, 1);
+}
+
+void Browser::WindowOSR::HandleMouseButtonUp(const MouseButtonEvent* event) {
+	CefMouseEvent e;
+	MouseEventToCef(&event->details, &e);
+	if (this->browser) this->browser->GetHost()->SendMouseClickEvent(e, MouseButtonToCef(event->button), true, 1);
+}
+
+void Browser::WindowOSR::HandleScroll(const MouseScrollEvent* event) {
+	CefMouseEvent e;
+	MouseEventToCef(&event->details, &e);
+	if (this->browser) this->browser->GetHost()->SendMouseWheelEvent(e, 0, event->direction ? 20 : -20);
+}
+
 
 CefRefPtr<CefRenderHandler> Browser::WindowOSR::GetRenderHandler() {
 	return this;
 }
 
+CefRefPtr<CefLifeSpanHandler> Browser::WindowOSR::GetLifeSpanHandler() {
+	return this;
+}
+
 void Browser::WindowOSR::GetViewRect(CefRefPtr<CefBrowser> browser, CefRect& rect) {
+	this->size_lock.lock();
 	rect.Set(0, 0, this->width, this->height);
+	this->size_lock.unlock();
 }
 
 void Browser::WindowOSR::OnPaint(CefRefPtr<CefBrowser> browser, PaintElementType type, const RectList& dirtyRects, const void* buffer, int width, int height) {
@@ -115,7 +183,7 @@ void Browser::WindowOSR::OnPaint(CefRefPtr<CefBrowser> browser, PaintElementType
 			if (ftruncate(this->shm, length)) {
 				fmt::print("[B] OnPaint: ftruncate error {}\n", errno);
 			}
-			this->file = mremap(nullptr, this->mapping_size, length, MAP_SHARED);
+			this->file = mremap(this->file, this->mapping_size, length, MREMAP_MAYMOVE);
 			this->mapping_size = length;
 			memcpy(this->file, buffer, length);
 		} else {
@@ -158,6 +226,7 @@ void Browser::WindowOSR::OnPaint(CefRefPtr<CefBrowser> browser, PaintElementType
 }
 
 void Browser::WindowOSR::OnAfterCreated(CefRefPtr<CefBrowser> browser) {
+	fmt::print("setting browser to {}\n", (uintptr_t)browser.get());
 	this->browser = browser;
 	if (this->pending_delete) {
 		browser->GetHost()->CloseBrowser(true);
@@ -166,6 +235,7 @@ void Browser::WindowOSR::OnAfterCreated(CefRefPtr<CefBrowser> browser) {
 
 void Browser::WindowOSR::OnBeforeClose(CefRefPtr<CefBrowser> browser) {
 	if (browser->IsSame(this->browser)) {
+		fmt::print("setting browser to nullptr\n");
 		this->browser = nullptr;
 		free(this->stored);
 		munmap(this->file, this->mapping_size);
