@@ -226,7 +226,6 @@ void Browser::WindowOSR::OnPaint(CefRefPtr<CefBrowser> browser, PaintElementType
 }
 
 void Browser::WindowOSR::OnAfterCreated(CefRefPtr<CefBrowser> browser) {
-	fmt::print("setting browser to {}\n", (uintptr_t)browser.get());
 	this->browser = browser;
 	if (this->pending_delete) {
 		browser->GetHost()->CloseBrowser(true);
@@ -235,7 +234,6 @@ void Browser::WindowOSR::OnAfterCreated(CefRefPtr<CefBrowser> browser) {
 
 void Browser::WindowOSR::OnBeforeClose(CefRefPtr<CefBrowser> browser) {
 	if (browser->IsSame(this->browser)) {
-		fmt::print("setting browser to nullptr\n");
 		this->browser = nullptr;
 		free(this->stored);
 		munmap(this->file, this->mapping_size);
