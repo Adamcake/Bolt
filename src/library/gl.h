@@ -193,6 +193,7 @@ struct GLProgram {
     GLint loc_uTextureAtlasSettings;
     GLint loc_uAtlasMeta;
     GLint loc_uModelMatrix;
+    GLint loc_uBoneTransforms;
     GLint loc_uGridSize;
     GLint loc_uVertexScale;
     GLint loc_sSceneHDRTex;

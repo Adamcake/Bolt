@@ -8,6 +8,7 @@
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -628,7 +629,7 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     PUSHSTRING(plugin->state, RENDER3D_META_REGISTRYNAME);
     lua_newtable(plugin->state);
     PUSHSTRING(plugin->state, "__index");
-    lua_createtable(plugin->state, 0, 14);
+    lua_createtable(plugin->state, 0, 17);
     API_ADD_SUB(plugin->state, vertexcount, render3d)
     API_ADD_SUB(plugin->state, vertexxyz, render3d)
     API_ADD_SUB(plugin->state, vertexmeta, render3d)
@@ -642,6 +643,9 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     API_ADD_SUB(plugin->state, toworldspace, render3d)
     API_ADD_SUB(plugin->state, toscreenspace, render3d)
     API_ADD_SUB(plugin->state, worldposition, render3d)
+    API_ADD_SUB(plugin->state, vertexbone, render3d)
+    API_ADD_SUB(plugin->state, bonetransforms, render3d)
+    API_ADD_SUB(plugin->state, animated, render3d)
     API_ADD_SUB_ALIAS(plugin->state, vertexcolour, vertexcolor, render3d)
     lua_settable(plugin->state, -3);
     lua_settable(plugin->state, LUA_REGISTRYINDEX);
@@ -1552,6 +1556,69 @@ static int api_render3d_worldposition(lua_State* state) {
     lua_pushnumber(state, out[1]);
     lua_pushnumber(state, out[2]);
     return 3;
+}
+
+static int api_render3d_vertexbone(lua_State* state) {
+    _bolt_check_argc(state, 2, "render3d_vertexbone");
+    struct Render3D* render = lua_touserdata(state, 1);
+    const int index = lua_tointeger(state, 2);
+    uint8_t ret = render->vertex_functions.bone_id(index, render->vertex_functions.userdata);
+    lua_pushinteger(state, ret);
+    return 1;
+}
+
+static int api_render3d_bonetransforms(lua_State* state) {
+    _bolt_check_argc(state, 2, "render3d_bonetransforms");
+    struct Render3D* render = lua_touserdata(state, 1);
+    const int bone_id = lua_tointeger(state, 2);
+
+    if (!render->is_animated) {
+        PUSHSTRING(state, "render3d_bonetransforms: cannot get bone transforms for non-animated model");
+        lua_error(state);
+    }
+
+    // not a mistake - game's shader supports values from 0 to 128, inclusive
+    if (bone_id < 0 || bone_id > 128) {
+        PUSHSTRING(state, "render3d_bonetransforms: invalid bone ID");
+        lua_error(state);
+    }
+
+#define LENGTH(N1, N2, N3) sqrt((N1 * N1) + (N2 * N2) + (N3 * N3))
+    double transform[16];
+    render->vertex_functions.bone_transform((uint8_t)bone_id, render->vertex_functions.userdata, transform);
+    lua_pushnumber(state, transform[12]);
+    lua_pushnumber(state, transform[13]);
+    lua_pushnumber(state, transform[14]);
+    const double scale_x = LENGTH(transform[0], transform[1], transform[2]);
+    const double scale_y = LENGTH(transform[4], transform[5], transform[6]);
+    const double scale_z = LENGTH(transform[8], transform[9], transform[10]);
+    lua_pushnumber(state, scale_x);
+    lua_pushnumber(state, scale_y);
+    lua_pushnumber(state, scale_z);
+    if (scale_x == 0.0 || scale_y == 0.0 || scale_z == 0.0) {
+        // scale=0 means we can't calculate angles because there would be a division by zero,
+        // and angle is meaningless for a zero-scale model anyway, so just put 0 for all the angles
+        lua_pushnumber(state, 0.0);
+        lua_pushnumber(state, 0.0);
+        lua_pushnumber(state, 0.0);
+    } else {
+        // see https://stackoverflow.com/questions/39128589/decomposing-rotation-matrix-x-y-z-cartesian-angles
+        const double yaw = atan2(-(transform[8] / scale_z), sqrt((transform[0] * transform[0] / (scale_x * scale_x)) + (transform[4] * transform[4] / (scale_y * scale_y))));
+        const double pitch = atan2((transform[9] / scale_z) / cos(yaw), (transform[10] / scale_z) / cos(yaw));
+        const double roll = atan2((transform[4] / scale_y) / cos(yaw), (transform[0] / scale_x) / cos(yaw));
+        lua_pushnumber(state, yaw);
+        lua_pushnumber(state, pitch);
+        lua_pushnumber(state, roll);
+    }
+    return 9;
+#undef LENGTH
+}
+
+static int api_render3d_animated(lua_State* state) {
+    _bolt_check_argc(state, 1, "render3d_animated");
+    struct Render3D* render = lua_touserdata(state, 1);
+    lua_pushboolean(state, render->is_animated);
+    return 1;
 }
 
 static int api_resizeevent_size(lua_State* state) {

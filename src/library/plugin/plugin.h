@@ -58,6 +58,12 @@ struct Vertex3DFunctions {
 
     /// Returns the RGBA colour of this vertex, each one normalised from 0.0 to 1.0.
     void (*colour)(size_t index, void* userdata, double* out);
+
+    /// Returns the ID of the bone this vertex belongs to.
+    uint8_t (*bone_id)(size_t index, void* userdata);
+
+    /// Returns the transform matrix for the given bone, as 16 doubles.
+    void (*bone_transform)(uint8_t bone_id, void* userdata, double* out);
 };
 
 /// Struct containing "vtable" callback information for textures.
@@ -199,6 +205,7 @@ struct RenderBatch2D {
 
 struct Render3D {
     uint32_t vertex_count;
+    uint8_t is_animated;
     struct Vertex3DFunctions vertex_functions;
     struct TextureFunctions texture_functions;
     struct Render3DMatrixFunctions matrix_functions;

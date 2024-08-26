@@ -86,6 +86,8 @@ static size_t _bolt_gl_plugin_drawelements_vertex3d_atlas_meta(size_t index, voi
 static void _bolt_gl_plugin_drawelements_vertex3d_meta_xywh(size_t meta, void* userdata, int32_t* out);
 static void _bolt_gl_plugin_drawelements_vertex3d_uv(size_t index, void* userdata, double* out);
 static void _bolt_gl_plugin_drawelements_vertex3d_colour(size_t index, void* userdata, double* out);
+static uint8_t _bolt_gl_plugin_drawelements_vertex3d_boneid(size_t index, void* userdata);
+static void _bolt_gl_plugin_bone_transform(uint8_t bone_id, void* userdata, double* out);
 static void _bolt_gl_plugin_matrix3d_toworldspace(int x, int y, int z, void* userdata, double* out);
 static void _bolt_gl_plugin_matrix3d_toscreenspace(int x, int y, int z, void* userdata, double* out);
 static void _bolt_gl_plugin_matrix3d_worldpos(void* userdata, double* out);
@@ -606,6 +608,7 @@ static GLuint _bolt_glCreateProgram() {
     program->loc_uTextureAtlasSettings = -1;
     program->loc_uAtlasMeta = -1;
     program->loc_uModelMatrix = -1;
+    program->loc_uBoneTransforms = -1;
     program->loc_uGridSize = -1;
     program->loc_uVertexScale = -1;
     program->loc_sSceneHDRTex = -1;
@@ -666,6 +669,7 @@ static void _bolt_glLinkProgram(GLuint program) {
     const GLint loc_uVertexScale = gl.GetUniformLocation(program, "uVertexScale");
     p->loc_sSceneHDRTex = gl.GetUniformLocation(program, "sSceneHDRTex");
     p->loc_sSourceTex = gl.GetUniformLocation(program, "sSourceTex");
+    p->loc_uBoneTransforms = gl.GetUniformLocation(program, "uBoneTransforms");
 
     const GLchar* view_var_names[] = {"uCameraPosition", "uViewProjMatrix"};
     const GLuint block_index_ViewTransforms = gl.GetUniformBlockIndex(program, "ViewTransforms");
@@ -1375,12 +1379,15 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
 
             struct Render3D render;
             render.vertex_count = count;
+            render.is_animated = c->bound_program->loc_uBoneTransforms != -1;
             render.vertex_functions.userdata = &vertex_userdata;
             render.vertex_functions.xyz = _bolt_gl_plugin_drawelements_vertex3d_xyz;
             render.vertex_functions.atlas_meta = _bolt_gl_plugin_drawelements_vertex3d_atlas_meta;
             render.vertex_functions.atlas_xywh = _bolt_gl_plugin_drawelements_vertex3d_meta_xywh;
             render.vertex_functions.uv = _bolt_gl_plugin_drawelements_vertex3d_uv;
             render.vertex_functions.colour = _bolt_gl_plugin_drawelements_vertex3d_colour;
+            render.vertex_functions.bone_id = _bolt_gl_plugin_drawelements_vertex3d_boneid;
+            render.vertex_functions.bone_transform = _bolt_gl_plugin_bone_transform;
             render.texture_functions.userdata = &tex_userdata;
             render.texture_functions.id = _bolt_gl_plugin_texture_id;
             render.texture_functions.size = _bolt_gl_plugin_texture_size;
@@ -1586,6 +1593,42 @@ static void _bolt_gl_plugin_drawelements_vertex3d_colour(size_t index, void* use
     out[1] = (double)colour[2];
     out[2] = (double)colour[1];
     out[3] = (double)colour[0];
+}
+
+static uint8_t _bolt_gl_plugin_drawelements_vertex3d_boneid(size_t index, void* userdata) {
+    struct GLPluginDrawElementsVertex3DUserData* data = userdata;
+    uint32_t ret[4];
+    if (!_bolt_get_attr_binding_int(data->c, data->xyz_bone, data->indices[index], 4, (int32_t*)&ret)) {
+        float retf[4];
+        _bolt_get_attr_binding(data->c, data->xyz_bone, data->indices[index], 4, retf);
+        return (uint8_t)(uint32_t)(int32_t)roundf(retf[3]);
+    }
+    return (uint8_t)(ret[3]);
+}
+
+static void _bolt_gl_plugin_bone_transform(uint8_t bone_id, void* userdata, double* out) {
+    struct GLContext* c = _bolt_context();
+    const GLint uniform_loc = c->bound_program->loc_uBoneTransforms + (bone_id * 3);
+    GLfloat f[4];
+    gl.GetUniformfv(c->bound_program->id, uniform_loc, f);
+    out[0] = (double)f[0];
+    out[1] = (double)f[1];
+    out[2] = (double)f[2];
+    out[3] = 0.0;
+    out[4] = (double)f[3];
+    gl.GetUniformfv(c->bound_program->id, uniform_loc + 1, f);
+    out[5] = (double)f[0];
+    out[6] = (double)f[1];
+    out[7] = 0.0;
+    out[8] = (double)f[2];
+    out[9] = (double)f[3];
+    gl.GetUniformfv(c->bound_program->id, uniform_loc + 2, f);
+    out[10] = (double)f[0];
+    out[11] = 0.0;
+    out[12] = (double)f[1];
+    out[13] = (double)f[2];
+    out[14] = (double)f[3];
+    out[15] = 1.0;
 }
 
 static void _bolt_gl_plugin_matrix3d_toworldspace(int x, int y, int z, void* userdata, double* out) {

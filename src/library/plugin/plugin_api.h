@@ -484,7 +484,9 @@ static int api_window_onscroll(lua_State*);
 static int api_render3d_vertexcount(lua_State*);
 
 /// [-2, +3, -]
-/// Given an index of a vertex in a model, returns its X Y and Z in model coordinates.
+/// Given an index of a vertex in a model, returns its X Y and Z in model coordinates. More
+/// specifically, this is the default position of this vertex in the model - it is not affected by
+/// any kind of scaling, rotation, movement, or animation that may be happening to the model.
 static int api_render3d_vertexxyz(lua_State*);
 
 /// [-2, +1, -]
@@ -570,6 +572,39 @@ static int api_render3d_toscreenspace(lua_State*);
 ///
 /// Equivalent to `render:toworldspace(0, 0, 0)`
 static int api_render3d_worldposition(lua_State*);
+
+/// [-1, +1, -]
+/// Returns the bone ID of this vertex. Animated models have multiple bones which can move
+/// independently of each other, and this function can be used to find out which bone a vertex
+/// belongs to. The returned value may be any integer from 0 to 255, although the game engine
+/// actually seems to be unable to handle indices higher than 128. (128 itself is valid.)
+///
+/// All vertices have bone IDs, even in non-animated models, so plugins may call this function
+/// regardless of whether the model is animated or not. For a non-animated model the bone ID seems
+/// to be meaningless and is usually 0. To check if the model is animated, use `animated()`.
+static int api_render3d_vertexbone(lua_State*);
+
+/// [-1, +9, -]
+/// Given a bone ID, returns the following nine floating-point values in this order: translation X,
+/// Y and Z, in model coordinates; scale factor X, Y and Z; yaw, pitch, and roll, in radians. These
+/// values represent the animation state of this bone during this render.
+///
+/// It is a fatal error to call this function on a render event for a non-animated model, since
+/// non-animated models have no bone transforms that could be queried. To check if the model is
+/// animated, use `animated()`.
+///
+/// The results of this function are imperfect for two reasons. Firstly, the engine doesn't use
+/// static animation frames; instead it interpolates between multiple frames, so the exact state of
+/// animation will depend on the user's FPS. Secondly, these values get pre-multiplied into one big
+/// matrix by the time Bolt can access them. Bolt decomposes the matrix back to its original values
+/// but there will be some loss of precision.
+static int api_render3d_bonetransforms(lua_State*);
+
+/// [-1, +1, -]
+/// Returns a boolean value indicating whether this model is animated. Animated models can have
+/// multiple bones which can move independently of each other. For more information on bones, see
+/// `vertexbone()` and `bonetransforms()`.
+static int api_render3d_animated(lua_State*);
 
 /// [-1, +2, -]
 /// Returns the new width and height that the window was resized to.
