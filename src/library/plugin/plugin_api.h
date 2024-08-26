@@ -486,8 +486,20 @@ static int api_render3d_vertexcount(lua_State*);
 /// [-2, +3, -]
 /// Given an index of a vertex in a model, returns its X Y and Z in model coordinates. More
 /// specifically, this is the default position of this vertex in the model - it is not affected by
-/// any kind of scaling, rotation, movement, or animation that may be happening to the model.
+/// any kind of scaling, rotation, movement, or animation that may be happening to the model. To
+/// get this vertex's position in its current animation state, use `vertexanimatedxyz()`.
 static int api_render3d_vertexxyz(lua_State*);
+
+/// [-2, +3, -]
+/// Given an index of a vertex in a model, returns its X Y and Z in model coordinates, transformed
+/// from its default position according to its animation state. To get its static default position,
+/// ignoring any animation state, use `vertexxyz()`. Note that due to the transformation involved,
+/// this function returns floating-point values, whereas vertexxyz always returns integers.
+///
+/// It is a fatal error to call this function on a render event for a non-animated model, since
+/// non-animated models have no bone transforms that could be queried. To check if the model is
+/// animated, use `animated()`.
+static int api_render3d_vertexanimatedxyz(lua_State*);
 
 /// [-2, +1, -]
 /// Given an index of a vertex in a model, returns a meta-ID relating to its associated image.

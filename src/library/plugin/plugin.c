@@ -629,9 +629,10 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     PUSHSTRING(plugin->state, RENDER3D_META_REGISTRYNAME);
     lua_newtable(plugin->state);
     PUSHSTRING(plugin->state, "__index");
-    lua_createtable(plugin->state, 0, 17);
+    lua_createtable(plugin->state, 0, 18);
     API_ADD_SUB(plugin->state, vertexcount, render3d)
     API_ADD_SUB(plugin->state, vertexxyz, render3d)
+    API_ADD_SUB(plugin->state, vertexanimatedxyz, render3d)
     API_ADD_SUB(plugin->state, vertexmeta, render3d)
     API_ADD_SUB(plugin->state, atlasxywh, render3d)
     API_ADD_SUB(plugin->state, vertexuv, render3d)
@@ -1433,6 +1434,30 @@ static int api_render3d_vertexxyz(lua_State* state) {
     return 3;
 }
 
+static int api_render3d_vertexanimatedxyz(lua_State* state) {
+    _bolt_check_argc(state, 2, "render3d_vertexanimatedxyz");
+    const struct Render3D* render = lua_touserdata(state, 1);
+    const lua_Integer index = lua_tointeger(state, 2);
+
+    if (!render->is_animated) {
+        PUSHSTRING(state, "render3d_bonetransforms: cannot get bone transforms for non-animated model");
+        lua_error(state);
+    }
+
+    int32_t xyz[3];
+    render->vertex_functions.xyz(index - 1, render->vertex_functions.userdata, xyz);
+    double transform[16];
+    const uint8_t bone_id = render->vertex_functions.bone_id(index - 1, render->vertex_functions.userdata);
+    render->vertex_functions.bone_transform(bone_id, render->vertex_functions.userdata, transform);
+    const double outx = ((double)xyz[0] * transform[0]) + ((double)xyz[1] * transform[4]) + ((double)xyz[2] * transform[8]) + transform[12];
+    const double outy = ((double)xyz[0] * transform[1]) + ((double)xyz[1] * transform[5]) + ((double)xyz[2] * transform[9]) + transform[13];
+    const double outz = ((double)xyz[0] * transform[2]) + ((double)xyz[1] * transform[6]) + ((double)xyz[2] * transform[10]) + transform[14];
+    lua_pushnumber(state, outx);
+    lua_pushnumber(state, outy);
+    lua_pushnumber(state, outz);
+    return 3;
+}
+
 static int api_render3d_vertexmeta(lua_State* state) {
     _bolt_check_argc(state, 2, "render3d_vertexmeta");
     const struct Render3D* render = lua_touserdata(state, 1);
@@ -1562,7 +1587,7 @@ static int api_render3d_vertexbone(lua_State* state) {
     _bolt_check_argc(state, 2, "render3d_vertexbone");
     struct Render3D* render = lua_touserdata(state, 1);
     const int index = lua_tointeger(state, 2);
-    uint8_t ret = render->vertex_functions.bone_id(index, render->vertex_functions.userdata);
+    uint8_t ret = render->vertex_functions.bone_id(index - 1, render->vertex_functions.userdata);
     lua_pushinteger(state, ret);
     return 1;
 }
