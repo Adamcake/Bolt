@@ -260,8 +260,6 @@ void _bolt_plugin_handle_messages();
 /// Returns 0 on success or 1 on failure.
 uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin);
 
-/// Stops a plugin via its unique ID, as passed to `_bolt_plugin_add`.
-void _bolt_plugin_stop(char* id, uint32_t id_length);
 
 /// Create an inbound SHM handle with a tag and ID. This pairing of tag and ID must not have been
 /// used for any SHM object previously during this run of the plugin loader. This is usually

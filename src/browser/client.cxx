@@ -43,7 +43,7 @@ Browser::Client::Client(CefRefPtr<Browser::App> app,std::filesystem::path config
 	CLIENT_FILEHANDLER(BOLT_DEV_LAUNCHER_DIRECTORY),
 #endif
 #if defined(BOLT_PLUGINS)
-	next_client_uid(0),
+	next_client_uid(0), next_plugin_uid(0),
 #endif
 	show_devtools(SHOW_DEVTOOLS), config_dir(config_dir), data_dir(data_dir), runtime_dir(runtime_dir)
 {
@@ -372,18 +372,16 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 		}
 		case IPC_MSG_CREATEBROWSER_OSR: {
 			int pid, w, h;
+			uint64_t plugin_id;
 			uint64_t plugin_window_id;
-			uint32_t id_length;
 			uint32_t url_length;
 			_bolt_ipc_receive(fd, &pid, sizeof(pid));
 			_bolt_ipc_receive(fd, &w, sizeof(w));
 			_bolt_ipc_receive(fd, &h, sizeof(h));
 			_bolt_ipc_receive(fd, &plugin_window_id, sizeof(plugin_window_id));
-			_bolt_ipc_receive(fd, &id_length, sizeof(id_length));
+			_bolt_ipc_receive(fd, &plugin_id, sizeof(plugin_id));
 			_bolt_ipc_receive(fd, &url_length, sizeof(url_length));
-			char* plugin_id = new char[id_length + url_length];
-			char* url = plugin_id + id_length;
-			_bolt_ipc_receive(fd, plugin_id, id_length);
+			char* url = new char[url_length];
 			_bolt_ipc_receive(fd, url, url_length);
 
 			this->game_clients_lock.lock();
@@ -392,7 +390,7 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 				if (!g.deleted && g.fd == fd) {
 					for (CefRefPtr<ActivePlugin>& p: g.plugins) {
 						if (p->deleted) continue;
-						if (!strncmp(p->id.c_str(), plugin_id, id_length)) {
+						if (p->uid == plugin_id) {
 							plugin = p;
 							break;
 						}
@@ -401,11 +399,11 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 			}
 
 			if (plugin) {
-				CefRefPtr<Browser::WindowOSR> window = new Browser::WindowOSR(CefString(url), w, h, fd, this, pid, plugin_window_id, plugin);
+				CefRefPtr<Browser::WindowOSR> window = new Browser::WindowOSR(CefString((char*)url), w, h, fd, this, pid, plugin_window_id, plugin);
 				plugin->windows_osr.push_back(window);
 			}
 			this->game_clients_lock.unlock();
-			delete[] plugin_id;
+			delete[] url;
 			break;
 		}
 		case IPC_MSG_OSRUPDATE_ACK: {
@@ -516,25 +514,24 @@ void Browser::Client::StartPlugin(uint64_t client_id, std::string id, std::strin
 				g.plugins.erase(it);
 				break;
 			}
-			g.plugins.push_back(new ActivePlugin(id, path));
+			g.plugins.push_back(new ActivePlugin(this->next_plugin_uid, id, path));
 
-			const size_t message_size = sizeof(BoltIPCMessageToClient) + (sizeof(uint32_t) * 3) + id.size() + path.size() + main.size();
+			const size_t message_size = sizeof(BoltIPCMessageToClient) + sizeof(uint64_t) + (sizeof(uint32_t) * 2) + path.size() + main.size();
 			uint8_t* message = new uint8_t[message_size];
 			*(BoltIPCMessageToClient*)message = {.message_type = IPC_MSG_STARTPLUGINS, .items = 1};
 			size_t pos = sizeof(BoltIPCMessageToClient);
-			*(uint32_t*)(message + pos) = id.size();
-			pos += sizeof(uint32_t);
+			*(uint64_t*)(message + pos) = this->next_plugin_uid;
+			pos += sizeof(uint64_t);
 			*(uint32_t*)(message + pos) = path.size();
 			pos += sizeof(uint32_t);
 			*(uint32_t*)(message + pos) = main.size();
 			pos += sizeof(uint32_t);
-			memcpy(message + pos, id.data(), id.size());
-			pos += id.size();
 			memcpy(message + pos, path.data(), path.size());
 			pos += path.size();
 			memcpy(message + pos, main.data(), main.size());
 			_bolt_ipc_send(g.fd, message, message_size);
 			delete[] message;
+			this->next_plugin_uid += 1;
 			break;
 		}
 	}
@@ -577,6 +574,6 @@ void Browser::Client::OnWindowCreated(CefRefPtr<CefWindow> window) {
 	window->AddChildView(this->ipc_view);
 }
 
-Browser::Client::ActivePlugin::ActivePlugin(std::string id, std::filesystem::path path): Directory(path), id(id), deleted(false) { }
+Browser::Client::ActivePlugin::ActivePlugin(uint64_t uid, std::string id, std::filesystem::path path): Directory(path), uid(uid), id(id), deleted(false) { }
 
 #endif

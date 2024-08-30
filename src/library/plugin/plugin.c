@@ -77,13 +77,12 @@ static int _bolt_api_init(lua_State* state);
 static BoltSocketType fd = 0;
 
 // a currently-running plugin.
-// note strings are not null terminated, and "path" must always be converted to use '/' as path-separators
-// and must always end with a trailing separator.
+// note "path" is not null-terminated, and must always be converted to use '/' as path-separators
+// and must always end with a trailing separator by the time it's received by this process.
 struct Plugin {
     lua_State* state;
-    char* id;
+    uint64_t id; // refers to this specific activation of the plugin, not the plugin in general
     char* path;
-    uint32_t id_length;
     uint32_t path_length;
 };
 
@@ -100,9 +99,10 @@ static void _bolt_plugin_handle_mousebutton(struct MouseButtonEvent*);
 static void _bolt_plugin_handle_mousebuttonup(struct MouseButtonEvent*);
 static void _bolt_plugin_handle_scroll(struct MouseScrollEvent*);
 
+static void _bolt_plugin_stop(uint64_t id);
+
 void _bolt_plugin_free(struct Plugin* const* plugin) {
     lua_close((*plugin)->state);
-    free((*plugin)->id);
     free(*plugin);
 }
 
@@ -117,13 +117,12 @@ static uint64_t _bolt_window_map_hash(const void* item, uint64_t seed0, uint64_t
 static int _bolt_plugin_map_compare(const void* a, const void* b, void* udata) {
     const struct Plugin* p1 = *(const struct Plugin* const*)a;
     const struct Plugin* p2 = *(const struct Plugin* const*)b;
-    if (p1->id_length != p2->id_length) return p1->id_length;
-    return strncmp(p1->id, p2->id, p1->id_length);
+    return p2->id - p1->id;
 }
 
 static uint64_t _bolt_plugin_map_hash(const void* item, uint64_t seed0, uint64_t seed1) {
     const struct Plugin* p = *(const struct Plugin* const*)item;
-    return hashmap_sip(p->id, p->id_length, seed0, seed1);
+    return hashmap_sip(&p->id, sizeof(p->id), seed0, seed1);
 }
 
 static struct hashmap* plugins;
@@ -151,7 +150,7 @@ void _bolt_plugin_handle_##APINAME(struct STRUCTNAME* e) { \
             const char* e = lua_tolstring(plugin->state, -1, 0); \
             printf("plugin callback " #APINAME " error: %s\n", e); \
             lua_pop(plugin->state, 2); /*stack: (empty)*/ \
-            _bolt_plugin_stop(plugin->id, plugin->id_length); \
+            _bolt_plugin_stop(plugin->id); \
             break; \
         } else { \
             lua_pop(plugin->state, 1); /*stack: (empty)*/ \
@@ -214,7 +213,7 @@ void _bolt_plugin_window_on##APINAME(struct EmbeddedWindow* window, struct EVNAM
             lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME); /*stack: window table, event table, error, plugin*/ \
             const struct Plugin* plugin = lua_touserdata(state, -1); \
             lua_pop(state, 4); /*stack: (empty)*/ \
-            _bolt_plugin_stop(plugin->id, plugin->id_length); \
+            _bolt_plugin_stop(plugin->id); \
         } else { \
             lua_pop(state, 2); /*stack: (empty)*/ \
         } \
@@ -472,12 +471,10 @@ void _bolt_plugin_handle_messages() {
                     struct Plugin* plugin = malloc(sizeof(struct Plugin));
                     plugin->state = luaL_newstate();
                     uint32_t main_length;
-                    _bolt_ipc_receive(fd, &plugin->id_length, sizeof(uint32_t));
+                    _bolt_ipc_receive(fd, &plugin->id, sizeof(plugin->id));
                     _bolt_ipc_receive(fd, &plugin->path_length, sizeof(uint32_t));
                     _bolt_ipc_receive(fd, &main_length, sizeof(uint32_t));
-                    plugin->id = malloc(plugin->id_length);
                     plugin->path = malloc(plugin->path_length);
-                    _bolt_ipc_receive(fd, plugin->id, plugin->id_length);
                     _bolt_ipc_receive(fd, plugin->path, plugin->path_length);
                     char* full_path = lua_newuserdata(plugin->state, plugin->path_length + main_length + 1);
                     memcpy(full_path, plugin->path, plugin->path_length);
@@ -552,7 +549,10 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
         return 0;
     }
     if (old_plugin) {
-        // a plugin with this id was already running and we just overwrote it, so make sure not to leak the memory
+        // a plugin with this id was already running and we just overwrote it, so make sure not to leak the memory.
+        // this shouldn't happen in practice because IDs are incremental, but what if someone overflows the ID to 0
+        // by starting 18 quintillion plugins in one session? okay, yes, it's very unlikely.
+        printf("plugin ID %llu has been overwritten by one with the same ID\n", (unsigned long long)plugin->id);
         _bolt_plugin_free(old_plugin);
     }
 
@@ -788,8 +788,8 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     }
 }
 
-void _bolt_plugin_stop(char* id, uint32_t id_length) {
-    struct Plugin p = {.id = id, .id_length = id_length};
+static void _bolt_plugin_stop(uint64_t uid) {
+    struct Plugin p = {.id = uid};
     struct Plugin* pp = &p;
     struct Plugin* const* plugin = hashmap_delete(plugins, &pp);
     _bolt_plugin_free(plugin);
@@ -1073,9 +1073,8 @@ static int api_createembeddedbrowser(lua_State* state) {
     _bolt_ipc_send(fd, &window->metadata.width, sizeof(window->metadata.width));
     _bolt_ipc_send(fd, &window->metadata.height, sizeof(window->metadata.height));
     _bolt_ipc_send(fd, &window->id, sizeof(window->id));
-    _bolt_ipc_send(fd, &plugin->id_length, sizeof(plugin->id_length));
+    _bolt_ipc_send(fd, &plugin->id, sizeof(plugin->id));
     _bolt_ipc_send(fd, &url_length32, sizeof(url_length32));
-    _bolt_ipc_send(fd, plugin->id, plugin->id_length);
     _bolt_ipc_send(fd, url, url_length32);
 
     // set this window in the hashmap, which is accessible by backends
