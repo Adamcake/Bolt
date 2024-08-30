@@ -151,6 +151,7 @@ void _bolt_plugin_handle_##APINAME(struct STRUCTNAME* e) { \
             printf("plugin callback " #APINAME " error: %s\n", e); \
             lua_pop(plugin->state, 2); /*stack: (empty)*/ \
             _bolt_plugin_stop(plugin->id); \
+            _bolt_plugin_notify_stopped(plugin->id); \
             break; \
         } else { \
             lua_pop(plugin->state, 1); /*stack: (empty)*/ \
@@ -214,6 +215,7 @@ void _bolt_plugin_window_on##APINAME(struct EmbeddedWindow* window, struct EVNAM
             const struct Plugin* plugin = lua_touserdata(state, -1); \
             lua_pop(state, 4); /*stack: (empty)*/ \
             _bolt_plugin_stop(plugin->id); \
+            _bolt_plugin_notify_stopped(plugin->id); \
         } else { \
             lua_pop(state, 2); /*stack: (empty)*/ \
         } \
@@ -454,6 +456,14 @@ void _bolt_plugin_close() {
     _bolt_rwlock_unlock_write(&windows.lock);
 }
 
+static void _bolt_plugin_notify_stopped(uint64_t id) {
+    struct BoltIPCMessageToHost message;
+    message.message_type = IPC_MSG_CLIENT_STOPPED_PLUGINS;
+    message.items = 1;
+    _bolt_ipc_send(fd, &message, sizeof(message));
+    _bolt_ipc_send(fd, &id, sizeof(id));
+}
+
 struct WindowInfo* _bolt_plugin_windowinfo() {
     return &windows;
 }
@@ -483,8 +493,17 @@ void _bolt_plugin_handle_messages() {
                     if (_bolt_plugin_add(full_path, plugin)) {
                         lua_pop(plugin->state, 1);
                     } else {
+                        _bolt_plugin_notify_stopped(plugin->id);
                         _bolt_plugin_free(&plugin);
                     }
+                }
+                break;
+            }
+            case IPC_MSG_HOST_STOPPED_PLUGINS: {
+                uint64_t id;
+                for (uint32_t i = 0; i < message.items; i += 1) {
+                    _bolt_ipc_receive(fd, &id, sizeof(id));
+                    _bolt_plugin_stop(id);
                 }
                 break;
             }
