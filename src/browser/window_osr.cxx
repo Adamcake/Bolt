@@ -1,5 +1,4 @@
 #include "window_osr.hxx"
-#include "include/internal/cef_types.h"
 
 #if defined(BOLT_PLUGINS)
 #if defined(_WIN32)
@@ -14,6 +13,7 @@
 
 #include <fmt/core.h>
 #include "client.hxx"
+#include "resource_handler.hxx"
 #include "../library/event.h"
 
 static void SendUpdateMsg(BoltSocketType fd, uint64_t id, int width, int height, bool needs_remap, const CefRect* rects, uint32_t rect_count) {
@@ -35,9 +35,9 @@ static void SendUpdateMsg(BoltSocketType fd, uint64_t id, int width, int height,
 	_bolt_ipc_send(fd, buf, sizeof(buf));
 }
 
-Browser::WindowOSR::WindowOSR(CefString url, int width, int height, BoltSocketType client_fd, Browser::Client* main_client, int pid, uint64_t window_id):
+Browser::WindowOSR::WindowOSR(CefString url, int width, int height, BoltSocketType client_fd, Browser::Client* main_client, int pid, uint64_t window_id, CefRefPtr<FileManager::Directory> file_manager):
 	deleted(false), pending_delete(false), client_fd(client_fd), width(width), height(height), browser(nullptr), window_id(window_id),
-	main_client(main_client), stored(nullptr), remote_is_idle(true)
+	main_client(main_client), stored(nullptr), remote_is_idle(true), file_manager(file_manager)
 {
 	char buf[256];
 	snprintf(buf, sizeof(buf), "/bolt-%i-eb-%lu", pid, window_id);
@@ -90,7 +90,7 @@ void Browser::WindowOSR::HandleAck() {
 		}
 		memcpy(this->file, this->stored, length);
 		SendUpdateMsg(this->client_fd, this->window_id, this->stored_width, this->stored_height, needs_remap, &this->stored_damage, 1);
-		free(this->stored);
+		::free(this->stored);
 		this->stored = nullptr;
 	} else {
 		this->remote_is_idle = true;
@@ -157,6 +157,10 @@ void Browser::WindowOSR::HandleScroll(const MouseScrollEvent* event) {
 	if (this->browser) this->browser->GetHost()->SendMouseWheelEvent(e, 0, event->direction ? 20 : -20);
 }
 
+CefRefPtr<CefRequestHandler> Browser::WindowOSR::GetRequestHandler() {
+	return this;
+}
+
 
 CefRefPtr<CefRenderHandler> Browser::WindowOSR::GetRenderHandler() {
 	return this;
@@ -198,7 +202,7 @@ void Browser::WindowOSR::OnPaint(CefRefPtr<CefBrowser> browser, PaintElementType
 		this->remote_is_idle = false;
 	} else {
 		const bool is_damage_stored = this->stored != nullptr;
-		if (is_damage_stored) free(this->stored);
+		if (is_damage_stored) ::free(this->stored);
 		this->stored = malloc(length);
 		memcpy(this->stored, buffer, length);
 		this->stored_width = width;
@@ -235,11 +239,42 @@ void Browser::WindowOSR::OnAfterCreated(CefRefPtr<CefBrowser> browser) {
 void Browser::WindowOSR::OnBeforeClose(CefRefPtr<CefBrowser> browser) {
 	if (browser->IsSame(this->browser)) {
 		this->browser = nullptr;
-		free(this->stored);
+		this->file_manager = nullptr;
+		::free(this->stored);
 		munmap(this->file, this->mapping_size);
 		close(this->shm);
 		this->deleted = true;
 		main_client->CleanupClientPlugins(this->client_fd);
+	}
+}
+
+CefRefPtr<CefResourceRequestHandler> Browser::WindowOSR::GetResourceRequestHandler(
+	CefRefPtr<CefBrowser> browser,
+	CefRefPtr<CefFrame> frame,
+	CefRefPtr<CefRequest> request,
+	bool is_navigation,
+	bool is_download,
+	const CefString& request_initiator,
+	bool& disable_default_handling
+) {
+	// Parse URL
+	const std::string request_url = request->GetURL().ToString();
+	const std::string::size_type colon = request_url.find_first_of(':');
+	if (colon == std::string::npos) return nullptr;
+	const std::string_view schema(request_url.begin(), request_url.begin() + colon);
+	if (schema != "file") return nullptr;
+	if (request_url.begin() + colon + 1 == request_url.end()) return nullptr;
+	if (request_url.at(colon + 1) != '/') return nullptr;
+	const std::string::size_type question_mark = request_url.find_first_of('?');
+	std::string_view req_path(request_url.begin() + colon + 1, (question_mark == std::string::npos) ? request_url.end() : request_url.begin() + question_mark);
+
+	FileManager::File file = this->file_manager->get(req_path);
+	if (file.contents) {
+		return new ResourceHandler(file, this->file_manager);
+	} else {
+		this->file_manager->free(file);
+		const char* data = "Not Found\n";
+		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 404, "text/plain");
 	}
 }
 

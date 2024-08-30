@@ -1,5 +1,6 @@
 #ifndef _BOLT_CLIENT_HXX_
 #define _BOLT_CLIENT_HXX_
+#include "include/base/cef_macros.h"
 #if defined(BOLT_PLUGINS)
 #include "window_osr.hxx"
 #include "../library/ipc.h"
@@ -166,9 +167,14 @@ namespace Browser {
 #endif
 
 #if defined(BOLT_PLUGINS)
-			struct ActivePlugin {
+			struct ActivePlugin: ::FileManager::Directory {
+				ActivePlugin(std::string, std::filesystem::path);
 				std::string id;
 				std::vector<CefRefPtr<Browser::WindowOSR>> windows_osr;
+
+				private:
+					IMPLEMENT_REFCOUNTING(ActivePlugin);
+					DISALLOW_COPY_AND_ASSIGN(ActivePlugin);
 			};
 			struct GameClient {
 				uint64_t uid;
@@ -176,7 +182,7 @@ namespace Browser {
 				// identity may be null if game hasn't reported its identity yet or display name is unset
 				char* identity;
 
-				std::vector<ActivePlugin> plugins;
+				std::vector<CefRefPtr<ActivePlugin>> plugins;
 			};
 			std::thread ipc_thread;
 			BoltSocketType ipc_fd;

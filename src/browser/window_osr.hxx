@@ -8,6 +8,7 @@
 #include "include/cef_render_handler.h"
 
 #include "../library/ipc.h"
+#include "../file_manager/directory.hxx"
 
 #include <mutex>
 
@@ -19,8 +20,8 @@ struct MouseScrollEvent;
 namespace Browser {
 	struct Client;
 
-	struct WindowOSR: public CefClient, CefLifeSpanHandler, CefRenderHandler {
-		WindowOSR(CefString url, int width, int height, BoltSocketType client_fd, Client* main_client, int pid, uint64_t window_id);
+	struct WindowOSR: public CefClient, CefLifeSpanHandler, CefRenderHandler, CefRequestHandler {
+		WindowOSR(CefString url, int width, int height, BoltSocketType client_fd, Client* main_client, int pid, uint64_t window_id, CefRefPtr<FileManager::Directory>);
 
 		bool IsDeleted();
 
@@ -35,6 +36,7 @@ namespace Browser {
 
 		uint64_t ID();
 
+		CefRefPtr<CefRequestHandler> GetRequestHandler() override;
 		CefRefPtr<CefRenderHandler> GetRenderHandler() override;
 		CefRefPtr<CefLifeSpanHandler> GetLifeSpanHandler() override;
 		void GetViewRect(CefRefPtr<CefBrowser> browser, CefRect& rect) override;
@@ -42,6 +44,16 @@ namespace Browser {
 
 		void OnAfterCreated(CefRefPtr<CefBrowser> browser) override;
 		void OnBeforeClose(CefRefPtr<CefBrowser> browser) override;
+
+		CefRefPtr<CefResourceRequestHandler> GetResourceRequestHandler(
+			CefRefPtr<CefBrowser>,
+			CefRefPtr<CefFrame>,
+			CefRefPtr<CefRequest>,
+			bool,
+			bool,
+			const CefString&,
+			bool&
+		) override;
 
 		private:
 			bool deleted;
@@ -55,6 +67,7 @@ namespace Browser {
 			CefRefPtr<CefBrowser> browser;
 			uint64_t window_id;
 			Client* main_client;
+			CefRefPtr<FileManager::Directory> file_manager;
 
 			std::mutex stored_lock;
 			void* stored;

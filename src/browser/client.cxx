@@ -314,8 +314,8 @@ void Browser::Client::IPCHandleClosed(int fd) {
 	auto it = std::find_if(this->game_clients.begin(), this->game_clients.end(), [fd](const GameClient& g) { return g.fd == fd; });
 	if (it != this->game_clients.end()) {
 		delete[] it->identity;
-		for (ActivePlugin& p: it->plugins) {
-			for (CefRefPtr<WindowOSR>& w: p.windows_osr) {
+		for (CefRefPtr<ActivePlugin>& p: it->plugins) {
+			for (CefRefPtr<WindowOSR>& w: p->windows_osr) {
 				w->Close();
 			}
 		}
@@ -327,8 +327,8 @@ void Browser::Client::IPCHandleClosed(int fd) {
 CefRefPtr<Browser::WindowOSR> Browser::Client::GetWindowFromFDAndID(BoltSocketType fd, uint64_t id) {
 	for (GameClient& g: this->game_clients) {
 		if (g.fd == fd) {
-			for (ActivePlugin& p: g.plugins) {
-				for (CefRefPtr<Browser::WindowOSR>& w: p.windows_osr) {
+			for (CefRefPtr<ActivePlugin>& p: g.plugins) {
+				for (CefRefPtr<Browser::WindowOSR>& w: p->windows_osr) {
 					if (w->ID() == id) {
 						return w;
 					}
@@ -380,12 +380,12 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 			_bolt_ipc_receive(fd, url, url_length);
 
 			this->game_clients_lock.lock();
-			ActivePlugin* plugin = nullptr;
+			CefRefPtr<ActivePlugin> plugin = nullptr;
 			for (GameClient& g: this->game_clients) {
 				if (g.fd == fd) {
-					for (ActivePlugin& p: g.plugins) {
-						if (!strncmp(p.id.c_str(), plugin_id, id_length)) {
-							plugin = &p;
+					for (CefRefPtr<ActivePlugin>& p: g.plugins) {
+						if (!strncmp(p->id.c_str(), plugin_id, id_length)) {
+							plugin = p;
 							break;
 						}
 					}
@@ -393,7 +393,7 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 			}
 
 			if (plugin) {
-				CefRefPtr<Browser::WindowOSR> window = new Browser::WindowOSR(CefString(url), w, h, fd, this, pid, plugin_window_id);
+				CefRefPtr<Browser::WindowOSR> window = new Browser::WindowOSR(CefString(url), w, h, fd, this, pid, plugin_window_id, plugin);
 				plugin->windows_osr.push_back(window);
 			}
 			this->game_clients_lock.unlock();
@@ -500,14 +500,14 @@ void Browser::Client::StartPlugin(uint64_t client_id, std::string id, std::strin
 	for (GameClient& g: this->game_clients) {
 		if (g.uid == client_id) {
 			for (auto it = g.plugins.begin(); it != g.plugins.end(); it++) {
-				if (it->id != id) continue;
-				for (CefRefPtr<WindowOSR>& w: it->windows_osr) {
+				if ((*it)->id != id) continue;
+				for (CefRefPtr<WindowOSR>& w: (*it)->windows_osr) {
 					w->Close();
 				}
 				g.plugins.erase(it);
 				break;
 			}
-			g.plugins.push_back(ActivePlugin {.id = id});
+			g.plugins.push_back(new ActivePlugin(id, path));
 
 			const size_t message_size = sizeof(BoltIPCMessageToClient) + (sizeof(uint32_t) * 3) + id.size() + path.size() + main.size();
 			uint8_t* message = new uint8_t[message_size];
@@ -536,14 +536,14 @@ void Browser::Client::CleanupClientPlugins(int fd) {
 	this->game_clients_lock.lock();
 	for (GameClient& g: this->game_clients) {
 		if (g.fd != fd) continue;
-		for (ActivePlugin& p: g.plugins) {
-			p.windows_osr.erase(
+		for (CefRefPtr<ActivePlugin>& p: g.plugins) {
+			p->windows_osr.erase(
 				std::remove_if(
-					p.windows_osr.begin(),
-					p.windows_osr.end(),
+					p->windows_osr.begin(),
+					p->windows_osr.end(),
 					[](const CefRefPtr<WindowOSR>& window){ return window->IsDeleted(); }
 				),
-				p.windows_osr.end()
+				p->windows_osr.end()
 			);
 		}
 		break;
@@ -556,4 +556,7 @@ void Browser::Client::OnWindowCreated(CefRefPtr<CefWindow> window) {
 	this->ipc_window = window;
 	window->AddChildView(this->ipc_view);
 }
+
+Browser::Client::ActivePlugin::ActivePlugin(std::string id, std::filesystem::path path): Directory(path), id(id) { }
+
 #endif
