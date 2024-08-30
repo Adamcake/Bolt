@@ -493,8 +493,7 @@ void _bolt_plugin_handle_messages() {
             }
             case IPC_MSG_OSRUPDATE: {
                 uint64_t window_id;
-                uint8_t needs_remap;
-                int width, height;
+                int width, height, needs_remap;
                 _bolt_ipc_receive(fd, &window_id, sizeof(window_id));
                 _bolt_ipc_receive(fd, &needs_remap, sizeof(needs_remap));
                 _bolt_ipc_receive(fd, &width, sizeof(width));

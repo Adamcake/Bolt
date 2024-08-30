@@ -17,15 +17,15 @@
 #include "../library/event.h"
 
 static void SendUpdateMsg(BoltSocketType fd, uint64_t id, int width, int height, bool needs_remap, const CefRect* rects, uint32_t rect_count) {
-	const size_t bytes = sizeof(BoltIPCMessageToClient) + sizeof(uint64_t) + (2 *sizeof(int)) + (rect_count * sizeof(int) * 4) + 1;
+	const size_t bytes = sizeof(BoltIPCMessageToClient) + sizeof(uint64_t) + (3 *sizeof(int)) + (4 * rect_count * sizeof(int));
 	uint8_t* buf = new uint8_t[bytes];
 	((BoltIPCMessageToClient*)buf)->message_type = IPC_MSG_OSRUPDATE;
 	((BoltIPCMessageToClient*)buf)->items = rect_count;
 	*(uint64_t*)(buf + sizeof(BoltIPCMessageToClient)) = id;
-	*(uint8_t*)(buf + sizeof(BoltIPCMessageToClient) + sizeof(uint64_t)) = needs_remap ? 1 : 0;
-	*(int*)(buf + sizeof(BoltIPCMessageToClient) + sizeof(uint64_t) + 1) = width;
-	*(int*)(buf + sizeof(BoltIPCMessageToClient) + sizeof(uint64_t) + sizeof(int) + 1) = height;
-	int* rect_data = (int*)(buf + sizeof(BoltIPCMessageToClient) + sizeof(uint64_t) + (sizeof(int) * 2) + 1);
+	*(int*)(buf + sizeof(BoltIPCMessageToClient) + sizeof(uint64_t)) = needs_remap ? 1 : 0;
+	*(int*)(buf + sizeof(BoltIPCMessageToClient) + sizeof(uint64_t) + sizeof(int)) = width;
+	*(int*)(buf + sizeof(BoltIPCMessageToClient) + sizeof(uint64_t) + (2 * sizeof(int))) = height;
+	int* rect_data = (int*)(buf + sizeof(BoltIPCMessageToClient) + sizeof(uint64_t) + (3 * sizeof(int)));
 	for (uint32_t i = 0; i < rect_count; i += 1) {
 		*rect_data = rects[i].x;
 		*(rect_data + 1) = rects[i].y;
@@ -33,7 +33,7 @@ static void SendUpdateMsg(BoltSocketType fd, uint64_t id, int width, int height,
 		*(rect_data + 3) = rects[i].height;
 		rect_data += 4;
 	}
-	_bolt_ipc_send(fd, buf, sizeof(buf));
+	_bolt_ipc_send(fd, buf, bytes);
 	delete[] buf;
 }
 
