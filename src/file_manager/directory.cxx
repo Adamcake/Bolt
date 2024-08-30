@@ -43,12 +43,16 @@ void Watch(std::filesystem::path path, CefRefPtr<FileManager::FileManager> file_
 }
 #endif
 
-FileManager::Directory::Directory(std::filesystem::path path): path(path) {
+FileManager::Directory::Directory(std::filesystem::path path, bool watch): path(path), watch(watch) {
+	if (watch) {
 #if defined(__linux__)
-	this->inotify_fd = inotify_init1(IN_CLOEXEC);
-	this->inotify_wd = inotify_add_watch(this->inotify_fd, path.c_str(), IN_CREATE | IN_DELETE | IN_CLOSE_WRITE | IN_MOVE | IN_MOVE_SELF | IN_DELETE_SELF | IN_IGNORED);
-	this->inotify_thread = std::thread(Watch, path, this, this->inotify_fd, this->inotify_wd);
+		this->inotify_fd = inotify_init1(IN_CLOEXEC);
+		this->inotify_wd = inotify_add_watch(this->inotify_fd, path.c_str(), IN_CREATE | IN_DELETE | IN_CLOSE_WRITE | IN_MOVE | IN_MOVE_SELF | IN_DELETE_SELF | IN_IGNORED);
+		this->inotify_thread = std::thread(Watch, path, this, this->inotify_fd, this->inotify_wd);
+#else
+		printf("[B] note: directory-watching is not supported on this platform\n");
 #endif
+	}
 }
 
 FileManager::File FileManager::Directory::get(std::string_view uri) const {
@@ -82,7 +86,9 @@ void FileManager::Directory::free(File file) const {
 
 void FileManager::Directory::StopFileManager() {
 #if defined(__linux__)
-	inotify_rm_watch(this->inotify_fd, this->inotify_wd);
-	this->inotify_thread.join();
+	if (this->watch) {
+		inotify_rm_watch(this->inotify_fd, this->inotify_wd);
+		this->inotify_thread.join();
+	}
 #endif
 }

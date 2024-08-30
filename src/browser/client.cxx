@@ -40,7 +40,7 @@ constexpr Browser::Details LAUNCHER_DETAILS = {
 
 Browser::Client::Client(CefRefPtr<Browser::App> app,std::filesystem::path config_dir, std::filesystem::path data_dir, std::filesystem::path runtime_dir):
 #if defined(BOLT_DEV_LAUNCHER_DIRECTORY)
-	CLIENT_FILEHANDLER(BOLT_DEV_LAUNCHER_DIRECTORY),
+	CLIENT_FILEHANDLER(BOLT_DEV_LAUNCHER_DIRECTORY, true),
 #endif
 #if defined(BOLT_PLUGINS)
 	next_client_uid(0), next_plugin_uid(0),
@@ -522,7 +522,7 @@ void Browser::Client::StartPlugin(uint64_t client_id, std::string id, std::strin
 				}
 				break;
 			}
-			g.plugins.push_back(new ActivePlugin(this->next_plugin_uid, id, path));
+			g.plugins.push_back(new ActivePlugin(this->next_plugin_uid, id, path, false));
 
 			const size_t message_size = sizeof(BoltIPCMessageToClient) + sizeof(uint64_t) + (sizeof(uint32_t) * 2) + path.size() + main.size();
 			uint8_t* message = new uint8_t[message_size];
@@ -582,6 +582,6 @@ void Browser::Client::OnWindowCreated(CefRefPtr<CefWindow> window) {
 	window->AddChildView(this->ipc_view);
 }
 
-Browser::Client::ActivePlugin::ActivePlugin(uint64_t uid, std::string id, std::filesystem::path path): Directory(path), uid(uid), id(id), deleted(false) { }
+Browser::Client::ActivePlugin::ActivePlugin(uint64_t uid, std::string id, std::filesystem::path path, bool watch): Directory(path, watch), uid(uid), id(id), deleted(false) { }
 
 #endif
