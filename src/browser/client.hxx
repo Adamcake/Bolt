@@ -170,6 +170,7 @@ namespace Browser {
 			struct ActivePlugin: ::FileManager::Directory {
 				ActivePlugin(std::string, std::filesystem::path);
 				std::string id;
+				bool deleted;
 				std::vector<CefRefPtr<Browser::WindowOSR>> windows_osr;
 
 				private:
@@ -179,6 +180,7 @@ namespace Browser {
 			struct GameClient {
 				uint64_t uid;
 				int fd;
+				bool deleted;
 				// identity may be null if game hasn't reported its identity yet or display name is unset
 				char* identity;
 

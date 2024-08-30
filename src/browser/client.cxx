@@ -296,7 +296,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Client::GetResourceRequestHandler(
 void Browser::Client::IPCHandleNewClient(int fd) {
 	fmt::print("[I] new client fd {}\n", fd);
 	this->game_clients_lock.lock();
-	this->game_clients.push_back(GameClient {.uid = this->next_client_uid, .fd = fd, .identity = nullptr});
+	this->game_clients.push_back(GameClient {.uid = this->next_client_uid, .fd = fd, .deleted = false, .identity = nullptr});
 	this->next_client_uid += 1;
 	this->game_clients_lock.unlock();
 }
@@ -313,23 +313,30 @@ void Browser::Client::IPCHandleClosed(int fd) {
 	std::lock_guard<std::mutex> _(this->game_clients_lock);
 	auto it = std::find_if(this->game_clients.begin(), this->game_clients.end(), [fd](const GameClient& g) { return g.fd == fd; });
 	if (it != this->game_clients.end()) {
+		bool delete_now = true;
 		delete[] it->identity;
+		it->deleted = true;
 		for (CefRefPtr<ActivePlugin>& p: it->plugins) {
+			p->deleted = true;
 			for (CefRefPtr<WindowOSR>& w: p->windows_osr) {
-				w->Close();
+				if (!w->IsDeleted()) w->Close();
+				delete_now = false;
 			}
 		}
-		this->game_clients.erase(it);
+		if (delete_now) {
+			this->game_clients.erase(it);
+		}
 	}
 }
 
 // convenience function, assumes the mutex is already locked
 CefRefPtr<Browser::WindowOSR> Browser::Client::GetWindowFromFDAndID(BoltSocketType fd, uint64_t id) {
 	for (GameClient& g: this->game_clients) {
-		if (g.fd == fd) {
+		if (!g.deleted && g.fd == fd) {
 			for (CefRefPtr<ActivePlugin>& p: g.plugins) {
+				if (p->deleted) continue;
 				for (CefRefPtr<Browser::WindowOSR>& w: p->windows_osr) {
-					if (w->ID() == id) {
+					if (!w->IsDeleted() && w->ID() == id) {
 						return w;
 					}
 				}
@@ -352,7 +359,7 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 		case IPC_MSG_IDENTIFY: {
 			this->game_clients_lock.lock();
 			for (GameClient& g: this->game_clients) {
-				if (g.fd == fd) {
+				if (!g.deleted && g.fd == fd) {
 					g.identity = new char[message.items + 1];
 					_bolt_ipc_receive(fd, g.identity, message.items);
 					g.identity[message.items] = '\0';
@@ -382,8 +389,9 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 			this->game_clients_lock.lock();
 			CefRefPtr<ActivePlugin> plugin = nullptr;
 			for (GameClient& g: this->game_clients) {
-				if (g.fd == fd) {
+				if (!g.deleted && g.fd == fd) {
 					for (CefRefPtr<ActivePlugin>& p: g.plugins) {
+						if (p->deleted) continue;
 						if (!strncmp(p->id.c_str(), plugin_id, id_length)) {
 							plugin = p;
 							break;
@@ -481,6 +489,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Client::ListGameClients() {
 	CefRefPtr<CefDictionaryValue> dict = CefDictionaryValue::Create();
 	this->game_clients_lock.lock();
 	for (const GameClient& g: this->game_clients) {
+		if (g.deleted) continue;
 		CefRefPtr<CefDictionaryValue> inner_dict = CefDictionaryValue::Create();
 		snprintf(buf, 256, "%llu", (unsigned long long)g.uid);
 		if (g.identity) {
@@ -498,7 +507,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Client::ListGameClients() {
 void Browser::Client::StartPlugin(uint64_t client_id, std::string id, std::string path, std::string main) {
 	this->game_clients_lock.lock();
 	for (GameClient& g: this->game_clients) {
-		if (g.uid == client_id) {
+		if (!g.deleted && g.uid == client_id) {
 			for (auto it = g.plugins.begin(); it != g.plugins.end(); it++) {
 				if ((*it)->id != id) continue;
 				for (CefRefPtr<WindowOSR>& w: (*it)->windows_osr) {
@@ -534,9 +543,9 @@ void Browser::Client::StartPlugin(uint64_t client_id, std::string id, std::strin
 
 void Browser::Client::CleanupClientPlugins(int fd) {
 	this->game_clients_lock.lock();
-	for (GameClient& g: this->game_clients) {
-		if (g.fd != fd) continue;
-		for (CefRefPtr<ActivePlugin>& p: g.plugins) {
+	for (auto it = this->game_clients.begin(); it != this->game_clients.end(); it += 1) {
+		if (it->fd != fd) continue;
+		for (CefRefPtr<ActivePlugin>& p: it->plugins) {
 			p->windows_osr.erase(
 				std::remove_if(
 					p->windows_osr.begin(),
@@ -545,6 +554,17 @@ void Browser::Client::CleanupClientPlugins(int fd) {
 				),
 				p->windows_osr.end()
 			);
+		}
+		it->plugins.erase(
+			std::remove_if(
+				it->plugins.begin(),
+				it->plugins.end(),
+				[](const CefRefPtr<ActivePlugin>& plugin) { return plugin->deleted && plugin->windows_osr.size() == 0; }
+			),
+			it->plugins.end()
+		);
+		if (it->deleted && it->plugins.size() == 0) {
+			this->game_clients.erase(it);
 		}
 		break;
 	}
@@ -557,6 +577,6 @@ void Browser::Client::OnWindowCreated(CefRefPtr<CefWindow> window) {
 	window->AddChildView(this->ipc_view);
 }
 
-Browser::Client::ActivePlugin::ActivePlugin(std::string id, std::filesystem::path path): Directory(path), id(id) { }
+Browser::Client::ActivePlugin::ActivePlugin(std::string id, std::filesystem::path path): Directory(path), id(id), deleted(false) { }
 
 #endif
