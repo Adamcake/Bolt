@@ -17,7 +17,8 @@
 #include "../library/event.h"
 
 static void SendUpdateMsg(BoltSocketType fd, uint64_t id, int width, int height, bool needs_remap, const CefRect* rects, uint32_t rect_count) {
-	uint8_t buf[sizeof(BoltIPCMessageToClient) + sizeof(uint64_t) + (2 *sizeof(int)) + (rect_count * sizeof(int) * 4) + 1];
+	const size_t bytes = sizeof(BoltIPCMessageToClient) + sizeof(uint64_t) + (2 *sizeof(int)) + (rect_count * sizeof(int) * 4) + 1;
+	uint8_t* buf = new uint8_t[bytes];
 	((BoltIPCMessageToClient*)buf)->message_type = IPC_MSG_OSRUPDATE;
 	((BoltIPCMessageToClient*)buf)->items = rect_count;
 	*(uint64_t*)(buf + sizeof(BoltIPCMessageToClient)) = id;
@@ -33,6 +34,7 @@ static void SendUpdateMsg(BoltSocketType fd, uint64_t id, int width, int height,
 		rect_data += 4;
 	}
 	_bolt_ipc_send(fd, buf, sizeof(buf));
+	delete[] buf;
 }
 
 Browser::WindowOSR::WindowOSR(CefString url, int width, int height, BoltSocketType client_fd, Browser::Client* main_client, int pid, uint64_t window_id, CefRefPtr<FileManager::Directory> file_manager):
