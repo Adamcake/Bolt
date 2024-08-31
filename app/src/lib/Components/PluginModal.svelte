@@ -11,6 +11,7 @@
 	const platformFileSep: string = bolt.platform === 'windows' ? '\\' : '/';
 	const configFileName: string = 'bolt.json';
 	const sepConfigFileName: string = platformFileSep.concat(configFileName);
+	const defaultMainLuaFilename: string = 'main.lua';
 
 	export function open() {
 		modal.open();
@@ -100,9 +101,8 @@
 
 	// function to start a plugin
 	const startPlugin = (client: string, id: string, path: string, main: string) => {
-		const origPath: string = bolt.pluginList[selectedPlugin].path;
 		const pathWithCorrectSeps: string =
-			bolt.platform === 'windows' ? origPath.replaceAll('\\', '/') : origPath;
+			bolt.platform === 'windows' ? path.replaceAll('\\', '/') : path;
 		const newPath = pathWithCorrectSeps.endsWith(platformFileSep)
 			? pathWithCorrectSeps
 			: pathWithCorrectSeps.concat('/');
@@ -110,6 +110,7 @@
 		var xml = new XMLHttpRequest();
 		xml.onreadystatechange = () => {
 			if (xml.readyState == 4) {
+				clientListPromise.set(getNewClientListPromise());
 				logger.info(`Start-plugin status: ${xml.statusText.trim()}`);
 			}
 		};
@@ -121,8 +122,16 @@
 		xml.send();
 	};
 
+	// function to stop a plugin, by the client ID and plugin activation ID
+	const stopPlugin = (client_id: string, plugin_uid: string) => {
+		// TODO: this
+		console.log(`stop plugin "${plugin_uid}" for client ${client_id}`);
+	};
+
 	// plugin management interface - currently-selected plugin
 	var selectedPlugin: string;
+	$: selectedPluginMeta = bolt.pluginList[selectedPlugin];
+	$: selectedPluginPath = selectedPluginMeta ? selectedPluginMeta.path : null;
 	$: managementPluginPromise = getPluginConfigPromiseFromID(selectedPlugin);
 
 	// connected clients list
@@ -246,15 +255,15 @@
 					<p>loading...</p>
 				{:then plugin}
 					{#if plugin && plugin.main && Object.keys(bolt.pluginList).includes(selectedPlugin)}
-						{#if bolt.pluginList[selectedPlugin].path}
+						{#if selectedPluginPath}
 							<button
 								class="mx-auto mb-1 w-auto rounded-lg bg-emerald-500 p-2 font-bold text-black duration-200 hover:opacity-75"
 								on:click={() =>
 									startPlugin(
 										selectedClientId,
 										selectedPlugin,
-										bolt.pluginList[selectedPlugin].path ?? '',
-										plugin.main ?? ''
+										selectedPluginPath,
+										plugin.main ?? defaultMainLuaFilename
 									)}
 							>
 								Start {plugin.name}
@@ -262,9 +271,41 @@
 						{:else}
 							<p>can't start plugin: no path is configured</p>
 						{/if}
+					{:else if Object.entries(bolt.pluginList).length === 0}
+						<p>(no plugins installed)</p>
 					{:else}
 						<p>can't start plugin: does not appear to be configured</p>
 					{/if}
+					<br />
+					<br />
+					<hr class="p-1 dark:border-slate-700" />
+					{#await $clientListPromise}
+						<p>loading...</p>
+					{:then clients}
+						{#each clients as client}
+							{#if client.uid === selectedClientId}
+								{#each client.plugins as activePlugin}
+									{#if Object.keys(bolt.pluginList).includes(activePlugin.id)}
+										<p>
+											{bolt.pluginList[activePlugin.id].name ?? activePlugin.id}
+											<button
+												class="bg-rose-500 shadow-lg hover:opacity-75"
+												on:click={() => {
+													stopPlugin(selectedClientId, activePlugin.id);
+												}}
+											>
+												<img src="svgs/xmark-solid.svg" class="h-4 w-4" alt="Close" />
+											</button>
+										</p>
+									{:else}
+										<p>{activePlugin.id}</p>
+									{/if}
+								{/each}
+							{/if}
+						{/each}
+					{:catch}
+						<p>error</p>
+					{/await}
 				{:catch}
 					<p>error</p>
 				{/await}

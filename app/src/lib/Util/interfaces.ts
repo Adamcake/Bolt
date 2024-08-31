@@ -34,10 +34,18 @@ export interface Direct6Token {
 	scanTime?: number;
 }
 
+// a specific instance of a currently-running rs3 plugin, associated with a GameClient
+// "id" is the UUID string of the installed plugin, uid uniquely identifies this specific instance of it
+export interface GameClientPlugin {
+	id: string;
+	uid: string;
+}
+
 // connected game client for plugin management purposes
 export interface GameClient {
 	uid: string;
 	identity?: string;
+	plugins: GameClientPlugin[];
 }
 
 // rs3 plugin configured in plugins.json

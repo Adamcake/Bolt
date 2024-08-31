@@ -262,11 +262,7 @@ export function getNewClientListPromise(): Promise<GameClient[]> {
 			if (xml.readyState == 4) {
 				if (xml.status == 200 && xml.getResponseHeader('content-type') === 'application/json') {
 					const dict = JSON.parse(xml.responseText);
-					resolve(
-						Object.keys(dict).map(
-							(uid) => <GameClient>{ uid, identity: dict[uid].identity || null }
-						)
-					);
+					resolve(<GameClient[]>dict);
 				} else {
 					reject(`error (${xml.responseText})`);
 				}
