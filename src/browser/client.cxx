@@ -394,6 +394,7 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 					break;
 				}
 			}
+			this->IPCHandleClientListUpdate();
 			break;
 		}
 		case IPC_MSG_CREATEBROWSER_OSR: {
@@ -485,20 +486,35 @@ void Browser::Client::IPCHandleNoMoreClients() {
 
 CefRefPtr<CefResourceRequestHandler> Browser::Client::ListGameClients() {
 	char buf[256];
-	CefRefPtr<CefDictionaryValue> dict = CefDictionaryValue::Create();
+	CefRefPtr<CefListValue> list = CefListValue::Create();
 	this->game_clients_lock.lock();
+	list->SetSize(std::count_if(this->game_clients.begin(), this->game_clients.end(), [](const GameClient& c){ return !c.deleted; }));
+	size_t list_index = 0;
 	for (const GameClient& g: this->game_clients) {
 		if (g.deleted) continue;
 		CefRefPtr<CefDictionaryValue> inner_dict = CefDictionaryValue::Create();
+		if (g.identity) inner_dict->SetString("identity", g.identity);
 		snprintf(buf, 256, "%llu", (unsigned long long)g.uid);
-		if (g.identity) {
-			inner_dict->SetString("identity", g.identity);
+		inner_dict->SetString("uid", buf);
+		CefRefPtr<CefListValue> plugin_list = CefListValue::Create();
+		plugin_list->SetSize(std::count_if(g.plugins.begin(), g.plugins.end(), [](const CefRefPtr<ActivePlugin> p){ return !p->deleted; }));
+		size_t plugin_list_index = 0;
+		for (const CefRefPtr<ActivePlugin>& p: g.plugins) {
+			if (p->deleted) continue;
+			CefRefPtr<CefDictionaryValue> plugin_dict = CefDictionaryValue::Create();
+			snprintf(buf, 256, "%llu", (unsigned long long)p->uid);
+			plugin_dict->SetString("uid", buf);
+			plugin_dict->SetString("id", CefString(p->id));
+			plugin_list->SetDictionary(plugin_list_index, plugin_dict);
+			plugin_list_index += 1;
 		}
-		dict->SetDictionary(buf, inner_dict);
+		inner_dict->SetList("plugins", plugin_list);
+		list->SetDictionary(list_index, inner_dict);
+		list_index += 1;
 	}
 	this->game_clients_lock.unlock();
 	CefRefPtr<CefValue> value = CefValue::Create();
-	value->SetDictionary(dict);
+	value->SetList(list);
 	std::string str = CefWriteJSON(value, JSON_WRITER_DEFAULT).ToString();
 	return new ResourceHandler(std::move(str), 200, "application/json");
 }
