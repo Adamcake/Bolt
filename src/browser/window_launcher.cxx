@@ -395,7 +395,6 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 				PQINT(uid)
 			});
 			if (!has_uid || !has_client || !uid_valid || !client_valid) {
-				fmt::print("bad request has_uid={} has_client={} uid_valid={} client_valid={} query={}\n", has_uid, has_client, uid_valid, client_valid, query);
 				const char* data = "Bad request\n";
 				return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
 			}
