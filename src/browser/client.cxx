@@ -562,6 +562,30 @@ void Browser::Client::StartPlugin(uint64_t client_id, std::string id, std::strin
 	this->game_clients_lock.unlock();
 }
 
+void Browser::Client::StopPlugin(uint64_t client_id, uint64_t uid) {
+	this->game_clients_lock.lock();
+	for (GameClient& g: this->game_clients) {
+		if (!g.deleted && g.uid == client_id) {
+			for (auto it = g.plugins.begin(); it != g.plugins.end(); it++) {
+				if ((*it)->uid != uid) continue;
+				uint8_t buf[sizeof(BoltIPCMessageToClient) + sizeof(uint64_t)];
+				*(BoltIPCMessageToClient*)buf = {.message_type = IPC_MSG_HOST_STOPPED_PLUGINS, .items = 1};
+				*(uint64_t*)(buf + sizeof(BoltIPCMessageToClient)) = (*it)->uid;
+				_bolt_ipc_send(g.fd, buf, sizeof(buf));
+				(*it)->deleted = true;
+				for (CefRefPtr<WindowOSR>& w: (*it)->windows_osr) {
+					w->Close();
+				}
+				if ((*it)->windows_osr.empty()) {
+					g.plugins.erase(it);
+				}
+				break;
+			}
+		}
+	}
+	this->game_clients_lock.unlock();
+}
+
 void Browser::Client::CleanupClientPlugins(int fd) {
 	this->game_clients_lock.lock();
 	for (auto it = this->game_clients.begin(); it != this->game_clients.end(); it += 1) {

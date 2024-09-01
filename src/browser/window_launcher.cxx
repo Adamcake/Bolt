@@ -347,67 +347,64 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 		// request to send a message to a game client to start a plugin
 		if (path == "/start-plugin") {
 #if defined(BOLT_PLUGINS)
-				std::string_view id;
-				bool has_id = false;
-				std::string_view path;
-				bool has_path  = false;
-				std::string_view main;
-				bool has_main  = false;
-				std::string_view client;
-				bool has_client  = false;
-				size_t pos = 0;
-				while (true) {
-					size_t next_and = query.find('&', pos);
-					size_t next_eq = query.find('=', pos);
-					if (next_eq == std::string_view::npos) break;
-					else if (next_and != std::string_view::npos && next_eq > next_and) {
-						pos = next_and + 1;
-						continue;
-					}
-					bool is_last = next_and == std::string_view::npos;
-					auto end = is_last ? query.end() : query.begin() + next_and;
-					std::string_view key(query.begin() + pos, query.begin() + next_eq);
-					std::string_view val(query.begin() + next_eq + 1, end);
-					if (key == "id") {
-						has_id = true;
-						id = val;
-					} else if (key == "path") {
-						has_path = true;
-						path = val;
-					} else if (key == "main") {
-						has_main = true;
-						main = val;
-					} else if (key == "client") {
-						has_client = true;
-						client = val;
-					}
-					if (is_last) break;
-					pos = next_and + 1;
-				}
-				if (!has_id || !has_path || !has_main || !has_client) {
-					const char* data = "Bad request\n";
-					return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
-				}
-				uint64_t client_id = 0;
-				for (auto it = client.begin(); it != client.end(); it += 1) {
-					if (*it < '0' || *it > '9') {
-						const char* data = "Bad request\n";
-						return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
-					}
-					client_id = (client_id * 10) + (*it - '0');
-				}
-				const cef_uri_unescape_rule_t rule = (cef_uri_unescape_rule_t)(UU_SPACES | UU_PATH_SEPARATORS | UU_URL_SPECIAL_CHARS_EXCEPT_PATH_SEPARATORS | UU_REPLACE_PLUS_WITH_SPACE);
-				this->client->StartPlugin(
-					client_id,
-					CefURIDecode(std::string(id), true, rule).ToString(),
-					CefURIDecode(std::string(path), true, rule).ToString(),
-					CefURIDecode(std::string(main), true, rule).ToString()
-				);
-				const char* data = "OK\n";
-				return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
-#else
-				const char* data = "Not supported\n";
+			std::string id;
+			bool has_id = false;
+			std::string path;
+			bool has_path  = false;
+			std::string main;
+			bool has_main  = false;
+			uint64_t client;
+			bool has_client  = false;
+			bool client_valid = true;
+			this->ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
+				PQCHECK(id)
+				PQCHECK(path)
+				PQCHECK(main)
+				PQINT(client)
+			});
+			if (!has_id || !has_path || !has_main || !has_client || !client_valid) {
+				const char* data = "Bad request\n";
 				return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+			}
+			const cef_uri_unescape_rule_t rule = (cef_uri_unescape_rule_t)(UU_SPACES | UU_PATH_SEPARATORS | UU_URL_SPECIAL_CHARS_EXCEPT_PATH_SEPARATORS | UU_REPLACE_PLUS_WITH_SPACE);
+			this->client->StartPlugin(
+				client,
+				CefURIDecode(std::string(id), true, rule).ToString(),
+				CefURIDecode(std::string(path), true, rule).ToString(),
+				CefURIDecode(std::string(main), true, rule).ToString()
+			);
+			const char* data = "OK\n";
+			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
+#else
+			const char* data = "Not supported\n";
+			return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+#endif
+		}
+
+		// request to stop a plugin that's currently running for a specific client
+		if (path == "/stop-plugin") {
+#if defined(BOLT_PLUGINS)
+			uint64_t client;
+			bool has_client = false;
+			bool client_valid = true;
+			uint64_t uid;
+			bool has_uid = false;
+			bool uid_valid = true;
+			this->ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
+				PQINT(client)
+				PQINT(uid)
+			});
+			if (!has_uid || !has_client || !uid_valid || !client_valid) {
+				fmt::print("bad request has_uid={} has_client={} uid_valid={} client_valid={} query={}\n", has_uid, has_client, uid_valid, client_valid, query);
+				const char* data = "Bad request\n";
+				return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+			}
+			this->client->StopPlugin(client, uid);
+			const char* data = "OK\n";
+			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
+#else
+			const char* data = "Not supported\n";
+			return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
 #endif
 		}
 

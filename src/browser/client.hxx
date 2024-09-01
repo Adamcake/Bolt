@@ -93,6 +93,9 @@ namespace Browser {
 		/// Sends an IPC message to the named client to start a plugin.
 		void StartPlugin(uint64_t client_id, std::string id, std::string path, std::string main);
 
+		/// Sends an IPC message to the named client to stop the named instance of a plugin.
+		void StopPlugin(uint64_t client_id, uint64_t uid);
+
 		/// Filters the list of plugins and their associated browsers for the client identified by the given fd,
 		/// to remove deleted plugins and browsers. Usually called when a browser is closed.
 		void CleanupClientPlugins(int fd);

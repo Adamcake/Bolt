@@ -95,6 +95,19 @@ if (key == #KEY) { \
 	return; \
 }
 
+#define PQINT(KEY) \
+if (key == #KEY) { \
+	has_##KEY = true; \
+	KEY = 0; \
+	for (auto it = val.begin(); it != val.end(); it += 1) { \
+		if (*it < '0' || *it > '9') { \
+			KEY##_valid = false; \
+			break; \
+		} \
+		KEY = (KEY * 10) + (*it - '0'); \
+	} \
+}
+
 #define PQBOOL(KEY) \
 if (key == #KEY) { \
 	KEY = (val.size() > 0 && val != "0"); \
