@@ -123,9 +123,16 @@
 	};
 
 	// function to stop a plugin, by the client ID and plugin activation ID
-	const stopPlugin = (client_id: string, plugin_uid: string) => {
-		// TODO: this
-		console.log(`stop plugin "${plugin_uid}" for client ${client_id}`);
+	const stopPlugin = (client: string, uid: string) => {
+		var xml = new XMLHttpRequest();
+		xml.onreadystatechange = () => {
+			if (xml.readyState == 4) {
+				clientListPromise.set(getNewClientListPromise());
+				logger.info(`Stop-plugin status: ${xml.statusText.trim()}`);
+			}
+		};
+		xml.open('GET', '/stop-plugin?'.concat(new URLSearchParams({ client, uid }).toString()), true);
+		xml.send();
 	};
 
 	// plugin management interface - currently-selected plugin
@@ -291,7 +298,7 @@
 											<button
 												class="bg-rose-500 shadow-lg hover:opacity-75"
 												on:click={() => {
-													stopPlugin(selectedClientId, activePlugin.id);
+													stopPlugin(selectedClientId, activePlugin.uid);
 												}}
 											>
 												<img src="svgs/xmark-solid.svg" class="h-4 w-4" alt="Close" />
