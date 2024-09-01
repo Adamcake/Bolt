@@ -98,14 +98,16 @@ if (key == #KEY) { \
 #define PQINT(KEY) \
 if (key == #KEY) { \
 	has_##KEY = true; \
+	KEY##_valid = true; \
 	KEY = 0; \
 	for (auto it = val.begin(); it != val.end(); it += 1) { \
 		if (*it < '0' || *it > '9') { \
 			KEY##_valid = false; \
-			break; \
+			return; \
 		} \
 		KEY = (KEY * 10) + (*it - '0'); \
 	} \
+	return; \
 }
 
 #define PQBOOL(KEY) \

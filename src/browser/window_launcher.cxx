@@ -355,7 +355,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 			bool has_main  = false;
 			uint64_t client;
 			bool has_client  = false;
-			bool client_valid = true;
+			bool client_valid = false;
 			this->ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
 				PQCHECK(id)
 				PQCHECK(path)
@@ -386,10 +386,10 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 #if defined(BOLT_PLUGINS)
 			uint64_t client;
 			bool has_client = false;
-			bool client_valid = true;
+			bool client_valid = false;
 			uint64_t uid;
 			bool has_uid = false;
-			bool uid_valid = true;
+			bool uid_valid = false;
 			this->ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
 				PQINT(client)
 				PQINT(uid)
