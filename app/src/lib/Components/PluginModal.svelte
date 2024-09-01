@@ -296,7 +296,7 @@
 										<p>
 											{bolt.pluginList[activePlugin.id].name ?? activePlugin.id}
 											<button
-												class="bg-rose-500 shadow-lg hover:opacity-75"
+												class="bg-rose-500 rounded-sm shadow-lg hover:opacity-75"
 												on:click={() => {
 													stopPlugin(selectedClientId, activePlugin.uid);
 												}}
