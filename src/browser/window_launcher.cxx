@@ -197,9 +197,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 		}
 		if (has_code && has_state) {
 			disable_default_handling = true;
-			const char* data = "Moved\n";
-			CefString location = CefString(this->internal_url + "index.html?code=" + std::string(code) + "&state=" + std::string(state));
-			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 302, "text/plain", location);
+			QSENDMOVED(CefString(this->internal_url + "index.html?code=" + std::string(code) + "&state=" + std::string(state)));
 		} else {
 			return nullptr;
 		}
@@ -225,17 +223,13 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 	// handler for launcher-redirect url
 	if (domain == launcher_redirect_domain && path == launcher_redirect_path) {
 		disable_default_handling = true;
-		const char* data = "Moved\n";
-		CefString location = CefString(this->internal_url + "index.html?" + std::string(query));
-		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 302, "text/plain", location);
+		QSENDMOVED(CefString(this->internal_url + "index.html?" + std::string(query)));
 	}
 
 	// handler for another custom request thing, but this one uses localhost, for whatever reason
 	if (domain == "localhost" && path == "/" && comment.starts_with("code=")) {
 		disable_default_handling = true;
-		const char* data = "Moved\n";
-		CefString location = CefString(this->internal_url + "index.html?" + std::string(comment));
-		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 302, "text/plain", location);
+		QSENDMOVED(CefString(this->internal_url + "index.html?" + std::string(comment)));
 	}
 
 	const bool is_internal_target = domain == "bolt-internal";
@@ -303,8 +297,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 #if defined(BOLT_PLUGINS)
 			return SaveFileFromPost(request, this->plugin_config_path.c_str());
 #else
-			const char* data = "Not supported\n";
-			return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+			QSENDNOTSUPPORTED();
 #endif
 		}
 
@@ -313,21 +306,20 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 #if defined(BOLT_PLUGINS)
 			return this->client->ListGameClients();
 #else
-			const char* data = "Not supported\n";
-			return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+			QSENDNOTSUPPORTED();
 #endif
 		}
 
 		// request for the contents of a JSON file - doesn't actually validate the contents
 		if (path == "/read-json-file") {
 #if defined(BOLT_PLUGINS)
-			if (!query.starts_with("path=") || !query.ends_with(".json") || query.find('&') != std::string_view::npos) {
-				const char* data = "Bad request\n";
-				return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
-			}
-			const cef_uri_unescape_rule_t unescape_rule = (cef_uri_unescape_rule_t)(UU_SPACES | UU_PATH_SEPARATORS | UU_URL_SPECIAL_CHARS_EXCEPT_PATH_SEPARATORS | UU_REPLACE_PLUS_WITH_SPACE);
-			const std::string uri_decoded = CefURIDecode(std::string(query.substr(5, -1)), true, unescape_rule).ToString();
-			std::ifstream file(uri_decoded, std::ios::in | std::ios::binary);
+			QSTRING path;
+			bool has_path = false;
+			this->ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
+				PQSTRING(path)
+			});
+			QREQPARAM(path);
+			std::ifstream file(path, std::ios::in | std::ios::binary);
 			if (!file.fail()) {
 				std::stringstream ss;
 				ss << file.rdbuf();
@@ -335,37 +327,35 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 				file.close();
 				return new Browser::ResourceHandler(str, 200, "application/json");
 			} else {
-				const char* data = "Not found\n";
-				return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 404, "text/plain");
+				QSENDNOTFOUND();
 			}
 #else
-			const char* data = "Not supported\n";
-			return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+			QSENDNOTSUPPORTED();
 #endif
 		}
 
 		// request to send a message to a game client to start a plugin
 		if (path == "/start-plugin") {
 #if defined(BOLT_PLUGINS)
-			std::string id;
+			QSTRING id;
 			bool has_id = false;
-			std::string path;
+			QSTRING path;
 			bool has_path  = false;
-			std::string main;
+			QSTRING main;
 			bool has_main  = false;
 			uint64_t client;
 			bool has_client  = false;
 			bool client_valid = false;
 			this->ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
-				PQCHECK(id)
-				PQCHECK(path)
-				PQCHECK(main)
+				PQSTRING(id)
+				PQSTRING(path)
+				PQSTRING(main)
 				PQINT(client)
 			});
-			if (!has_id || !has_path || !has_main || !has_client || !client_valid) {
-				const char* data = "Bad request\n";
-				return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
-			}
+			QREQPARAM(id);
+			QREQPARAM(path);
+			QREQPARAM(main);
+			QREQPARAMINT(client);
 			const cef_uri_unescape_rule_t rule = (cef_uri_unescape_rule_t)(UU_SPACES | UU_PATH_SEPARATORS | UU_URL_SPECIAL_CHARS_EXCEPT_PATH_SEPARATORS | UU_REPLACE_PLUS_WITH_SPACE);
 			this->client->StartPlugin(
 				client,
@@ -373,11 +363,9 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 				CefURIDecode(std::string(path), true, rule).ToString(),
 				CefURIDecode(std::string(main), true, rule).ToString()
 			);
-			const char* data = "OK\n";
-			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
+			QSENDOK();
 #else
-			const char* data = "Not supported\n";
-			return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+			QSENDNOTSUPPORTED();
 #endif
 		}
 
@@ -394,26 +382,19 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 				PQINT(client)
 				PQINT(uid)
 			});
-			if (!has_uid || !has_client || !uid_valid || !client_valid) {
-				const char* data = "Bad request\n";
-				return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
-			}
+			QREQPARAMINT(client);
+			QREQPARAMINT(uid);
 			this->client->StopPlugin(client, uid);
-			const char* data = "OK\n";
-			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
+			QSENDOK();
 #else
-			const char* data = "Not supported\n";
-			return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+			QSENDNOTSUPPORTED();
 #endif
 		}
 
 		// instruction to try to open an external URL in the user's browser
 		if (path == "/open-external-url") {
 			CefRefPtr<CefPostData> post_data = request->GetPostData();
-			if (post_data->GetElementCount() != 1) {
-				const char* data = "Bad request\n";
-				return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
-			}
+			QSENDBADREQUESTIF(!post_data || post_data->GetElementCount() != 1);
 			CefPostData::ElementVector elements;
 			post_data->GetElements(elements);
 			size_t byte_count = elements[0]->GetBytesCount();
@@ -422,19 +403,15 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 			url[byte_count] = '\0';
 			this->OpenExternalUrl(url);
 			delete[] url;
-			const char* data = "OK\n";
-			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
+			QSENDOK();
 		}
 
 		// instruction to try to open Bolt's data directory in the user's file explorer
 		if (path == "/browse-data") {
 			if (!this->BrowseData()) {
-				const char* data = "OK\n";
-				return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
-			} else {
-				const char* data = "Error in fork()\n";
-				return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 500, "text/plain");
+				QSENDSTR("Error creating process", 500);
 			}
+			QSENDOK();
 		}
 
 		// instruction to open a file picker for .jar files
@@ -456,8 +433,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 			return new ResourceHandler(file, this->file_manager);
 		} else {
 			this->file_manager->free(file);
-			const char* data = "Not Found\n";
-			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 404, "text/plain");
+			QSENDNOTFOUND();
 		}
 	}
 
@@ -584,25 +560,17 @@ void Browser::Launcher::ParseQuery(std::string_view query, std::function<void(co
 
 CefRefPtr<CefResourceRequestHandler> SaveFileFromPost(CefRefPtr<CefRequest> request, const std::filesystem::path::value_type* path) {
 	CefRefPtr<CefPostData> post_data = request->GetPostData();
-	if (post_data->GetElementCount() != 1) {
-		const char* data = "Bad request\n";
-		return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
-	}
+	QSENDBADREQUESTIF(!post_data || post_data->GetElementCount() != 1);
 
 	CefPostData::ElementVector elements;
 	post_data->GetElements(elements);
 	size_t byte_count = elements[0]->GetBytesCount();
 	
 	std::ofstream file(path, std::ios::out | std::ios::binary);
-	if (file.fail()) {
-		const char* data = "Failed to open file\n";
-		return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 500, "text/plain");
-	}
+	QSENDSYSTEMERRORIF(file.fail());
 	char* buf = new char[byte_count];
 	elements[0]->GetBytes(byte_count, buf);
 	file.write(buf, byte_count);
 	delete[] buf;
-
-	const char* data = "OK\n";
-	return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
+	QSENDOK();
 }

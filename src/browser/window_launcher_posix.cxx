@@ -78,11 +78,11 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<C
 	bool plugin_loader = false;
 #endif
 	this->ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
-		PQCHECK(hash)
-		PQCHECK(config_uri)
-		PQCHECK(jx_session_id)
-		PQCHECK(jx_character_id)
-		PQCHECK(jx_display_name)
+		PQSTRING(hash)
+		PQSTRING(config_uri)
+		PQSTRING(jx_session_id)
+		PQSTRING(jx_character_id)
+		PQSTRING(jx_display_name)
 #if defined(BOLT_PLUGINS)
 		PQBOOL(plugin_loader)
 #endif
@@ -90,12 +90,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<C
 
 	// if there was a "hash" in the query string, we need to save the new game exe and the new hash
 	if (has_hash) {
-		if (post_data == nullptr || post_data->GetElementCount() != 1) {
-			// hash param must be accompanied by POST data containing the file it's a hash of,
-			// so hash but no POST is a bad request
-			const char* data = "Bad Request";
-			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
-		}
+		QSENDBADREQUESTIF(!post_data || post_data->GetElementCount() != 1);
 		std::filesystem::path icons_dir = this->data_dir.parent_path();
 		icons_dir.append("icons");
 		CefPostData::ElementVector vec;
@@ -118,8 +113,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<C
 				archive_read_close(ar);
 				archive_read_free(ar);
 				delete[] deb;
-				const char* data = "Malformed .deb file\n";
-				return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+				QSENDSTR("Malformed .deb file", 400);
 			}
 			if (strcmp(archive_entry_pathname(entry), "data.tar.xz") == 0) {
 				entry_found = true;
@@ -131,8 +125,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<C
 			archive_read_close(ar);
 			archive_read_free(ar);
 			delete[] deb;
-			const char* data = "No data in .deb file\n";
-			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+			QSENDSTR("No data in .deb file", 400);
 		}
 
 		const long entry_size = archive_entry_size(entry);
@@ -159,8 +152,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<C
 				archive_read_close(xz);
 				archive_read_free(xz);
 				delete[] tar_xz;
-				const char* data = "Malformed .tar.xz file\n";
-				return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+				QSENDSTR("Malformed .tar.xz file", 400);
 			}
 
 			const char* entry_pathname = archive_entry_pathname(entry);
@@ -179,8 +171,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<C
 				if (file == -1) {
 					// failed to open game binary file on disk - probably in use or a permissions issue
 					delete[] game;
-					const char* data = "Failed to save executable; if the game is already running, close it and try again\n";
-					return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 500, "text/plain");
+					QSENDSTR("Failed to save executable; if the game is already running, close it and try again", 500);
 				}
 				while (written < game_size) {
 					written += write(file, game + written, game_size - written);
@@ -224,9 +215,8 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<C
 		delete[] tar_xz;
 
 		if (!entry_found) {
-			// data.tar.tx was valid but did not contain a game binary according to libarchive
-			const char* data = "No target executable in .tar.xz file\n";
-			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+			// data.tar.xz was valid but did not contain a game binary according to libarchive
+			QSENDSTR("No target executable in .tar.xz file", 400);
 		}
 	}
 
@@ -266,36 +256,30 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<C
 		size_t written = 0;
 		int file = open(this->rs3_elf_hash_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
 		if (file == -1) {
-			const char* data = "OK, but unable to save hash file\n";
-			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
+			QSENDSTR("OK, but unable to save hash file", 200);
 		}
 		while (written < hash.size()) {
 			written += write(file, hash.c_str() + written, hash.size() - written);
 		}
 		close(file);
 	}
-	const char* data = "OK\n";
-	return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
+	QSENDOK();
 }
 
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Exe(CefRefPtr<CefRequest> request, std::string_view query) {
-	const char* data = ".exe is not supported on this platform\n";
-	return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+	QSENDSTR(".exe is not supported on this platform", 400);
 }
 
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3App(CefRefPtr<CefRequest> request, std::string_view query) {
-	const char* data = "Mac binaries are not supported on this platform\n";
-	return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+	QSENDSTR("Mac binaries are not supported on this platform", 400);
 }
 
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchOsrsExe(CefRefPtr<CefRequest> request, std::string_view query) {
-	const char* data = ".exe is not supported on this platform\n";
-	return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+	QSENDSTR(".exe is not supported on this platform", 400);
 }
 
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchOsrsApp(CefRefPtr<CefRequest> request, std::string_view query) {
-	const char* data = "Mac binaries are not supported on this platform\n";
-	return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+	QSENDSTR("Mac binaries are not supported on this platform", 400);
 }
 
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRefPtr<CefRequest> request, std::string_view query, bool configure) {
@@ -316,11 +300,11 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 	std::string jx_display_name;
 	bool has_jx_display_name = false;
 	this->ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
-		PQCHECK(jar_path)
-		PQCHECK(id)
-		PQCHECK(jx_session_id)
-		PQCHECK(jx_character_id)
-		PQCHECK(jx_display_name)
+		PQSTRING(jar_path)
+		PQSTRING(id)
+		PQSTRING(jx_session_id)
+		PQSTRING(jx_character_id)
+		PQSTRING(jx_display_name)
 	});
 
 	// path to runelite.jar will either be a user-provided one or one in our data folder,
@@ -333,13 +317,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 
 		// if there was an "id" in the query string, we need to save the new jar and hash
 		if (has_id) {
-			if (post_data == nullptr || post_data->GetElementCount() != 1) {
-				// hash param must be accompanied by POST data containing the file it's a hash of,
-				// so hash but no POST is a bad request
-				const char* data = "Bad Request";
-				return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
-			}
-
+			QSENDBADREQUESTIF(post_data == nullptr || post_data->GetElementCount() != 1);
 			CefPostData::ElementVector vec;
 			post_data->GetElements(vec);
 			size_t jar_size = vec[0]->GetBytesCount();
@@ -351,8 +329,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 			if (file == -1) {
 				// failed to open game binary file on disk - probably in use or a permissions issue
 				delete[] jar;
-				const char* data = "Failed to save JAR; if the game is already running, close it and try again\n";
-				return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 500, "text/plain");
+				QSENDSTR("Failed to save JAR; if the game is already running, close it and try again", 500);
 			}
 			while (written < jar_size) {
 				written += write(file, jar + written, jar_size - written);
@@ -364,9 +341,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 
 	std::string java;
 	if (!FindJava(getenv("JAVA_HOME"), java)) {
-		const char* data = "Couldn't find Java: JAVA_HOME is either unset or does not point to a Java binary, "
-						   "and no binary named \"java\" exists in PATH.\n";
-		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 500, "text/plain");
+		QSENDSTR("Couldn't find Java: JAVA_HOME is either unset or does not point to a Java binary, and no binary named \"java\" exists in PATH.", 500);
 	}
 	std::string arg_home = "-Duser.home=" + user_home;
 	std::string arg_jvm_argument_home = "-J" + arg_home;
@@ -403,16 +378,15 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 		size_t written = 0;
 		int file = open(this->runelite_id_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
 		if (file == -1) {
+			QSENDSTR("OK, but unable to save id file", 200);
 			const char* data = "OK, but unable to save id file\n";
-			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
 		}
 		while (written < id.size()) {
 			written += write(file, id.c_str() + written, id.size() - written);
 		}
 		close(file);
 	}
-	const char* data = "OK\n";
-	return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
+	QSENDOK();
 }
 
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<CefRequest> request, std::string_view query) {
@@ -423,8 +397,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<
 	if (!java_home) {
 		// the only reason this is necessary is the lines where we symlink the /lib and /conf directories
 		// into our fake java.home, not sure we can do anything about that
-		const char* data = "JAVA_HOME environment variable is required to run HDOS\n";
-		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+		QSENDSTR("JAVA_HOME environment variable is required to run HDOS", 400);
 	}
 
 	const char* env_key_user_home = "BOLT_ARG_HOME=";
@@ -433,9 +406,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<
 
 	std::string java;
 	if (!FindJava(java_home, java)) {
-		const char* data = "Couldn't find Java: JAVA_HOME is either unset or does not point to a Java binary, "
-						   "and no binary named \"java\" exists in PATH.\n";
-		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 500, "text/plain");
+		QSENDSTR("Couldn't find Java: JAVA_HOME does not point to a Java binary", 400);
 	}
 
 	std::filesystem::path java_proxy_bin_path = std::filesystem::current_path();
@@ -459,8 +430,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<
 	err |= symlink(java_conf_str.c_str(), java_proxy_conf_path.c_str());
 	err |= symlink(java_proxy_bin_path.c_str(), java_proxy_java_path.c_str());
 	if (err) {
-		const char* data = "Unable to create symlinks\n";
-		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 500, "text/plain");
+		QSENDSTR("Unable to create symlinks", 500);
 	}
 
 	// parse query
@@ -473,21 +443,15 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<
 	std::string jx_display_name;
 	bool has_jx_display_name = false;
 	this->ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
-		PQCHECK(version)
-		PQCHECK(jx_session_id)
-		PQCHECK(jx_character_id)
-		PQCHECK(jx_display_name)
+		PQSTRING(version)
+		PQSTRING(jx_session_id)
+		PQSTRING(jx_character_id)
+		PQSTRING(jx_display_name)
 	});
 
 	// if there was a "version" in the query string, we need to save the new jar and hash
 	if (has_version) {
-		if (post_data == nullptr || post_data->GetElementCount() != 1) {
-			// hash param must be accompanied by POST data containing the file it's a hash of,
-			// so hash but no POST is a bad request
-			const char* data = "Bad Request";
-			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
-		}
-
+		QSENDBADREQUESTIF(post_data == nullptr || post_data->GetElementCount() != 1);
 		CefPostData::ElementVector vec;
 		post_data->GetElements(vec);
 		size_t jar_size = vec[0]->GetBytesCount();
@@ -499,8 +463,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<
 		if (file == -1) {
 			// failed to open game binary file on disk - probably in use or a permissions issue
 			delete[] jar;
-			const char* data = "Failed to save JAR; if the game is already running, close it and try again\n";
-			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 500, "text/plain");
+			QSENDSTR("Failed to save JAR; if the game is already running, close it and try again", 500);
 		}
 		while (written < jar_size) {
 			written += write(file, jar + written, jar_size - written);
@@ -544,16 +507,14 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<
 		size_t written = 0;
 		int file = open(this->hdos_version_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
 		if (file == -1) {
-			const char* data = "OK, but unable to save version file\n";
-			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
+			QSENDSTR("OK, but unable to save version file", 200);
 		}
 		while (written < version.size()) {
 			written += write(file, version.c_str() + written, version.size() - written);
 		}
 		close(file);
 	}
-	const char* data = "OK\n";
-	return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
+	QSENDOK();
 }
 
 void Browser::Launcher::OpenExternalUrl(char* url) const {
@@ -564,12 +525,12 @@ void Browser::Launcher::OpenExternalUrl(char* url) const {
 	if (pid == 0) execv(arg_env, argv);
 }
 
-int Browser::Launcher::BrowseData() const {
+bool Browser::Launcher::BrowseData() const {
 	char arg_env[] = "/usr/bin/env";
 	char arg_xdg_open[] = "xdg-open";
 	std::string dir = this->data_dir;
 	char* argv[] { arg_env, arg_xdg_open, dir.data(), nullptr };
 	pid_t pid = fork();
 	if (pid == 0) execv(arg_env, argv);
-	return pid;
+	return pid > 0;
 }

@@ -33,8 +33,8 @@ namespace Browser {
 		void OpenExternalUrl(char* url) const;
 
 		/// Attempts to open Bolt's data directory externally in the user's file explorer.
-		/// Returns the value returned by `fork`, which is 0 on success or -1 on error.
-		int BrowseData() const;
+		/// Returns true on success, false on failure.
+		bool BrowseData() const;
 
 		/// Builds and returns the URL for the launcher to open, including reading config files and
 		/// inserting their contents into the query params
@@ -83,12 +83,14 @@ namespace Browser {
 }
 
 #if defined(_WIN32)
+typedef std::wstring QSTRING;
 #define PQTOSTRING ToWString
 #else
+typedef std::string QSTRING;
 #define PQTOSTRING ToString
 #endif
 
-#define PQCHECK(KEY) \
+#define PQSTRING(KEY) \
 if (key == #KEY) { \
 	has_##KEY = true; \
 	KEY = CefURIDecode(std::string(val), true, (cef_uri_unescape_rule_t)(UU_SPACES | UU_PATH_SEPARATORS | UU_URL_SPECIAL_CHARS_EXCEPT_PATH_SEPARATORS | UU_REPLACE_PLUS_WITH_SPACE)).PQTOSTRING(); \
@@ -115,5 +117,15 @@ if (key == #KEY) { \
 	KEY = (val.size() > 0 && val != "0"); \
 	return; \
 }
+
+#define QSENDSTR(STR, CODE) return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(STR "\n"), sizeof(STR "\n") - sizeof(*STR), CODE, "text/plain")
+#define QSENDMOVED(LOC) return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>("Moved\n"), sizeof("Moved\n") - sizeof("Moved\n"), 302, "text/plain", LOC)
+#define QSENDOK() QSENDSTR("OK", 200)
+#define QSENDNOTFOUND() QSENDSTR("Not found", 404)
+#define QSENDBADREQUESTIF(COND) if (COND) QSENDSTR("Bad response", 400)
+#define QSENDSYSTEMERRORIF(COND) if (COND) QSENDSTR("System error", 500)
+#define QSENDNOTSUPPORTED() QSENDSTR("Not supported", 400)
+#define QREQPARAM(NAME) if (!has_##NAME) QSENDSTR("Missing required param " #NAME, 400)
+#define QREQPARAMINT(NAME) QREQPARAM(NAME); if (!NAME##_valid) QSENDSTR("Invalid value for required param " #NAME, 400)
 
 #endif

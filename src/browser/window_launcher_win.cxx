@@ -9,8 +9,7 @@
 #endif
 
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<CefRequest> request, std::string_view query) {
-	const char* data = "Elf binaries are not supported on this platform\n";
-	return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+	QSENDSTR("Elf binaries are not supported on this platform", 400);
 }
 
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Exe(CefRefPtr<CefRequest> request, std::string_view query) {
@@ -31,11 +30,11 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Exe(CefRefPtr<C
 	bool plugin_loader = false;
 #endif
 	this->ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
-		PQCHECK(hash)
-		PQCHECK(config_uri)
-		PQCHECK(jx_session_id)
-		PQCHECK(jx_character_id)
-		PQCHECK(jx_display_name)
+		PQSTRING(hash)
+		PQSTRING(config_uri)
+		PQSTRING(jx_session_id)
+		PQSTRING(jx_character_id)
+		PQSTRING(jx_display_name)
 #if defined(BOLT_PLUGINS)
 		PQBOOL(plugin_loader)
 #endif
@@ -43,16 +42,10 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Exe(CefRefPtr<C
 
 	// if there was a "hash" in the query string, we need to save the new game exe and the new hash
 	if (has_hash) {
-		if (post_data == nullptr || post_data->GetElementCount() != 1) {
-			// hash param must be accompanied by POST data containing the file it's a hash of,
-			// so hash but no POST is a bad request
-			const char* data = "Bad Request";
-			return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
-		}
+		QSENDBADREQUESTIF(post_data == nullptr || post_data->GetElementCount() != 1);
 		std::ofstream file(this->rs3_exe_path, std::ios::out | std::ios::binary);
 		if (file.fail()) {
-			const char* data = "Failed to save executable; if the game is already running, close it and try again\n";
-			return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 500, "text/plain");
+			QSENDSTR("Failed to save executable; if the game is already running, close it and try again", 500);
 		}
 		CefPostData::ElementVector vec;
 		post_data->GetElements(vec);
@@ -157,41 +150,33 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Exe(CefRefPtr<C
 	if (has_hash) {
 		std::wofstream file(this->rs3_exe_hash_path, std::ios::out | std::ios::binary);
 		if (file.fail()) {
-			const char* data = "OK, but unable to save hash file\n";
-			return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
+			QSENDSTR("OK, but unable to save hash file", 200);
 		}
 		file << hash;
 		file.close();
 	}
-
-	const char* data = "OK\n";
-	return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 200, "text/plain");
+	QSENDOK();
 }
 
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3App(CefRefPtr<CefRequest> request, std::string_view query) {
-	const char* data = "Mac binaries are not supported on this platform\n";
-	return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+	QSENDSTR("Mac binaries are not supported on this platform", 400);
 }
 
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchOsrsExe(CefRefPtr<CefRequest> request, std::string_view query) {
 	// TODO
-	const char* data = ".exe is not supported on this platform\n";
-	return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+	QSENDSTR("Not yet supported on this platform", 400);
 }
 
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchOsrsApp(CefRefPtr<CefRequest> request, std::string_view query) {
-	const char* data = "Mac binaries are not supported on this platform\n";
-	return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 400, "text/plain");
+	QSENDSTR("Mac binaries are not supported on this platform", 400);
 }
 
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRefPtr<CefRequest> request, std::string_view query, bool configure) {
-	const char* data = "JAR files not yet supported on Windows\n";
-	return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 500, "text/plain");
+	QSENDSTR("JAR files not yet supported on Windows", 400);
 }
 
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<CefRequest> request, std::string_view query) {
-	const char* data = "JAR files not yet supported on Windows\n";
-	return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 500, "text/plain");
+	QSENDSTR("JAR files not yet supported on Windows", 400);
 }
 
 void Browser::Launcher::OpenExternalUrl(char* u) const {
@@ -203,7 +188,7 @@ void Browser::Launcher::OpenExternalUrl(char* u) const {
 	delete[] buf;
 }
 
-int Browser::Launcher::BrowseData() const {
+bool Browser::Launcher::BrowseData() const {
 	// TODO
 	return -1;
 }
