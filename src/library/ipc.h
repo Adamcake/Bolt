@@ -27,6 +27,7 @@ enum BoltMessageTypeToHost {
     IPC_MSG_EVMOUSEBUTTON,
     IPC_MSG_EVMOUSEBUTTONUP,
     IPC_MSG_EVSCROLL,
+    IPC_MSG_EVMOUSELEAVE,
 };
 
 enum BoltMessageTypeToClient {
