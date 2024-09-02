@@ -159,6 +159,12 @@ void Browser::WindowOSR::HandleScroll(const MouseScrollEvent* event) {
 	if (this->browser) this->browser->GetHost()->SendMouseWheelEvent(e, 0, event->direction ? 20 : -20);
 }
 
+void Browser::WindowOSR::HandleMouseLeave(const MouseMotionEvent* event) {
+	CefMouseEvent e;
+	MouseEventToCef(&event->details, &e);
+	if (this->browser) this->browser->GetHost()->SendMouseMoveEvent(e, true);
+}
+
 CefRefPtr<CefRequestHandler> Browser::WindowOSR::GetRequestHandler() {
 	return this;
 }

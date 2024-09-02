@@ -33,6 +33,7 @@ namespace Browser {
 		void HandleMouseButton(const MouseButtonEvent*);
 		void HandleMouseButtonUp(const MouseButtonEvent*);
 		void HandleScroll(const MouseScrollEvent*);
+		void HandleMouseLeave(const MouseMotionEvent*);
 
 		uint64_t ID();
 

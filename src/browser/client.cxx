@@ -471,6 +471,15 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 			if (window) window->HandleScroll(&event);
 			break;
 		}
+		case IPC_MSG_EVMOUSELEAVE: {
+			uint64_t plugin_window_id;
+			MouseMotionEvent event;
+			_bolt_ipc_receive(fd, &plugin_window_id, sizeof(plugin_window_id));
+			_bolt_ipc_receive(fd, &event, sizeof(event));
+			CefRefPtr<Browser::WindowOSR> window = this->GetWindowFromFDAndID(client, plugin_window_id);
+			if (window) window->HandleMouseLeave(&event);
+			break;
+		}
 		default: {
 			fmt::print("[I] got unknown message type {}\n", (int)message.message_type);
 			break;
