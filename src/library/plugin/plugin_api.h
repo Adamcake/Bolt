@@ -479,6 +479,13 @@ static int api_window_onmousebuttonup(lua_State*);
 /// events.
 static int api_window_onscroll(lua_State*);
 
+/// [-2, +0, -]
+/// Sets an event handler for this window for mouse leave events. If the value is a function, it
+/// will be called with one parameter, that being a mouse motion object. If the value is not a
+/// function, it will not be called, and therefore the plugin will not be notified of mouse motion
+/// events.
+static int api_window_onmouseleave(lua_State*);
+
 /// [-1, +1, -]
 /// Returns the number of vertices in a 3D render object (i.e. a model).
 static int api_render3d_vertexcount(lua_State*);

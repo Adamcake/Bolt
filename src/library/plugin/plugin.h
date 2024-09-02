@@ -136,6 +136,7 @@ struct PluginManagedFunctions {
 struct WindowPendingInput {
     /* bools are listed at the top to make the structure smaller by having less padding in it */
     uint8_t mouse_motion;
+    uint8_t mouse_leave;
     uint8_t mouse_left;
     uint8_t mouse_right;
     uint8_t mouse_middle;
@@ -145,6 +146,7 @@ struct WindowPendingInput {
     uint8_t mouse_scroll_down;
     uint8_t mouse_scroll_up;
     struct MouseEvent mouse_motion_event;
+    struct MouseEvent mouse_leave_event;
     struct MouseEvent mouse_left_event;
     struct MouseEvent mouse_right_event;
     struct MouseEvent mouse_middle_event;

@@ -46,6 +46,7 @@ LARGE_INTEGER performance_frequency;
 #define MOUSEBUTTON_META_REGISTRYNAME "mousebuttonmeta"
 #define MOUSEBUTTONUP_META_REGISTRYNAME MOUSEBUTTON_META_REGISTRYNAME
 #define SCROLL_META_REGISTRYNAME "scrollmeta"
+#define MOUSELEAVE_META_REGISTRYNAME "mouseleavemeta"
 #define WINDOW_META_REGISTRYNAME "windowmeta"
 #define EMBEDDEDBROWSER_META_REGISTRYNAME "embeddedbrowsermeta"
 #define SWAPBUFFERS_CB_REGISTRYNAME "swapbufferscb"
@@ -63,6 +64,7 @@ enum {
     WINDOW_ONMOUSEBUTTON,
     WINDOW_ONMOUSEBUTTONUP,
     WINDOW_ONSCROLL,
+    WINDOW_ONMOUSELEAVE,
     WINDOW_EVENT_ENUM_SIZE, // last member of enum
 };
 
@@ -94,6 +96,7 @@ static void _bolt_plugin_window_onmousemotion(struct EmbeddedWindow*, struct Mou
 static void _bolt_plugin_window_onmousebutton(struct EmbeddedWindow*, struct MouseButtonEvent*);
 static void _bolt_plugin_window_onmousebuttonup(struct EmbeddedWindow*, struct MouseButtonEvent*);
 static void _bolt_plugin_window_onscroll(struct EmbeddedWindow*, struct MouseScrollEvent*);
+static void _bolt_plugin_window_onmouseleave(struct EmbeddedWindow*, struct MouseMotionEvent*);
 static void _bolt_plugin_handle_mousemotion(struct MouseMotionEvent*);
 static void _bolt_plugin_handle_mousebutton(struct MouseButtonEvent*);
 static void _bolt_plugin_handle_mousebuttonup(struct MouseButtonEvent*);
@@ -435,6 +438,11 @@ void _bolt_plugin_process_windows(uint32_t window_width, uint32_t window_height)
         if (inputs.mouse_scroll_down) {
             struct MouseScrollEvent event = {.details = inputs.mouse_scroll_down_event, .direction = 0};
             _bolt_plugin_window_onscroll(window, &event);
+        }
+
+        if (inputs.mouse_leave) {
+            struct MouseMotionEvent event = {.details = inputs.mouse_motion_event};
+            _bolt_plugin_window_onmouseleave(window, &event);
         }
 
         window->surface_functions.draw_to_screen(window->surface_functions.userdata, 0, 0, metadata.width, metadata.height, metadata.x, metadata.y, metadata.width, metadata.height);
@@ -795,6 +803,22 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     lua_settable(plugin->state, -3);
     lua_settable(plugin->state, LUA_REGISTRYINDEX);
 
+    // create the metatable for all MouseLeaveEvent objects
+    PUSHSTRING(plugin->state, MOUSEMOTION_META_REGISTRYNAME);
+    lua_newtable(plugin->state);
+    PUSHSTRING(plugin->state, "__index");
+    lua_createtable(plugin->state, 0, 8);
+    API_ADD_SUB(plugin->state, xy, mouseevent)
+    API_ADD_SUB(plugin->state, ctrl, mouseevent);
+    API_ADD_SUB(plugin->state, shift, mouseevent);
+    API_ADD_SUB(plugin->state, meta, mouseevent);
+    API_ADD_SUB(plugin->state, alt, mouseevent);
+    API_ADD_SUB(plugin->state, capslock, mouseevent);
+    API_ADD_SUB(plugin->state, numlock, mouseevent);
+    API_ADD_SUB(plugin->state, mousebuttons, mouseevent);
+    lua_settable(plugin->state, -3);
+    lua_settable(plugin->state, LUA_REGISTRYINDEX);
+
     // attempt to run the function
     if (lua_pcall(plugin->state, 0, 0, 0)) {
         const char* e = lua_tolstring(plugin->state, -1, 0);
@@ -866,6 +890,7 @@ DEFINE_WINDOWEVENT(mousemotion, MOUSEMOTION, MouseMotionEvent)
 DEFINE_WINDOWEVENT(mousebutton, MOUSEBUTTON, MouseButtonEvent)
 DEFINE_WINDOWEVENT(mousebuttonup, MOUSEBUTTONUP, MouseButtonEvent)
 DEFINE_WINDOWEVENT(scroll, SCROLL, MouseScrollEvent)
+DEFINE_WINDOWEVENT(mouseleave, MOUSELEAVE, MouseMotionEvent)
 
 static int api_apiversion(lua_State* state) {
     _bolt_check_argc(state, 0, "apiversion");
