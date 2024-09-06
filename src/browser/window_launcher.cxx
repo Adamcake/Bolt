@@ -337,32 +337,26 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 		// request to send a message to a game client to start a plugin
 		if (path == "/start-plugin") {
 #if defined(BOLT_PLUGINS)
-			QSTRING id;
+			CefString id;
 			bool has_id = false;
-			QSTRING path;
+			CefString path;
 			bool has_path  = false;
-			QSTRING main;
+			CefString main;
 			bool has_main  = false;
 			uint64_t client;
 			bool has_client  = false;
 			bool client_valid = false;
 			this->ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
-				PQSTRING(id)
-				PQSTRING(path)
-				PQSTRING(main)
+				PQCEFSTRING(id)
+				PQCEFSTRING(path)
+				PQCEFSTRING(main)
 				PQINT(client)
 			});
 			QREQPARAM(id);
 			QREQPARAM(path);
 			QREQPARAM(main);
 			QREQPARAMINT(client);
-			const cef_uri_unescape_rule_t rule = (cef_uri_unescape_rule_t)(UU_SPACES | UU_PATH_SEPARATORS | UU_URL_SPECIAL_CHARS_EXCEPT_PATH_SEPARATORS | UU_REPLACE_PLUS_WITH_SPACE);
-			this->client->StartPlugin(
-				client,
-				CefURIDecode(std::string(id), true, rule).ToString(),
-				CefURIDecode(std::string(path), true, rule).ToString(),
-				CefURIDecode(std::string(main), true, rule).ToString()
-			);
+			this->client->StartPlugin(client, std::string(id), std::string(path), std::string(main));
 			QSENDOK();
 #else
 			QSENDNOTSUPPORTED();

@@ -90,6 +90,13 @@ typedef std::string QSTRING;
 #define PQTOSTRING ToString
 #endif
 
+#define PQCEFSTRING(KEY) \
+if (key == #KEY) { \
+	has_##KEY = true; \
+	KEY = CefURIDecode(std::string(val), true, (cef_uri_unescape_rule_t)(UU_SPACES | UU_PATH_SEPARATORS | UU_URL_SPECIAL_CHARS_EXCEPT_PATH_SEPARATORS | UU_REPLACE_PLUS_WITH_SPACE)); \
+	return; \
+}
+
 #define PQSTRING(KEY) \
 if (key == #KEY) { \
 	has_##KEY = true; \
