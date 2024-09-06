@@ -368,7 +368,7 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 		this->game_clients_lock.unlock();
 		return true;
 	}
-	GameClient* const client = it.base();
+	GameClient* const client = &(*it);
 
 	switch (message.message_type) {
 		case IPC_MSG_IDENTIFY: {
