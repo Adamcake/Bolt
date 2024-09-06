@@ -408,8 +408,9 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 			_bolt_ipc_receive(fd, &plugin_window_id, sizeof(plugin_window_id));
 			_bolt_ipc_receive(fd, &plugin_id, sizeof(plugin_id));
 			_bolt_ipc_receive(fd, &url_length, sizeof(url_length));
-			char* url = new char[url_length];
+			char* url = new char[url_length + 1];
 			_bolt_ipc_receive(fd, url, url_length);
+			url[url_length] = '\0';
 
 			CefRefPtr<ActivePlugin> plugin = this->GetPluginFromFDAndID(client, plugin_id);
 			if (plugin) {
