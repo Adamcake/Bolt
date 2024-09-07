@@ -11,25 +11,24 @@
 namespace Browser {
 	struct Client;
 
-	/// Represents a visible browser window on the user's screen. This struct wraps a single pointer,
-	/// so it is safe to store anywhere and move around during operation.
-	/// The window will exist either until the user closes it or Window::OnBrowserClosed() is called.
-	/// In both cases, CefLifeSpanHandler::OnBeforeClose callback will be called (implemented by Client).
-	/// This struct also acts as the CefWindowDelegate and CefBrowserViewDelegate for the window it represents,
-	/// and the CefResourceRequestHandler for requests originating from this window or any of its children.
+	/// Represents a visible browser window on the user's screen. The window will exist either
+	/// until the user closes it or Window::OnBrowserClosed() is called. In both cases,
+	/// CefLifeSpanHandler::OnBeforeClose callback will be called (implemented by Client).
+	///
+	/// This struct also acts as the CefClient, CefWindowDelegate and CefBrowserViewDelegate for
+	/// the window, the CefLifeSpanHandler for itself, and the CefResourceRequestHandler for
+	/// requests originating from the window or any of its children.
+	/// https://github.com/chromiumembedded/cef/blob/5735/include/cef_client.h
+	/// https://github.com/chromiumembedded/cef/blob/5735/include/cef_life_span_handler.h
 	/// https://github.com/chromiumembedded/cef/blob/5735/include/views/cef_window_delegate.h
 	/// https://github.com/chromiumembedded/cef/blob/5735/include/views/cef_browser_view_delegate.h
 	/// https://github.com/chromiumembedded/cef/blob/5735/include/cef_resource_request_handler.h
-	struct Window: CefWindowDelegate, CefBrowserViewDelegate, CefRequestHandler {
+	struct Window: CefClient, CefLifeSpanHandler, CefWindowDelegate, CefBrowserViewDelegate, CefRequestHandler {
 		/// Calls this->Init internally
 		Window(CefRefPtr<Browser::Client> client, Details, CefString, bool);
 
 		/// Does not call this->Init internally
-		Window(CefRefPtr<Browser::Client>, Details, bool);
-
-		/// Returns true if this window is a launcher, false otherwise.
-		/// Used to verify that only one launcher may be open at a time.
-		virtual bool IsLauncher() const;
+		Window(CefRefPtr<Browser::Client> client, Details, bool);
 
 		/// Initialise with a browser_view. Should be called from a constructor, if at all.
 		void Init(CefRefPtr<CefClient> client, Details, CefString, bool);
@@ -37,11 +36,8 @@ namespace Browser {
 		/// Refreshes this browser, ignoring cache. Can be called from any thread in the browser process.
 		virtual void Refresh() const;
 
-		/// Returns true if the given browser is this window or one of its children, otherwise false
-		bool HasBrowser(CefRefPtr<CefBrowser>) const;
-
-		/// Counts how many browsers this browser is responsible for, including itself and children recursively
-		size_t CountBrowsers() const;
+		/// Calls browser->IsSame
+		bool IsSameBrowser(CefRefPtr<CefBrowser>) const;
 
 		/// Requests focus for this browser window
 		void Focus() const;
@@ -52,20 +48,36 @@ namespace Browser {
 		/// Closes all of this window's child windows except its devtools window, if open.
 		void CloseChildrenExceptDevtools();
 
-		/// Purges matching windows from this window's list of children
-		/// Returns true if this window itself matches the given browser, false otherwise
-		/// Cannot be called from CefLifeSpanHandler::OnBeforeClose, see CefBrowserViewDelegate::OnBrowserDestroyed for info
-		bool OnBrowserClosing(CefRefPtr<CefBrowser>);
-
-		/// Assigns given popup features to to matching windows
-		/// Given popup features will be used for the next child window to open
-		void SetPopupFeaturesForBrowser(CefRefPtr<CefBrowser>, const CefPopupFeatures&);
-
 		/// Opens devtools for this browser
 		void ShowDevTools();
 
+		/// Called by OnBeforeClose when this browser has closed. Does nothing by default.
+		virtual void NotifyClosed();
+
 		/// Send CEF process message for this browser
 		virtual void SendMessage(CefString);
+
+		/* CefClient overrides */
+		CefRefPtr<CefLifeSpanHandler> GetLifeSpanHandler() override;
+		CefRefPtr<CefRequestHandler> GetRequestHandler() override;
+
+		/* CefLifeSpanHandler overrides */
+		bool OnBeforePopup(
+			CefRefPtr<CefBrowser>,
+			CefRefPtr<CefFrame>,
+			const CefString&,
+			const CefString&,
+			CefLifeSpanHandler::WindowOpenDisposition,
+			bool,
+			const CefPopupFeatures&,
+			CefWindowInfo&,
+			CefRefPtr<CefClient>&,
+			CefBrowserSettings&,
+			CefRefPtr<CefDictionaryValue>&,
+			bool*
+		) override;
+		void OnAfterCreated(CefRefPtr<CefBrowser>) override;
+		void OnBeforeClose(CefRefPtr<CefBrowser>) override;
 
 		/* CefWindowDelegate functions */
 		void OnWindowCreated(CefRefPtr<CefWindow>) override;
@@ -97,6 +109,7 @@ namespace Browser {
 		) override;
 
 		protected:
+			size_t browser_count;
 			bool show_devtools;
 			Details details;
 			Client* client;

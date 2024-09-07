@@ -45,7 +45,7 @@ Browser::Client::Client(CefRefPtr<Browser::App> app,std::filesystem::path config
 #if defined(BOLT_PLUGINS)
 	next_client_uid(0), next_plugin_uid(0),
 #endif
-	show_devtools(SHOW_DEVTOOLS), config_dir(config_dir), data_dir(data_dir), runtime_dir(runtime_dir)
+	show_devtools(SHOW_DEVTOOLS), config_dir(config_dir), data_dir(data_dir), runtime_dir(runtime_dir), launcher(nullptr)
 {
 	app->SetBrowserProcessHandler(this);
 
@@ -60,31 +60,39 @@ Browser::Client::Client(CefRefPtr<Browser::App> app,std::filesystem::path config
 }
 
 void Browser::Client::OpenLauncher() {
-	std::lock_guard<std::mutex> _(this->windows_lock);
-	auto it = std::find_if(this->windows.begin(), this->windows.end(), [](CefRefPtr<Window>& win) { return win->IsLauncher(); });
-	if (it == this->windows.end()) {
-		CefRefPtr<Window> w = new Browser::Launcher(this, LAUNCHER_DETAILS, this->show_devtools, this, this->config_dir, this->data_dir);
-		this->windows.push_back(w);
+	std::lock_guard<std::mutex> _(this->launcher_lock);
+	if (this->launcher) {
+		this->launcher->Focus();
 	} else {
-		(*it)->Focus();
+		this->launcher = new Browser::Launcher(this, LAUNCHER_DETAILS, this->show_devtools, this, this->config_dir, this->data_dir);
 	}
 }
 
-void Browser::Client::TryExit() {
-	this->windows_lock.lock();
-	size_t window_count = this->windows.size();
-	this->windows_lock.unlock();
+void Browser::Client::OnLauncherClosed() {
+	this->launcher_lock.lock();
+	this->launcher = nullptr;
+	this->launcher_lock.unlock();
+	this->TryExit(false);
+}
+
+void Browser::Client::TryExit(bool check_launcher) {
+	bool launcher_open = check_launcher;
+	if (check_launcher) {
+		this->launcher_lock.lock();
+		launcher_open = this->launcher != nullptr;
+		this->launcher_lock.unlock();
+	}
 
 #if defined(BOLT_PLUGINS)
 	this->game_clients_lock.lock();
 	size_t client_count = this->game_clients.size();
 	this->game_clients_lock.unlock();
 
-	bool can_exit = (window_count == 0) && (client_count == 0);
-	fmt::print("[B] TryExit, windows={}, clients={}, exit={}\n", window_count, client_count, can_exit);
+	bool can_exit = !launcher_open && (client_count == 0);
+	fmt::print("[B] TryExit, launcher={}, clients={}, exit={}\n", launcher_open, client_count, can_exit);
 #else
-	bool can_exit = window_count == 0;
-	fmt::print("[B] TryExit, windows={}, exit={}\n", window_count, can_exit);
+	bool can_exit = !launcher_open;
+	fmt::print("[B] TryExit, launcher={}, exit={}\n", launcher_open, can_exit);
 #endif
 	if (can_exit) {
 #if defined(BOLT_PLUGINS)
@@ -158,57 +166,23 @@ void Browser::Client::OnContextInitialized() {
 #endif
 }
 
-bool Browser::Client::OnBeforePopup(
-	CefRefPtr<CefBrowser> browser,
-	CefRefPtr<CefFrame> frame,
-	const CefString& target_url,
-	const CefString& target_frame_name,
-	CefLifeSpanHandler::WindowOpenDisposition target_disposition,
-	bool user_gesture,
-	const CefPopupFeatures& popup_features,
-	CefWindowInfo& window_info,
-	CefRefPtr<CefClient>& client,
-	CefBrowserSettings& settings,
-	CefRefPtr<CefDictionaryValue>& extra_info,
-	bool* no_javascript_access
-) {
-	std::lock_guard<std::mutex> _(this->windows_lock);
-	for (CefRefPtr<Browser::Window>& window: this->windows) {
-		window->SetPopupFeaturesForBrowser(browser, popup_features);
-	}
-	return false;
-}
-
 void Browser::Client::OnAfterCreated(CefRefPtr<CefBrowser> browser) {
-	fmt::print("[B] OnAfterCreated for browser {}\n", browser->GetIdentifier());
+	// usually only called for IPC dummy window
+	fmt::print("[B] Client::OnAfterCreated for browser {}\n", browser->GetIdentifier());
 #if defined(BOLT_PLUGINS)
 	CefRefPtr<CefBrowser> ipc_browser = this->ipc_view->GetBrowser();
 	if (ipc_browser && ipc_browser->IsSame(browser)) {
 		this->ipc_browser = browser;
-		this->windows_lock.lock();
-		CefRefPtr<Browser::Window> w = new Browser::Launcher(this, LAUNCHER_DETAILS, this->show_devtools, this, this->config_dir, this->data_dir);
-		this->windows.push_back(w);
-		this->windows_lock.unlock();
+		this->launcher_lock.lock();
+		this->launcher = new Browser::Launcher(this, LAUNCHER_DETAILS, this->show_devtools, this, this->config_dir, this->data_dir);
+		this->launcher_lock.unlock();
 	}
 #endif
 }
 
-bool Browser::Client::DoClose(CefRefPtr<CefBrowser> browser) {
-	fmt::print("[B] DoClose for browser {}\n", browser->GetIdentifier());
-	std::lock_guard<std::mutex> _(this->windows_lock);
-	this->windows.erase(
-		std::remove_if(
-			this->windows.begin(),
-			this->windows.end(),
-			[&browser](const CefRefPtr<Browser::Window>& window){ return window->OnBrowserClosing(browser); }
-		),
-		this->windows.end()
-	);
-	return false;
-}
-
 void Browser::Client::OnBeforeClose(CefRefPtr<CefBrowser> browser) {
-	fmt::print("[B] OnBeforeClose for browser {}, remaining windows {}\n", browser->GetIdentifier(), this->windows.size());
+	// usually only called for IPC dummy window
+	fmt::print("[B] Client::OnBeforeClose for browser {}\n", browser->GetIdentifier());
 #if defined(BOLT_PLUGINS)
 	if (this->ipc_browser && this->ipc_browser->IsSame(browser)) {
 		this->ipc_browser = nullptr;
@@ -218,7 +192,6 @@ void Browser::Client::OnBeforeClose(CefRefPtr<CefBrowser> browser) {
 		return;
 	}
 #endif
-	this->TryExit();
 }
 
 bool Browser::Client::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefProcessId, CefRefPtr<CefProcessMessage> message) {
@@ -228,7 +201,7 @@ bool Browser::Client::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, Ce
 	if (browser->IsSame(this->ipc_browser)) {
 		if (name == "__bolt_no_more_clients") {
 			fmt::print("[B] no more clients\n");
-			this->TryExit();
+			this->TryExit(true);
 			return true;
 		}
 
@@ -241,18 +214,12 @@ bool Browser::Client::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, Ce
 #endif
 
 	if (name == "__bolt_refresh") {
-		this->windows_lock.lock();
+		this->launcher_lock.lock();
 		fmt::print("[B] bolt_refresh message received, refreshing browser {}\n", browser->GetIdentifier());
-		auto it = std::find_if(
-			this->windows.begin(),
-			this->windows.end(),
-			[&browser](const CefRefPtr<Browser::Window>& window){ return window->HasBrowser(browser); }
-		);
-		if (it != this->windows.end()) {
-			auto browser = *it;
-			this->windows_lock.unlock();
-			browser->CloseChildrenExceptDevtools();
+		if (this->launcher) {
+			this->launcher->CloseChildrenExceptDevtools();
 		}
+		this->launcher_lock.unlock();
 		browser->ReloadIgnoreCache();
 		return true;
 	}
@@ -269,8 +236,6 @@ CefRefPtr<CefResourceRequestHandler> Browser::Client::GetResourceRequestHandler(
 	const CefString& request_initiator,
 	bool& disable_default_handling
 ) {
-	std::lock_guard<std::mutex> _(this->windows_lock);
-
 #if defined(BOLT_PLUGINS)
 	// check if this is the IPC dummy window spawning
 	if (request->GetURL() == BOLT_IPC_URL) {
@@ -278,18 +243,13 @@ CefRefPtr<CefResourceRequestHandler> Browser::Client::GetResourceRequestHandler(
 	}
 #endif
 
-	// find the Window responsible for this request, if any
-	auto it = std::find_if(
-		this->windows.begin(),
-		this->windows.end(),
-		[&browser](const CefRefPtr<Browser::Window>& window){ return window->HasBrowser(browser); }
-	);
-	if (it == this->windows.end()) {
-		// request came from no window?
-		return nullptr;
-	} else {
-		return (*it)->GetResourceRequestHandler(browser, frame, request, is_navigation, is_download, request_initiator, disable_default_handling);
+	CefRefPtr<CefResourceRequestHandler> ret = nullptr;
+	this->launcher_lock.lock();
+	if (this->launcher) {
+		ret = this->launcher->GetResourceRequestHandler(browser, frame, request, is_navigation, is_download, request_initiator, disable_default_handling);
 	}
+	this->launcher_lock.unlock();
+	return ret;
 }
 
 #if defined(BOLT_PLUGINS)
@@ -302,11 +262,11 @@ void Browser::Client::IPCHandleNewClient(int fd) {
 }
 
 void Browser::Client::IPCHandleClientListUpdate() {
-	std::lock_guard<std::mutex> _(this->windows_lock);
-	auto it = std::find_if(this->windows.begin(), this->windows.end(), [](CefRefPtr<Window>& win) { return win->IsLauncher(); });
-	if (it != this->windows.end()) {
-		(*it)->SendMessage("__bolt_client_list_update");
+	this->launcher_lock.lock();
+	if (this->launcher) {
+		this->launcher->SendMessage("__bolt_client_list_update");
 	}
+	this->launcher_lock.unlock();
 }
 
 void Browser::Client::IPCHandleClosed(int fd) {

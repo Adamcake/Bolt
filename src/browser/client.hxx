@@ -11,7 +11,7 @@
 #include "include/cef_life_span_handler.h"
 #include "include/views/cef_window_delegate.h"
 #include "app.hxx"
-#include "../browser.hxx"
+#include "../browser/window_launcher.hxx"
 
 #include <filesystem>
 #include <mutex>
@@ -49,9 +49,12 @@ namespace Browser {
 		/// but this function may be used to open another after previous ones have been closed.
 		void OpenLauncher();
 
+		/// Called by Browser::Launcher when closed.
+		void OnLauncherClosed();
+
 		/// Checks if it's safe to call CefQuitMessageLoop() and exit the process, and if so, does so.
 		/// Implementation differs depending on which build features are enabled.
-		void TryExit();
+		void TryExit(bool check_launcher);
 
 		/// Handler to be called when a new CefWindow is created. Must be called before Show()
 		void OnBoltWindowCreated(CefRefPtr<CefWindow>);
@@ -125,22 +128,7 @@ namespace Browser {
 		void OnContextInitialized() override;
 
 		/* CefLifeSpanHandler overrides */
-		bool OnBeforePopup(
-			CefRefPtr<CefBrowser>,
-			CefRefPtr<CefFrame>,
-			const CefString&,
-			const CefString&,
-			CefLifeSpanHandler::WindowOpenDisposition,
-			bool,
-			const CefPopupFeatures&,
-			CefWindowInfo&,
-			CefRefPtr<CefClient>&,
-			CefBrowserSettings&,
-			CefRefPtr<CefDictionaryValue>&,
-			bool*
-		) override;
 		void OnAfterCreated(CefRefPtr<CefBrowser>) override;
-		bool DoClose(CefRefPtr<CefBrowser>) override;
 		void OnBeforeClose(CefRefPtr<CefBrowser>) override;
 
 		/* CefRequestHandler overrides */
@@ -203,9 +191,9 @@ namespace Browser {
 			CefRefPtr<ActivePlugin> GetPluginFromFDAndID(GameClient* client, uint64_t id);
 #endif
 
-			// Mutex-locked vector - may be accessed from either UI thread (most of the time) or IO thread (GetResourceRequestHandler)
-			std::vector<CefRefPtr<Browser::Window>> windows;
-			std::mutex windows_lock;
+			// Mutex-locked - may be accessed from either UI thread (most of the time) or IO thread (GetResourceRequestHandler)
+			CefRefPtr<Browser::Launcher> launcher;
+			std::mutex launcher_lock;
 	};
 }
 

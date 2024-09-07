@@ -1,5 +1,6 @@
 #include "browser/client.hxx"
 #include "browser.hxx"
+#include "include/cef_life_span_handler.h"
 #include "include/views/cef_window.h"
 
 #include <algorithm>
@@ -7,26 +8,22 @@
 #include <fmt/core.h>
 
 Browser::Window::Window(CefRefPtr<Browser::Client> client, Browser::Details details, CefString url, bool show_devtools):
-	client(client.get()), show_devtools(show_devtools), details(details), window(nullptr), browser_view(nullptr), browser(nullptr), pending_child(nullptr)
+	browser_count(0), client(client.get()), show_devtools(show_devtools), details(details), window(nullptr), browser_view(nullptr), browser(nullptr), pending_child(nullptr)
 {
 	fmt::print("[B] Browser::Window constructor, this={}\n", reinterpret_cast<uintptr_t>(this));
 	this->Init(client, details, url, show_devtools);
 }
 
 Browser::Window::Window(CefRefPtr<Browser::Client> client, Browser::Details details, bool show_devtools):
-	client(client.get()), show_devtools(show_devtools), details(details), window(nullptr), browser_view(nullptr), browser(nullptr), pending_child(nullptr)
+	browser_count(0), client(client.get()), show_devtools(show_devtools), details(details), window(nullptr), browser_view(nullptr), browser(nullptr), pending_child(nullptr)
 {
 	fmt::print("[B] Browser::Window popup constructor, this={}\n", reinterpret_cast<uintptr_t>(this));
-}
-
-bool Browser::Window::IsLauncher() const {
-	return false;
 }
 
 void Browser::Window::Init(CefRefPtr<CefClient> client, Browser::Details details, CefString url, bool show_devtools) {
 	CefBrowserSettings browser_settings;
 	browser_settings.background_color = CefColorSetARGB(0, 0, 0, 0);
-	this->browser_view = CefBrowserView::CreateBrowserView(client, url, browser_settings, nullptr, nullptr, this);
+	this->browser_view = CefBrowserView::CreateBrowserView(this, url, browser_settings, nullptr, nullptr, this);
 	CefWindow::CreateTopLevelWindow(this);
 }
 
@@ -87,7 +84,7 @@ bool Browser::Window::CanMinimize(CefRefPtr<CefWindow>) {
 bool Browser::Window::CanClose(CefRefPtr<CefWindow> win) {
 	fmt::print("[B] CanClose for window {}, this={}\n", window->GetID(), reinterpret_cast<uintptr_t>(this));
 
-	// Empty this->children by swapping it with a local empty vector, then iterate the local vector
+	// empty this->children by swapping it with a local empty vector, then iterate the local vector
 	std::vector<CefRefPtr<Browser::Window>> children;
 	std::swap(this->children, children);
 	for (CefRefPtr<Window>& window: children) {
@@ -100,6 +97,7 @@ bool Browser::Window::CanClose(CefRefPtr<CefWindow> win) {
 	// https://github.com/chromiumembedded/cef/blob/5735/tests/cefsimple/simple_app.cc#L38-L45
 	CefRefPtr<CefBrowser> browser = this->browser_view->GetBrowser();
 	if (browser) {
+		browser->GetHost()->CloseDevTools();
 		return browser->GetHost()->TryCloseBrowser();
 	} else {
 		return true;
@@ -146,7 +144,6 @@ void Browser::Window::OnBrowserCreated(CefRefPtr<CefBrowserView> browser_view, C
 
 void Browser::Window::OnBrowserDestroyed(CefRefPtr<CefBrowserView>, CefRefPtr<CefBrowser>) {
 	fmt::print("[B] OnBrowserDestroyed this={}\n", reinterpret_cast<uintptr_t>(this));
-	this->browser = nullptr;
 }
 
 CefRefPtr<CefResourceRequestHandler> Browser::Window::GetResourceRequestHandler(
@@ -162,23 +159,8 @@ CefRefPtr<CefResourceRequestHandler> Browser::Window::GetResourceRequestHandler(
 	return nullptr;
 }
 
-bool Browser::Window::HasBrowser(CefRefPtr<CefBrowser> browser) const {
-	if (this->browser->IsSame(browser)) {
-		return true;
-	}
-	bool ret = std::any_of(
-		this->children.begin(),
-		this->children.end(),
-		[&browser](const CefRefPtr<Browser::Window>& window){ return window->HasBrowser(browser); });
-	return ret;
-}
-
-size_t Browser::Window::CountBrowsers() const {
-	size_t ret = 1;
-	for (const CefRefPtr<Browser::Window>& child: this->children) {
-		ret += child->CountBrowsers();
-	}
-	return ret;
+bool Browser::Window::IsSameBrowser(CefRefPtr<CefBrowser> browser) const {
+	return this->browser->IsSame(browser);
 }
 
 void Browser::Window::Focus() const {
@@ -202,35 +184,59 @@ void Browser::Window::CloseChildrenExceptDevtools() {
 	}
 }
 
-bool Browser::Window::OnBrowserClosing(CefRefPtr<CefBrowser> browser) {
-	fmt::print("[B] OnBrowserClosing this={}\n", reinterpret_cast<uintptr_t>(this));
-	this->children.erase(
-		std::remove_if(
-			this->children.begin(),
-			this->children.end(),
-			[&browser](const CefRefPtr<Browser::Window>& window){ return window->OnBrowserClosing(browser); }
-		),
-		this->children.end()
-	);
-	return this->browser->IsSame(browser);
-}
-
-void Browser::Window::SetPopupFeaturesForBrowser(CefRefPtr<CefBrowser> browser, const CefPopupFeatures& popup_features) {
-	for (CefRefPtr<Window>& window: this->children) {
-		window->SetPopupFeaturesForBrowser(browser, popup_features);
-	}
-	if (this->browser_view->GetBrowser()->IsSame(browser)) {
-		this->popup_features = popup_features;
-	}
-}
-
 void Browser::Window::ShowDevTools() {
 	CefRefPtr<CefBrowserHost> browser_host = browser->GetHost();
 	CefWindowInfo window_info; // ignored, because this is a BrowserView
 	CefBrowserSettings browser_settings;
-	browser_host->ShowDevTools(window_info, browser_host->GetClient(), browser_settings, CefPoint());
+	browser_host->ShowDevTools(window_info, this, browser_settings, CefPoint());
 }
+
+void Browser::Window::NotifyClosed() { }
 
 void Browser::Window::SendMessage(CefString str) {
 	this->browser->GetMainFrame()->SendProcessMessage(PID_RENDERER, CefProcessMessage::Create(str));
+}
+
+CefRefPtr<CefLifeSpanHandler> Browser::Window::GetLifeSpanHandler() {
+	return this;
+}
+
+CefRefPtr<CefRequestHandler> Browser::Window::GetRequestHandler() {
+	return this;
+}
+
+bool Browser::Window::OnBeforePopup(
+	CefRefPtr<CefBrowser> browser,
+	CefRefPtr<CefFrame> frame,
+	const CefString& target_url,
+	const CefString& target_frame_name,
+	CefLifeSpanHandler::WindowOpenDisposition target_disposition,
+	bool user_gesture,
+	const CefPopupFeatures& popup_features,
+	CefWindowInfo& window_info,
+	CefRefPtr<CefClient>& client,
+	CefBrowserSettings& settings,
+	CefRefPtr<CefDictionaryValue>& extra_info,
+	bool* no_javascript_access
+) {
+	fmt::print("[B] Browser::OnBeforePopup for browser {}\n", browser->GetIdentifier());
+	this->popup_features = popup_features;
+	return false;
+}
+
+void Browser::Window::OnAfterCreated(CefRefPtr<CefBrowser> browser) {
+	fmt::print("[B] Browser::OnAfterCreated for browser {}\n", browser->GetIdentifier());
+	this->browser_count += 1;
+}
+
+void Browser::Window::OnBeforeClose(CefRefPtr<CefBrowser> browser) {
+	fmt::print("[B] Browser::OnBeforeClose for browser {}\n", browser->GetIdentifier());
+	if (this->browser && browser->IsSame(this->browser)) {
+		this->browser = nullptr;
+		this->file_manager = nullptr;
+	}
+	this->browser_count -= 1;
+	if (this->browser_count == 0) {
+		this->NotifyClosed();
+	}
 }

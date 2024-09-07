@@ -13,8 +13,6 @@ namespace Browser {
 	struct Launcher: public Window {
 		Launcher(CefRefPtr<Browser::Client>, Details, bool, CefRefPtr<FileManager::FileManager>, std::filesystem::path, std::filesystem::path);
 
-		bool IsLauncher() const override;
-
 		CefRefPtr<CefResourceRequestHandler> GetResourceRequestHandler(
 			CefRefPtr<CefBrowser>,
 			CefRefPtr<CefFrame>,
@@ -42,6 +40,8 @@ namespace Browser {
 
 		/// Goes through all the key-value pairs in the given query string and calls the callback for each one.
 		void ParseQuery(std::string_view query, std::function<void(const std::string_view&, const std::string_view&)> callback);
+
+		void NotifyClosed() override;
 
 		/* 
 		Functions called by GetResourceRequestHandler. The result will be returned immediately and must not be null.

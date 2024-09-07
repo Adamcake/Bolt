@@ -133,11 +133,7 @@ Browser::Launcher::Launcher(
 #endif
 
 	CefString url = this->BuildURL();
-	this->Init(client, details, url, show_devtools);
-}
-
-bool Browser::Launcher::IsLauncher() const {
-	return true;
+	this->Init(this, details, url, show_devtools);
 }
 
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandler(
@@ -550,6 +546,10 @@ void Browser::Launcher::ParseQuery(std::string_view query, std::function<void(co
 		if (is_last) break;
 		pos = next_and + 1;
 	}
+}
+
+void Browser::Launcher::NotifyClosed() {
+	this->client->OnLauncherClosed();
 }
 
 CefRefPtr<CefResourceRequestHandler> SaveFileFromPost(CefRefPtr<CefRequest> request, const std::filesystem::path::value_type* path) {
