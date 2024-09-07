@@ -517,7 +517,8 @@ void _bolt_plugin_handle_messages() {
             }
             case IPC_MSG_OSRUPDATE: {
                 uint64_t window_id;
-                int width, height, needs_remap;
+                void* needs_remap; // this is a HANDLE or 0 on windows, just a boolean on posix systems
+                int width, height;
                 _bolt_ipc_receive(fd, &window_id, sizeof(window_id));
                 _bolt_ipc_receive(fd, &needs_remap, sizeof(needs_remap));
                 _bolt_ipc_receive(fd, &width, sizeof(width));
@@ -527,8 +528,8 @@ void _bolt_plugin_handle_messages() {
                 _bolt_rwlock_lock_read(&windows.lock);
                 struct EmbeddedWindow** window = (struct EmbeddedWindow**)hashmap_get(windows.map, &window_id_ptr);
                 _bolt_rwlock_unlock_read(&windows.lock);
-                if (window && (needs_remap || !(*window)->browser_shm.file)) {
-                    _bolt_plugin_shm_remap(&(*window)->browser_shm, width * height * 4);
+                if (window && needs_remap) {
+                    _bolt_plugin_shm_remap(&(*window)->browser_shm, width * height * 4, needs_remap);
                 }
                 for (uint32_t i = 0; i < message.items; i += 1) {
                     int dmgx, dmgy, dmgw, dmgh;
