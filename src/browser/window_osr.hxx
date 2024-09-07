@@ -2,12 +2,13 @@
 #define _BOLT_WINDOW_OSR_HXX_
 #if defined(BOLT_PLUGINS)
 
+#include "../library/ipc.h"
+
 #include "include/cef_base.h"
 #include "include/cef_client.h"
 #include "include/cef_life_span_handler.h"
 #include "include/cef_render_handler.h"
 
-#include "../library/ipc.h"
 #include "../file_manager/directory.hxx"
 
 #include <mutex>
@@ -62,7 +63,12 @@ namespace Browser {
 			BoltSocketType client_fd;
 			std::mutex size_lock;
 			int width, height;
+#if defined(_WIN32)
+			HANDLE shm;
+			HANDLE target_process;
+#else
 			int shm;
+#endif
 			void* file;
 			size_t mapping_size;
 			CefRefPtr<CefBrowser> browser;
@@ -75,6 +81,7 @@ namespace Browser {
 			int stored_width;
 			int stored_height;
 			CefRect stored_damage;
+			uint8_t remote_has_remapped;
 			uint8_t remote_is_idle;
 
 			IMPLEMENT_REFCOUNTING(WindowOSR);

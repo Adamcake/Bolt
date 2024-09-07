@@ -2,7 +2,7 @@
 
 #if defined(BOLT_PLUGINS)
 #if defined(_WIN32)
-// ?
+#include <Windows.h>
 #else
 #define _GNU_SOURCE 1
 #include <unistd.h>
@@ -16,16 +16,16 @@
 #include "resource_handler.hxx"
 #include "../library/event.h"
 
-static void SendUpdateMsg(BoltSocketType fd, uint64_t id, int width, int height, bool needs_remap, const CefRect* rects, uint32_t rect_count) {
-	const size_t bytes = sizeof(BoltIPCMessageToClient) + sizeof(uint64_t) + (3 *sizeof(int)) + (4 * rect_count * sizeof(int));
+static void SendUpdateMsg(BoltSocketType fd, uint64_t id, int width, int height, void* needs_remap, const CefRect* rects, uint32_t rect_count) {
+	const size_t bytes = sizeof(BoltIPCMessageToClient) + sizeof(uint64_t) + sizeof(void*) + (2 *sizeof(int)) + (4 * rect_count * sizeof(int));
 	uint8_t* buf = new uint8_t[bytes];
 	((BoltIPCMessageToClient*)buf)->message_type = IPC_MSG_OSRUPDATE;
 	((BoltIPCMessageToClient*)buf)->items = rect_count;
 	*(uint64_t*)(buf + sizeof(BoltIPCMessageToClient)) = id;
-	*(int*)(buf + sizeof(BoltIPCMessageToClient) + sizeof(uint64_t)) = needs_remap ? 1 : 0;
-	*(int*)(buf + sizeof(BoltIPCMessageToClient) + sizeof(uint64_t) + sizeof(int)) = width;
-	*(int*)(buf + sizeof(BoltIPCMessageToClient) + sizeof(uint64_t) + (2 * sizeof(int))) = height;
-	int* rect_data = (int*)(buf + sizeof(BoltIPCMessageToClient) + sizeof(uint64_t) + (3 * sizeof(int)));
+	*(void**)(buf + sizeof(BoltIPCMessageToClient) + sizeof(uint64_t)) = needs_remap;
+	*(int*)(buf + sizeof(BoltIPCMessageToClient) + sizeof(uint64_t) + sizeof(void*)) = width;
+	*(int*)(buf + sizeof(BoltIPCMessageToClient) + sizeof(uint64_t) + sizeof(void*) + sizeof(int)) = height;
+	int* rect_data = (int*)(buf + sizeof(BoltIPCMessageToClient) + sizeof(uint64_t) + sizeof(void*) + (2 * sizeof(int)));
 	for (uint32_t i = 0; i < rect_count; i += 1) {
 		*rect_data = rects[i].x;
 		*(rect_data + 1) = rects[i].y;
@@ -39,21 +39,27 @@ static void SendUpdateMsg(BoltSocketType fd, uint64_t id, int width, int height,
 
 Browser::WindowOSR::WindowOSR(CefString url, int width, int height, BoltSocketType client_fd, Browser::Client* main_client, int pid, uint64_t window_id, CefRefPtr<FileManager::Directory> file_manager):
 	deleted(false), pending_delete(false), client_fd(client_fd), width(width), height(height), browser(nullptr), window_id(window_id),
-	main_client(main_client), stored(nullptr), remote_is_idle(true), file_manager(file_manager)
+	main_client(main_client), stored(nullptr), remote_has_remapped(false), remote_is_idle(true), file_manager(file_manager)
 {
+	this->mapping_size = (size_t)width * (size_t)height * 4;
+
+#if defined(_WIN32)
+	this->shm = CreateFileMappingW(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, (DWORD)this->mapping_size, NULL);
+	this->target_process = OpenProcess(PROCESS_DUP_HANDLE, 0, pid);
+	this->file = MapViewOfFile(this->shm, FILE_MAP_WRITE, 0, 0, this->mapping_size);
+#else
 	char buf[256];
 	snprintf(buf, sizeof(buf), "/bolt-%i-eb-%lu", pid, window_id);
 	this->shm = shm_open(buf, O_RDWR, 644);
 	shm_unlink(buf);
-	const off_t shm_len = (off_t)width * (off_t)height * 4;
-	if (ftruncate(this->shm, shm_len)) {
+	if (ftruncate(this->shm, this->mapping_size)) {
 		fmt::print("[B] WindowOSR(): ftruncate error {}\n", errno);
 	}
-	this->file = mmap(nullptr, shm_len, PROT_WRITE, MAP_SHARED, this->shm, 0);
+	this->file = mmap(nullptr, this->mapping_size, PROT_WRITE, MAP_SHARED, this->shm, 0);
 	if (this->file == MAP_FAILED) {
 		fmt::print("[B] WindowOSR(): mmap error {}\n", errno);
 	}
-	this->mapping_size = shm_len;
+#endif
 
 	CefWindowInfo window_info;
 	window_info.bounds.width = width;
@@ -84,10 +90,21 @@ void Browser::WindowOSR::HandleAck() {
 	if (this->deleted) return;
 	this->stored_lock.lock();
 	if (this->stored) {
-		const int length = this->stored_width * this->stored_height * 4;
-		const bool needs_remap = length != this->mapping_size;
+		const size_t length = this->stored_width * this->stored_height * 4;
+		void* needs_remap = length != this->mapping_size ? (void*)1 : (void*)0;
 		if (needs_remap) {
+#if defined(_WIN32)
+			UnmapViewOfFile(this->file);
+			CloseHandle(this->shm);
+			this->shm = CreateFileMappingW(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, (DWORD)length, NULL);
+			this->file = MapViewOfFile(this->shm, FILE_MAP_WRITE, 0, 0, length);
+			DuplicateHandle(GetCurrentProcess(), this->shm, this->target_process, (LPHANDLE)&needs_remap, 0, false, DUPLICATE_SAME_ACCESS);
+#else
+			if (ftruncate(this->shm, length)) {
+				fmt::print("[B] OnPaint: ftruncate error {}\n", errno);
+			}
 			this->file = mremap(this->file, this->mapping_size, length, MREMAP_MAYMOVE);
+#endif
 			this->mapping_size = length;
 		}
 		memcpy(this->file, this->stored, length);
@@ -169,7 +186,6 @@ CefRefPtr<CefRequestHandler> Browser::WindowOSR::GetRequestHandler() {
 	return this;
 }
 
-
 CefRefPtr<CefRenderHandler> Browser::WindowOSR::GetRenderHandler() {
 	return this;
 }
@@ -187,15 +203,24 @@ void Browser::WindowOSR::GetViewRect(CefRefPtr<CefBrowser> browser, CefRect& rec
 void Browser::WindowOSR::OnPaint(CefRefPtr<CefBrowser> browser, PaintElementType type, const RectList& dirtyRects, const void* buffer, int width, int height) {
 	if (this->deleted || dirtyRects.empty()) return;
 
-	const off_t length = width * height * 4;
+	const size_t length = (size_t)width * (size_t)height * 4;
 	this->stored_lock.lock();
 	if (this->remote_is_idle) {
-		const bool needs_remap = length != this->mapping_size;
+		void* needs_remap = length != this->mapping_size ? (void*)1 : (void*)0;
 		if (needs_remap) {
+#if defined(_WIN32)
+			UnmapViewOfFile(this->file);
+			CloseHandle(this->shm);
+			this->shm = CreateFileMappingW(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, (DWORD)length, NULL);
+			this->file = MapViewOfFile(this->shm, FILE_MAP_WRITE, 0, 0, length);
+			DuplicateHandle(GetCurrentProcess(), this->shm, this->target_process, (LPHANDLE)&needs_remap, 0, false, DUPLICATE_SAME_ACCESS);
+			this->remote_has_remapped = 1;
+#else
 			if (ftruncate(this->shm, length)) {
 				fmt::print("[B] OnPaint: ftruncate error {}\n", errno);
 			}
 			this->file = mremap(this->file, this->mapping_size, length, MREMAP_MAYMOVE);
+#endif
 			this->mapping_size = length;
 			memcpy(this->file, buffer, length);
 		} else {
@@ -206,7 +231,15 @@ void Browser::WindowOSR::OnPaint(CefRefPtr<CefBrowser> browser, PaintElementType
 				}
 			}
 		}
+		if (!this->remote_has_remapped) {
+#if defined(_WIN32)
+			DuplicateHandle(GetCurrentProcess(), this->shm, this->target_process, (LPHANDLE)&needs_remap, 0, false, DUPLICATE_SAME_ACCESS);
+#else
+			needs_remap = (void*)1;
+#endif
+		}
 		SendUpdateMsg(this->client_fd, this->window_id, width, height, needs_remap, dirtyRects.data(), dirtyRects.size());
+		this->remote_has_remapped = true;
 		this->remote_is_idle = false;
 	} else {
 		const bool is_damage_stored = this->stored != nullptr;
@@ -249,8 +282,14 @@ void Browser::WindowOSR::OnBeforeClose(CefRefPtr<CefBrowser> browser) {
 		this->browser = nullptr;
 		this->file_manager = nullptr;
 		::free(this->stored);
+#if defined(_WIN32)
+		UnmapViewOfFile(this->file);
+		CloseHandle(this->shm);
+		CloseHandle(this->target_process);
+#else
 		munmap(this->file, this->mapping_size);
 		close(this->shm);
+#endif
 		this->deleted = true;
 		main_client->CleanupClientPlugins(this->client_fd);
 	}
