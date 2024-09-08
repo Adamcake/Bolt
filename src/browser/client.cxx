@@ -160,9 +160,9 @@ void Browser::Client::OnContextInitialized() {
 	this->ipc_view = CefBrowserView::CreateBrowserView(this, BOLT_IPC_URL, CefBrowserSettings {}, nullptr, nullptr, nullptr);
 	CefWindow::CreateTopLevelWindow(this);
 #else
-	std::lock_guard<std::mutex> _(this->windows_lock);
-	CefRefPtr<Browser::Window> w = new Browser::Launcher(this, LAUNCHER_DETAILS, this->show_devtools, this, this->config_dir, this->data_dir);
-	this->windows.push_back(w);
+	this->launcher_lock.lock();
+	this->launcher = new Browser::Launcher(this, LAUNCHER_DETAILS, this->show_devtools, this, this->config_dir, this->data_dir);
+	this->launcher_lock.unlock();
 #endif
 }
 
