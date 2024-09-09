@@ -76,7 +76,7 @@ void Browser::App::OnUncaughtException(
 
 bool Browser::App::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefProcessId, CefRefPtr<CefProcessMessage> message) {
 	CefString name = message->GetName();
-	if (name == "__bolt_refresh" || name == "__bolt_new_client" || name == "__bolt_no_more_clients" || name == "__bolt_open_launcher") {
+	if (name == "__bolt_refresh" || name == "__bolt_new_client" || name == "__bolt_no_more_clients" || name == "__bolt_open_launcher" || name == "__bolt_pluginbrowser_close") {
 		frame->SendProcessMessage(PID_BROWSER, message);
 		return true;
 	}

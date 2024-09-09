@@ -41,6 +41,8 @@ namespace Browser {
 		CefRefPtr<CefRequestHandler> GetRequestHandler() override;
 		CefRefPtr<CefRenderHandler> GetRenderHandler() override;
 		CefRefPtr<CefLifeSpanHandler> GetLifeSpanHandler() override;
+		bool OnProcessMessageReceived(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, CefProcessId, CefRefPtr<CefProcessMessage>) override;
+
 		void GetViewRect(CefRefPtr<CefBrowser> browser, CefRect& rect) override;
 		void OnPaint(CefRefPtr<CefBrowser> browser, PaintElementType type, const RectList& dirtyRects, const void* buffer, int width, int height) override;
 

@@ -1,4 +1,5 @@
 #include "window_osr.hxx"
+#include "include/internal/cef_types.h"
 
 #if defined(BOLT_PLUGINS)
 #if defined(_WIN32)
@@ -194,6 +195,15 @@ CefRefPtr<CefLifeSpanHandler> Browser::WindowOSR::GetLifeSpanHandler() {
 	return this;
 }
 
+bool Browser::WindowOSR::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefProcessId process, CefRefPtr<CefProcessMessage> message) {
+	if (!(this->browser && this->browser->IsSame(browser))) return false;
+	const CefString name = message->GetName();
+	if (name == "__bolt_pluginbrowser_close") {
+		this->browser->GetHost()->CloseBrowser(true);
+	}
+	return false;
+}
+
 void Browser::WindowOSR::GetViewRect(CefRefPtr<CefBrowser> browser, CefRect& rect) {
 	this->size_lock.lock();
 	rect.Set(0, 0, this->width, this->height);
@@ -273,7 +283,9 @@ void Browser::WindowOSR::OnPaint(CefRefPtr<CefBrowser> browser, PaintElementType
 void Browser::WindowOSR::OnAfterCreated(CefRefPtr<CefBrowser> browser) {
 	this->browser = browser;
 	if (this->pending_delete) {
-		browser->GetHost()->CloseBrowser(true);
+		// calling CloseBrowser here would lead to a segmentation fault in CEF because we're still
+		// technically in the create function, which is going to assume the browser still exists.
+		browser->GetMainFrame()->SendProcessMessage(PID_RENDERER, CefProcessMessage::Create("__bolt_pluginbrowser_close"));
 	}
 }
 
