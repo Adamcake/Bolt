@@ -1120,9 +1120,6 @@ static int api_createembeddedbrowser(lua_State* state) {
 
     // send an IPC message to the host to create an OSR browser
     const int pid = getpid();
-    lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME);
-    const struct Plugin* plugin = lua_touserdata(state, -1);
-    lua_pop(state, 1);
     size_t url_length;
     const char* url = lua_tolstring(state, 5, &url_length);
     struct BoltIPCMessageToHost message = {.message_type = IPC_MSG_CREATEBROWSER_OSR, .items = 1};
