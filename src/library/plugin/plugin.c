@@ -195,8 +195,9 @@ static int api_window_on##APINAME(lua_State* state) { \
 void _bolt_plugin_window_on##APINAME(struct EmbeddedWindow* window, struct EVNAME* event) { \
     lua_State* state = window->plugin; \
     if (window->is_browser) { \
-        struct BoltIPCMessageToHost message = {.message_type = IPC_MSG_EV##REGNAME}; \
+        const struct BoltIPCMessageToHost message = {.message_type = IPC_MSG_EV##REGNAME}; \
         _bolt_ipc_send(fd, &message, sizeof(message)); \
+        _bolt_ipc_send(fd, &window->plugin_id, sizeof(window->plugin_id)); \
         _bolt_ipc_send(fd, &window->id, sizeof(window->id)); \
         _bolt_ipc_send(fd, event, sizeof(struct EVNAME)); \
         return; \
@@ -548,8 +549,9 @@ void _bolt_plugin_handle_messages() {
                     }
                 }
 
-                struct BoltIPCMessageToHost message = {.message_type = IPC_MSG_OSRUPDATE_ACK};
+                const struct BoltIPCMessageToHost message = {.message_type = IPC_MSG_OSRUPDATE_ACK};
                 _bolt_ipc_send(fd, &message, sizeof(message));
+                _bolt_ipc_send(fd, &(*window)->plugin_id, sizeof((*window)->plugin_id));
                 _bolt_ipc_send(fd, &window_id, sizeof(window_id));
                 break;
             }
@@ -1048,11 +1050,16 @@ static int api_createsurfacefrompng(lua_State* state) {
 
 static int api_createwindow(lua_State* state) {
     _bolt_check_argc(state, 4, "createwindow");
+
+    lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME);
+    const struct Plugin* plugin = lua_touserdata(state, -1);
+    lua_pop(state, 1);
     
     // push a window onto the stack as the return value, then initialise it
     struct EmbeddedWindow* window = lua_newuserdata(state, sizeof(struct EmbeddedWindow));
     window->is_browser = false;
     window->id = next_window_id;
+    window->plugin_id = plugin->id;
     window->plugin = state;
     _bolt_rwlock_init(&window->lock);
     _bolt_rwlock_init(&window->input_lock);
@@ -1083,6 +1090,10 @@ static int api_createwindow(lua_State* state) {
 static int api_createembeddedbrowser(lua_State* state) {
     _bolt_check_argc(state, 5, "createembeddedbrowser");
 
+    lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME);
+    const struct Plugin* plugin = lua_touserdata(state, -1);
+    lua_pop(state, 1);
+
     // push a window onto the stack as the return value, then initialise it
     struct EmbeddedWindow* window = lua_newuserdata(state, sizeof(struct EmbeddedWindow));
     if (!_bolt_plugin_shm_open_inbound(&window->browser_shm, "eb", next_window_id)) {
@@ -1091,6 +1102,7 @@ static int api_createembeddedbrowser(lua_State* state) {
     }
     window->is_browser = true;
     window->id = next_window_id;
+    window->plugin_id = plugin->id;
     window->plugin = state;
     _bolt_rwlock_init(&window->lock);
     _bolt_rwlock_init(&window->input_lock);

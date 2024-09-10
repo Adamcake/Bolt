@@ -176,6 +176,7 @@ struct EmbeddedWindowMetadata {
 
 struct EmbeddedWindow {
     uint64_t id;
+    uint64_t plugin_id;
     struct SurfaceFunctions surface_functions;
     struct lua_State* plugin;
     RWLock lock; // applies to the metadata
