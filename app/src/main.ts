@@ -4,10 +4,9 @@ import { type Session } from '$lib/Services/UserService';
 import { Platform, bolt } from '$lib/State/Bolt';
 import { GlobalState } from '$lib/State/GlobalState';
 import { initConfig } from '$lib/Util/Config';
-import { getNewClientListPromise } from '$lib/Util/functions';
 import { type BoltMessage } from '$lib/Util/interfaces';
 import { logger } from '$lib/Util/Logger';
-import { clientListPromise } from '$lib/Util/store';
+import { clientList } from '$lib/Util/store';
 import AuthApp from '@/AuthApp.svelte';
 import BoltApp from '@/BoltApp.svelte';
 import { get } from 'svelte/store';
@@ -132,8 +131,9 @@ function addMessageListeners(): void {
 				xml.send(event.data.url);
 				break;
 			}
-			case 'gameClientListUpdate':
-				clientListPromise.set(getNewClientListPromise());
+			case 'gameClientList':
+				console.log(event.data.clients);
+				clientList.set(event.data.clients);
 				break;
 			default: {
 				const type = (event.data as { type: string | undefined })?.type ?? 'no type provided';

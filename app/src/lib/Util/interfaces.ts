@@ -38,12 +38,12 @@ export interface Direct6Token {
 // "id" is the UUID string of the installed plugin, uid uniquely identifies this specific instance of it
 export interface GameClientPlugin {
 	id: string;
-	uid: string;
+	uid: number;
 }
 
 // connected game client for plugin management purposes
 export interface GameClient {
-	uid: string;
+	uid: number;
 	identity?: string;
 	plugins: GameClientPlugin[];
 }
@@ -83,7 +83,8 @@ interface ExternalUrlMessage {
 }
 
 interface GameClientListMessage {
-	type: 'gameClientListUpdate';
+	type: 'gameClientList';
+	clients: GameClient[];
 }
 
 export type BoltMessage =

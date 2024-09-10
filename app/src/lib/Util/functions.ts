@@ -1,7 +1,7 @@
 import { BoltService } from '$lib/Services/BoltService';
 import { bolt } from '$lib/State/Bolt';
 import { GlobalState } from '$lib/State/GlobalState';
-import { type Direct6Token, type GameClient } from '$lib/Util/interfaces';
+import { type Direct6Token } from '$lib/Util/interfaces';
 import { logger } from '$lib/Util/Logger';
 import { get } from 'svelte/store';
 
@@ -254,22 +254,17 @@ export function launchHdos(
 	xml.send();
 }
 
-export function getNewClientListPromise(): Promise<GameClient[]> {
-	return new Promise((resolve, reject) => {
-		const xml = new XMLHttpRequest();
-		xml.open('GET', '/list-game-clients', true);
-		xml.onreadystatechange = () => {
-			if (xml.readyState == 4) {
-				if (xml.status == 200 && xml.getResponseHeader('content-type') === 'application/json') {
-					const dict = JSON.parse(xml.responseText);
-					resolve(<GameClient[]>dict);
-				} else {
-					reject(`error (${xml.responseText})`);
-				}
+export function requestNewClientListPromise(): void {
+	const xml = new XMLHttpRequest();
+	xml.open('GET', '/list-game-clients', true);
+	xml.onreadystatechange = () => {
+		if (xml.readyState == 4) {
+			if (xml.status != 200) {
+				logger.error(`Error requesting client list: ${xml.status}: ${xml.responseText}`);
 			}
-		};
-		xml.send();
-	});
+		}
+	};
+	xml.send();
 }
 
 // TODO: move to BoltService

@@ -1,10 +1,10 @@
 <script lang="ts">
 	import Modal from '$lib/Components/CommonUI/Modal.svelte';
 	import { bolt } from '$lib/State/Bolt';
-	import { getNewClientListPromise, savePluginConfig } from '$lib/Util/functions';
+	import { requestNewClientListPromise, savePluginConfig } from '$lib/Util/functions';
 	import { type PluginConfig } from '$lib/Util/interfaces';
 	import { logger } from '$lib/Util/Logger';
-	import { clientListPromise } from '$lib/Util/store';
+	import { clientList } from '$lib/Util/store';
 
 	let modal: Modal;
 
@@ -92,15 +92,15 @@
 	};
 
 	// get connected client list
-	clientListPromise.set(getNewClientListPromise());
-	$: $clientListPromise.then((x) => {
-		if (!x.some((x) => x.uid === selectedClientId)) {
+	requestNewClientListPromise();
+	$: {
+		if (!$clientList.some((x) => x.uid === selectedClientId)) {
 			isClientSelected = false;
 		}
-	});
+	}
 
 	// function to start a plugin
-	const startPlugin = (client: string, id: string, path: string, main: string) => {
+	const startPlugin = (client: number, id: string, path: string, main: string) => {
 		const pathWithCorrectSeps: string =
 			bolt.platform === 'windows' ? path.replaceAll('\\', '/') : path;
 		const newPath = pathWithCorrectSeps.endsWith(platformFileSep)
@@ -110,28 +110,36 @@
 		var xml = new XMLHttpRequest();
 		xml.onreadystatechange = () => {
 			if (xml.readyState == 4) {
-				clientListPromise.set(getNewClientListPromise());
+				requestNewClientListPromise();
 				logger.info(`Start-plugin status: ${xml.statusText.trim()}`);
 			}
 		};
 		xml.open(
 			'GET',
-			'/start-plugin?'.concat(new URLSearchParams({ client, id, path: newPath, main }).toString()),
+			'/start-plugin?'.concat(
+				new URLSearchParams({ client: client.toString(), id, path: newPath, main }).toString()
+			),
 			true
 		);
 		xml.send();
 	};
 
 	// function to stop a plugin, by the client ID and plugin activation ID
-	const stopPlugin = (client: string, uid: string) => {
+	const stopPlugin = (client: number, uid: number) => {
 		var xml = new XMLHttpRequest();
 		xml.onreadystatechange = () => {
 			if (xml.readyState == 4) {
-				clientListPromise.set(getNewClientListPromise());
+				requestNewClientListPromise();
 				logger.info(`Stop-plugin status: ${xml.statusText.trim()}`);
 			}
 		};
-		xml.open('GET', '/stop-plugin?'.concat(new URLSearchParams({ client, uid }).toString()), true);
+		xml.open(
+			'GET',
+			'/stop-plugin?'.concat(
+				new URLSearchParams({ client: client.toString(), uid: uid.toString() }).toString()
+			),
+			true
+		);
 		xml.send();
 	};
 
@@ -143,7 +151,7 @@
 
 	// connected clients list
 	var isClientSelected: boolean = false;
-	var selectedClientId: string;
+	var selectedClientId: number;
 
 	let pluginConfigDirty: boolean = false;
 </script>
@@ -169,31 +177,25 @@
 			Manage Plugins
 		</button>
 		<hr class="p-1 dark:border-slate-700" />
-		{#await $clientListPromise}
-			<p>loading...</p>
-		{:then clients}
-			{#if clients.length == 0}
-				<p>(start an RS3 game client with plugins enabled and it will be listed here.)</p>
-			{:else}
-				{#each clients as client}
-					<button
-						on:click={() => {
-							selectedClientId = client.uid;
-							isClientSelected = true;
-						}}
-						class="m-1 h-[28px] w-[95%] rounded-lg border-2 {isClientSelected &&
-						selectedClientId === client.uid
-							? 'border-black bg-blue-500 text-black'
-							: 'border-blue-500 text-black dark:text-white'} hover:opacity-75"
-					>
-						{client.identity || unnamedClientName}
-					</button>
-					<br />
-				{/each}
-			{/if}
-		{:catch}
-			<p>error</p>
-		{/await}
+		{#if $clientList.length == 0}
+			<p>(start an RS3 game client with plugins enabled and it will be listed here.)</p>
+		{:else}
+			{#each $clientList as client}
+				<button
+					on:click={() => {
+						selectedClientId = client.uid;
+						isClientSelected = true;
+					}}
+					class="m-1 h-[28px] w-[95%] rounded-lg border-2 {isClientSelected &&
+					selectedClientId === client.uid
+						? 'border-black bg-blue-500 text-black'
+						: 'border-blue-500 text-black dark:text-white'} hover:opacity-75"
+				>
+					{client.identity || unnamedClientName}
+				</button>
+				<br />
+			{/each}
+		{/if}
 	</div>
 	<div class="h-full pt-10">
 		{#if bolt.hasBoltPlugins}
@@ -286,33 +288,27 @@
 					<br />
 					<br />
 					<hr class="p-1 dark:border-slate-700" />
-					{#await $clientListPromise}
-						<p>loading...</p>
-					{:then clients}
-						{#each clients as client}
-							{#if client.uid === selectedClientId}
-								{#each client.plugins as activePlugin}
-									{#if Object.keys(bolt.pluginList).includes(activePlugin.id)}
-										<p>
-											{bolt.pluginList[activePlugin.id].name ?? activePlugin.id}
-											<button
-												class="bg-rose-500 rounded-sm shadow-lg hover:opacity-75"
-												on:click={() => {
-													stopPlugin(selectedClientId, activePlugin.uid);
-												}}
-											>
-												<img src="svgs/xmark-solid.svg" class="h-4 w-4" alt="Close" />
-											</button>
-										</p>
-									{:else}
-										<p>{activePlugin.id}</p>
-									{/if}
-								{/each}
-							{/if}
-						{/each}
-					{:catch}
-						<p>error</p>
-					{/await}
+					{#each $clientList as client}
+						{#if client.uid === selectedClientId}
+							{#each client.plugins as activePlugin}
+								{#if Object.keys(bolt.pluginList).includes(activePlugin.id)}
+									<p>
+										{bolt.pluginList[activePlugin.id].name ?? activePlugin.id}
+										<button
+											class="rounded-sm bg-rose-500 shadow-lg hover:opacity-75"
+											on:click={() => {
+												stopPlugin(selectedClientId, activePlugin.uid);
+											}}
+										>
+											<img src="svgs/xmark-solid.svg" class="h-4 w-4" alt="Close" />
+										</button>
+									</p>
+								{:else}
+									<p>{activePlugin.id}</p>
+								{/if}
+							{/each}
+						{/if}
+					{/each}
 				{:catch}
 					<p>error</p>
 				{/await}
