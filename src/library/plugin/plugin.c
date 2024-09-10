@@ -549,10 +549,12 @@ void _bolt_plugin_handle_messages() {
                     }
                 }
 
-                const struct BoltIPCMessageToHost message = {.message_type = IPC_MSG_OSRUPDATE_ACK};
-                _bolt_ipc_send(fd, &message, sizeof(message));
-                _bolt_ipc_send(fd, &(*window)->plugin_id, sizeof((*window)->plugin_id));
-                _bolt_ipc_send(fd, &window_id, sizeof(window_id));
+                if (window) {
+                    const struct BoltIPCMessageToHost message = {.message_type = IPC_MSG_OSRUPDATE_ACK};
+                    _bolt_ipc_send(fd, &message, sizeof(message));
+                    _bolt_ipc_send(fd, &(*window)->plugin_id, sizeof((*window)->plugin_id));
+                    _bolt_ipc_send(fd, &window_id, sizeof(window_id));
+                }
                 break;
             }
             default:
