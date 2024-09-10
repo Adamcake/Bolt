@@ -74,7 +74,8 @@ namespace Browser {
 
 		/// Handles any case where the UI for the client list should be reloaded.
 		/// Should be called after updating it (e.g. by calling IPCHandleNewClient)
-		void IPCHandleClientListUpdate();
+		/// bool indicates whether game_clients_lock is already locked
+		void IPCHandleClientListUpdate(bool need_lock_mutex);
 
 		/// Handles a client's file descriptor having been closed
 		void IPCHandleClosed(int fd);
@@ -83,8 +84,8 @@ namespace Browser {
 		/// This is separate from IPCHandleClientListUpdate and must be called separately.
 		void IPCHandleNoMoreClients();
 
-		/// ResourceRequestHandler style function to return game_clients as JSON
-		CefRefPtr<CefResourceRequestHandler> ListGameClients();
+		/// Lists all the game clients, in the format expected by the frontend, into the output list
+		void ListGameClients(CefRefPtr<CefListValue>, bool need_lock_mutex);
 
 		/// Handles a new message being sent to the IPC socket by a client. Called by the IPC thread.
 		/// The message hasn't actually been pulled from the socket yet when this function is called;

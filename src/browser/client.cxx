@@ -4,7 +4,6 @@
 #if defined(BOLT_PLUGINS)
 #include "window_osr.hxx"
 #include "../library/event.h"
-#include "include/cef_parser.h"
 #include <cstring>
 #define BOLT_IPC_URL "https://bolt-blankpage/"
 #endif
@@ -261,10 +260,10 @@ void Browser::Client::IPCHandleNewClient(int fd) {
 	this->game_clients_lock.unlock();
 }
 
-void Browser::Client::IPCHandleClientListUpdate() {
+void Browser::Client::IPCHandleClientListUpdate(bool need_lock_mutex) {
 	this->launcher_lock.lock();
 	if (this->launcher) {
-		this->launcher->SendMessage("__bolt_client_list_update");
+		this->launcher->UpdateClientList(need_lock_mutex);
 	}
 	this->launcher_lock.unlock();
 }
@@ -336,7 +335,7 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 			client->identity = new char[message.items + 1];
 			_bolt_ipc_receive(fd, client->identity, message.items);
 			client->identity[message.items] = '\0';
-			this->IPCHandleClientListUpdate();
+			this->IPCHandleClientListUpdate(false);
 			break;
 		}
 		case IPC_MSG_CLIENT_STOPPED_PLUGINS: {
@@ -355,7 +354,7 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 					break;
 				}
 			}
-			this->IPCHandleClientListUpdate();
+			this->IPCHandleClientListUpdate(false);
 			break;
 		}
 		case IPC_MSG_CREATEBROWSER_OSR: {
@@ -418,26 +417,22 @@ void Browser::Client::IPCHandleNoMoreClients() {
 	this->ipc_browser->GetMainFrame()->SendProcessMessage(PID_RENDERER, CefProcessMessage::Create("__bolt_no_more_clients"));
 }
 
-CefRefPtr<CefResourceRequestHandler> Browser::Client::ListGameClients() {
-	char buf[256];
-	CefRefPtr<CefListValue> list = CefListValue::Create();
-	this->game_clients_lock.lock();
+void Browser::Client::ListGameClients(CefRefPtr<CefListValue> list, bool need_lock_mutex) {
+	if (need_lock_mutex) this->game_clients_lock.lock();
 	list->SetSize(std::count_if(this->game_clients.begin(), this->game_clients.end(), [](const GameClient& c){ return !c.deleted; }));
 	size_t list_index = 0;
 	for (const GameClient& g: this->game_clients) {
 		if (g.deleted) continue;
 		CefRefPtr<CefDictionaryValue> inner_dict = CefDictionaryValue::Create();
 		if (g.identity) inner_dict->SetString("identity", g.identity);
-		snprintf(buf, 256, "%llu", (unsigned long long)g.uid);
-		inner_dict->SetString("uid", buf);
+		inner_dict->SetInt("uid", g.uid);
 		CefRefPtr<CefListValue> plugin_list = CefListValue::Create();
 		plugin_list->SetSize(std::count_if(g.plugins.begin(), g.plugins.end(), [](const CefRefPtr<ActivePlugin> p){ return !p->deleted; }));
 		size_t plugin_list_index = 0;
 		for (const CefRefPtr<ActivePlugin>& p: g.plugins) {
 			if (p->deleted) continue;
 			CefRefPtr<CefDictionaryValue> plugin_dict = CefDictionaryValue::Create();
-			snprintf(buf, 256, "%llu", (unsigned long long)p->uid);
-			plugin_dict->SetString("uid", buf);
+			plugin_dict->SetInt("uid", p->uid);
 			plugin_dict->SetString("id", CefString(p->id));
 			plugin_list->SetDictionary(plugin_list_index, plugin_dict);
 			plugin_list_index += 1;
@@ -446,11 +441,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Client::ListGameClients() {
 		list->SetDictionary(list_index, inner_dict);
 		list_index += 1;
 	}
-	this->game_clients_lock.unlock();
-	CefRefPtr<CefValue> value = CefValue::Create();
-	value->SetList(list);
-	std::string str = CefWriteJSON(value, JSON_WRITER_DEFAULT).ToString();
-	return new ResourceHandler(std::move(str), 200, "application/json");
+	if (need_lock_mutex) this->game_clients_lock.unlock();
 }
 
 void Browser::Client::StartPlugin(uint64_t client_id, std::string id, std::string path, std::string main) {

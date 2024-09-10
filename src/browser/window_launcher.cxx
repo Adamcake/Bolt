@@ -300,7 +300,8 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 		// request for list of connected game clients
 		if (path == "/list-game-clients") {
 #if defined(BOLT_PLUGINS)
-			return this->client->ListGameClients();
+			this->UpdateClientList(true);
+			QSENDOK();
 #else
 			QSENDNOTSUPPORTED();
 #endif
@@ -520,6 +521,13 @@ CefString Browser::Launcher::BuildURL() const {
 #endif
 
 	return url.str();
+}
+
+void Browser::Launcher::UpdateClientList(bool need_lock_mutex) const {
+	CefRefPtr<CefProcessMessage> message = CefProcessMessage::Create("__bolt_clientlist");
+	CefRefPtr<CefListValue> list = message->GetArgumentList();
+	this->client->ListGameClients(list, need_lock_mutex);
+	this->browser->GetMainFrame()->SendProcessMessage(PID_RENDERER, message);
 }
 
 void Browser::Launcher::Refresh() const {

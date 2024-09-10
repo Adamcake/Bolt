@@ -1,4 +1,5 @@
 #include "app.hxx"
+#include "include/cef_values.h"
 #include "include/internal/cef_types.h"
 
 #include <fmt/core.h>
@@ -80,15 +81,42 @@ bool Browser::App::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRe
 		frame->SendProcessMessage(PID_BROWSER, message);
 		return true;
 	}
-	if (name == "__bolt_client_list_update") {
-		fmt::print("[R] handling client_list_update\n");
+	if (name == "__bolt_clientlist") {
+		fmt::print("[R] handling client list\n");
 		CefRefPtr<CefV8Context> context = frame->GetV8Context();
 		context->Enter();
 		CefRefPtr<CefV8Value> post_message = context->GetGlobal()->GetValue("postMessage");
 		if (post_message->IsFunction()) {
-			// equivalent to: `window.postMessage({type: 'gameClientListUpdate'}, '*')`
+			CefRefPtr<CefListValue> list = message->GetArgumentList();
+			CefRefPtr<CefV8Value> clients = CefV8Value::CreateArray(list->GetSize());
+
+			for (size_t i = 0; i < list->GetSize(); i += 1) {
+				CefRefPtr<CefDictionaryValue> dict = list->GetDictionary(i);
+				CefRefPtr<CefV8Value> client = CefV8Value::CreateObject(nullptr, nullptr);
+				CefRefPtr<CefListValue> plugin_list = dict->GetList("plugins");
+				CefRefPtr<CefV8Value> plugins = CefV8Value::CreateArray(plugin_list->GetSize());
+
+				for (size_t j = 0; j < plugin_list->GetSize(); j += 1) {
+					CefRefPtr<CefDictionaryValue> in_plugin = plugin_list->GetDictionary(j);
+					CefRefPtr<CefV8Value> plugin = CefV8Value::CreateObject(nullptr, nullptr);
+					plugin->SetValue("id", CefV8Value::CreateString(in_plugin->GetString("id")), V8_PROPERTY_ATTRIBUTE_READONLY);
+					plugin->SetValue("uid", CefV8Value::CreateUInt(in_plugin->GetInt("uid")), V8_PROPERTY_ATTRIBUTE_READONLY);
+					plugins->SetValue(j, plugin);
+				}
+
+				if (dict->HasKey("identity")) {
+					client->SetValue("identity", CefV8Value::CreateString(dict->GetString("identity")), V8_PROPERTY_ATTRIBUTE_READONLY);
+				}
+				client->SetValue("uid", CefV8Value::CreateUInt(dict->GetInt("uid")), V8_PROPERTY_ATTRIBUTE_READONLY);
+				client->SetValue("plugins", plugins, V8_PROPERTY_ATTRIBUTE_READONLY);
+
+				clients->SetValue(i, client);
+			}
+
+			// equivalent to: `window.postMessage({type: 'gameClientList', clients: [ ... ]}, '*')`
 			CefRefPtr<CefV8Value> dict = CefV8Value::CreateObject(nullptr, nullptr);
-			dict->SetValue("type", CefV8Value::CreateString("gameClientListUpdate"), V8_PROPERTY_ATTRIBUTE_READONLY);
+			dict->SetValue("type", CefV8Value::CreateString("gameClientList"), V8_PROPERTY_ATTRIBUTE_READONLY);
+			dict->SetValue("clients", clients, V8_PROPERTY_ATTRIBUTE_READONLY);
 			CefV8ValueList value_list = {dict, CefV8Value::CreateString("*")};
 			post_message->ExecuteFunctionWithContext(context, nullptr, value_list);
 		} else {
