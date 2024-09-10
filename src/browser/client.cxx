@@ -290,11 +290,11 @@ void Browser::Client::IPCHandleClosed(int fd) {
 }
 
 // convenience function, assumes the mutex is already locked
-CefRefPtr<Browser::WindowOSR> Browser::Client::GetWindowFromFDAndID(GameClient* client, uint64_t id) {
+CefRefPtr<Browser::WindowOSR> Browser::Client::GetWindowFromFDAndIDs(GameClient* client, uint64_t plugin_id, uint64_t window_id) {
 	for (CefRefPtr<ActivePlugin>& p: client->plugins) {
-		if (p->deleted) continue;
+		if (p->deleted || p->uid != plugin_id) continue;
 		for (CefRefPtr<Browser::WindowOSR>& w: p->windows_osr) {
-			if (!w->IsDeleted() && w->ID() == id) {
+			if (!w->IsDeleted() && w->ID() == window_id) {
 				return w;
 			}
 		}
@@ -330,6 +330,7 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 	}
 	GameClient* const client = &(*it);
 
+	uint64_t plugin_id, window_id;
 	switch (message.message_type) {
 		case IPC_MSG_IDENTIFY: {
 			client->identity = new char[message.items + 1];
@@ -381,70 +382,33 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 			break;
 		}
 		case IPC_MSG_OSRUPDATE_ACK: {
-			uint64_t plugin_window_id;
-			_bolt_ipc_receive(fd, &plugin_window_id, sizeof(plugin_window_id));
-			CefRefPtr<Browser::WindowOSR> window = this->GetWindowFromFDAndID(client, plugin_window_id);
+			_bolt_ipc_receive(fd, &plugin_id, sizeof(plugin_id));
+			_bolt_ipc_receive(fd, &window_id, sizeof(window_id));
+			CefRefPtr<Browser::WindowOSR> window = this->GetWindowFromFDAndIDs(client, plugin_id, window_id);
 			if (window) window->HandleAck();
 			break;
 		}
-		case IPC_MSG_EVRESIZE: {
-			uint64_t plugin_window_id;
-			ResizeEvent event;
-			_bolt_ipc_receive(fd, &plugin_window_id, sizeof(plugin_window_id));
-			_bolt_ipc_receive(fd, &event, sizeof(event));
-			CefRefPtr<Browser::WindowOSR> window = this->GetWindowFromFDAndID(client, plugin_window_id);
-			if (window) window->HandleResize(&event);
-			break;
-		}
-		case IPC_MSG_EVMOUSEMOTION: {
-			uint64_t plugin_window_id;
-			MouseMotionEvent event;
-			_bolt_ipc_receive(fd, &plugin_window_id, sizeof(plugin_window_id));
-			_bolt_ipc_receive(fd, &event, sizeof(event));
-			CefRefPtr<Browser::WindowOSR> window = this->GetWindowFromFDAndID(client, plugin_window_id);
-			if (window) window->HandleMouseMotion(&event);
-			break;
-		}
-		case IPC_MSG_EVMOUSEBUTTON: {
-			uint64_t plugin_window_id;
-			MouseButtonEvent event;
-			_bolt_ipc_receive(fd, &plugin_window_id, sizeof(plugin_window_id));
-			_bolt_ipc_receive(fd, &event, sizeof(event));
-			CefRefPtr<Browser::WindowOSR> window = this->GetWindowFromFDAndID(client, plugin_window_id);
-			if (window) window->HandleMouseButton(&event);
-			break;
-		}
-		case IPC_MSG_EVMOUSEBUTTONUP: {
-			uint64_t plugin_window_id;
-			MouseButtonEvent event;
-			_bolt_ipc_receive(fd, &plugin_window_id, sizeof(plugin_window_id));
-			_bolt_ipc_receive(fd, &event, sizeof(event));
-			CefRefPtr<Browser::WindowOSR> window = this->GetWindowFromFDAndID(client, plugin_window_id);
-			if (window) window->HandleMouseButtonUp(&event);
-			break;
-		}
-		case IPC_MSG_EVSCROLL: {
-			uint64_t plugin_window_id;
-			MouseScrollEvent event;
-			_bolt_ipc_receive(fd, &plugin_window_id, sizeof(plugin_window_id));
-			_bolt_ipc_receive(fd, &event, sizeof(event));
-			CefRefPtr<Browser::WindowOSR> window = this->GetWindowFromFDAndID(client, plugin_window_id);
-			if (window) window->HandleScroll(&event);
-			break;
-		}
-		case IPC_MSG_EVMOUSELEAVE: {
-			uint64_t plugin_window_id;
-			MouseMotionEvent event;
-			_bolt_ipc_receive(fd, &plugin_window_id, sizeof(plugin_window_id));
-			_bolt_ipc_receive(fd, &event, sizeof(event));
-			CefRefPtr<Browser::WindowOSR> window = this->GetWindowFromFDAndID(client, plugin_window_id);
-			if (window) window->HandleMouseLeave(&event);
-			break;
-		}
-		default: {
+
+#define DEF_OSR_EVENT(EVNAME, HANDLER, EVTYPE) case IPC_MSG_EV##EVNAME: { \
+	EVTYPE event; \
+	_bolt_ipc_receive(fd, &plugin_id, sizeof(plugin_id)); \
+	_bolt_ipc_receive(fd, &window_id, sizeof(window_id)); \
+	_bolt_ipc_receive(fd, &event, sizeof(event)); \
+	CefRefPtr<Browser::WindowOSR> window = this->GetWindowFromFDAndIDs(client, plugin_id, window_id); \
+	if (window) window->HANDLER(&event); \
+	break; \
+}
+		DEF_OSR_EVENT(RESIZE, HandleResize, ResizeEvent)
+		DEF_OSR_EVENT(MOUSEMOTION, HandleMouseMotion, MouseMotionEvent)
+		DEF_OSR_EVENT(MOUSEBUTTON, HandleMouseButton, MouseButtonEvent)
+		DEF_OSR_EVENT(MOUSEBUTTONUP, HandleMouseButtonUp, MouseButtonEvent)
+		DEF_OSR_EVENT(SCROLL, HandleScroll, MouseScrollEvent)
+		DEF_OSR_EVENT(MOUSELEAVE, HandleMouseLeave, MouseMotionEvent)
+#undef DEF_OSR_EVENT
+
+		default:
 			fmt::print("[I] got unknown message type {}\n", (int)message.message_type);
 			break;
-		}
 	}
 	this->game_clients_lock.unlock();
 	return true;

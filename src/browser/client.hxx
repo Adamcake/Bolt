@@ -187,7 +187,7 @@ namespace Browser {
 			uint64_t next_plugin_uid;
 			std::mutex game_clients_lock;
 			std::vector<GameClient> game_clients;
-			CefRefPtr<Browser::WindowOSR> GetWindowFromFDAndID(GameClient* client, uint64_t id);
+			CefRefPtr<Browser::WindowOSR> GetWindowFromFDAndIDs(GameClient* client, uint64_t plugin_id, uint64_t window_id);
 			CefRefPtr<ActivePlugin> GetPluginFromFDAndID(GameClient* client, uint64_t id);
 #endif
 
