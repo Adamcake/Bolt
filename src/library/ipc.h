@@ -28,12 +28,14 @@ enum BoltMessageTypeToHost {
     IPC_MSG_EVMOUSEBUTTONUP,
     IPC_MSG_EVSCROLL,
     IPC_MSG_EVMOUSELEAVE,
+    IPC_MSG_OSRPLUGINMESSAGE,
 };
 
 enum BoltMessageTypeToClient {
     IPC_MSG_STARTPLUGINS,
     IPC_MSG_HOST_STOPPED_PLUGINS,
     IPC_MSG_OSRUPDATE,
+    IPC_MSG_BROWSERMESSAGE,
 };
 
 /// A generic message. The host process will always assume incoming data is an instance of this
