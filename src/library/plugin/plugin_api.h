@@ -673,3 +673,21 @@ static int api_mousebutton_button(lua_State*);
 /// Returns a boolean value representing the scroll direction. False means scrolling down, toward
 /// the user, and true means scrolling up, away from the user.
 static int api_scroll_direction(lua_State*);
+
+/// [-2, +0, -]
+/// Sends a message to the embedded browser. The parameter must be a string, or convertible to a
+/// string. It will be sent to the browser using the postMessage function, so to handle it in your
+/// browser application, just add an event listener for "message" to the window object. The event's
+/// data will have "type": "pluginMessage", and "content" will be an ArrayBuffer containing the Lua
+/// string that was passed to this function. Note that the string will be transferred exactly as it
+/// appeared in Lua, byte-for-byte - it will not be decoded or re-encoded at any point.
+static int api_embeddedbrowser_sendmessage(lua_State*);
+
+/// [-2, +0, -]
+/// Sets an event handler for this embedded browser for message events. If the value is a function,
+/// it will be called with one parameter, that being a string. If the value is not a function, it
+/// will not be called, and therefore the plugin will not be notified of messages.
+///
+/// A message event is fired when the embedded browser calls the "send-plugin-message" endpoint
+/// from Javascript.
+static int api_embeddedbrowser_onmessage(lua_State*);
