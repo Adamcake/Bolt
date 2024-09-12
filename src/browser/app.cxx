@@ -1,8 +1,20 @@
 #include "app.hxx"
+#include "include/cef_base.h"
+#include "include/cef_v8.h"
 #include "include/cef_values.h"
 #include "include/internal/cef_types.h"
 
 #include <fmt/core.h>
+
+class ArrayBufferReleaseCallbackFree: public CefV8ArrayBufferReleaseCallback {
+	void ReleaseBuffer(void* buffer) override {
+		::free(buffer);
+	}
+	IMPLEMENT_REFCOUNTING(ArrayBufferReleaseCallbackFree);
+	DISALLOW_COPY_AND_ASSIGN(ArrayBufferReleaseCallbackFree);
+	public:
+		ArrayBufferReleaseCallbackFree() {}
+};
 
 Browser::App::App(): browser_process_handler(nullptr) {
 	
@@ -77,10 +89,12 @@ void Browser::App::OnUncaughtException(
 
 bool Browser::App::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefProcessId, CefRefPtr<CefProcessMessage> message) {
 	CefString name = message->GetName();
+
 	if (name == "__bolt_refresh" || name == "__bolt_new_client" || name == "__bolt_no_more_clients" || name == "__bolt_open_launcher" || name == "__bolt_pluginbrowser_close") {
 		frame->SendProcessMessage(PID_BROWSER, message);
 		return true;
 	}
+
 	if (name == "__bolt_clientlist") {
 		fmt::print("[R] handling client list\n");
 		CefRefPtr<CefV8Context> context = frame->GetV8Context();
@@ -125,6 +139,38 @@ bool Browser::App::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRe
 		context->Exit();
 		return true;
 	}
+
+	if (name == "__bolt_plugin_message") {
+		fmt::print("[R] handling plugin message\n");
+		CefRefPtr<CefV8Context> context = frame->GetV8Context();
+		context->Enter();
+		CefRefPtr<CefV8Value> post_message = context->GetGlobal()->GetValue("postMessage");
+		if (post_message->IsFunction()) {
+			CefRefPtr<CefListValue> list = message->GetArgumentList();
+			for (size_t i = 0; i < list->GetSize(); i += 1) {
+				// "data" should be the exact contents of the lua string, since lua strings are
+				// just byte arrays with no encoding or anything
+				CefRefPtr<CefBinaryValue> data = list->GetBinary(i);
+				size_t size = data->GetSize();
+				CefRefPtr<CefV8ArrayBufferReleaseCallback> cb = new ArrayBufferReleaseCallbackFree();
+				void* buffer = malloc(size);
+				data->GetData(buffer, size, 0);
+				CefRefPtr<CefV8Value> content = CefV8Value::CreateArrayBuffer(buffer, size, cb);
+
+				// equivalent to: `window.postMessage({type: 'pluginMessage', content: ArrayBuffer...}, '*')`
+				CefRefPtr<CefV8Value> dict = CefV8Value::CreateObject(nullptr, nullptr);
+				dict->SetValue("type", CefV8Value::CreateString("pluginMessage"), V8_PROPERTY_ATTRIBUTE_READONLY);
+				dict->SetValue("content", content, V8_PROPERTY_ATTRIBUTE_READONLY);
+				CefV8ValueList value_list = {dict, CefV8Value::CreateString("*")};
+				post_message->ExecuteFunctionWithContext(context, nullptr, value_list);
+			}
+		} else {
+			fmt::print("[R] warning: window.postMessage is not a function, {} will be ignored\n", name.ToString());
+		}
+		context->Exit();
+		return true;
+	}
+
 	return false;
 }
 

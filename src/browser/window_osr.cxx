@@ -1,5 +1,4 @@
 #include "window_osr.hxx"
-#include "include/internal/cef_types.h"
 
 #if defined(BOLT_PLUGINS)
 #if defined(_WIN32)
@@ -183,6 +182,14 @@ void Browser::WindowOSR::HandleMouseLeave(const MouseMotionEvent* event) {
 	if (this->browser) this->browser->GetHost()->SendMouseMoveEvent(e, true);
 }
 
+void Browser::WindowOSR::HandlePluginMessage(const uint8_t* data, size_t len) {
+	CefRefPtr<CefProcessMessage> message = CefProcessMessage::Create("__bolt_plugin_message");
+	CefRefPtr<CefListValue> list = message->GetArgumentList();
+	list->SetSize(1);
+	list->SetBinary(0, CefBinaryValue::Create(data, len));
+	if (this->browser) this->browser->GetMainFrame()->SendProcessMessage(PID_RENDERER, message);
+}
+
 CefRefPtr<CefRequestHandler> Browser::WindowOSR::GetRequestHandler() {
 	return this;
 }
@@ -321,20 +328,65 @@ CefRefPtr<CefResourceRequestHandler> Browser::WindowOSR::GetResourceRequestHandl
 	const std::string::size_type colon = request_url.find_first_of(':');
 	if (colon == std::string::npos) return nullptr;
 	const std::string_view schema(request_url.begin(), request_url.begin() + colon);
-	if (schema != "file") return nullptr;
 	if (request_url.begin() + colon + 1 == request_url.end()) return nullptr;
 	if (request_url.at(colon + 1) != '/') return nullptr;
-	const std::string::size_type question_mark = request_url.find_first_of('?');
-	std::string_view req_path(request_url.begin() + colon + 1, (question_mark == std::string::npos) ? request_url.end() : request_url.begin() + question_mark);
 
-	FileManager::File file = this->file_manager->get(req_path);
-	if (file.contents) {
-		return new ResourceHandler(file, this->file_manager);
-	} else {
-		this->file_manager->free(file);
-		const char* data = "Not Found\n";
-		return new ResourceHandler(reinterpret_cast<const unsigned char*>(data), strlen(data), 404, "text/plain");
+	if (schema == "file") {
+		disable_default_handling = true;
+		const std::string::size_type question_mark = request_url.find_first_of('?');
+		std::string_view req_path(request_url.begin() + colon + 1, (question_mark == std::string::npos) ? request_url.end() : request_url.begin() + question_mark);
+		FileManager::File file = this->file_manager->get(req_path);
+		if (file.contents) {
+			return new ResourceHandler(file, this->file_manager);
+		} else {
+			this->file_manager->free(file);
+			QSENDNOTFOUND();
+		}
 	}
+
+	if (schema == "http" || schema == "https") {
+		// figure out if this is a request to the "bolt-api" hostname - if not, return nullptr
+		// (i.e. allow the request to be handled normally)
+		const std::string::size_type host_name_start = request_url.find_first_not_of('/', colon + 1);
+		if (host_name_start == std::string::npos) return nullptr;
+		const std::string::size_type next_slash = request_url.find_first_of('/', host_name_start);
+		if (next_slash == std::string::npos) return nullptr;
+		const std::string_view hostname(request_url.begin() + host_name_start, request_url.begin() + next_slash);
+		if (hostname != "bolt-api") return nullptr;
+
+		// indicate that we will definitely be handling this request, and parse the rest of it
+		disable_default_handling = true;
+		const std::string::size_type api_name_start = next_slash + 1;
+		const std::string::size_type next_questionmark = request_url.find_first_of('?', api_name_start);
+		const bool has_query = next_questionmark != std::string::npos;
+		const std::string_view api_name = std::string_view(request_url.begin() + api_name_start, has_query ? request_url.begin() + next_questionmark : request_url.end());
+		std::string_view query;
+		if (has_query) query = std::string_view(request_url.begin() + next_questionmark + 1, request_url.end());
+
+		// match API endpoint
+		if (api_name == "send-message") {
+			const CefRefPtr<CefPostData> post_data = request->GetPostData();
+			QSENDBADREQUESTIF(post_data == nullptr || post_data->GetElementCount() != 1);
+			CefPostData::ElementVector vec;
+			post_data->GetElements(vec);
+			size_t message_size = vec[0]->GetBytesCount();
+
+			const size_t bytes = sizeof(BoltIPCMessageToClient) + sizeof(uint64_t) + message_size;
+			unsigned char* buf = new unsigned char[bytes];
+			((BoltIPCMessageToClient*)buf)->message_type = IPC_MSG_BROWSERMESSAGE;
+			((BoltIPCMessageToClient*)buf)->items = message_size;
+			*(uint64_t*)(buf + sizeof(BoltIPCMessageToClient)) = this->window_id;
+			vec[0]->GetBytes(message_size, buf + sizeof(BoltIPCMessageToClient) + sizeof(uint64_t));
+			_bolt_ipc_send(this->client_fd, buf, bytes);
+			delete[] buf;
+			QSENDOK();
+		}
+
+		// no API endpoint matched, so respond 404
+		QSENDNOTFOUND();
+	}
+
+	return nullptr;
 }
 
 #endif

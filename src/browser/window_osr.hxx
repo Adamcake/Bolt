@@ -35,6 +35,7 @@ namespace Browser {
 		void HandleMouseButtonUp(const MouseButtonEvent*);
 		void HandleScroll(const MouseScrollEvent*);
 		void HandleMouseLeave(const MouseMotionEvent*);
+		void HandlePluginMessage(const uint8_t*, size_t);
 
 		uint64_t ID();
 

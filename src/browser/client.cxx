@@ -405,6 +405,16 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 		DEF_OSR_EVENT(MOUSELEAVE, HandleMouseLeave, MouseMotionEvent)
 #undef DEF_OSR_EVENT
 
+		case IPC_MSG_OSRPLUGINMESSAGE: {
+			uint8_t* content = (uint8_t*)malloc(message.items);
+			_bolt_ipc_receive(fd, &plugin_id, sizeof(plugin_id));
+			_bolt_ipc_receive(fd, &window_id, sizeof(window_id));
+			_bolt_ipc_receive(fd, content, message.items);
+			CefRefPtr<Browser::WindowOSR> window = this->GetWindowFromFDAndIDs(client, plugin_id, window_id);
+			if (window) window->HandlePluginMessage(content, message.items);
+			::free(content);
+			break;
+		}
 		default:
 			fmt::print("[I] got unknown message type {}\n", (int)message.message_type);
 			break;
