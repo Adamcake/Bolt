@@ -141,7 +141,6 @@ bool Browser::App::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRe
 	}
 
 	if (name == "__bolt_plugin_message") {
-		fmt::print("[R] handling plugin message\n");
 		CefRefPtr<CefV8Context> context = frame->GetV8Context();
 		context->Enter();
 		CefRefPtr<CefV8Value> post_message = context->GetGlobal()->GetValue("postMessage");
