@@ -16,10 +16,10 @@ typedef int BoltSocketType;
 #include <stdint.h>
 #include <stddef.h>
 
-enum BoltMessageTypeToHost {
+enum BoltIPCMessageTypeToHost {
     IPC_MSG_DUPLICATEPROCESS,
     IPC_MSG_IDENTIFY,
-    IPC_MSG_CLIENT_STOPPED_PLUGINS,
+    IPC_MSG_CLIENT_STOPPED_PLUGIN,
     IPC_MSG_CREATEBROWSER_OSR,
     IPC_MSG_OSRUPDATE_ACK,
     IPC_MSG_EVRESIZE,
@@ -31,33 +31,85 @@ enum BoltMessageTypeToHost {
     IPC_MSG_OSRPLUGINMESSAGE,
 };
 
-enum BoltMessageTypeToClient {
-    IPC_MSG_STARTPLUGINS,
-    IPC_MSG_HOST_STOPPED_PLUGINS,
+enum BoltIPCMessageTypeToClient {
+    IPC_MSG_STARTPLUGIN,
+    IPC_MSG_HOST_STOPPED_PLUGIN,
     IPC_MSG_OSRUPDATE,
     IPC_MSG_BROWSERMESSAGE,
 };
 
-/// A generic message. The host process will always assume incoming data is an instance of this
-/// struct, and may choose to handle or ignore any message based on the first parameter, `message_type`.
-/// The meaning of the `items` parameter on the other hand is specific to the message type, but
-/// typically indicates how much extra data there is to read from the IPC socket for this message.
-///
-/// Messages to the host process may originate from anywhere.
-struct BoltIPCMessageToHost {
-    enum BoltMessageTypeToHost message_type;
-    uint32_t items;
+/// Header for BoltIPCMessageTypeToHost::IPC_MSG_IDENTIFY
+struct BoltIPCIdentifyHeader {
+    uint8_t name_length;
 };
 
-/// A generic message. A client process will always assume incoming data is an instance of this
-/// struct, and may choose to handle or ignore any message based on the first parameter, `message_type`.
-/// The meaning of the `items` parameter on the other hand is specific to the message type, but
-/// typically indicates how much extra data there is to read from the IPC socket for this message.
-///
-/// Messages to the host process always originate from the host.
-struct BoltIPCMessageToClient {
-    enum BoltMessageTypeToClient message_type;
-    uint32_t items;
+/// Header for BoltIPCMessageTypeToHost::IPC_MSG_CLIENT_STOPPED_PLUGINS
+struct BoltIPCClientStoppedPluginHeader {
+    uint64_t plugin_id;
+};
+
+/// Header for BoltIPCMessageTypeToHost::IPC_MSG_CREATEBROWSER_OSR
+struct BoltIPCCreateBrowserHeader {
+    uint64_t plugin_id;
+    uint64_t window_id;
+    uint32_t url_length;
+    int pid;
+    int w;
+    int h;
+};
+
+/// Header for BoltIPCMessageTypeToHost::IPC_MSG_OSRUPDATE_ACK
+struct BoltIPCOsrUpdateAckHeader {
+    uint64_t plugin_id;
+    uint64_t window_id;
+};
+
+/// Header for BoltIPCMessageTypeToHost::IPC_MSG_EV*
+struct BoltIPCEvHeader {
+    uint64_t plugin_id;
+    uint64_t window_id;
+};
+
+/// Header for BoltMessageTypeToHost::IPC_MSG_OSRPLUGINMESSAGE
+struct BoltIPCOsrPluginMessageHeader {
+    uint64_t plugin_id;
+    uint64_t window_id;
+    size_t message_size;
+};
+
+/// Header for BoltIPCMessageTypeToClient::IPC_MSG_STARTPLUGIN
+struct BoltIPCStartPluginHeader {
+    uint64_t uid;
+    uint32_t path_size;
+    uint32_t main_size;
+};
+
+/// Header for BoltIPCMessageTypeToClient::IPC_MSG_HOST_STOPPED_PLUGIN
+struct BoltIPCHostStoppedPluginHeader {
+    uint64_t plugin_id;
+};
+
+/// Header for BoltIPCMessageTypeToClient::IPC_MSG_OSRUPDATE
+struct BoltIPCOsrUpdateHeader {
+    uint32_t rect_count;
+    uint64_t window_id;
+    void* needs_remap; // 1 or 0 on POSIX-compliant platforms, HANDLE or nullptr on Windows
+    int width;
+    int height;
+};
+
+/// Rectangle sent after IPC_MSG_OSRUPDATE; header.rect_count indicates the number of rects sent
+struct BoltIPCOsrUpdateRect {
+    int x;
+    int y;
+    int w;
+    int h;
+};
+
+/// Header for BoltMessageTypeToClient::IPC_MSG_BROWSERMESSAGE
+struct BoltIPCBrowserMessageHeader {
+    uint64_t window_id;
+    size_t message_size;
 };
 
 #if defined(__cplusplus)

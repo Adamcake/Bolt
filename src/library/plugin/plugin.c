@@ -202,10 +202,10 @@ static int api_window_on##APINAME(lua_State* state) { \
 void _bolt_plugin_window_on##APINAME(struct EmbeddedWindow* window, struct EVNAME* event) { \
     lua_State* state = window->plugin; \
     if (window->is_browser) { \
-        const struct BoltIPCMessageToHost message = {.message_type = IPC_MSG_EV##REGNAME}; \
-        _bolt_ipc_send(fd, &message, sizeof(message)); \
-        _bolt_ipc_send(fd, &window->plugin_id, sizeof(window->plugin_id)); \
-        _bolt_ipc_send(fd, &window->id, sizeof(window->id)); \
+        const enum BoltIPCMessageTypeToHost msg_type = IPC_MSG_EV##REGNAME; \
+        const struct BoltIPCEvHeader header = { .plugin_id = window->plugin_id, .window_id = window->id }; \
+        _bolt_ipc_send(fd, &msg_type, sizeof(msg_type)); \
+        _bolt_ipc_send(fd, &header, sizeof(header)); \
         _bolt_ipc_send(fd, event, sizeof(struct EVNAME)); \
         return; \
     } \
@@ -281,8 +281,10 @@ void _bolt_plugin_init(const struct PluginManagedFunctions* functions) {
     const char* display_name = getenv("JX_DISPLAY_NAME");
     if (display_name && *display_name) {
         size_t name_len = strlen(display_name);
-        struct BoltIPCMessageToHost message = {.message_type = IPC_MSG_IDENTIFY, .items = name_len};
-        _bolt_ipc_send(fd, &message, sizeof(message));
+        const enum BoltIPCMessageTypeToHost msg_type = IPC_MSG_IDENTIFY;
+        const struct BoltIPCIdentifyHeader header = { .name_length = name_len };
+        _bolt_ipc_send(fd, &msg_type, sizeof(msg_type));
+        _bolt_ipc_send(fd, &header, sizeof(header));
         _bolt_ipc_send(fd, display_name, name_len);
     }
 
@@ -473,11 +475,10 @@ void _bolt_plugin_close() {
 }
 
 static void _bolt_plugin_notify_stopped(uint64_t id) {
-    struct BoltIPCMessageToHost message;
-    message.message_type = IPC_MSG_CLIENT_STOPPED_PLUGINS;
-    message.items = 1;
-    _bolt_ipc_send(fd, &message, sizeof(message));
-    _bolt_ipc_send(fd, &id, sizeof(id));
+    const enum BoltIPCMessageTypeToHost msg_type = IPC_MSG_CLIENT_STOPPED_PLUGIN;
+    const struct BoltIPCClientStoppedPluginHeader header = { .plugin_id = id };
+    _bolt_ipc_send(fd, &msg_type, sizeof(msg_type));
+    _bolt_ipc_send(fd, &header, sizeof(header));
 }
 
 struct WindowInfo* _bolt_plugin_windowinfo() {
@@ -485,104 +486,92 @@ struct WindowInfo* _bolt_plugin_windowinfo() {
 }
 
 void _bolt_plugin_handle_messages() {
-    struct BoltIPCMessageToHost message;
+    enum BoltIPCMessageTypeToHost msg_type;
     while (_bolt_ipc_poll(fd)) {
-        if (_bolt_ipc_receive(fd, &message, sizeof(message)) != 0) break;
-        switch (message.message_type) {
-            case IPC_MSG_STARTPLUGINS: {
+        if (_bolt_ipc_receive(fd, &msg_type, sizeof(msg_type)) != 0) break;
+        switch (msg_type) {
+            case IPC_MSG_STARTPLUGIN: {
                 // note: incoming messages are sanitised by the UI, by replacing `\` with `/` and
                 // making sure to leave a trailing slash, when initiating this type of message
                 // (see PluginMenu.svelte)
-                for (size_t i = 0; i < message.items; i += 1) {
-                    struct Plugin* plugin = malloc(sizeof(struct Plugin));
-                    plugin->state = luaL_newstate();
-                    uint32_t main_length;
-                    _bolt_ipc_receive(fd, &plugin->id, sizeof(plugin->id));
-                    _bolt_ipc_receive(fd, &plugin->path_length, sizeof(uint32_t));
-                    _bolt_ipc_receive(fd, &main_length, sizeof(uint32_t));
-                    plugin->path = malloc(plugin->path_length);
-                    _bolt_ipc_receive(fd, plugin->path, plugin->path_length);
-                    char* full_path = lua_newuserdata(plugin->state, plugin->path_length + main_length + 1);
-                    memcpy(full_path, plugin->path, plugin->path_length);
-                    _bolt_ipc_receive(fd, full_path + plugin->path_length, main_length);
-                    full_path[plugin->path_length + main_length] = '\0';
-                    if (_bolt_plugin_add(full_path, plugin)) {
-                        lua_pop(plugin->state, 1);
-                    } else {
-                        _bolt_plugin_notify_stopped(plugin->id);
-                        _bolt_plugin_free(&plugin);
-                    }
+                struct Plugin* plugin = malloc(sizeof(struct Plugin));
+                struct BoltIPCStartPluginHeader header;
+                plugin->state = luaL_newstate();
+                _bolt_ipc_receive(fd, &header, sizeof(header));
+                plugin->id = header.uid;
+                plugin->path = malloc(header.path_size);
+                plugin->path_length = header.path_size;
+                _bolt_ipc_receive(fd, plugin->path, header.path_size);
+                char* full_path = lua_newuserdata(plugin->state, header.path_size + header.main_size + 1);
+                memcpy(full_path, plugin->path, header.path_size);
+                _bolt_ipc_receive(fd, full_path + header.path_size, header.main_size);
+                full_path[header.path_size + header.main_size] = '\0';
+                if (_bolt_plugin_add(full_path, plugin)) {
+                    lua_pop(plugin->state, 1);
+                } else {
+                    _bolt_plugin_notify_stopped(header.uid);
+                    _bolt_plugin_free(&plugin);
                 }
                 break;
             }
-            case IPC_MSG_HOST_STOPPED_PLUGINS: {
-                uint64_t id;
-                for (uint32_t i = 0; i < message.items; i += 1) {
-                    _bolt_ipc_receive(fd, &id, sizeof(id));
-                    _bolt_plugin_stop(id);
-                }
+            case IPC_MSG_HOST_STOPPED_PLUGIN: {
+                struct BoltIPCHostStoppedPluginHeader header;
+                _bolt_ipc_receive(fd, &header, sizeof(header));
+                _bolt_plugin_stop(header.plugin_id);
                 break;
             }
             case IPC_MSG_OSRUPDATE: {
-                uint64_t window_id;
-                void* needs_remap; // this is a HANDLE or 0 on windows, just a boolean on posix systems
-                int width, height;
-                _bolt_ipc_receive(fd, &window_id, sizeof(window_id));
-                _bolt_ipc_receive(fd, &needs_remap, sizeof(needs_remap));
-                _bolt_ipc_receive(fd, &width, sizeof(width));
-                _bolt_ipc_receive(fd, &height, sizeof(height));
+                struct BoltIPCOsrUpdateHeader header;
+                struct BoltIPCOsrUpdateRect rect;
+                _bolt_ipc_receive(fd, &header, sizeof(header));
                 
-                uint64_t* window_id_ptr = &window_id;
+                uint64_t* window_id_ptr = &header.window_id;
                 _bolt_rwlock_lock_read(&windows.lock);
                 struct EmbeddedWindow** window = (struct EmbeddedWindow**)hashmap_get(windows.map, &window_id_ptr);
                 _bolt_rwlock_unlock_read(&windows.lock);
-                if (window && needs_remap) {
-                    _bolt_plugin_shm_remap(&(*window)->browser_shm, width * height * 4, needs_remap);
+                if (window && header.needs_remap) {
+                    _bolt_plugin_shm_remap(&(*window)->browser_shm, (size_t)header.width * (size_t)header.height * 4, header.needs_remap);
                 }
-                for (uint32_t i = 0; i < message.items; i += 1) {
-                    int dmgx, dmgy, dmgw, dmgh;
-                    _bolt_ipc_receive(fd, &dmgx, sizeof(dmgx));
-                    _bolt_ipc_receive(fd, &dmgy, sizeof(dmgy));
-                    _bolt_ipc_receive(fd, &dmgw, sizeof(dmgw));
-                    _bolt_ipc_receive(fd, &dmgh, sizeof(dmgh));
+                for (uint32_t i = 0; i < header.rect_count; i += 1) {
+                    _bolt_ipc_receive(fd, &rect, sizeof(rect));
                     if (window) {
                         // the backend needs contiguous pixels for the rectangle, so here we ignore
                         // the width of the damage and instead update every row of pixels in the
                         // damage area. that way we have contiguous pixels straight out of the shm file.
                         // would it be faster to allocate and build a contiguous pixel rect and use
                         // that as the subimage? probably not.
-                        const void* data_ptr = (const void*)((uint8_t*)(*window)->browser_shm.file + (width * dmgy * 4));
-                        (*window)->surface_functions.subimage((*window)->surface_functions.userdata, 0, dmgy, width, dmgh, data_ptr, 1);
+                        const void* data_ptr = (const void*)((uint8_t*)(*window)->browser_shm.file + (header.width * rect.y * 4));
+                        (*window)->surface_functions.subimage((*window)->surface_functions.userdata, 0, rect.y, header.width, rect.h, data_ptr, 1);
                     }
                 }
 
                 if (window) {
-                    const struct BoltIPCMessageToHost message = {.message_type = IPC_MSG_OSRUPDATE_ACK};
-                    _bolt_ipc_send(fd, &message, sizeof(message));
-                    _bolt_ipc_send(fd, &(*window)->plugin_id, sizeof((*window)->plugin_id));
-                    _bolt_ipc_send(fd, &window_id, sizeof(window_id));
+                    const enum BoltIPCMessageTypeToHost msg_type = IPC_MSG_OSRUPDATE_ACK;
+                    struct BoltIPCOsrUpdateAckHeader ack_header = { .window_id = header.window_id, .plugin_id = (*window)->plugin_id };
+                    _bolt_ipc_send(fd, &msg_type, sizeof(msg_type));
+                    _bolt_ipc_send(fd, &ack_header, sizeof(ack_header));
                 }
                 break;
             }
             case IPC_MSG_BROWSERMESSAGE: {
-                uint64_t window_id;
-                _bolt_ipc_receive(fd, &window_id, sizeof(window_id));
-                uint64_t* window_id_ptr = &window_id;
+                struct BoltIPCBrowserMessageHeader header;
+                _bolt_ipc_receive(fd, &header, sizeof(header));
+                uint64_t* window_id_ptr = &header.window_id;
                 _bolt_rwlock_lock_read(&windows.lock);
                 struct EmbeddedWindow** window = (struct EmbeddedWindow**)hashmap_get(windows.map, &window_id_ptr);
                 lua_State* state = (*window)->plugin;
                 _bolt_rwlock_unlock_read(&windows.lock);
                 
-                void* newud = lua_newuserdata(state, message.items); /*stack: message ud*/
-                _bolt_ipc_receive(fd, newud, message.items);
+                void* newud = lua_newuserdata(state, header.message_size); /*stack: message ud*/
+                _bolt_ipc_receive(fd, newud, header.message_size);
                 lua_getfield(state, LUA_REGISTRYINDEX, BROWSERS_REGISTRYNAME); /*stack: message ud, window table*/
-                lua_pushinteger(state, window_id); /*stack: message ud, window table, window id*/
+                lua_pushinteger(state, header.window_id); /*stack: message ud, window table, window id*/
                 lua_gettable(state, -2); /*stack: message ud, window table, event table*/
                 lua_pushinteger(state, BROWSER_ONMESSAGE); /*stack: message ud, window table, event table, event id*/
                 lua_gettable(state, -2); /*stack: message ud, window table, event table, function or nil*/
 
                 if (lua_isfunction(state, -1)) {
-                    lua_pushlstring(state, newud, message.items); /*stack: message ud, window table, event table, function, message*/
+                    lua_pushlstring(state, newud, header.message_size); /*stack: message ud, window table, event table, function, message*/
 
                     if (lua_pcall(state, 1, 0, 0)) { /*stack: message ud, window table, event table, ?error*/
                         const char* e = lua_tolstring(state, -1, 0);
@@ -601,7 +590,7 @@ void _bolt_plugin_handle_messages() {
                 break;
             }
             default:
-                printf("unknown message type %u\n", message.message_type);
+                printf("unknown message type %i\n", (int)msg_type);
                 break;
         }
     }
@@ -1178,15 +1167,18 @@ static int api_createembeddedbrowser(lua_State* state) {
     const int pid = getpid();
     size_t url_length;
     const char* url = lua_tolstring(state, 5, &url_length);
-    struct BoltIPCMessageToHost message = {.message_type = IPC_MSG_CREATEBROWSER_OSR, .items = 1};
+    const enum BoltIPCMessageTypeToHost msg_type = IPC_MSG_CREATEBROWSER_OSR;
+    const struct BoltIPCCreateBrowserHeader header = {
+        .plugin_id = plugin->id,
+        .window_id = window->id,
+        .url_length = url_length,
+        .pid = pid,
+        .w = window->metadata.width,
+        .h = window->metadata.height,
+    };
     const uint32_t url_length32 = (uint32_t)url_length;
-    _bolt_ipc_send(fd, &message, sizeof(message));
-    _bolt_ipc_send(fd, &pid, sizeof(pid));
-    _bolt_ipc_send(fd, &window->metadata.width, sizeof(window->metadata.width));
-    _bolt_ipc_send(fd, &window->metadata.height, sizeof(window->metadata.height));
-    _bolt_ipc_send(fd, &window->id, sizeof(window->id));
-    _bolt_ipc_send(fd, &plugin->id, sizeof(plugin->id));
-    _bolt_ipc_send(fd, &url_length32, sizeof(url_length32));
+    _bolt_ipc_send(fd, &msg_type, sizeof(msg_type));
+    _bolt_ipc_send(fd, &header, sizeof(header));
     _bolt_ipc_send(fd, url, url_length32);
 
     // set this window in the hashmap, which is accessible by backends
@@ -1850,10 +1842,11 @@ static int api_embeddedbrowser_sendmessage(lua_State* state) {
     const struct Plugin* plugin = lua_touserdata(state, -1);
     const uint64_t id = plugin->id;
     lua_pop(state, 1);
-    const struct BoltIPCMessageToHost message = {.message_type = IPC_MSG_OSRPLUGINMESSAGE, .items = len};
-    _bolt_ipc_send(fd, &message, sizeof(message));
-    _bolt_ipc_send(fd, &id, sizeof(id));
-    _bolt_ipc_send(fd, &window->id, sizeof(window->id));
+
+    const enum BoltIPCMessageTypeToHost msg_type = IPC_MSG_OSRPLUGINMESSAGE;
+    const struct BoltIPCOsrPluginMessageHeader header = { .plugin_id = id, .window_id = window->id, .message_size = len };
+    _bolt_ipc_send(fd, &msg_type, sizeof(msg_type));
+    _bolt_ipc_send(fd, &header, sizeof(header));
     _bolt_ipc_send(fd, str, len);
     return 0;
 }
