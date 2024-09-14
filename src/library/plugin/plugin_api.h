@@ -424,6 +424,10 @@ static int api_surface_drawtosurface(lua_State*);
 /// Paramaters are target window, then source X,Y,W,H, then destination X,Y,W,H, all in pixels.
 static int api_surface_drawtowindow(lua_State*);
 
+/// [-1, +0, -]
+/// Closes the window.
+static int api_window_close(lua_State*);
+
 /// [-1, +1, -]
 /// Returns the unique ID of this window (an integer).
 static int api_window_id(lua_State*);
@@ -673,6 +677,10 @@ static int api_mousebutton_button(lua_State*);
 /// Returns a boolean value representing the scroll direction. False means scrolling down, toward
 /// the user, and true means scrolling up, away from the user.
 static int api_scroll_direction(lua_State*);
+
+/// [-1, +0, -]
+/// Closes the browser.
+static int api_embeddedbrowser_close(lua_State*);
 
 /// [-2, +0, -]
 /// Sends a message to the embedded browser. The parameter must be a string, or convertible to a

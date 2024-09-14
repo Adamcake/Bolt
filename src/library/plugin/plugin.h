@@ -184,6 +184,7 @@ struct EmbeddedWindow {
     RWLock input_lock; // applies to the pending inputs
     struct WindowPendingInput input;
     uint8_t is_browser;
+    uint8_t is_deleted;
     struct BoltSHM browser_shm; // set and initialised only if is_browser
 };
 

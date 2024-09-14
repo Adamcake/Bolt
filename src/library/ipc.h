@@ -21,6 +21,7 @@ enum BoltIPCMessageTypeToHost {
     IPC_MSG_IDENTIFY,
     IPC_MSG_CLIENT_STOPPED_PLUGIN,
     IPC_MSG_CREATEBROWSER_OSR,
+    IPC_MSG_CLOSEBROWSER_OSR,
     IPC_MSG_OSRUPDATE_ACK,
     IPC_MSG_EVRESIZE,
     IPC_MSG_EVMOUSEMOTION,
@@ -56,6 +57,11 @@ struct BoltIPCCreateBrowserHeader {
     int pid;
     int w;
     int h;
+};
+
+struct BoltIPCCloseBrowserOsrHeader {
+    uint64_t plugin_id;
+    uint64_t window_id;
 };
 
 /// Header for BoltIPCMessageTypeToHost::IPC_MSG_OSRUPDATE_ACK

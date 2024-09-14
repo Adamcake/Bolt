@@ -93,6 +93,7 @@ struct Plugin {
     uint64_t id; // refers to this specific activation of the plugin, not the plugin in general
     char* path;
     uint32_t path_length;
+    uint8_t is_deleted;
 };
 
 static void _bolt_plugin_ipc_init(BoltSocketType*);
@@ -145,6 +146,7 @@ void _bolt_plugin_handle_##APINAME(struct STRUCTNAME* e) { \
     void* item; \
     while (hashmap_iter(plugins, &iter, &item)) { \
         struct Plugin* plugin = *(struct Plugin* const*)item; \
+        if (plugin->is_deleted) continue; \
         void* newud = lua_newuserdata(plugin->state, sizeof(struct STRUCTNAME)); /*stack: userdata*/ \
         memcpy(newud, e, sizeof(struct STRUCTNAME)); \
         lua_getfield(plugin->state, LUA_REGISTRYINDEX, REGNAME##_META_REGISTRYNAME); /*stack: userdata, metatable*/ \
@@ -200,6 +202,7 @@ static int api_window_on##APINAME(lua_State* state) { \
     return 0; \
 } \
 void _bolt_plugin_window_on##APINAME(struct EmbeddedWindow* window, struct EVNAME* event) { \
+    if (window->is_deleted) return; \
     lua_State* state = window->plugin; \
     if (window->is_browser) { \
         const enum BoltIPCMessageTypeToHost msg_type = IPC_MSG_EV##REGNAME; \
@@ -238,31 +241,6 @@ void _bolt_plugin_window_on##APINAME(struct EmbeddedWindow* window, struct EVNAM
 static int surface_gc(lua_State* state) {
     const struct SurfaceFunctions* functions = lua_touserdata(state, 1);
     managed_functions.surface_destroy(functions->userdata);
-    return 0;
-}
-
-static int window_gc(lua_State* state) {
-    struct EmbeddedWindow* window = lua_touserdata(state, 1);
-
-    if (window->is_browser) {
-        // destroy shm object
-        _bolt_plugin_shm_close(&window->browser_shm);
-    }
-
-    // destroy the public hashmap entry and clean up the struct itself
-    _bolt_rwlock_lock_write(&windows.lock);
-    _bolt_rwlock_destroy(&window->lock);
-    hashmap_delete(windows.map, &window);
-    _bolt_rwlock_unlock_write(&windows.lock);
-
-    // destroy the plugin registry entry
-    lua_getfield(state, LUA_REGISTRYINDEX, window->is_browser ? BROWSERS_REGISTRYNAME : WINDOWS_REGISTRYNAME);
-    lua_pushinteger(state, window->id);
-    lua_pushnil(state);
-    lua_settable(state, -3);
-    lua_pop(state, 1);
-
-    managed_functions.surface_destroy(window->surface_functions.userdata);
     return 0;
 }
 
@@ -371,11 +349,16 @@ void _bolt_plugin_process_windows(uint32_t window_width, uint32_t window_height)
         _bolt_plugin_handle_scroll(&event);
     }
 
+    bool any_deleted = false;
     _bolt_rwlock_lock_read(&windows->lock);
     size_t iter = 0;
     void* item;
     while (hashmap_iter(windows->map, &iter, &item)) {
         struct EmbeddedWindow* window = *(struct EmbeddedWindow**)item;
+        if (window->is_deleted) {
+            any_deleted = true;
+            continue;
+        }
         _bolt_rwlock_lock_write(&window->lock);
         bool did_resize = false;
         if (window->metadata.width > window_width) {
@@ -458,20 +441,69 @@ void _bolt_plugin_process_windows(uint32_t window_width, uint32_t window_height)
         window->surface_functions.draw_to_screen(window->surface_functions.userdata, 0, 0, metadata.width, metadata.height, metadata.x, metadata.y, metadata.width, metadata.height);
     }
     _bolt_rwlock_unlock_read(&windows->lock);
+
+    if (any_deleted) {
+        _bolt_rwlock_lock_write(&windows->lock);
+        iter = 0;
+        while (hashmap_iter(windows->map, &iter, &item)) {
+            struct EmbeddedWindow* window = *(struct EmbeddedWindow**)item;
+            if (window->is_deleted) {
+                if (window->is_browser) {
+                    // destroy shm object
+                    _bolt_plugin_shm_close(&window->browser_shm);
+                }
+
+                // destroy the plugin registry entry
+                lua_getfield(window->plugin, LUA_REGISTRYINDEX, window->is_browser ? BROWSERS_REGISTRYNAME : WINDOWS_REGISTRYNAME);
+                lua_pushinteger(window->plugin, window->id);
+                lua_pushnil(window->plugin);
+                lua_settable(window->plugin, -3);
+                lua_pop(window->plugin, 1);
+
+                managed_functions.surface_destroy(window->surface_functions.userdata);
+                _bolt_rwlock_destroy(&window->lock);
+                hashmap_delete(windows->map, &window);
+                iter = 0;
+            }
+        }
+        _bolt_rwlock_unlock_write(&windows->lock);
+    }
+
+    iter = 0;
+    while (hashmap_iter(plugins, &iter, &item)) {
+        struct Plugin* plugin = *(struct Plugin**)item;
+        if (plugin->is_deleted) {
+            hashmap_delete(plugins, &plugin);
+            iter = 0;
+        }
+    }
 }
 
 void _bolt_plugin_close() {
     _bolt_plugin_ipc_close(fd);
     size_t iter = 0;
     void* item;
-    while (hashmap_iter(plugins, &iter, &item)) {
-        struct Plugin** plugin = item;
-        _bolt_plugin_free(plugin);
-    }
     _bolt_rwlock_lock_write(&windows.lock);
+    while (hashmap_iter(windows.map, &iter, &item)) {
+        struct EmbeddedWindow* window = *(struct EmbeddedWindow**)item;
+        if (!window->is_deleted) {
+            if (window->is_browser) {
+                _bolt_plugin_shm_close(&window->browser_shm);
+            }
+            managed_functions.surface_destroy(window->surface_functions.userdata);
+            _bolt_rwlock_destroy(&window->lock);
+        }
+    }
+    hashmap_clear(windows.map, true);
+    _bolt_rwlock_unlock_write(&windows.lock);
+    iter = 0;
+    while (hashmap_iter(plugins, &iter, &item)) {
+        struct Plugin* plugin = *(struct Plugin**)item;
+        if (!plugin->is_deleted) _bolt_plugin_free(&plugin);
+    }
+    
     hashmap_free(plugins);
     inited = 0;
-    _bolt_rwlock_unlock_write(&windows.lock);
 }
 
 static void _bolt_plugin_notify_stopped(uint64_t id) {
@@ -501,6 +533,7 @@ void _bolt_plugin_handle_messages() {
                 plugin->id = header.uid;
                 plugin->path = malloc(header.path_size);
                 plugin->path_length = header.path_size;
+                plugin->is_deleted = false;
                 _bolt_ipc_receive(fd, plugin->path, header.path_size);
                 char* full_path = lua_newuserdata(plugin->state, header.path_size + header.main_size + 1);
                 memcpy(full_path, plugin->path, header.path_size);
@@ -510,7 +543,7 @@ void _bolt_plugin_handle_messages() {
                     lua_pop(plugin->state, 1);
                 } else {
                     _bolt_plugin_notify_stopped(header.uid);
-                    _bolt_plugin_free(&plugin);
+                    plugin->is_deleted = true;
                 }
                 break;
             }
@@ -529,12 +562,12 @@ void _bolt_plugin_handle_messages() {
                 _bolt_rwlock_lock_read(&windows.lock);
                 struct EmbeddedWindow** window = (struct EmbeddedWindow**)hashmap_get(windows.map, &window_id_ptr);
                 _bolt_rwlock_unlock_read(&windows.lock);
-                if (window && header.needs_remap) {
+                if (window && !(*window)->is_deleted && header.needs_remap) {
                     _bolt_plugin_shm_remap(&(*window)->browser_shm, (size_t)header.width * (size_t)header.height * 4, header.needs_remap);
                 }
                 for (uint32_t i = 0; i < header.rect_count; i += 1) {
                     _bolt_ipc_receive(fd, &rect, sizeof(rect));
-                    if (window) {
+                    if (window && !(*window)->is_deleted) {
                         // the backend needs contiguous pixels for the rectangle, so here we ignore
                         // the width of the damage and instead update every row of pixels in the
                         // damage area. that way we have contiguous pixels straight out of the shm file.
@@ -545,7 +578,7 @@ void _bolt_plugin_handle_messages() {
                     }
                 }
 
-                if (window) {
+                if (window && !(*window)->is_deleted) {
                     const enum BoltIPCMessageTypeToHost msg_type = IPC_MSG_OSRUPDATE_ACK;
                     struct BoltIPCOsrUpdateAckHeader ack_header = { .window_id = header.window_id, .plugin_id = (*window)->plugin_id };
                     _bolt_ipc_send(fd, &msg_type, sizeof(msg_type));
@@ -559,11 +592,16 @@ void _bolt_plugin_handle_messages() {
                 uint64_t* window_id_ptr = &header.window_id;
                 _bolt_rwlock_lock_read(&windows.lock);
                 struct EmbeddedWindow** window = (struct EmbeddedWindow**)hashmap_get(windows.map, &window_id_ptr);
+                uint8_t deleted = (*window)->is_deleted;
                 lua_State* state = (*window)->plugin;
                 _bolt_rwlock_unlock_read(&windows.lock);
                 
                 void* newud = lua_newuserdata(state, header.message_size); /*stack: message ud*/
                 _bolt_ipc_receive(fd, newud, header.message_size);
+                if (deleted) {
+                    lua_pop(state, 1);
+                    break;
+                }
                 lua_getfield(state, LUA_REGISTRYINDEX, BROWSERS_REGISTRYNAME); /*stack: message ud, window table*/
                 lua_pushinteger(state, header.window_id); /*stack: message ud, window table, window id*/
                 lua_gettable(state, -2); /*stack: message ud, window table, event table*/
@@ -609,7 +647,6 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     struct Plugin* const* old_plugin = hashmap_set(plugins, &plugin);
     if (hashmap_oom(plugins)) {
         printf("plugin load error: out of memory\n");
-        _bolt_plugin_free(&plugin);
         return 0;
     }
     if (old_plugin) {
@@ -617,7 +654,7 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
         // this shouldn't happen in practice because IDs are incremental, but what if someone overflows the ID to 0
         // by starting 18 quintillion plugins in one session? okay, yes, it's very unlikely.
         printf("plugin ID %llu has been overwritten by one with the same ID\n", (unsigned long long)plugin->id);
-        _bolt_plugin_free(old_plugin);
+        (*old_plugin)->is_deleted = true;
     }
 
     // add the struct pointer to the registry
@@ -758,7 +795,8 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     PUSHSTRING(plugin->state, WINDOW_META_REGISTRYNAME);
     lua_newtable(plugin->state);
     PUSHSTRING(plugin->state, "__index");
-    lua_createtable(plugin->state, 0, 9);
+    lua_createtable(plugin->state, 0, 10);
+    API_ADD_SUB(plugin->state, close, window)
     API_ADD_SUB(plugin->state, id, window)
     API_ADD_SUB(plugin->state, size, window)
     API_ADD_SUB(plugin->state, clear, window)
@@ -769,21 +807,16 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     API_ADD_SUB(plugin->state, onmousebuttonup, window)
     API_ADD_SUB(plugin->state, onscroll, window)
     lua_settable(plugin->state, -3);
-    PUSHSTRING(plugin->state, "__gc");
-    lua_pushcfunction(plugin->state, window_gc);
-    lua_settable(plugin->state, -3);
     lua_settable(plugin->state, LUA_REGISTRYINDEX);
 
     // create the metatable for all EmbeddedBrowser objects
     PUSHSTRING(plugin->state, EMBEDDEDBROWSER_META_REGISTRYNAME);
     lua_newtable(plugin->state);
     PUSHSTRING(plugin->state, "__index");
-    lua_createtable(plugin->state, 0, 2);
+    lua_createtable(plugin->state, 0, 3);
+    API_ADD_SUB(plugin->state, close, embeddedbrowser)
     API_ADD_SUB(plugin->state, sendmessage, embeddedbrowser)
     API_ADD_SUB(plugin->state, onmessage, embeddedbrowser)
-    lua_settable(plugin->state, -3);
-    PUSHSTRING(plugin->state, "__gc");
-    lua_pushcfunction(plugin->state, window_gc);
     lua_settable(plugin->state, -3);
     lua_settable(plugin->state, LUA_REGISTRYINDEX);
 
@@ -864,10 +897,19 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
 
     // attempt to run the function
     if (lua_pcall(plugin->state, 0, 0, 0)) {
+        _bolt_rwlock_lock_read(&windows.lock);
+        size_t iter = 0;
+        void* item;
+        while (hashmap_iter(windows.map, &iter, &item)) {
+            struct EmbeddedWindow* window = *(struct EmbeddedWindow**)item;
+            window->is_deleted = true;
+        }
+        _bolt_rwlock_unlock_read(&windows.lock);
+
         const char* e = lua_tolstring(plugin->state, -1, 0);
         printf("plugin startup error: %s\n", e);
         lua_pop(plugin->state, 1);
-        hashmap_delete(plugins, &plugin);
+        plugin->is_deleted = true;
         return 0;
     } else {
         return 1;
@@ -875,10 +917,19 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
 }
 
 static void _bolt_plugin_stop(uint64_t uid) {
+    size_t iter = 0;
+    void* item;
+    _bolt_rwlock_lock_read(&windows.lock);
+    while (hashmap_iter(windows.map, &iter, &item)) {
+        struct EmbeddedWindow* window = *(struct EmbeddedWindow**)item;
+        if (window->plugin_id == uid) window->is_deleted = true;
+    }
+    _bolt_rwlock_unlock_read(&windows.lock);
+
     struct Plugin p = {.id = uid};
     struct Plugin* pp = &p;
-    struct Plugin* const* plugin = hashmap_delete(plugins, &pp);
-    _bolt_plugin_free(plugin);
+    struct Plugin* const* plugin = hashmap_get(plugins, &pp);
+    (*plugin)->is_deleted = true;
 }
 
 // Calls `error()` if arg count is incorrect
@@ -1097,6 +1148,7 @@ static int api_createwindow(lua_State* state) {
     
     // push a window onto the stack as the return value, then initialise it
     struct EmbeddedWindow* window = lua_newuserdata(state, sizeof(struct EmbeddedWindow));
+    window->is_deleted = false;
     window->is_browser = false;
     window->id = next_window_id;
     window->plugin_id = plugin->id;
@@ -1140,6 +1192,7 @@ static int api_createembeddedbrowser(lua_State* state) {
         PUSHSTRING(state, "createembeddedbrowser: failed to create shm object");
         lua_error(state);
     }
+    window->is_deleted = false;
     window->is_browser = true;
     window->id = next_window_id;
     window->plugin_id = plugin->id;
@@ -1439,6 +1492,13 @@ static int api_surface_drawtowindow(lua_State* state) {
     const int dw = lua_tointeger(state, 9);
     const int dh = lua_tointeger(state, 10);
     functions->draw_to_surface(functions->userdata, target->surface_functions.userdata, sx, sy, sw, sh, dx, dy, dw, dh);
+    return 0;
+}
+
+static int api_window_close(lua_State* state) {
+    _bolt_check_argc(state, 1, "window_close");
+    struct EmbeddedWindow* window = lua_touserdata(state, 1);
+    window->is_deleted = true;
     return 0;
 }
 
@@ -1827,6 +1887,19 @@ static int api_scroll_direction(lua_State* state) {
     struct MouseScrollEvent* event = lua_touserdata(state, 1);
     lua_pushinteger(state, event->direction);
     return 1;
+}
+
+static int api_embeddedbrowser_close(lua_State* state) {
+    _bolt_check_argc(state, 1, "embeddedbrowser_close");
+    struct EmbeddedWindow* window = lua_touserdata(state, 1);
+    window->is_deleted = true;
+
+    const enum BoltIPCMessageTypeToHost msg_type = IPC_MSG_CLOSEBROWSER_OSR;
+    const struct BoltIPCCloseBrowserOsrHeader header = { .plugin_id = window->plugin_id, .window_id = window->id };
+    _bolt_ipc_send(fd, &msg_type, sizeof(msg_type));
+    _bolt_ipc_send(fd, &header, sizeof(header));
+
+    return 0;
 }
 
 static int api_embeddedbrowser_sendmessage(lua_State* state) {
