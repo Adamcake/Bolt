@@ -372,6 +372,13 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 			delete[] url;
 			break;
 		}
+		case IPC_MSG_CLOSEBROWSER_OSR: {
+			BoltIPCCloseBrowserOsrHeader header;
+			_bolt_ipc_receive(fd, &header, sizeof(header));
+			CefRefPtr<Browser::WindowOSR> window = this->GetWindowFromFDAndIDs(client, header.plugin_id, header.window_id);
+			if (window) window->Close();
+			break;
+		}
 		case IPC_MSG_OSRUPDATE_ACK: {
 			BoltIPCOsrUpdateAckHeader header;
 			_bolt_ipc_receive(fd, &header, sizeof(header));
