@@ -1,4 +1,5 @@
 #include "window_osr.hxx"
+#include "window_launcher.hxx"
 
 #if defined(BOLT_PLUGINS)
 #if defined(_WIN32)
@@ -17,21 +18,16 @@
 #include "../library/event.h"
 
 static void SendUpdateMsg(BoltSocketType fd, uint64_t id, int width, int height, void* needs_remap, const CefRect* rects, uint32_t rect_count) {
-	const size_t bytes = sizeof(BoltIPCMessageToClient) + sizeof(uint64_t) + sizeof(void*) + (2 *sizeof(int)) + (4 * rect_count * sizeof(int));
+	const size_t bytes = sizeof(BoltIPCMessageTypeToClient) + sizeof(BoltIPCOsrUpdateHeader) + (rect_count * sizeof(BoltIPCOsrUpdateRect));
 	uint8_t* buf = new uint8_t[bytes];
-	((BoltIPCMessageToClient*)buf)->message_type = IPC_MSG_OSRUPDATE;
-	((BoltIPCMessageToClient*)buf)->items = rect_count;
-	*(uint64_t*)(buf + sizeof(BoltIPCMessageToClient)) = id;
-	*(void**)(buf + sizeof(BoltIPCMessageToClient) + sizeof(uint64_t)) = needs_remap;
-	*(int*)(buf + sizeof(BoltIPCMessageToClient) + sizeof(uint64_t) + sizeof(void*)) = width;
-	*(int*)(buf + sizeof(BoltIPCMessageToClient) + sizeof(uint64_t) + sizeof(void*) + sizeof(int)) = height;
-	int* rect_data = (int*)(buf + sizeof(BoltIPCMessageToClient) + sizeof(uint64_t) + sizeof(void*) + (2 * sizeof(int)));
+	BoltIPCMessageTypeToClient* msg_type = reinterpret_cast<BoltIPCMessageTypeToClient*>(buf);
+	BoltIPCOsrUpdateHeader* header = reinterpret_cast<BoltIPCOsrUpdateHeader*>(msg_type + 1);
+	BoltIPCOsrUpdateRect* ipc_rects = reinterpret_cast<BoltIPCOsrUpdateRect*>(header + 1);
+	*msg_type = IPC_MSG_OSRUPDATE;
+	*header = { .rect_count = rect_count, .window_id = id, .needs_remap = needs_remap, .width = width, .height = height };
+
 	for (uint32_t i = 0; i < rect_count; i += 1) {
-		*rect_data = rects[i].x;
-		*(rect_data + 1) = rects[i].y;
-		*(rect_data + 2) = rects[i].width;
-		*(rect_data + 3) = rects[i].height;
-		rect_data += 4;
+		ipc_rects[i] = { .x = rects[i].x, .y = rects[i].y, .w = rects[i].width, .h = rects[i].height };
 	}
 	_bolt_ipc_send(fd, buf, bytes);
 	delete[] buf;
@@ -371,14 +367,17 @@ CefRefPtr<CefResourceRequestHandler> Browser::WindowOSR::GetResourceRequestHandl
 			post_data->GetElements(vec);
 			size_t message_size = vec[0]->GetBytesCount();
 
-			const size_t bytes = sizeof(BoltIPCMessageToClient) + sizeof(uint64_t) + message_size;
-			unsigned char* buf = new unsigned char[bytes];
-			((BoltIPCMessageToClient*)buf)->message_type = IPC_MSG_BROWSERMESSAGE;
-			((BoltIPCMessageToClient*)buf)->items = message_size;
-			*(uint64_t*)(buf + sizeof(BoltIPCMessageToClient)) = this->window_id;
-			vec[0]->GetBytes(message_size, buf + sizeof(BoltIPCMessageToClient) + sizeof(uint64_t));
-			_bolt_ipc_send(this->client_fd, buf, bytes);
+			const size_t bytes = sizeof(BoltIPCMessageTypeToClient) + sizeof(BoltIPCBrowserMessageHeader) + message_size;
+			uint8_t* buf = new uint8_t[bytes];
+			BoltIPCMessageTypeToClient* msg_type = reinterpret_cast<BoltIPCMessageTypeToClient*>(buf);
+			BoltIPCBrowserMessageHeader* header = reinterpret_cast<BoltIPCBrowserMessageHeader*>(msg_type + 1);
+			void* message = reinterpret_cast<void*>(header + 1);
+			*msg_type = IPC_MSG_BROWSERMESSAGE;
+			*header = {.window_id = this->window_id, .message_size = message_size};
+			vec[0]->GetBytes(message_size, message);
+			const uint8_t ret = _bolt_ipc_send(this->client_fd, buf, bytes);
 			delete[] buf;
+			QSENDSYSTEMERRORIF(ret);
 			QSENDOK();
 		}
 
