@@ -425,7 +425,10 @@ static int api_surface_drawtosurface(lua_State*);
 static int api_surface_drawtowindow(lua_State*);
 
 /// [-1, +0, -]
-/// Closes the window.
+/// Closes and destroys the window. This is the only way for a window to be destroyed, other than
+/// the plugin stopping, which will destroy the window automatically.
+///
+/// Do not use the window object again after calling this function on it.
 static int api_window_close(lua_State*);
 
 /// [-1, +1, -]
@@ -679,7 +682,10 @@ static int api_mousebutton_button(lua_State*);
 static int api_scroll_direction(lua_State*);
 
 /// [-1, +0, -]
-/// Closes the browser.
+/// Closes and destroys the browser. This is the only way for a browser to be destroyed, other than
+/// the plugin stopping, which will destroy the browser automatically.
+///
+/// Do not use the browser object again after calling this function on it.
 static int api_embeddedbrowser_close(lua_State*);
 
 /// [-2, +0, -]
