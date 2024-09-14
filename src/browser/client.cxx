@@ -311,12 +311,12 @@ CefRefPtr<Browser::Client::ActivePlugin> Browser::Client::GetPluginFromFDAndID(G
 }
 
 bool Browser::Client::IPCHandleMessage(int fd) {
-	BoltIPCMessageToHost message;
-	if (_bolt_ipc_receive(fd, &message, sizeof(message))) {
+	BoltIPCMessageTypeToHost msg_type;
+	if (_bolt_ipc_receive(fd, &msg_type, sizeof(msg_type))) {
 		return false;
 	}
 
-	if (message.message_type == IPC_MSG_DUPLICATEPROCESS) {
+	if (msg_type == IPC_MSG_DUPLICATEPROCESS) {
 		this->ipc_browser->GetMainFrame()->SendProcessMessage(PID_RENDERER, CefProcessMessage::Create("__bolt_open_launcher"));
 		return true;
 	}
@@ -329,71 +329,63 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 	}
 	GameClient* const client = &(*it);
 
-	uint64_t plugin_id, window_id;
-	switch (message.message_type) {
+	switch (msg_type) {
 		case IPC_MSG_IDENTIFY: {
-			client->identity = new char[message.items + 1];
-			_bolt_ipc_receive(fd, client->identity, message.items);
-			client->identity[message.items] = '\0';
+			struct BoltIPCIdentifyHeader header;
+			_bolt_ipc_receive(fd, &header, sizeof(header));
+			delete[] client->identity;
+			client->identity = new char[header.name_length + 1];
+			_bolt_ipc_receive(fd, client->identity, header.name_length);
+			client->identity[header.name_length] = '\0';
 			this->IPCHandleClientListUpdate(false);
 			break;
 		}
-		case IPC_MSG_CLIENT_STOPPED_PLUGINS: {
-			uint64_t plugin_id;
-			for (uint32_t i = 0; i < message.items; i += 1) {
-				_bolt_ipc_receive(fd, &plugin_id, sizeof(plugin_id));
-				for (auto it = client->plugins.begin(); it != client->plugins.end(); it++) {
-					if ((*it)->deleted || (*it)->uid != plugin_id) continue;
-					(*it)->deleted = true;
-					for (CefRefPtr<WindowOSR>& w: (*it)->windows_osr) {
-						if (!w->IsDeleted()) w->Close();
-					}
-					if ((*it)->windows_osr.empty()) {
-						client->plugins.erase(it);
-					}
-					break;
+		case IPC_MSG_CLIENT_STOPPED_PLUGIN: {
+			BoltIPCClientStoppedPluginHeader header;
+			_bolt_ipc_receive(fd, &header, sizeof(header));
+			for (auto it = client->plugins.begin(); it != client->plugins.end(); it++) {
+				if ((*it)->deleted || (*it)->uid != header.plugin_id) continue;
+				(*it)->deleted = true;
+				for (CefRefPtr<WindowOSR>& w: (*it)->windows_osr) {
+					if (!w->IsDeleted()) w->Close();
 				}
+				if ((*it)->windows_osr.empty()) {
+					client->plugins.erase(it);
+				}
+				break;
 			}
 			this->IPCHandleClientListUpdate(false);
 			break;
 		}
 		case IPC_MSG_CREATEBROWSER_OSR: {
-			int pid, w, h;
-			uint64_t plugin_id;
-			uint64_t plugin_window_id;
-			uint32_t url_length;
-			_bolt_ipc_receive(fd, &pid, sizeof(pid));
-			_bolt_ipc_receive(fd, &w, sizeof(w));
-			_bolt_ipc_receive(fd, &h, sizeof(h));
-			_bolt_ipc_receive(fd, &plugin_window_id, sizeof(plugin_window_id));
-			_bolt_ipc_receive(fd, &plugin_id, sizeof(plugin_id));
-			_bolt_ipc_receive(fd, &url_length, sizeof(url_length));
-			char* url = new char[url_length + 1];
-			_bolt_ipc_receive(fd, url, url_length);
-			url[url_length] = '\0';
+			BoltIPCCreateBrowserHeader header;
+			_bolt_ipc_receive(fd, &header, sizeof(header));
+			char* url = new char[header.url_length + 1];
+			_bolt_ipc_receive(fd, url, header.url_length);
+			url[header.url_length] = '\0';
 
-			CefRefPtr<ActivePlugin> plugin = this->GetPluginFromFDAndID(client, plugin_id);
+			CefRefPtr<ActivePlugin> plugin = this->GetPluginFromFDAndID(client, header.plugin_id);
 			if (plugin) {
-				CefRefPtr<Browser::WindowOSR> window = new Browser::WindowOSR(CefString((char*)url), w, h, fd, this, pid, plugin_window_id, plugin);
+				CefRefPtr<Browser::WindowOSR> window = new Browser::WindowOSR(CefString((char*)url), header.w, header.h, fd, this, header.pid, header.window_id, plugin);
 				plugin->windows_osr.push_back(window);
 			}
 			delete[] url;
 			break;
 		}
 		case IPC_MSG_OSRUPDATE_ACK: {
-			_bolt_ipc_receive(fd, &plugin_id, sizeof(plugin_id));
-			_bolt_ipc_receive(fd, &window_id, sizeof(window_id));
-			CefRefPtr<Browser::WindowOSR> window = this->GetWindowFromFDAndIDs(client, plugin_id, window_id);
+			BoltIPCOsrUpdateAckHeader header;
+			_bolt_ipc_receive(fd, &header, sizeof(header));
+			CefRefPtr<Browser::WindowOSR> window = this->GetWindowFromFDAndIDs(client, header.plugin_id, header.window_id);
 			if (window) window->HandleAck();
 			break;
 		}
 
 #define DEF_OSR_EVENT(EVNAME, HANDLER, EVTYPE) case IPC_MSG_EV##EVNAME: { \
+	BoltIPCEvHeader header; \
 	EVTYPE event; \
-	_bolt_ipc_receive(fd, &plugin_id, sizeof(plugin_id)); \
-	_bolt_ipc_receive(fd, &window_id, sizeof(window_id)); \
+	_bolt_ipc_receive(fd, &header, sizeof(header)); \
 	_bolt_ipc_receive(fd, &event, sizeof(event)); \
-	CefRefPtr<Browser::WindowOSR> window = this->GetWindowFromFDAndIDs(client, plugin_id, window_id); \
+	CefRefPtr<Browser::WindowOSR> window = this->GetWindowFromFDAndIDs(client, header.plugin_id, header.window_id); \
 	if (window) window->HANDLER(&event); \
 	break; \
 }
@@ -406,17 +398,17 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 #undef DEF_OSR_EVENT
 
 		case IPC_MSG_OSRPLUGINMESSAGE: {
-			uint8_t* content = (uint8_t*)malloc(message.items);
-			_bolt_ipc_receive(fd, &plugin_id, sizeof(plugin_id));
-			_bolt_ipc_receive(fd, &window_id, sizeof(window_id));
-			_bolt_ipc_receive(fd, content, message.items);
-			CefRefPtr<Browser::WindowOSR> window = this->GetWindowFromFDAndIDs(client, plugin_id, window_id);
-			if (window) window->HandlePluginMessage(content, message.items);
-			::free(content);
+			BoltIPCOsrPluginMessageHeader header;
+			_bolt_ipc_receive(fd, &header, sizeof(header));
+			uint8_t* content = new uint8_t[header.message_size];
+			_bolt_ipc_receive(fd, content, header.message_size);
+			CefRefPtr<Browser::WindowOSR> window = this->GetWindowFromFDAndIDs(client, header.plugin_id, header.window_id);
+			if (window) window->HandlePluginMessage(content, header.message_size);
+			delete[] content;
 			break;
 		}
 		default:
-			fmt::print("[I] got unknown message type {}\n", (int)message.message_type);
+			fmt::print("[I] got unknown message type {}\n", static_cast<int>(msg_type));
 			break;
 	}
 	this->game_clients_lock.unlock();
@@ -460,9 +452,11 @@ void Browser::Client::StartPlugin(uint64_t client_id, std::string id, std::strin
 		if (!g.deleted && g.uid == client_id) {
 			for (auto it = g.plugins.begin(); it != g.plugins.end(); it++) {
 				if ((*it)->id != id) continue;
-				uint8_t buf[sizeof(BoltIPCMessageToClient) + sizeof(uint64_t)];
-				*(BoltIPCMessageToClient*)buf = {.message_type = IPC_MSG_HOST_STOPPED_PLUGINS, .items = 1};
-				*(uint64_t*)(buf + sizeof(BoltIPCMessageToClient)) = (*it)->uid;
+				uint8_t buf[sizeof(BoltIPCMessageTypeToClient) + sizeof(BoltIPCHostStoppedPluginHeader)];
+				BoltIPCMessageTypeToClient* msg_type = reinterpret_cast<BoltIPCMessageTypeToClient*>(buf);
+				BoltIPCHostStoppedPluginHeader* header = reinterpret_cast<BoltIPCHostStoppedPluginHeader*>(msg_type + 1);
+				*(BoltIPCMessageTypeToClient*)buf = IPC_MSG_HOST_STOPPED_PLUGIN;
+				*header = { .plugin_id = (*it)->uid };
 				_bolt_ipc_send(g.fd, buf, sizeof(buf));
 				(*it)->deleted = true;
 				for (CefRefPtr<WindowOSR>& w: (*it)->windows_osr) {
@@ -475,19 +469,16 @@ void Browser::Client::StartPlugin(uint64_t client_id, std::string id, std::strin
 			}
 			g.plugins.push_back(new ActivePlugin(this->next_plugin_uid, id, path, false));
 
-			const size_t message_size = sizeof(BoltIPCMessageToClient) + sizeof(uint64_t) + (sizeof(uint32_t) * 2) + path.size() + main.size();
+			const size_t message_size = sizeof(BoltIPCMessageTypeToClient) + sizeof(BoltIPCStartPluginHeader) + path.size() + main.size();
 			uint8_t* message = new uint8_t[message_size];
-			*(BoltIPCMessageToClient*)message = {.message_type = IPC_MSG_STARTPLUGINS, .items = 1};
-			size_t pos = sizeof(BoltIPCMessageToClient);
-			*(uint64_t*)(message + pos) = this->next_plugin_uid;
-			pos += sizeof(uint64_t);
-			*(uint32_t*)(message + pos) = path.size();
-			pos += sizeof(uint32_t);
-			*(uint32_t*)(message + pos) = main.size();
-			pos += sizeof(uint32_t);
-			memcpy(message + pos, path.data(), path.size());
-			pos += path.size();
-			memcpy(message + pos, main.data(), main.size());
+			BoltIPCMessageTypeToClient* msg_type = reinterpret_cast<BoltIPCMessageTypeToClient*>(message);
+			BoltIPCStartPluginHeader* header = reinterpret_cast<BoltIPCStartPluginHeader*>(msg_type + 1);
+			uint8_t* message_path = reinterpret_cast<uint8_t*>(header + 1);
+			uint8_t* message_main = message_path + path.size();
+			*msg_type = IPC_MSG_STARTPLUGIN;
+			*header = { .uid = this->next_plugin_uid, .path_size = static_cast<uint32_t>(path.size()), .main_size = static_cast<uint32_t>(main.size()) };
+			memcpy(message_path, path.data(), path.size());
+			memcpy(message_main, main.data(), main.size());
 			_bolt_ipc_send(g.fd, message, message_size);
 			delete[] message;
 			this->next_plugin_uid += 1;
@@ -503,9 +494,11 @@ void Browser::Client::StopPlugin(uint64_t client_id, uint64_t uid) {
 		if (!g.deleted && g.uid == client_id) {
 			for (auto it = g.plugins.begin(); it != g.plugins.end(); it++) {
 				if ((*it)->uid != uid) continue;
-				uint8_t buf[sizeof(BoltIPCMessageToClient) + sizeof(uint64_t)];
-				*(BoltIPCMessageToClient*)buf = {.message_type = IPC_MSG_HOST_STOPPED_PLUGINS, .items = 1};
-				*(uint64_t*)(buf + sizeof(BoltIPCMessageToClient)) = (*it)->uid;
+				uint8_t buf[sizeof(BoltIPCMessageTypeToClient) + sizeof(BoltIPCHostStoppedPluginHeader)];
+				BoltIPCMessageTypeToClient* msg_type = reinterpret_cast<BoltIPCMessageTypeToClient*>(buf);
+				BoltIPCHostStoppedPluginHeader* header = reinterpret_cast<BoltIPCHostStoppedPluginHeader*>(msg_type + 1);
+				*(BoltIPCMessageTypeToClient*)buf = IPC_MSG_HOST_STOPPED_PLUGIN;
+				*header = { .plugin_id = (*it)->uid };
 				_bolt_ipc_send(g.fd, buf, sizeof(buf));
 				(*it)->deleted = true;
 				for (CefRefPtr<WindowOSR>& w: (*it)->windows_osr) {
