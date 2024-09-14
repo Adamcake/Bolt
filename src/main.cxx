@@ -137,8 +137,8 @@ void BoltFailToObtainLockfile(std::filesystem::path tempdir) {
     int fd = socket(addr.sun_family, SOCK_STREAM, 0);
 	strncpy(addr.sun_path, ipc_path, sizeof(addr.sun_path));
     if (connect(fd, (const struct sockaddr*)&addr, sizeof(addr)) != -1) {
-		struct BoltIPCMessageToHost message {.message_type = IPC_MSG_DUPLICATEPROCESS};
-        bool success = !_bolt_ipc_send(fd, &message, sizeof(message));
+		const enum BoltIPCMessageTypeToHost msg_type = IPC_MSG_DUPLICATEPROCESS;
+        bool success = !_bolt_ipc_send(fd, &msg_type, sizeof(msg_type));
 		shutdown(fd, SHUT_RDWR);
 		close(fd);
 		if (success) return;
