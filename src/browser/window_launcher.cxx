@@ -12,7 +12,7 @@
 
 #define DOMAIN "bolt-internal"
 #define URI "https://" DOMAIN
-#define INDEX "index.html"
+#define DEFAULTURL URI "/index.html"
 
 #if defined(__linux__)
 #define URLPLATFORM "linux"
@@ -180,7 +180,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 		}, ',');
 		if (has_code && has_state) {
 			disable_default_handling = true;
-			QSENDMOVED(CefString(std::string(URI "/" INDEX "?code=") + code.ToString() + "&state=" + state.ToString()));
+			QSENDMOVED(CefString(std::string(DEFAULTURL "?code=") + code.ToString() + "&state=" + state.ToString()));
 		} else {
 			return nullptr;
 		}
@@ -206,13 +206,13 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 	// handler for launcher-redirect url
 	if (domain == launcher_redirect_domain && path == launcher_redirect_path) {
 		disable_default_handling = true;
-		QSENDMOVED(CefString(std::string(URI "/" INDEX "?") + std::string(query)));
+		QSENDMOVED(CefString(std::string(DEFAULTURL "?") + std::string(query)));
 	}
 
 	// handler for another custom request thing, but this one uses localhost, for whatever reason
 	if (domain == "localhost" && path == "/" && comment.starts_with("code=")) {
 		disable_default_handling = true;
-		QSENDMOVED(CefString(std::string(URI "/" INDEX "?") + std::string(comment)));
+		QSENDMOVED(CefString(std::string(DEFAULTURL "?") + std::string(comment)));
 	}
 
 	const bool is_internal_target = domain == DOMAIN;
@@ -436,7 +436,7 @@ void Browser::Launcher::OnBrowserDestroyed(CefRefPtr<CefBrowserView> view, CefRe
 
 CefString Browser::Launcher::BuildURL() const {
 	std::stringstream url;
-	url << URI "/" INDEX "?platform=" URLPLATFORM
+	url << DEFAULTURL "?platform=" URLPLATFORM
 #if defined(BOLT_FLATHUB_BUILD)
 	"&flathub=1"
 #endif
