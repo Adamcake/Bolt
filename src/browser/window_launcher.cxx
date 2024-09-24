@@ -171,16 +171,16 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 		// parser for custom schema thing
 		const std::string_view query(request_url.begin() + colon + 1, request_url.end());
 		bool has_code = false;
-		QSTRING code;
+		CefString code;
 		bool has_state = false;
-		QSTRING state;
+		CefString state;
 		this->ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
-			PQSTRING(code)
-			PQSTRING(state)
+			PQCEFSTRING(code)
+			PQCEFSTRING(state)
 		}, ',');
 		if (has_code && has_state) {
 			disable_default_handling = true;
-			QSENDMOVED(QSTRING(URI "/" INDEX "?code=") + code + "&state=" + state);
+			QSENDMOVED(CefString(std::string(URI "/" INDEX "?code=") + code.ToString() + "&state=" + state.ToString()));
 		} else {
 			return nullptr;
 		}
