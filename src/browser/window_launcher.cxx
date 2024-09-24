@@ -10,16 +10,20 @@
 #include <fstream>
 #include <sstream>
 
+#define DOMAIN "bolt-internal"
+#define URI "https://" DOMAIN
+#define INDEX "index.html"
+
 #if defined(__linux__)
-constexpr std::string_view URI = "index.html?platform=linux";
+#define URLPLATFORM "linux"
 #endif
 
 #if defined(_WIN32)
-constexpr std::string_view URI = "index.html?platform=windows";
+#define URLPLATFORM "windows"
 #endif
 
 #if defined(__APPLE__)
-constexpr std::string_view URI = "index.html?platform=mac";
+#define URLPLATFORM "mac"
 #endif
 
 CefRefPtr<CefResourceRequestHandler> SaveFileFromPost(CefRefPtr<CefRequest>, const std::filesystem::path::value_type*);
@@ -165,35 +169,18 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 	const std::string_view schema(request_url.begin(), request_url.begin() + colon);
 	if (schema == provider) {
 		// parser for custom schema thing
+		const std::string_view query(request_url.begin() + colon + 1, request_url.end());
 		bool has_code = false;
-		std::string_view code;
+		QSTRING code;
 		bool has_state = false;
-		std::string_view state;
-		std::string::size_type cursor = colon + 1;
-		while (true) {
-			std::string::size_type next_eq = request_url.find_first_of('=', cursor);
-			std::string::size_type next_comma = request_url.find_first_of(',', cursor);
-			if (next_eq == std::string::npos || next_comma < next_eq) return nullptr;
-			const bool last_pair = next_comma == std::string::npos;
-			std::string_view key(request_url.begin() + cursor, request_url.begin() + next_eq);
-			std::string_view value(request_url.begin() + next_eq + 1, last_pair ? request_url.end() : request_url.begin() + next_comma);
-			if (key == "code") {
-				code = value;
-				has_code = true;
-			}
-			if (key == "state") {
-				state = value;
-				has_state = true;
-			}
-			if (last_pair) {
-				break;
-			} else {
-				cursor = next_comma + 1;
-			}
-		}
+		QSTRING state;
+		this->ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
+			PQSTRING(code)
+			PQSTRING(state)
+		}, ',');
 		if (has_code && has_state) {
 			disable_default_handling = true;
-			QSENDMOVED(CefString(this->internal_url + "index.html?code=" + std::string(code) + "&state=" + std::string(state)));
+			QSENDMOVED(QSTRING(URI "/" INDEX "?code=") + code + "&state=" + state);
 		} else {
 			return nullptr;
 		}
@@ -219,17 +206,17 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 	// handler for launcher-redirect url
 	if (domain == launcher_redirect_domain && path == launcher_redirect_path) {
 		disable_default_handling = true;
-		QSENDMOVED(CefString(this->internal_url + "index.html?" + std::string(query)));
+		QSENDMOVED(CefString(std::string(URI "/" INDEX "?") + std::string(query)));
 	}
 
 	// handler for another custom request thing, but this one uses localhost, for whatever reason
 	if (domain == "localhost" && path == "/" && comment.starts_with("code=")) {
 		disable_default_handling = true;
-		QSENDMOVED(CefString(this->internal_url + "index.html?" + std::string(comment)));
+		QSENDMOVED(CefString(std::string(URI "/" INDEX "?") + std::string(comment)));
 	}
 
-	const bool is_internal_target = domain == "bolt-internal";
-	const bool is_internal_initiator = request_initiator == "https://bolt-internal";
+	const bool is_internal_target = domain == DOMAIN;
+	const bool is_internal_initiator = request_initiator == URI;
 
 	if (is_internal_target) {
 		disable_default_handling = true;
@@ -449,7 +436,11 @@ void Browser::Launcher::OnBrowserDestroyed(CefRefPtr<CefBrowserView> view, CefRe
 
 CefString Browser::Launcher::BuildURL() const {
 	std::stringstream url;
-	url << this->internal_url << URI << "&flathub=" << BOLT_FLATHUB_BUILD;
+	url << URI "/" INDEX "?platform=" URLPLATFORM
+#if defined(BOLT_FLATHUB_BUILD)
+	"&flathub=1"
+#endif
+	;
 
 	std::ifstream rs_elf_hashfile(this->rs3_elf_hash_path.c_str(), std::ios::in | std::ios::binary);
 	if (!rs_elf_hashfile.fail()) {
@@ -538,10 +529,10 @@ void Browser::Launcher::Refresh() const {
 	this->browser->GetMainFrame()->LoadURL(this->BuildURL());
 }
 
-void Browser::Launcher::ParseQuery(std::string_view query, std::function<void(const std::string_view&, const std::string_view&)> callback) {
+void Browser::Launcher::ParseQuery(std::string_view query, std::function<void(const std::string_view&, const std::string_view&)> callback, char delim) {
 	size_t pos = 0;
 	while (true) {
-		const size_t next_and = query.find('&', pos);
+		const size_t next_and = query.find(delim, pos);
 		const size_t next_eq = query.find('=', pos);
 		if (next_eq == std::string_view::npos) break;
 		else if (next_and != std::string_view::npos && next_eq > next_and) {

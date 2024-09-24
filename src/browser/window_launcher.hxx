@@ -45,7 +45,7 @@ namespace Browser {
 #endif
 
 		/// Goes through all the key-value pairs in the given query string and calls the callback for each one.
-		void ParseQuery(std::string_view query, std::function<void(const std::string_view&, const std::string_view&)> callback);
+		void ParseQuery(std::string_view query, std::function<void(const std::string_view&, const std::string_view&)> callback, char delim = '&');
 
 		void NotifyClosed() override;
 
@@ -63,7 +63,6 @@ namespace Browser {
 		CefRefPtr<CefResourceRequestHandler> LaunchHdosJar(CefRefPtr<CefRequest>, std::string_view);
 
 		private:
-			const std::string internal_url = "https://bolt-internal/";
 			CefRefPtr<FileManager::FileManager> file_manager;
 			std::filesystem::path data_dir;
 			std::filesystem::path creds_path;
@@ -132,7 +131,7 @@ if (key == #KEY) { \
 }
 
 #define QSENDSTR(STR, CODE) return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>(STR "\n"), sizeof(STR "\n") - sizeof(*STR), CODE, "text/plain")
-#define QSENDMOVED(LOC) return new Browser::ResourceHandler(reinterpret_cast<const unsigned char*>("Moved\n"), sizeof("Moved\n") - sizeof("Moved\n"), 302, "text/plain", LOC)
+#define QSENDMOVED(LOC) return new Browser::ResourceHandler(nullptr, 0, 302, "text/plain", LOC)
 #define QSENDOK() QSENDSTR("OK", 200)
 #define QSENDNOTFOUND() QSENDSTR("Not found", 404)
 #define QSENDBADREQUESTIF(COND) if (COND) QSENDSTR("Bad response", 400)
