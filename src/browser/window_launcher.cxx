@@ -523,12 +523,14 @@ CefString Browser::Launcher::BuildURL() const {
 	return url.str();
 }
 
+#if defined(BOLT_PLUGINS)
 void Browser::Launcher::UpdateClientList(bool need_lock_mutex) const {
 	CefRefPtr<CefProcessMessage> message = CefProcessMessage::Create("__bolt_clientlist");
 	CefRefPtr<CefListValue> list = message->GetArgumentList();
 	this->client->ListGameClients(list, need_lock_mutex);
 	this->browser->GetMainFrame()->SendProcessMessage(PID_RENDERER, message);
 }
+#endif
 
 void Browser::Launcher::Refresh() const {
 	// override the default behaviour, which would be to call ReloadIgnoreCache() (a.k.a. ctrl+f5)

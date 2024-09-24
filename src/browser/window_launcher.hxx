@@ -38,9 +38,11 @@ namespace Browser {
 		/// inserting their contents into the query params
 		CefString BuildURL() const;
 
+#if defined(BOLT_PLUGINS)
 		/// Gets a new game client list and sends it to the browser window via a postMessage.
 		/// bool indicates whether client's game_clients_lock is already locked
 		void UpdateClientList(bool need_lock_client_mutex) const;
+#endif
 
 		/// Goes through all the key-value pairs in the given query string and calls the callback for each one.
 		void ParseQuery(std::string_view query, std::function<void(const std::string_view&, const std::string_view&)> callback);
