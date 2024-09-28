@@ -19,7 +19,12 @@
 {/if}
 <div class="mx-auto p-2">
 	<label for="use_custom_uri">Use custom config URI: </label>
-	<input type="checkbox" bind:checked={$config.use_custom_rs_config_uri} class="ml-2" />
+	<input
+		id="use_custom_uri"
+		type="checkbox"
+		bind:checked={$config.use_custom_rs_config_uri}
+		class="ml-2"
+	/>
 </div>
 <div class="p-2">
 	<textarea

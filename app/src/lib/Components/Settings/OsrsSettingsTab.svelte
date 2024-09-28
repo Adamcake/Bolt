@@ -54,7 +54,12 @@
 </button>
 <div class="mx-auto border-t-2 border-slate-300 p-2 pt-5 dark:border-slate-800">
 	<label for="use_custom_jar">Use custom RuneLite JAR: </label>
-	<input type="checkbox" bind:checked={$config.runelite_use_custom_jar} class="ml-2" />
+	<input
+		id="use_custom_jar"
+		type="checkbox"
+		bind:checked={$config.runelite_use_custom_jar}
+		class="ml-2"
+	/>
 </div>
 <div class="mx-auto p-2" class:opacity-25={!$config.runelite_use_custom_jar}>
 	<textarea
