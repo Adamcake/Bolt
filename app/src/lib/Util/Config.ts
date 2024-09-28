@@ -10,6 +10,7 @@ type UserDetails = {
 export interface Config {
 	use_dark_theme: boolean;
 	rs_plugin_loader: boolean;
+	check_announcements: boolean;
 	flatpak_rich_presence: boolean;
 	runelite_use_custom_jar: boolean;
 	use_custom_rs_config_uri: boolean;
@@ -29,6 +30,7 @@ export interface Config {
 export const defaultConfig: Config = {
 	use_dark_theme: true,
 	rs_plugin_loader: false,
+	check_announcements: true,
 	flatpak_rich_presence: false,
 	runelite_use_custom_jar: false,
 	use_custom_rs_config_uri: false,
@@ -49,6 +51,7 @@ export function initConfig() {
 			typeof conf === 'object' &&
 			typeof conf.use_dark_theme === 'boolean' &&
 			typeof conf.rs_plugin_loader === 'boolean' &&
+			typeof conf.check_announcements === 'boolean' &&
 			typeof conf.flatpak_rich_presence === 'boolean' &&
 			typeof conf.runelite_use_custom_jar === 'boolean' &&
 			typeof conf.selected === 'object' &&
@@ -64,6 +67,10 @@ export function initConfig() {
 	if (configParam) {
 		try {
 			const parsedConfig = JSON.parse(configParam);
+			if (typeof parsedConfig.check_announcements === 'undefined') {
+				parsedConfig.check_announcements = true;
+				GlobalState.configHasPendingChanges = true;
+			}
 			if (isConfigValid(parsedConfig)) {
 				config.set(parsedConfig);
 			} else {

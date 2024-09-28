@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { logger } from '$lib/Util/Logger';
+	import { GlobalState } from '$lib/State/GlobalState';
 
 	// opens local data on disk
 	function openDataDir(): void {
@@ -12,6 +13,8 @@
 		};
 		xml.send();
 	}
+
+	const { config } = GlobalState;
 </script>
 
 <button
@@ -30,3 +33,13 @@
 		Browse App Data
 	</div>
 </button>
+
+<div class="mx-auto p-2">
+	<label for="check_announcements">Check game announcements: </label>
+	<input
+		id="check_announcements"
+		type="checkbox"
+		bind:checked={$config.check_announcements}
+		class="ml-2"
+	/>
+</div>

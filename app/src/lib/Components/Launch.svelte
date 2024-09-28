@@ -22,13 +22,18 @@
 	let psa: string | null = null;
 	let gameEnabled: boolean = true;
 	$: {
-		const url: string = `${bolt.env.psa_url}${$config.selected.game == Game.osrs ? 'osrs' : bolt.env.provider}.json`;
-		fetch(url, { method: 'GET' })
-			.then((response) => response.json())
-			.then((response) => {
-				psa = response.psa && response.psa.length > 0 ? response.psa : null;
-				gameEnabled = !(response.isDisabled ?? false);
-			});
+		if ($config.check_announcements) {
+			const url: string = `${bolt.env.psa_url}${$config.selected.game == Game.osrs ? 'osrs' : bolt.env.provider}.json`;
+			fetch(url, { method: 'GET' })
+				.then((response) => response.json())
+				.then((response) => {
+					psa = response.psa && response.psa.length > 0 ? response.psa : null;
+					gameEnabled = !(response.isDisabled ?? false);
+				});
+		} else {
+			psa = null;
+			gameEnabled = true;
+		}
 	}
 
 	// when play is clicked, check the selected_play store for all relevant details
