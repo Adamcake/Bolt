@@ -1,4 +1,5 @@
 <script lang="ts">
+	import LaunchConfirmModal from './LaunchConfirmModal.svelte';
 	import PluginModal from '$lib/Components/PluginModal.svelte';
 	import { BoltService } from '$lib/Services/BoltService';
 	import { bolt, Platform } from '$lib/State/Bolt';
@@ -12,6 +13,7 @@
 	import { Client, clientMap, Game } from '$lib/Util/interfaces';
 	import { logger } from '$lib/Util/Logger';
 
+	let confirmModal: LaunchConfirmModal;
 	let pluginModal: PluginModal;
 	let { config } = GlobalState;
 	$: selectedUserId = $config.selected.user_id;
@@ -38,7 +40,7 @@
 
 	// when play is clicked, check the selected_play store for all relevant details
 	// calls the appropriate launch functions
-	function launch(game: Game, client: Client): void {
+	export function launch(game: Game, client: Client): void {
 		if (!selectedUserId) {
 			return logger.warn('Please log in or select a user to play.');
 		}
@@ -92,6 +94,7 @@
 	}
 </script>
 
+<LaunchConfirmModal bind:this={confirmModal}></LaunchConfirmModal>
 {#if bolt.hasBoltPlugins}
 	<PluginModal bind:this={pluginModal}></PluginModal>
 {/if}
@@ -110,7 +113,13 @@
 		/>
 		<button
 			class="w-52 rounded-lg bg-emerald-500 p-2 font-bold text-black duration-200 hover:opacity-75"
-			on:click={() => launch($config.selected.game, $config.selected.client)}
+			on:click={() => {
+				if (gameEnabled) {
+					launch($config.selected.game, $config.selected.client);
+				} else {
+					confirmModal.open(launch, $config.selected.game, $config.selected.client);
+				}
+			}}
 		>
 			Play
 		</button>
