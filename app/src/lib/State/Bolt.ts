@@ -20,6 +20,7 @@ export interface BoltEnv {
 	content_url: string;
 	direct6_url: string;
 	default_config_uri: string;
+	psa_url: string;
 	games: string[];
 }
 

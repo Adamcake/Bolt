@@ -18,6 +18,19 @@
 	$: selectedAccountId = $config.userDetails[selectedUserId ?? '']?.account_id;
 	$: accounts = BoltService.findSession($config.selected.user_id)?.accounts ?? [];
 
+	// messages about game downtime, retrieved from game server
+	let psa: string | null = null;
+	let gameEnabled: boolean = true;
+	$: {
+		const url: string = `${bolt.env.psa_url}${$config.selected.game == Game.osrs ? 'osrs' : bolt.env.provider}.json`;
+		fetch(url, { method: 'GET' })
+			.then((response) => response.json())
+			.then((response) => {
+				psa = response.psa && response.psa.length > 0 ? response.psa : null;
+				gameEnabled = !(response.isDisabled ?? false);
+			});
+	}
+
 	// when play is clicked, check the selected_play store for all relevant details
 	// calls the appropriate launch functions
 	function launch(game: Game, client: Client): void {
@@ -79,6 +92,11 @@
 {/if}
 
 <div class="bg-grad flex h-full flex-col border-slate-300 p-5 duration-200 dark:border-slate-800">
+	{#if $psa}
+		<div class="absolute left-[2%] w-[96%] rounded-lg rounded-lg bg-blue-400 px-2 text-black">
+			{$psa}
+		</div>
+	{/if}
 	<div class="flex flex-col items-center gap-4">
 		<img
 			src="svgs/rocket-solid.svg"
