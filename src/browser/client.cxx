@@ -134,11 +134,11 @@ void Browser::Client::OnBoltWindowCreated(CefRefPtr<CefWindow> window) {
 
 #if defined(BOLT_DEV_LAUNCHER_DIRECTORY)
 void Browser::Client::OnFileChange() {
-	std::lock_guard<std::mutex> _(this->windows_lock);
-	auto it = std::find_if(this->windows.begin(), this->windows.end(), [](CefRefPtr<Window>& win) { return win->IsLauncher(); });
-	if (it != this->windows.end()) {
-		(*it)->Refresh();
+	this->launcher_lock.lock();
+	if (this->launcher) {
+		this->launcher->Refresh();
 	}
+	this->launcher_lock.unlock();
 }
 #endif
 
