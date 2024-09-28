@@ -132,7 +132,6 @@ function addMessageListeners(): void {
 				break;
 			}
 			case 'gameClientList':
-				console.log(event.data.clients);
 				clientList.set(event.data.clients);
 				break;
 			default: {
