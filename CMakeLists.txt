@@ -354,12 +354,6 @@ if(BOLT_DEV_LAUNCHER_DIRECTORY)
     target_compile_definitions(bolt PUBLIC BOLT_DEV_LAUNCHER_DIRECTORY="${BOLT_HTML_DIR}")
 endif()
 
-# fake java wrapper for running hdos
-if(NOT WIN32)
-    add_executable(java-proxy src/fake_java.c)
-    install(TARGETS java-proxy DESTINATION "${BOLT_CEF_INSTALLDIR}/bolt-launcher")
-endif()
-
 # Install commands for target dir layout - as per https://bitbucket.org/chromiumembedded/cef/wiki/Tutorial.md
 if(APPLE)
     # TODO: mac support
