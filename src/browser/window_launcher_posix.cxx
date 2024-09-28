@@ -393,44 +393,13 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<
 	const CefRefPtr<CefPostData> post_data = request->GetPostData();
 
 	const std::string user_home = this->data_dir.string();
-	const char* java_home = getenv("JAVA_HOME");
-	if (!java_home) {
-		// the only reason this is necessary is the lines where we symlink the /lib and /conf directories
-		// into our fake java.home, not sure we can do anything about that
-		QSENDSTR("JAVA_HOME environment variable is required to run HDOS", 400);
-	}
-
 	const char* env_key_user_home = "BOLT_ARG_HOME=";
 	std::string arg_user_home = "-Duser.home=" + user_home;
 	std::string arg_app_user_home = "-Dapp.user.home=" + user_home;
 
 	std::string java;
-	if (!FindJava(java_home, java)) {
+	if (!FindJava(getenv("JAVA_HOME"), java)) {
 		QSENDSTR("Couldn't find Java: JAVA_HOME does not point to a Java binary", 400);
-	}
-
-	std::filesystem::path java_proxy_bin_path = std::filesystem::current_path();
-	java_proxy_bin_path.append("java-proxy");
-	std::filesystem::path java_proxy_data_dir_path = this->data_dir;
-	java_proxy_data_dir_path.append("java-proxy");
-	std::filesystem::remove_all(java_proxy_data_dir_path);
-	std::filesystem::create_directory(java_proxy_data_dir_path);
-	std::filesystem::path java_proxy_lib_path = java_proxy_data_dir_path;
-	java_proxy_lib_path.append("lib");
-	std::filesystem::path java_proxy_conf_path = java_proxy_data_dir_path;
-	java_proxy_conf_path.append("conf");
-	std::filesystem::path java_proxy_java_path = java_proxy_data_dir_path;
-	java_proxy_java_path.append("bin");
-	std::filesystem::create_directory(java_proxy_java_path);
-	java_proxy_java_path.append("java");
-	const std::string java_lib_str = std::string(java_home) + "/lib";
-	const std::string java_conf_str = std::string(java_home) + "/conf";
-	int err = 0;
-	err |= symlink(java_lib_str.c_str(), java_proxy_lib_path.c_str());
-	err |= symlink(java_conf_str.c_str(), java_proxy_conf_path.c_str());
-	err |= symlink(java_proxy_bin_path.c_str(), java_proxy_java_path.c_str());
-	if (err) {
-		QSENDSTR("Unable to create symlinks", 500);
 	}
 
 	// parse query
@@ -475,12 +444,10 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<
 	// set up argv for the new process
 	std::string path_str = this->hdos_path.string();
 	char arg_jar[] = "-jar";
-	std::string arg_java_home = "-Djava.home=" + java_proxy_data_dir_path.string();
 	char* argv[] = {
 		java.data(),
 		arg_user_home.data(),
 		arg_app_user_home.data(),
-		arg_java_home.data(),
 		arg_jar,
 		path_str.data(),
 		nullptr,
