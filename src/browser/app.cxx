@@ -199,6 +199,7 @@ bool Browser::App::Execute(const CefString&, CefRefPtr<CefV8Value>, const CefV8V
 	retval->SetValue("content_url", CefV8Value::CreateString("aHR0cHM6Ly9jb250ZW50LnJ1bmVzY2FwZS5jb20vZG93bmxvYWRzL3VidW50dS8"), V8_PROPERTY_ATTRIBUTE_READONLY);
 	retval->SetValue("default_config_uri", CefV8Value::CreateString("aHR0cHM6Ly93d3cucnVuZXNjYXBlLmNvbS9rPTUvbD0wL2phdl9jb25maWcud3M"), V8_PROPERTY_ATTRIBUTE_READONLY);
 	retval->SetValue("direct6_url", CefV8Value::CreateString("aHR0cHM6Ly9qYWdleC5ha2FtYWl6ZWQubmV0L2RpcmVjdDYv"), V8_PROPERTY_ATTRIBUTE_READONLY);
+	retval->SetValue("psa_url", CefV8Value::CreateString("aHR0cHM6Ly9maWxlcy5wdWJsaXNoaW5nLnByb2R1Y3Rpb24uanhwLmphZ2V4LmNvbS8"), V8_PROPERTY_ATTRIBUTE_READONLY);
 
 	CefRefPtr<CefV8Value> games = CefV8Value::CreateArray(2);
 	games->SetValue(0, CefV8Value::CreateString("UnVuZVNjYXBl"));
