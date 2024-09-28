@@ -23,7 +23,7 @@
 	let inactiveClass = 'border-2 border-blue-500 hover:opacity-75 duration-200 rounded-lg p-1 w-3/4';
 </script>
 
-<Modal bind:this={modal} class="h-3/4 w-3/4">
+<Modal bind:this={modal} class="h-3/4 w-3/4 select-none">
 	<div class="grid h-full grid-cols-4">
 		<div
 			class="flex flex-col items-center gap-2 border-r-2 border-slate-300 pt-10 dark:border-slate-800"
