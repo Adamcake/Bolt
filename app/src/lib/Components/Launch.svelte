@@ -12,6 +12,7 @@
 	} from '$lib/Util/functions';
 	import { Client, clientMap, Game } from '$lib/Util/interfaces';
 	import { logger } from '$lib/Util/Logger';
+	import { writable, type Writable } from 'svelte/store';
 
 	let confirmModal: LaunchConfirmModal;
 	let pluginModal: PluginModal;
@@ -21,20 +22,20 @@
 	$: accounts = BoltService.findSession($config.selected.user_id)?.accounts ?? [];
 
 	// messages about game downtime, retrieved from game server
-	let psa: string | null = null;
-	let gameEnabled: boolean = true;
+	let psa: Writable<string | null> = writable(null);
+	let gameEnabled: Writable<boolean> = writable(true);
 	$: {
 		if ($config.check_announcements) {
 			const url: string = `${bolt.env.psa_url}${$config.selected.game == Game.osrs ? 'osrs' : bolt.env.provider}.json`;
 			fetch(url, { method: 'GET' })
 				.then((response) => response.json())
 				.then((response) => {
-					psa = response.psa && response.psa.length > 0 ? response.psa : null;
-					gameEnabled = !(response.isDisabled ?? false);
+					$psa = response.psa && response.psa.length > 0 ? response.psa : null;
+					$gameEnabled = !(response.isDisabled ?? false);
 				});
 		} else {
-			psa = null;
-			gameEnabled = true;
+			$psa = null;
+			$gameEnabled = true;
 		}
 	}
 
@@ -114,7 +115,7 @@
 		<button
 			class="w-52 rounded-lg bg-emerald-500 p-2 font-bold text-black duration-200 hover:opacity-75"
 			on:click={() => {
-				if (gameEnabled) {
+				if ($gameEnabled) {
 					launch($config.selected.game, $config.selected.client);
 				} else {
 					confirmModal.open(launch, $config.selected.game, $config.selected.client);
