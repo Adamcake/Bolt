@@ -245,6 +245,8 @@ file(GENERATE OUTPUT .gitignore CONTENT "*")
 if(WIN32)
     list(APPEND BOLT_WINDOWS_NONMSVC_OPTIONS "-municode" "-mwin32")
     list(APPEND BOLT_WINDOWS_NONMSVC_LINKOPTIONS ${BOLT_WINDOWS_NONMSVC_OPTIONS} "-s")
+    set(FMT_UNICODE 1)
+    add_compile_options(/utf-8)
 endif()
 
 # Build plugin library
