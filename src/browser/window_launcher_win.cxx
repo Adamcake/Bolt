@@ -415,12 +415,6 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 
 	std::map<std::wstring, std::wstring> jvm_args, application_args, env_vars;
 
-	jvm_args[L"-Duser.home"] = user_home;
-	jvm_args[L"-Dapp.user.home"] = user_home;
-
-	application_args[L"-J-Duser.home"] = user_home;
-
-	env_vars[L"HOME"] = user_home;
 	if (has_jx_session_id) env_vars[L"JX_SESSION_ID"] = jx_session_id;
 	if (has_jx_character_id) env_vars[L"JX_CHARACTER_ID"] = jx_character_id;
 	if (has_jx_display_name) env_vars[L"JX_DISPLAY_NAME"] = jx_display_name;
@@ -481,9 +475,6 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<
 	}
 
 	std::map<std::wstring, std::wstring> jvm_args, application_args, env_vars;
-
-	jvm_args[L"-Duser.home"] = user_home;
-	jvm_args[L"-Dapp.user.home"] = user_home;
 
 	if (has_jx_session_id) env_vars[L"JX_SESSION_ID"] = jx_session_id;
 	if (has_jx_character_id) env_vars[L"JX_CHARACTER_ID"] = jx_character_id;
