@@ -101,8 +101,8 @@ wchar_t* CreateEnvironmentString(const std::map<std::wstring, std::wstring>& add
  * @param java The path to the jdk/jre java executable.
  * @param jar_path The path to the jar file to be executed.
  * @param working_dir The working directory for the new process.
- * @param jvm_args The JVM arguments to be used
- * @param application_args The arguments to be passed to the application
+ * @param jvm_args The JVM arguments to be used. K/V pairs with nullopt values are treated as flags.
+ * @param application_args The arguments to be passed to the application. K/V pairs with nullopt values are treated as flags.
  * @param env_vars The environment variables to be set for the new process
  * 
  * @return An exit code for the new process. ULONG_MAX if the env vars could not be created.
@@ -111,18 +111,22 @@ DWORD LaunchJavaProcess(
 	const std::wstring& java, 
 	const std::wstring& jar_path,
 	const std::wstring& working_dir,
-	const std::map<std::wstring, std::wstring>& jvm_args, 
-	const std::map<std::wstring, std::wstring>& application_args, 
+	const std::map<std::wstring, std::optional<std::wstring>>& jvm_args, 
+	const std::map<std::wstring, std::optional<std::wstring>>& application_args, 
 	const std::map<std::wstring, std::wstring>& env_vars
 ) {
 	std::wstring jvm_args_string;
-	for (const auto& [key, value] : jvm_args) {
-		jvm_args_string += key + L"=" + value + L" ";
+	for (const auto& [key, maybe_value] : jvm_args) {
+		jvm_args_string += key;
+		if (maybe_value.has_value()) jvm_args_string += L"=" + maybe_value.value();
+		jvm_args_string += L" ";
 	}
 
 	std::wstring application_args_string;
-	for (const auto& [key, value] : application_args) {
-		application_args_string += key + L"=" + value + L" ";
+	for (const auto& [key, maybe_value] : application_args) {
+		application_args_string += key;
+		if(maybe_value.has_value()) application_args_string += L"=" + maybe_value.value();
+		application_args_string += L" ";
 	}
 
 	LPWSTR env_str(CreateEnvironmentString(env_vars));
@@ -364,8 +368,6 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchOsrsApp(CefRefPtr<
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRefPtr<CefRequest> request, std::string_view query, bool configure) {
 	const CefRefPtr<CefPostData> post_data = request->GetPostData();
 
-	const std::wstring user_home = this->data_dir;
-
 	const wchar_t* java_home = _wgetenv(L"JAVA_HOME");
 	std::wstring java;
 	if (!FindJava(java_home, java)) {
@@ -413,11 +415,14 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 		}
 	}
 
-	std::map<std::wstring, std::wstring> jvm_args, application_args, env_vars;
+	std::map<std::wstring, std::optional<std::wstring>> jvm_args, application_args;
+	std::map<std::wstring, std::wstring> env_vars;
 
 	if (has_jx_session_id) env_vars[L"JX_SESSION_ID"] = jx_session_id;
 	if (has_jx_character_id) env_vars[L"JX_CHARACTER_ID"] = jx_character_id;
 	if (has_jx_display_name) env_vars[L"JX_DISPLAY_NAME"] = jx_display_name;
+
+	if(configure) application_args[L"--configure"] = std::nullopt;
 
 	DWORD exit_code = LaunchJavaProcess(java, rl_path, this->data_dir, jvm_args, application_args, env_vars);
 	if (exit_code != 0) {
@@ -435,8 +440,6 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 }
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<CefRequest> request, std::string_view query) {
 	const CefRefPtr<CefPostData> post_data = request->GetPostData();
-
-	const std::wstring user_home = this->data_dir;
 
 	const wchar_t* java_home = _wgetenv(L"JAVA_HOME");
 	std::wstring java;
@@ -474,7 +477,8 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<
 		}
 	}
 
-	std::map<std::wstring, std::wstring> jvm_args, application_args, env_vars;
+	std::map<std::wstring, std::optional<std::wstring>> jvm_args, application_args;
+	std::map<std::wstring, std::wstring> env_vars;
 
 	if (has_jx_session_id) env_vars[L"JX_SESSION_ID"] = jx_session_id;
 	if (has_jx_character_id) env_vars[L"JX_CHARACTER_ID"] = jx_character_id;
