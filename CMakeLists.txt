@@ -241,13 +241,16 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Tell git to ignore everything in the new build directory
 file(GENERATE OUTPUT .gitignore CONTENT "*")
 
-# define extra build and link args for windows non-msvc builds
+# define extra build and link args for windows builds
 if(WIN32)
-    list(APPEND BOLT_WINDOWS_NONMSVC_OPTIONS "-municode" "-mwin32")
-    list(APPEND BOLT_WINDOWS_NONMSVC_LINKOPTIONS ${BOLT_WINDOWS_NONMSVC_OPTIONS} "-s")
-    set(FMT_UNICODE 1)
-    add_compile_options(/utf-8)
+    if(MSVC)
+        list(APPEND BOLT_WINDOWS_MSVC_OPTIONS "/utf-8")
+    else()
+        list(APPEND BOLT_WINDOWS_NONMSVC_OPTIONS "-municode" "-mwin32")
+        list(APPEND BOLT_WINDOWS_NONMSVC_LINKOPTIONS ${BOLT_WINDOWS_NONMSVC_OPTIONS} "-s")
+    endif()
 endif()
+
 
 # Build plugin library
 if(NOT BOLT_SKIP_LIBRARIES)
@@ -327,6 +330,7 @@ elseif(WIN32)
     target_link_libraries(bolt PUBLIC "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/libcef.lib")
     target_link_libraries(bolt PUBLIC "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/cef_sandbox.lib")
     if(MSVC)
+        target_compile_options(bolt PUBLIC ${BOLT_WINDOWS_MSVC_OPTIONS})
         set_property(TARGET bolt PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     else()
         target_compile_options(bolt PUBLIC ${BOLT_WINDOWS_NONMSVC_OPTIONS})
