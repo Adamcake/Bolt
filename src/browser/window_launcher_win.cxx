@@ -394,7 +394,11 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 	const wchar_t* java_home = _wgetenv(L"JAVA_HOME");
 	std::wstring java;
 	if (!FindJava(java_home, java)) {
-		QSENDSTR("Couldn't find Java: JAVA_HOME does not point to a Java binary", 400);
+		if (java_home && *java_home) {
+			QSENDSTR("Couldn't find Java: JAVA_HOME does not point to a Java binary (is it installed correctly?)", 400);
+		} else {
+			QSENDSTR("Couldn't find Java: please install Java and try again", 400);
+		}
 	}
 
 	std::wstring jar_path, id, jx_session_id, jx_character_id, jx_display_name;
@@ -461,13 +465,18 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 
 	QSENDOK();
 }
+
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<CefRequest> request, std::string_view query) {
 	const CefRefPtr<CefPostData> post_data = request->GetPostData();
 
 	const wchar_t* java_home = _wgetenv(L"JAVA_HOME");
 	std::wstring java;
 	if (!FindJava(java_home, java)) {
-		QSENDSTR("Couldn't find Java: JAVA_HOME does not point to a Java binary", 400);
+		if (java_home && *java_home) {
+			QSENDSTR("Couldn't find Java: JAVA_HOME does not point to a Java binary (is it installed correctly?)", 400);
+		} else {
+			QSENDSTR("Couldn't find Java: please install Java and try again", 400);
+		}
 	}
 
 	std::wstring version, jx_session_id, jx_character_id, jx_display_name;
@@ -521,7 +530,6 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<
 
 	QSENDOK();
 }
-
 
 void Browser::Launcher::OpenExternalUrl(char* u) const {
 	const char* url = u;
