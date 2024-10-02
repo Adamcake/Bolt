@@ -533,6 +533,9 @@ void Browser::Launcher::OpenExternalUrl(char* u) const {
 }
 
 bool Browser::Launcher::BrowseData() const {
-	// TODO
-	return -1;
+	// MSDN: "If [ShellExecuteW] succeeds, it returns a value greater than 32."
+	const uintptr_t ret = reinterpret_cast<uintptr_t>(ShellExecuteW(NULL, L"explore", this->data_dir.c_str(), NULL, NULL, SW_SHOW));
+	if (ret > 32) return true;
+	fmt::println(stderr, "BrowseData failed: ShellExecuteW returned {}", ret);
+	return false;
 }
