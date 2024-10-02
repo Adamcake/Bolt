@@ -311,8 +311,77 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3App(CefRefPtr<C
 }
 
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchOsrsExe(CefRefPtr<CefRequest> request, std::string_view query) {
-	// TODO
-	QSENDSTR("Not yet supported on this platform", 400);
+	const CefRefPtr<CefPostData> post_data = request->GetPostData();
+
+	// parse query
+	std::wstring hash;
+	bool has_hash = false;
+	std::wstring jx_session_id;
+	bool has_jx_session_id = false;
+	std::wstring jx_character_id;
+	bool has_jx_character_id = false;
+	std::wstring jx_display_name;
+	bool has_jx_display_name = false;
+	this->ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
+		PQSTRING(hash)
+		PQSTRING(jx_session_id)
+		PQSTRING(jx_character_id)
+		PQSTRING(jx_display_name)
+	});
+
+	// if there was a "hash" in the query string, we need to save the new game exe and the new hash
+	if (has_hash) {
+		QSENDBADREQUESTIF(post_data == nullptr || post_data->GetElementCount() != 1);
+		CefPostData::ElementVector vec;
+		post_data->GetElements(vec);
+		size_t exe_size = vec[0]->GetBytesCount();
+		std::unique_ptr<unsigned char[]> exe(new unsigned char[exe_size]);
+		vec[0]->GetBytes(exe_size, exe.get());
+		if (!WriteBytesToFile(this->osrs_exe_path, exe.get(), exe_size)) {
+			QSENDSTR("Failed to save executable; if the game is already running, close it and try again", 500);
+		}
+	}
+
+	// create the command line for the new process
+	std::wstring command_line = std::wstring(L"\"") + this->osrs_exe_path.wstring() + L"\"";
+
+	// create the environment block for the new process
+	std::map<std::wstring, std::wstring> env_vars;
+	if (has_jx_session_id) env_vars[L"JX_SESSION_ID"] = jx_session_id;
+	if (has_jx_character_id) env_vars[L"JX_CHARACTER_ID"] = jx_character_id;
+	if (has_jx_display_name) env_vars[L"JX_DISPLAY_NAME"] = jx_display_name;
+	LPWSTR new_env = CreateEnvironmentString(env_vars);
+
+	PROCESS_INFORMATION pi;
+	STARTUPINFOW si;
+	ZeroMemory(&si, sizeof(si));
+	si.cb = sizeof(si);
+
+	if (!CreateProcessW(
+		NULL,
+		&command_line[0],
+		NULL,
+		NULL,
+		false,
+		CREATE_UNICODE_ENVIRONMENT,
+		new_env,
+		NULL,
+		&si,
+		&pi
+	)) {
+		delete[] new_env;
+		const DWORD error = GetLastError();
+		const std::string error_message = "CreateProcess failed with error " + std::to_string(error) + "\n";
+		return new ResourceHandler(error_message, 500, "text/plain");
+	}
+	delete[] new_env;
+
+	CloseHandle(pi.hProcess);
+	CloseHandle(pi.hThread);
+	if (has_hash && !WriteStringToFile(this->osrs_exe_hash_path, hash)) {
+		QSENDSTR("OK, but unable to save hash file", 200);
+	}
+	QSENDOK();
 }
 
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchOsrsApp(CefRefPtr<CefRequest> request, std::string_view query) {
