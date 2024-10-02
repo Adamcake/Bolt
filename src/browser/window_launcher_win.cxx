@@ -23,7 +23,7 @@
  * 
  * @return True if the executable was found, false otherwise.
  */
-bool FindJava(const wchar_t* java_home, std::wstring& out) {
+static bool FindJava(const wchar_t* java_home, std::wstring& out) {
 	if (java_home) {
 		std::filesystem::path java(java_home);
 		java.append("bin");
@@ -60,7 +60,7 @@ bool FindJava(const wchar_t* java_home, std::wstring& out) {
  * 
  * @return A pointer to a new environment block containing the additional environment variables. Null if the function fails.
  */
-wchar_t* CreateEnvironmentString(const std::map<std::wstring, std::wstring>& additional_env_vars) {
+static wchar_t* CreateEnvironmentString(const std::map<std::wstring, std::wstring>& additional_env_vars) {
 	wchar_t* currentEnv = GetEnvironmentStringsW();
 	if (currentEnv == nullptr) {
 		return nullptr;
@@ -107,7 +107,7 @@ wchar_t* CreateEnvironmentString(const std::map<std::wstring, std::wstring>& add
  * 
  * @return An exit code for the new process. ULONG_MAX if the env vars could not be created.
  */
-DWORD LaunchJavaProcess(
+static DWORD LaunchJavaProcess(
 	const std::wstring& java, 
 	const std::wstring& jar_path,
 	const std::wstring& working_dir,
@@ -176,7 +176,7 @@ DWORD LaunchJavaProcess(
 	return 0;
 }
 
-bool WriteStringToFile(const std::filesystem::path path, const std::wstring& data) {
+static bool WriteStringToFile(const std::filesystem::path path, const std::wstring& data) {
     std::wofstream file(path, std::ios::out | std::ios::binary);
 
     if (file.fail()) {
@@ -189,7 +189,7 @@ bool WriteStringToFile(const std::filesystem::path path, const std::wstring& dat
 	return true;
 }
 
-bool WriteBytesToFile(const std::filesystem::path& path, const unsigned char* data, size_t size) {
+static bool WriteBytesToFile(const std::filesystem::path& path, const unsigned char* data, size_t size) {
     std::ofstream file(path, std::ios::out | std::ios::binary);
 
     if (file.fail()) {
@@ -237,18 +237,14 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Exe(CefRefPtr<C
 	// if there was a "hash" in the query string, we need to save the new game exe and the new hash
 	if (has_hash) {
 		QSENDBADREQUESTIF(post_data == nullptr || post_data->GetElementCount() != 1);
-		std::ofstream file(this->rs3_exe_path, std::ios::out | std::ios::binary);
-		if (file.fail()) {
-			QSENDSTR("Failed to save executable; if the game is already running, close it and try again", 500);
-		}
 		CefPostData::ElementVector vec;
 		post_data->GetElements(vec);
 		size_t exe_size = vec[0]->GetBytesCount();
-		unsigned char* exe = new unsigned char[exe_size];
-		vec[0]->GetBytes(exe_size, exe);
-		file.write((const char*)exe, exe_size);
-		file.close();
-		delete[] exe;
+		std::unique_ptr<unsigned char[]> exe(new unsigned char[exe_size]);
+		vec[0]->GetBytes(exe_size, exe.get());
+		if (!WriteBytesToFile(this->rs3_exe_path, exe.get(), exe_size)) {
+			QSENDSTR("Failed to save executable; if the game is already running, close it and try again", 500);
+		}
 	}
 
 	// create the command line for the new process
@@ -260,48 +256,11 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Exe(CefRefPtr<C
 	}
 
 	// create the environment block for the new process
-	std::wstring session_key = L"JX_SESSION_ID=";
-	std::wstring character_key = L"JX_CHARACTER_ID=";
-	std::wstring name_key = L"JX_DISPLAY_NAME=";
-	LPWCH env = GetEnvironmentStringsW();
-	size_t env_size = 0;
-	while (env[env_size] != '\0') {
-		while (env[env_size] != '\0') env_size += 1;
-		env_size += 1;
-	}
-	const size_t current_process_env_size = env_size;
-	if (has_jx_session_id) env_size += session_key.size() + jx_session_id.size() + 1;
-	if (has_jx_character_id) env_size += character_key.size() + jx_character_id.size() + 1;
-	if (has_jx_display_name) env_size += name_key.size() + jx_display_name.size() + 1;
-	wchar_t* new_env = new wchar_t[env_size + 1];
-	memcpy(&new_env[0], env, current_process_env_size * sizeof(*env));
-	FreeEnvironmentStringsW(env);
-	wchar_t* cursor = &new_env[current_process_env_size];
-	if (has_jx_session_id) {
-		memcpy(cursor, &session_key[0], session_key.size() * sizeof(session_key[0]));
-		cursor += session_key.size();
-		memcpy(cursor, &jx_session_id[0], jx_session_id.size() * sizeof(jx_session_id[0]));
-		cursor += jx_session_id.size();
-		*cursor = '\0';
-		cursor += 1;
-	}
-	if (has_jx_character_id) {
-		memcpy(cursor, &character_key[0], character_key.size() * sizeof(character_key[0]));
-		cursor += character_key.size();
-		memcpy(cursor, &jx_character_id[0], jx_character_id.size() * sizeof(jx_character_id[0]));
-		cursor += jx_character_id.size();
-		*cursor = '\0';
-		cursor += 1;
-	}
-	if (has_jx_display_name) {
-		memcpy(cursor, &name_key[0], name_key.size() * sizeof(name_key[0]));
-		cursor += name_key.size();
-		memcpy(cursor, &jx_display_name[0], jx_display_name.size() * sizeof(jx_display_name[0]));
-		cursor += jx_display_name.size();
-		*cursor = '\0';
-		cursor += 1;
-	}
-	*cursor = '\0';
+	std::map<std::wstring, std::wstring> env_vars;
+	if (has_jx_session_id) env_vars[L"JX_SESSION_ID"] = jx_session_id;
+	if (has_jx_character_id) env_vars[L"JX_CHARACTER_ID"] = jx_character_id;
+	if (has_jx_display_name) env_vars[L"JX_DISPLAY_NAME"] = jx_display_name;
+	LPWSTR new_env = CreateEnvironmentString(env_vars);
 
 	PROCESS_INFORMATION pi;
 	STARTUPINFOW si;
@@ -341,13 +300,8 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Exe(CefRefPtr<C
 
 	CloseHandle(pi.hProcess);
 	CloseHandle(pi.hThread);
-	if (has_hash) {
-		std::wofstream file(this->rs3_exe_hash_path, std::ios::out | std::ios::binary);
-		if (file.fail()) {
-			QSENDSTR("OK, but unable to save hash file", 200);
-		}
-		file << hash;
-		file.close();
+	if (has_hash && !WriteStringToFile(this->rs3_exe_hash_path, hash)) {
+		QSENDSTR("OK, but unable to save hash file", 200);
 	}
 	QSENDOK();
 }
