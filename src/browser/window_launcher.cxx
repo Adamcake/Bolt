@@ -10,9 +10,9 @@
 #include <fstream>
 #include <sstream>
 
-#define DOMAIN "bolt-internal"
-#define URI "https://" DOMAIN
-#define DEFAULTURL URI "/index.html"
+#define BOLTDOMAIN "bolt-internal"
+#define BOLTURI "https://" BOLTDOMAIN
+#define DEFAULTURL BOLTURI "/index.html"
 
 #if defined(__linux__)
 #define URLPLATFORM "linux"
@@ -215,8 +215,8 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 		QSENDMOVED(CefString(std::string(DEFAULTURL "?") + std::string(comment)));
 	}
 
-	const bool is_internal_target = domain == DOMAIN;
-	const bool is_internal_initiator = request_initiator == URI;
+	const bool is_internal_target = domain == BOLTDOMAIN;
+	const bool is_internal_initiator = request_initiator == BOLTURI;
 
 	if (is_internal_target) {
 		disable_default_handling = true;
