@@ -355,8 +355,15 @@ export async function launchOfficialClient(
 	}
 	const catalog = JSON.parse(atob(catalogText.split('.')[1]));
 
+	// change http -> https, and also redirect a specific domain that has no certificate to one that does
+	const fixUrl = (url: string): string => {
+		return url
+			.replace(/^http:\/\/(.{5})-akamai\.aws\.snxd\.com\//i, 'https://$1.akamaized.net/')
+			.replace(/^http:/i, 'https:');
+	};
+
 	// download the metafile that's linked in the catalog, used to download the actual files
-	const metafileUrl = catalog.metafile.replace(/^http:/i, 'https:');
+	const metafileUrl = fixUrl(catalog.metafile);
 	const metafileUrlResponse = await fetch(metafileUrl, { method: 'GET' });
 	const metafileText = await metafileUrlResponse.text();
 	if (metafileUrlResponse.status !== 200) {
@@ -371,13 +378,11 @@ export async function launchOfficialClient(
 			.split('')
 			.map((c) => c.charCodeAt(0).toString(16).padStart(2, '0'))
 			.join('');
-		const chunk_url: string = catalog.config.remote.baseUrl
-			.replace(/^http:/i, 'https:')
-			.concat(
-				catalog.config.remote.pieceFormat
-					.replace('{SubString:0,2,{TargetDigest}}', hex_chunk.substring(0, 2))
-					.replace('{TargetDigest}', hex_chunk)
-			);
+		const chunk_url: string = fixUrl(catalog.config.remote.baseUrl).concat(
+			catalog.config.remote.pieceFormat
+				.replace('{SubString:0,2,{TargetDigest}}', hex_chunk.substring(0, 2))
+				.replace('{TargetDigest}', hex_chunk)
+		);
 		return fetch(chunk_url, { method: 'GET' }).then((x: Response) =>
 			x.blob().then((blob) => {
 				const ds = new DecompressionStream('gzip');
