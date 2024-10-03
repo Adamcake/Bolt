@@ -76,7 +76,7 @@ jobs:
         id: restore-cef-cache
         uses: actions/cache/restore@v4
         with:
-          path: cef
+          path: Bolt\cef\dist
           key: 'windows-cef-${{ env.CEF_VERSION }}'
 
       - name: Download CEF
@@ -84,17 +84,15 @@ jobs:
         run: |
           Invoke-WebRequest -Uri 'https://adamcake.com/cef/cef-${{ env.CEF_VERSION }}-windows64-minimal-ungoogled.zip' -OutFile 'cef.zip'
           Expand-Archive -Path 'cef.zip' -DestinationPath 'cef'
-      
+          Copy-Item -Path (Get-ChildItem -Path "cef" -Directory | Select-Object -First 1).FullName -Destination "Bolt\cef\dist" -Recurse
+
       - name: Save CEF to Cache
         if: steps.restore-cef-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
-          path: cef
+          path: Bolt\cef\dist
           key: 'windows-cef-${{ env.CEF_VERSION }}'
       
-      - name: Copy CEF to Bolt
-        run: Copy-Item -Path (Get-ChildItem -Path "cef" -Directory | Select-Object -First 1).FullName -Destination "Bolt\cef\dist" -Recurse
-
       # At this point the file tree looks like
       # D:\a\Bolt\Bolt
       # - LuaJIT
