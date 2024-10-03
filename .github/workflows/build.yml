@@ -44,15 +44,15 @@ jobs:
         run: |
           mkdir cef
 
-      - name: Cache LuaJIT
-        id: cache-luajit
-        uses: actions/cache@v4
+      - name: Restore LuaJIT from Cache
+        id: restore-cache-luajit
+        uses: actions/cache/restore@v4
         with:
           path: LuaJIT
           key: 'windows-luajit-${{ env.LUAJIT_VERSION }}'
 
       - name: Checkout LuaJIT
-        if: steps.cache-luajit.outputs.cache-hit != 'true'
+        if: steps.restore-cache-luajit.outputs.cache-hit != 'true'
         uses: actions/checkout@v4.2.0
         with:
           path: LuaJIT
@@ -60,10 +60,17 @@ jobs:
           ref: v${{ env.LUAJIT_VERSION }}
 
       - name: Build LuaJIT
-        if: steps.cache-luajit.outputs.cache-hit != 'true'
+        if: steps.restore-cache-luajit.outputs.cache-hit != 'true'
         run: |
           cd LuaJIT/src
           .\msvcbuild.bat
+
+      - name: Save LuaJIT to Cache
+        if: steps.restore-cache-luajit.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: LuaJIT
+          key: 'windows-luajit-${{ env.LUAJIT_VERSION }}'
 
       - name: Restore CEF from Cache
         id: restore-cef-cache
