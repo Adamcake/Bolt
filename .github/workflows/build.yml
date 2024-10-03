@@ -11,7 +11,7 @@ on:
       - published # Automatically build and publish artifacts on release (gated behind ENABLE_WINDOWS_RELEASES)
 
 env:
-  CEF_VERSION: '114.0.5735.199-x'
+  CEF_VERSION: '114.0.5735.199'
   LUAJIT_VERSION: '2.1'
   ENABLE_WINDOWS_RELEASES: 'false'
 
@@ -82,7 +82,7 @@ jobs:
       - name: Download CEF
         if: steps.restore-cef-cache.outputs.cache-hit != 'true'
         run: |
-          Invoke-WebRequest -Uri 'https://adamcake.com/cef/cef-114.0.5735.199-windows64-minimal-ungoogled.zip' -OutFile 'cef.zip'
+          Invoke-WebRequest -Uri 'https://adamcake.com/cef/cef-${{ env.CEF_VERSION }}-windows64-minimal-ungoogled.zip' -OutFile 'cef.zip'
           Expand-Archive -Path 'cef.zip' -DestinationPath 'cef'
       
       - name: Save CEF to Cache
