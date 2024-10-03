@@ -13,7 +13,7 @@ on:
 env:
   CEF_VERSION: '114.0.5735.199-x'
   LUAJIT_VERSION: '2.1'
-  ENABLE_WINDOWS_RELEASES: 'true'
+  ENABLE_WINDOWS_RELEASES: 'false'
 
 jobs:
   build-windows-project:          
