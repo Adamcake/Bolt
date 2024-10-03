@@ -143,4 +143,3 @@ jobs:
           cd Bolt
           Compress-Archive -Path D:\a\Bolt\Bolt\install-location\bolt-launcher -DestinationPath D:\a\Bolt\Bolt\Bolt-Windows.zip
           gh release upload ${{ github.event.release.tag_name }} D:\a\Bolt\Bolt\Bolt-Windows.zip
-          
