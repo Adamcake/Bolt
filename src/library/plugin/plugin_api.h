@@ -85,8 +85,8 @@ static int api_time(lua_State*);
 static int api_datetime(lua_State*);
 
 /// [-0, +1, -]
-/// Returns an integer representing the current weekday in to game-time (i.e. UTC). A value
-/// of 1 represents Sunday, 2 represents Monday, 3 represents Tuesday, and so on.
+/// Returns an integer representing the current weekday in game-time (i.e. UTC). A value of 1
+/// represents Sunday, 2 represents Monday, 3 represents Tuesday, and so on.
 ///
 /// This function is based on the user's system clock but the result will be converted to
 /// game-time. There is no way to get the user's timezone information via Bolt.
