@@ -55,6 +55,11 @@ static int api_apiversion(lua_State*);
 /// For compatibility reasons, there will never be a breaking change to this function.
 static int api_checkversion(lua_State*);
 
+/// [-0, +0, -]
+/// Stops this instance of this plugin. Any resources will be cleaned up and destroyed. Do not use
+/// any API functions after this one.
+static int api_close(lua_State*);
+
 /// [-0, +1, -]
 /// Returns a monotonic time as an integer, in microseconds.
 /// 

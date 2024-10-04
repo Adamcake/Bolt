@@ -275,9 +275,10 @@ void _bolt_plugin_init(const struct PluginManagedFunctions* functions) {
 }
 
 static int _bolt_api_init(lua_State* state) {
-    lua_createtable(state, 0, 18);
+    lua_createtable(state, 0, 19);
     API_ADD(apiversion)
     API_ADD(checkversion)
+    API_ADD(close)
     API_ADD(time)
     API_ADD(datetime)
     API_ADD(weekday)
@@ -1007,6 +1008,16 @@ static int api_checkversion(lua_State* state) {
         lua_error(state);
     }
     return 2;
+}
+
+static int api_close(lua_State* state) {
+    lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME);
+    const struct Plugin* plugin = lua_touserdata(state, -1);
+    const uint64_t id = plugin->id;
+    lua_pop(state, 1);
+    _bolt_plugin_stop(id);
+    _bolt_plugin_notify_stopped(id);
+    return 0;
 }
 
 static int api_time(lua_State* state) {
