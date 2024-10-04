@@ -47,6 +47,20 @@ namespace Browser {
 		void GetViewRect(CefRefPtr<CefBrowser> browser, CefRect& rect) override;
 		void OnPaint(CefRefPtr<CefBrowser> browser, PaintElementType type, const RectList& dirtyRects, const void* buffer, int width, int height) override;
 
+		bool OnBeforePopup(
+			CefRefPtr<CefBrowser>,
+			CefRefPtr<CefFrame>,
+			const CefString&,
+			const CefString&,
+			CefLifeSpanHandler::WindowOpenDisposition,
+			bool,
+			const CefPopupFeatures&,
+			CefWindowInfo&,
+			CefRefPtr<CefClient>&,
+			CefBrowserSettings&,
+			CefRefPtr<CefDictionaryValue>&,
+			bool*
+		) override;
 		void OnAfterCreated(CefRefPtr<CefBrowser> browser) override;
 		void OnBeforeClose(CefRefPtr<CefBrowser> browser) override;
 

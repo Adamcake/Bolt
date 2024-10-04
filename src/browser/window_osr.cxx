@@ -283,6 +283,24 @@ void Browser::WindowOSR::OnPaint(CefRefPtr<CefBrowser> browser, PaintElementType
 	this->stored_lock.unlock();
 }
 
+bool Browser::WindowOSR::OnBeforePopup(
+	CefRefPtr<CefBrowser> browser,
+	CefRefPtr<CefFrame> frame,
+	const CefString& target_url,
+	const CefString& target_frame_name,
+	CefLifeSpanHandler::WindowOpenDisposition target_disposition,
+	bool user_gesture,
+	const CefPopupFeatures& popup_features,
+	CefWindowInfo& window_info,
+	CefRefPtr<CefClient>& client,
+	CefBrowserSettings& settings,
+	CefRefPtr<CefDictionaryValue>& extra_info,
+	bool* no_javascript_access
+) {
+	// block popup creation: osr windows can't have child windows
+	return true;
+}
+
 void Browser::WindowOSR::OnAfterCreated(CefRefPtr<CefBrowser> browser) {
 	this->browser = browser;
 	if (this->pending_delete) {
