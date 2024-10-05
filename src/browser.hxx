@@ -40,7 +40,7 @@ namespace Browser {
 		void Focus() const;
 
 		/// Force-closes this browser and all of its children
-		void Close();
+		virtual void Close();
 
 		/// Closes all of this window's child windows except its devtools window, if open.
 		void CloseChildrenExceptDevtools();
