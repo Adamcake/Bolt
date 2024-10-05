@@ -95,6 +95,7 @@ namespace Browser {
 
 		protected:
 			size_t browser_count;
+			bool pending_delete;
 			bool show_devtools;
 			Details details;
 			Client* client;
