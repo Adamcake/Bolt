@@ -53,7 +53,7 @@ struct BoltIPCClientStoppedPluginHeader {
     uint64_t plugin_id;
 };
 
-/// Header for BoltIPCMessageTypeToHost::IPC_MSG_CREATEBROWSER_OSR
+/// Header for BoltIPCMessageTypeToHost::IPC_MSG_CREATEBROWSER_*
 struct BoltIPCCreateBrowserHeader {
     uint64_t plugin_id;
     uint64_t window_id;
@@ -63,6 +63,7 @@ struct BoltIPCCreateBrowserHeader {
     int h;
 };
 
+/// Header for BoltIPCMessageTypeToHost::IPC_MSG_CLOSEBROWSER_*
 struct BoltIPCCloseBrowserHeader {
     uint64_t plugin_id;
     uint64_t window_id;
@@ -80,7 +81,7 @@ struct BoltIPCEvHeader {
     uint64_t window_id;
 };
 
-/// Header for BoltMessageTypeToHost::IPC_MSG_OSRPLUGINMESSAGE
+/// Header for BoltMessageTypeToHost::IPC_MSG_PLUGINMESSAGE and BoltMessageTypeToHost::IPC_MSG_OSRPLUGINMESSAGE
 struct BoltIPCPluginMessageHeader {
     uint64_t plugin_id;
     uint64_t window_id;
