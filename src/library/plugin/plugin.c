@@ -528,6 +528,45 @@ struct WindowInfo* _bolt_plugin_windowinfo() {
     return &windows;
 }
 
+static void _bolt_receive_discard(uint64_t amount) {
+    uint8_t buf[0x10000];
+    uint64_t i = 0;
+    while (amount - i > sizeof(buf)) {
+        _bolt_ipc_receive(fd, buf, sizeof(buf));
+        amount -= sizeof(buf);
+    }
+    if (i < amount) {
+        _bolt_ipc_receive(fd, buf, amount - i);
+    }
+}
+
+static void _bolt_incoming_plugin_msg(lua_State* state, struct BoltIPCBrowserMessageHeader* header) {
+    void* newud = lua_newuserdata(state, header->message_size); /*stack: message ud*/
+    _bolt_ipc_receive(fd, newud, header->message_size);
+    lua_getfield(state, LUA_REGISTRYINDEX, BROWSERS_REGISTRYNAME); /*stack: message ud, window table*/
+    lua_pushinteger(state, header->window_id); /*stack: message ud, window table, window id*/
+    lua_gettable(state, -2); /*stack: message ud, window table, event table*/
+    lua_pushinteger(state, BROWSER_ONMESSAGE); /*stack: message ud, window table, event table, event id*/
+    lua_gettable(state, -2); /*stack: message ud, window table, event table, function or nil*/
+    if (lua_isfunction(state, -1)) {
+        lua_pushlstring(state, newud, header->message_size); /*stack: message ud, window table, event table, function, message*/
+
+        if (lua_pcall(state, 1, 0, 0)) { /*stack: message ud, window table, event table, ?error*/
+            const char* e = lua_tolstring(state, -1, 0);
+            printf("plugin browser onmessage error: %s\n", e);
+            lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME); /*stack: message ud, window table, event table, error, plugin*/
+            const struct Plugin* plugin = lua_touserdata(state, -1);
+            lua_pop(state, 5); /*stack: (empty)*/
+            _bolt_plugin_stop(plugin->id);
+            _bolt_plugin_notify_stopped(plugin->id);
+        } else {
+            lua_pop(state, 3); /*stack: (empty)*/
+        }
+    } else {
+        lua_pop(state, 4); /*stack: (empty)*/
+    }
+}
+
 void _bolt_plugin_handle_messages() {
     enum BoltIPCMessageTypeToHost msg_type;
     while (_bolt_ipc_poll(fd)) {
@@ -605,33 +644,16 @@ void _bolt_plugin_handle_messages() {
                 struct Plugin* pp = &p;
                 uint64_t* window_id_ptr = &header.window_id;
                 struct Plugin** plugin = (struct Plugin**)hashmap_get(plugins, &pp);
-                struct ExternalBrowser** browser = (struct ExternalBrowser**)hashmap_get((*plugin)->external_browsers, &window_id_ptr);
-                lua_State* state = (*browser)->plugin->state;
-                void* newud = lua_newuserdata(state, header.message_size); /*stack: message ud*/
-                _bolt_ipc_receive(fd, newud, header.message_size);
-                lua_getfield(state, LUA_REGISTRYINDEX, BROWSERS_REGISTRYNAME); /*stack: message ud, window table*/
-                lua_pushinteger(state, header.window_id); /*stack: message ud, window table, window id*/
-                lua_gettable(state, -2); /*stack: message ud, window table, event table*/
-                lua_pushinteger(state, BROWSER_ONMESSAGE); /*stack: message ud, window table, event table, event id*/
-                lua_gettable(state, -2); /*stack: message ud, window table, event table, function or nil*/
-                printf("2\n");
-                if (lua_isfunction(state, -1)) {
-                    lua_pushlstring(state, newud, header.message_size); /*stack: message ud, window table, event table, function, message*/
-
-                    if (lua_pcall(state, 1, 0, 0)) { /*stack: message ud, window table, event table, ?error*/
-                        const char* e = lua_tolstring(state, -1, 0);
-                        printf("plugin browser onmessage error: %s\n", e);
-                        lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME); /*stack: message ud, window table, event table, error, plugin*/
-                        const struct Plugin* plugin = lua_touserdata(state, -1);
-                        lua_pop(state, 5); /*stack: (empty)*/
-                        _bolt_plugin_stop(plugin->id);
-                        _bolt_plugin_notify_stopped(plugin->id);
-                    } else {
-                        lua_pop(state, 3); /*stack: (empty)*/
-                    }
-                } else {
-                    lua_pop(state, 4); /*stack: (empty)*/
+                if (!plugin) {
+                    _bolt_receive_discard(header.message_size);
+                    break;
                 }
+                struct ExternalBrowser** browser = (struct ExternalBrowser**)hashmap_get((*plugin)->external_browsers, &window_id_ptr);
+                if (!browser) {
+                    _bolt_receive_discard(header.message_size);
+                    break;
+                }
+                _bolt_incoming_plugin_msg((*browser)->plugin->state, &header);
                 break;
             }
             case IPC_MSG_OSRBROWSERMESSAGE: {
@@ -640,39 +662,18 @@ void _bolt_plugin_handle_messages() {
                 uint64_t* window_id_ptr = &header.window_id;
                 _bolt_rwlock_lock_read(&windows.lock);
                 struct EmbeddedWindow** window = (struct EmbeddedWindow**)hashmap_get(windows.map, &window_id_ptr);
+                if (!window) {
+                    _bolt_receive_discard(header.message_size);
+                    break;
+                }
                 uint8_t deleted = (*window)->is_deleted;
                 lua_State* state = (*window)->plugin;
                 _bolt_rwlock_unlock_read(&windows.lock);
-                
-                void* newud = lua_newuserdata(state, header.message_size); /*stack: message ud*/
-                _bolt_ipc_receive(fd, newud, header.message_size);
                 if (deleted) {
-                    lua_pop(state, 1);
+                    _bolt_receive_discard(header.message_size);
                     break;
                 }
-                lua_getfield(state, LUA_REGISTRYINDEX, BROWSERS_REGISTRYNAME); /*stack: message ud, window table*/
-                lua_pushinteger(state, header.window_id); /*stack: message ud, window table, window id*/
-                lua_gettable(state, -2); /*stack: message ud, window table, event table*/
-                lua_pushinteger(state, BROWSER_ONMESSAGE); /*stack: message ud, window table, event table, event id*/
-                lua_gettable(state, -2); /*stack: message ud, window table, event table, function or nil*/
-
-                if (lua_isfunction(state, -1)) {
-                    lua_pushlstring(state, newud, header.message_size); /*stack: message ud, window table, event table, function, message*/
-
-                    if (lua_pcall(state, 1, 0, 0)) { /*stack: message ud, window table, event table, ?error*/
-                        const char* e = lua_tolstring(state, -1, 0);
-                        printf("plugin browser onmessage error: %s\n", e);
-                        lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME); /*stack: message ud, window table, event table, error, plugin*/
-                        const struct Plugin* plugin = lua_touserdata(state, -1);
-                        lua_pop(state, 5); /*stack: (empty)*/
-                        _bolt_plugin_stop(plugin->id);
-                        _bolt_plugin_notify_stopped(plugin->id);
-                    } else {
-                        lua_pop(state, 3); /*stack: (empty)*/
-                    }
-                } else {
-                    lua_pop(state, 4); /*stack: (empty)*/
-                }
+                _bolt_incoming_plugin_msg(state, &header);
                 break;
             }
             default:
