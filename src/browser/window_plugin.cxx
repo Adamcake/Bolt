@@ -73,8 +73,7 @@ CefRefPtr<CefRequestHandler> Browser::PluginWindow::GetRequestHandler() {
 	return this;
 }
 
-void Browser::PluginWindow::OnBeforeClose(CefRefPtr<CefBrowser> browser) {
-	Browser::Window::OnBeforeClose(browser);
+void Browser::PluginWindow::NotifyClosed() {
 	this->deleted = true;
 	this->client->CleanupClientPlugins(this->client_fd);
 }

@@ -33,7 +33,7 @@ namespace Browser {
 		) override;
 
 		CefRefPtr<CefRequestHandler> GetRequestHandler() override;
-		void OnBeforeClose(CefRefPtr<CefBrowser>) override;
+		void NotifyClosed() override;
 
 		private:
 			uint64_t window_id;
