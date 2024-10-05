@@ -33,6 +33,8 @@ namespace Browser {
 		) override;
 
 		CefRefPtr<CefRequestHandler> GetRequestHandler() override;
+		void Close() override;
+		bool CanClose(CefRefPtr<CefWindow>) override;
 		void NotifyClosed() override;
 
 		private:
@@ -40,6 +42,7 @@ namespace Browser {
 			uint64_t plugin_id;
 			CefRefPtr<FileManager::Directory> file_manager;
 			BoltSocketType client_fd;
+			bool closing;
 			bool deleted;
 	};
 }

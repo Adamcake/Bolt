@@ -3,6 +3,7 @@
 #if defined(BOLT_PLUGINS)
 #include "client.hxx"
 #include "include/cef_base.h"
+#include <fmt/core.h>
 
 struct InitTask: public CefTask {
 	InitTask(CefRefPtr<Browser::PluginWindow> window, const char* url): window(window), url(CefString(url)) {}
@@ -18,7 +19,7 @@ struct InitTask: public CefTask {
 
 Browser::PluginWindow::PluginWindow(CefRefPtr<Client> main_client, Details details, const char* url, CefRefPtr<FileManager::Directory> file_manager, BoltSocketType fd, uint64_t id, uint64_t plugin_id, bool show_devtools):
 	PluginRequestHandler(IPC_MSG_EXTERNALBROWSERMESSAGE), Window(main_client, details, show_devtools),
-	file_manager(file_manager), client_fd(fd), window_id(id), plugin_id(plugin_id), deleted(false)
+	file_manager(file_manager), client_fd(fd), window_id(id), plugin_id(plugin_id), closing(false), deleted(false)
 {
 	if (CefCurrentlyOn(TID_UI)) {
 		this->Init(CefString(url));
@@ -71,6 +72,24 @@ bool Browser::PluginWindow::OnBeforePopup(
 
 CefRefPtr<CefRequestHandler> Browser::PluginWindow::GetRequestHandler() {
 	return this;
+}
+
+void Browser::PluginWindow::Close() {
+	this->closing = true;
+	Browser::Window::Close();
+}
+
+bool Browser::PluginWindow::CanClose(CefRefPtr<CefWindow> win) {
+	if (this->closing) {
+		return Browser::Window::CanClose(win);
+	}
+	uint8_t buf[sizeof(BoltIPCMessageTypeToClient) + sizeof(BoltIPCCloseBrowserHeader)];
+	BoltIPCMessageTypeToClient* msg_type = reinterpret_cast<BoltIPCMessageTypeToClient*>(buf);
+	BoltIPCBrowserCloseRequestHeader* header = reinterpret_cast<BoltIPCBrowserCloseRequestHeader*>(msg_type + 1);
+	*msg_type = IPC_MSG_BROWSERCLOSEREQUEST;
+	*header = { .window_id = this->window_id, .plugin_id = this->plugin_id };
+	_bolt_ipc_send(this->client_fd, buf, sizeof(buf));
+	return false;
 }
 
 void Browser::PluginWindow::NotifyClosed() {
