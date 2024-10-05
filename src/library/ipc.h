@@ -41,6 +41,7 @@ enum BoltIPCMessageTypeToClient {
     IPC_MSG_OSRUPDATE,
     IPC_MSG_EXTERNALBROWSERMESSAGE,
     IPC_MSG_OSRBROWSERMESSAGE,
+    IPC_MSG_BROWSERCLOSEREQUEST,
 };
 
 /// Header for BoltIPCMessageTypeToHost::IPC_MSG_IDENTIFY
@@ -122,6 +123,12 @@ struct BoltIPCBrowserMessageHeader {
     uint64_t window_id;
     uint64_t plugin_id;
     size_t message_size;
+};
+
+/// Header for BoltMessageTypeToClient::IPC_MSG_BROWSERCLOSEREQUEST
+struct BoltIPCBrowserCloseRequestHeader {
+    uint64_t window_id;
+    uint64_t plugin_id;
 };
 
 #if defined(__cplusplus)
