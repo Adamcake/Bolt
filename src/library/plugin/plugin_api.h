@@ -713,6 +713,17 @@ static int api_browser_close(lua_State*);
 static int api_browser_sendmessage(lua_State*);
 
 /// [-2, +0, -]
+/// Sets an event handler for this browser for close requests. If the value is a function, it will
+/// be called with no parameters when the browser window has requested to close, such as by the
+/// user clicking the 'X' button at the top corner of the window. If the value is not a function,
+/// it will not be called, and therefore the plugin will not be notified of close requests.
+///
+/// Bolt takes no default action other than calling this function, which means nothing will happen
+/// by default when the user tries to close the window. To enable normal closing behaviour, add a
+/// closerequest handler which calls `mybrowser:close()`.
+static int api_browser_oncloserequest(lua_State*);
+
+/// [-2, +0, -]
 /// Sets an event handler for this browser for message events. If the value is a function, it will
 /// be called with one parameter, that being a string. If the value is not a function, it will not
 /// be called, and therefore the plugin will not be notified of messages.

@@ -72,6 +72,7 @@ enum {
 };
 
 enum {
+    BROWSER_ONCLOSEREQUEST,
     BROWSER_ONMESSAGE,
     BROWSER_EVENT_ENUM_SIZE, // last member of enum
 };
@@ -676,6 +677,39 @@ void _bolt_plugin_handle_messages() {
                 _bolt_incoming_plugin_msg(state, &header);
                 break;
             }
+            case IPC_MSG_BROWSERCLOSEREQUEST: {
+                struct BoltIPCBrowserCloseRequestHeader header;
+                _bolt_ipc_receive(fd, &header, sizeof(header));
+                struct Plugin p = {.id = header.plugin_id};
+                struct Plugin* pp = &p;
+                uint64_t* window_id_ptr = &header.window_id;
+                struct Plugin** plugin = (struct Plugin**)hashmap_get(plugins, &pp);
+                if (!plugin) break;
+                struct ExternalBrowser** browser = (struct ExternalBrowser**)hashmap_get((*plugin)->external_browsers, &window_id_ptr);
+                if (!browser) break;
+                lua_State* state = (*plugin)->state;
+                lua_getfield(state, LUA_REGISTRYINDEX, BROWSERS_REGISTRYNAME); /*stack: window table*/
+                lua_pushinteger(state, header.window_id); /*stack: window table, window id*/
+                lua_gettable(state, -2); /*stack: window table, event table*/
+                lua_pushinteger(state, BROWSER_ONCLOSEREQUEST); /*stack: window table, event table, event id*/
+                lua_gettable(state, -2); /*stack: window table, event table, function or nil*/
+                if (lua_isfunction(state, -1)) {
+                    if (lua_pcall(state, 0, 0, 0)) { /*stack: window table, event table, ?error*/
+                        const char* e = lua_tolstring(state, -1, 0);
+                        printf("plugin browser oncloserequest error: %s\n", e);
+                        lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME); /*stack: window table, event table, error, plugin*/
+                        const struct Plugin* plugin = lua_touserdata(state, -1);
+                        lua_pop(state, 4); /*stack: (empty)*/
+                        _bolt_plugin_stop(plugin->id);
+                        _bolt_plugin_notify_stopped(plugin->id);
+                    } else {
+                        lua_pop(state, 2); /*stack: (empty)*/
+                    }
+                } else {
+                    lua_pop(state, 3); /*stack: (empty)*/
+                }
+                break;
+            }
             default:
                 printf("unknown message type %i\n", (int)msg_type);
                 break;
@@ -865,6 +899,7 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     lua_createtable(plugin->state, 0, 3);
     API_ADD_SUB(plugin->state, close, browser)
     API_ADD_SUB(plugin->state, sendmessage, browser)
+    API_ADD_SUB(plugin->state, oncloserequest, browser)
     API_ADD_SUB(plugin->state, onmessage, browser)
     lua_settable(plugin->state, -3);
     lua_settable(plugin->state, LUA_REGISTRYINDEX);
@@ -2037,6 +2072,23 @@ static int api_browser_sendmessage(lua_State* state) {
     _bolt_ipc_send(fd, &msg_type, sizeof(msg_type));
     _bolt_ipc_send(fd, &header, sizeof(header));
     _bolt_ipc_send(fd, str, len);
+    return 0;
+}
+
+static int api_browser_oncloserequest(lua_State* state) {
+    _bolt_check_argc(state, 2, "browser_oncloserequest");
+    const struct ExternalBrowser* window = lua_touserdata(state, 1);
+    lua_getfield(state, LUA_REGISTRYINDEX, BROWSERS_REGISTRYNAME); /*stack: window table*/
+    lua_pushinteger(state, window->id); /*stack: window table, window id*/
+    lua_gettable(state, -2); /*stack: window table, event table*/
+    lua_pushinteger(state, BROWSER_ONCLOSEREQUEST); /*stack: window table, event table, event id*/
+    if (lua_isfunction(state, 2)) {
+        lua_pushvalue(state, 2);
+    } else {
+        lua_pushnil(state);
+    } /*stack: window table, event table, event id, value*/
+    lua_settable(state, -3); /*stack: window table, event table*/
+    lua_pop(state, 2); /*stack: (empty)*/
     return 0;
 }
 
