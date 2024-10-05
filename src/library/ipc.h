@@ -20,7 +20,9 @@ enum BoltIPCMessageTypeToHost {
     IPC_MSG_DUPLICATEPROCESS,
     IPC_MSG_IDENTIFY,
     IPC_MSG_CLIENT_STOPPED_PLUGIN,
+    IPC_MSG_CREATEBROWSER_EXTERNAL,
     IPC_MSG_CREATEBROWSER_OSR,
+    IPC_MSG_CLOSEBROWSER_EXTERNAL,
     IPC_MSG_CLOSEBROWSER_OSR,
     IPC_MSG_OSRUPDATE_ACK,
     IPC_MSG_EVRESIZE,
@@ -29,6 +31,7 @@ enum BoltIPCMessageTypeToHost {
     IPC_MSG_EVMOUSEBUTTONUP,
     IPC_MSG_EVSCROLL,
     IPC_MSG_EVMOUSELEAVE,
+    IPC_MSG_PLUGINMESSAGE,
     IPC_MSG_OSRPLUGINMESSAGE,
 };
 
@@ -36,7 +39,8 @@ enum BoltIPCMessageTypeToClient {
     IPC_MSG_STARTPLUGIN,
     IPC_MSG_HOST_STOPPED_PLUGIN,
     IPC_MSG_OSRUPDATE,
-    IPC_MSG_BROWSERMESSAGE,
+    IPC_MSG_EXTERNALBROWSERMESSAGE,
+    IPC_MSG_OSRBROWSERMESSAGE,
 };
 
 /// Header for BoltIPCMessageTypeToHost::IPC_MSG_IDENTIFY
@@ -59,7 +63,7 @@ struct BoltIPCCreateBrowserHeader {
     int h;
 };
 
-struct BoltIPCCloseBrowserOsrHeader {
+struct BoltIPCCloseBrowserHeader {
     uint64_t plugin_id;
     uint64_t window_id;
 };
@@ -77,7 +81,7 @@ struct BoltIPCEvHeader {
 };
 
 /// Header for BoltMessageTypeToHost::IPC_MSG_OSRPLUGINMESSAGE
-struct BoltIPCOsrPluginMessageHeader {
+struct BoltIPCPluginMessageHeader {
     uint64_t plugin_id;
     uint64_t window_id;
     size_t message_size;
@@ -112,9 +116,10 @@ struct BoltIPCOsrUpdateRect {
     int h;
 };
 
-/// Header for BoltMessageTypeToClient::IPC_MSG_BROWSERMESSAGE
+/// Header for BoltMessageTypeToClient::IPC_MSG_EXTERNALBROWSERMESSAGE and BoltMessageTypeToClient::IPC_MSG_OSRBROWSERMESSAGE
 struct BoltIPCBrowserMessageHeader {
     uint64_t window_id;
+    uint64_t plugin_id;
     size_t message_size;
 };
 

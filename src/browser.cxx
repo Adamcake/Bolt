@@ -11,7 +11,7 @@ Browser::Window::Window(CefRefPtr<Browser::Client> client, Browser::Details deta
 	browser_count(0), client(client.get()), show_devtools(show_devtools), details(details), window(nullptr), browser_view(nullptr), browser(nullptr), pending_child(nullptr)
 {
 	fmt::print("[B] Browser::Window constructor, this={}\n", reinterpret_cast<uintptr_t>(this));
-	this->Init(client, details, url, show_devtools);
+	this->Init(url);
 }
 
 Browser::Window::Window(CefRefPtr<Browser::Client> client, Browser::Details details, bool show_devtools):
@@ -20,7 +20,7 @@ Browser::Window::Window(CefRefPtr<Browser::Client> client, Browser::Details deta
 	fmt::print("[B] Browser::Window popup constructor, this={}\n", reinterpret_cast<uintptr_t>(this));
 }
 
-void Browser::Window::Init(CefRefPtr<CefClient> client, Browser::Details details, CefString url, bool show_devtools) {
+void Browser::Window::Init(CefString url) {
 	CefBrowserSettings browser_settings;
 	browser_settings.background_color = CefColorSetARGB(0, 0, 0, 0);
 	this->browser_view = CefBrowserView::CreateBrowserView(this, url, browser_settings, nullptr, nullptr, this);
@@ -146,19 +146,6 @@ void Browser::Window::OnBrowserDestroyed(CefRefPtr<CefBrowserView>, CefRefPtr<Ce
 	fmt::print("[B] OnBrowserDestroyed this={}\n", reinterpret_cast<uintptr_t>(this));
 }
 
-CefRefPtr<CefResourceRequestHandler> Browser::Window::GetResourceRequestHandler(
-	CefRefPtr<CefBrowser>,
-	CefRefPtr<CefFrame>,
-	CefRefPtr<CefRequest>,
-	bool,
-	bool,
-	const CefString&,
-	bool&
-) {
-	// Custom resource handling is implemented by overriding this function in child classes
-	return nullptr;
-}
-
 bool Browser::Window::IsSameBrowser(CefRefPtr<CefBrowser> browser) const {
 	return this->browser->IsSame(browser);
 }
@@ -201,10 +188,6 @@ CefRefPtr<CefLifeSpanHandler> Browser::Window::GetLifeSpanHandler() {
 	return this;
 }
 
-CefRefPtr<CefRequestHandler> Browser::Window::GetRequestHandler() {
-	return this;
-}
-
 bool Browser::Window::OnBeforePopup(
 	CefRefPtr<CefBrowser> browser,
 	CefRefPtr<CefFrame> frame,
@@ -233,7 +216,6 @@ void Browser::Window::OnBeforeClose(CefRefPtr<CefBrowser> browser) {
 	fmt::print("[B] Browser::OnBeforeClose for browser {}\n", browser->GetIdentifier());
 	if (this->browser && browser->IsSame(this->browser)) {
 		this->browser = nullptr;
-		this->file_manager = nullptr;
 	}
 	this->browser_count -= 1;
 	if (this->browser_count == 0) {

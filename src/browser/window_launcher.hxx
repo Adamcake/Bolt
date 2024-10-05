@@ -10,9 +10,10 @@
 #include <functional>
 
 namespace Browser {
-	struct Launcher: public Window {
+	struct Launcher: public Window, CefRequestHandler {
 		Launcher(CefRefPtr<Browser::Client>, Details, bool, CefRefPtr<FileManager::FileManager>, std::filesystem::path, std::filesystem::path);
 
+		CefRefPtr<CefRequestHandler> GetRequestHandler() override;
 		CefRefPtr<CefResourceRequestHandler> GetResourceRequestHandler(
 			CefRefPtr<CefBrowser>,
 			CefRefPtr<CefFrame>,
@@ -22,7 +23,6 @@ namespace Browser {
 			const CefString&,
 			bool&
 		) override;
-
 		void OnBrowserDestroyed(CefRefPtr<CefBrowserView>, CefRefPtr<CefBrowser>) override;
 
 		void Refresh() const override;

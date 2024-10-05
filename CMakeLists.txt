@@ -306,7 +306,7 @@ add_executable(bolt
     src/browser/client_posix.cxx src/browser/resource_handler.cxx src/browser/window_launcher.cxx
     ${WINDOW_LAUNCHER_OS_SPECIFIC} src/mime.cxx src/file_manager/directory.cxx client_cmake_gen.cxx
     "${LIBRARY_IPC_OS_SPECIFIC}" ${BOLT_FILE_MANAGER_LAUNCHER_GEN} ${BOLT_STUB_INJECT_CXX}
-    src/browser/window_osr.cxx
+    src/browser/window_osr.cxx src/browser/window_plugin.cxx src/browser/window_plugin_requests.cxx
 )
 if(BOLT_STUB_INJECT_CXX)
     add_dependencies(bolt BOLT_STUB_INJECT_DEPENDENCY)

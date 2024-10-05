@@ -9,6 +9,7 @@
 #include "include/cef_life_span_handler.h"
 #include "include/cef_render_handler.h"
 
+#include "window_plugin_requests.hxx"
 #include "../file_manager/directory.hxx"
 
 #include <mutex>
@@ -21,8 +22,8 @@ struct MouseScrollEvent;
 namespace Browser {
 	struct Client;
 
-	struct WindowOSR: public CefClient, CefLifeSpanHandler, CefRenderHandler, CefRequestHandler {
-		WindowOSR(CefString url, int width, int height, BoltSocketType client_fd, Client* main_client, int pid, uint64_t window_id, CefRefPtr<FileManager::Directory>);
+	struct WindowOSR: public CefClient, CefLifeSpanHandler, CefRenderHandler, PluginRequestHandler {
+		WindowOSR(CefString url, int width, int height, BoltSocketType client_fd, Client* main_client, int pid, uint64_t window_id, uint64_t plugin_id, CefRefPtr<FileManager::Directory>);
 
 		bool IsDeleted();
 
@@ -35,9 +36,12 @@ namespace Browser {
 		void HandleMouseButtonUp(const MouseButtonEvent*);
 		void HandleScroll(const MouseScrollEvent*);
 		void HandleMouseLeave(const MouseMotionEvent*);
-		void HandlePluginMessage(const uint8_t*, size_t);
 
-		uint64_t ID();
+		uint64_t WindowID() const override;
+		uint64_t PluginID() const override;
+		BoltSocketType ClientFD() const override;
+		CefRefPtr<FileManager::FileManager> FileManager() const override;
+		CefRefPtr<CefBrowser> Browser() const override;
 
 		CefRefPtr<CefRequestHandler> GetRequestHandler() override;
 		CefRefPtr<CefRenderHandler> GetRenderHandler() override;
@@ -64,16 +68,6 @@ namespace Browser {
 		void OnAfterCreated(CefRefPtr<CefBrowser> browser) override;
 		void OnBeforeClose(CefRefPtr<CefBrowser> browser) override;
 
-		CefRefPtr<CefResourceRequestHandler> GetResourceRequestHandler(
-			CefRefPtr<CefBrowser>,
-			CefRefPtr<CefFrame>,
-			CefRefPtr<CefRequest>,
-			bool,
-			bool,
-			const CefString&,
-			bool&
-		) override;
-
 		private:
 			bool deleted;
 			bool pending_delete;
@@ -90,6 +84,7 @@ namespace Browser {
 			size_t mapping_size;
 			CefRefPtr<CefBrowser> browser;
 			uint64_t window_id;
+			uint64_t plugin_id;
 			Client* main_client;
 			CefRefPtr<FileManager::Directory> file_manager;
 

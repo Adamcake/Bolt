@@ -3,6 +3,7 @@
 
 #if defined(BOLT_PLUGINS)
 #include "window_osr.hxx"
+#include "window_plugin.hxx"
 #include "../library/event.h"
 #include <cstring>
 #define BOLT_IPC_URL "https://bolt-blankpage/"
@@ -281,6 +282,10 @@ void Browser::Client::IPCHandleClosed(int fd) {
 				if (!w->IsDeleted()) w->Close();
 				delete_now = false;
 			}
+			for (CefRefPtr<PluginWindow>& w: p->windows) {
+				if (!w->IsDeleted()) w->Close();
+				delete_now = false;
+			}
 		}
 		if (delete_now) {
 			this->game_clients.erase(it);
@@ -289,11 +294,24 @@ void Browser::Client::IPCHandleClosed(int fd) {
 }
 
 // convenience function, assumes the mutex is already locked
-CefRefPtr<Browser::WindowOSR> Browser::Client::GetWindowFromFDAndIDs(GameClient* client, uint64_t plugin_id, uint64_t window_id) {
+CefRefPtr<Browser::PluginWindow> Browser::Client::GetExternalWindowFromFDAndIDs(GameClient* client, uint64_t plugin_id, uint64_t window_id) {
+	for (CefRefPtr<ActivePlugin>& p: client->plugins) {
+		if (p->deleted || p->uid != plugin_id) continue;
+		for (CefRefPtr<Browser::PluginWindow>& w: p->windows) {
+			if (!w->IsDeleted() && w->WindowID() == window_id) {
+				return w;
+			}
+		}
+	}
+	return nullptr;
+}
+
+// convenience function, assumes the mutex is already locked
+CefRefPtr<Browser::WindowOSR> Browser::Client::GetOsrWindowFromFDAndIDs(GameClient* client, uint64_t plugin_id, uint64_t window_id) {
 	for (CefRefPtr<ActivePlugin>& p: client->plugins) {
 		if (p->deleted || p->uid != plugin_id) continue;
 		for (CefRefPtr<Browser::WindowOSR>& w: p->windows_osr) {
-			if (!w->IsDeleted() && w->ID() == window_id) {
+			if (!w->IsDeleted() && w->WindowID() == window_id) {
 				return w;
 			}
 		}
@@ -349,12 +367,34 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 				for (CefRefPtr<WindowOSR>& w: (*it)->windows_osr) {
 					if (!w->IsDeleted()) w->Close();
 				}
-				if ((*it)->windows_osr.empty()) {
+				for (CefRefPtr<PluginWindow>& w: (*it)->windows) {
+					if (!w->IsDeleted()) w->Close();
+				}
+				if ((*it)->windows.empty() && (*it)->windows_osr.empty()) {
 					client->plugins.erase(it);
 				}
 				break;
 			}
 			this->IPCHandleClientListUpdate(false);
+			break;
+		}
+		case IPC_MSG_CREATEBROWSER_EXTERNAL: {
+			BoltIPCCreateBrowserHeader header;
+			_bolt_ipc_receive(fd, &header, sizeof(header));
+			char* url = new char[header.url_length + 1];
+			_bolt_ipc_receive(fd, url, header.url_length);
+			url[header.url_length] = '\0';
+
+			CefRefPtr<ActivePlugin> plugin = this->GetPluginFromFDAndID(client, header.plugin_id);
+			Browser::Details details {
+				.preferred_width = header.w,
+				.preferred_height = header.h,
+				.center_on_open = true,
+				.resizeable = true,
+				.frame = true,
+			};
+			plugin->windows.push_back(new Browser::PluginWindow(this, details, url, plugin, fd, header.window_id, header.plugin_id, false));
+			delete[] url;
 			break;
 		}
 		case IPC_MSG_CREATEBROWSER_OSR: {
@@ -366,23 +406,30 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 
 			CefRefPtr<ActivePlugin> plugin = this->GetPluginFromFDAndID(client, header.plugin_id);
 			if (plugin) {
-				CefRefPtr<Browser::WindowOSR> window = new Browser::WindowOSR(CefString((char*)url), header.w, header.h, fd, this, header.pid, header.window_id, plugin);
+				CefRefPtr<Browser::WindowOSR> window = new Browser::WindowOSR(CefString((char*)url), header.w, header.h, fd, this, header.pid, header.window_id, header.plugin_id, plugin);
 				plugin->windows_osr.push_back(window);
 			}
 			delete[] url;
 			break;
 		}
-		case IPC_MSG_CLOSEBROWSER_OSR: {
-			BoltIPCCloseBrowserOsrHeader header;
+		case IPC_MSG_CLOSEBROWSER_EXTERNAL: {
+			BoltIPCCloseBrowserHeader header;
 			_bolt_ipc_receive(fd, &header, sizeof(header));
-			CefRefPtr<Browser::WindowOSR> window = this->GetWindowFromFDAndIDs(client, header.plugin_id, header.window_id);
-			if (window) window->Close();
+			CefRefPtr<Browser::PluginWindow> window = this->GetExternalWindowFromFDAndIDs(client, header.plugin_id, header.window_id);
+			if (window && !window->IsDeleted()) window->Close();
+			break;
+		}
+		case IPC_MSG_CLOSEBROWSER_OSR: {
+			BoltIPCCloseBrowserHeader header;
+			_bolt_ipc_receive(fd, &header, sizeof(header));
+			CefRefPtr<Browser::WindowOSR> window = this->GetOsrWindowFromFDAndIDs(client, header.plugin_id, header.window_id);
+			if (window && !window->IsDeleted()) window->Close();
 			break;
 		}
 		case IPC_MSG_OSRUPDATE_ACK: {
 			BoltIPCOsrUpdateAckHeader header;
 			_bolt_ipc_receive(fd, &header, sizeof(header));
-			CefRefPtr<Browser::WindowOSR> window = this->GetWindowFromFDAndIDs(client, header.plugin_id, header.window_id);
+			CefRefPtr<Browser::WindowOSR> window = this->GetOsrWindowFromFDAndIDs(client, header.plugin_id, header.window_id);
 			if (window) window->HandleAck();
 			break;
 		}
@@ -392,7 +439,7 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 	EVTYPE event; \
 	_bolt_ipc_receive(fd, &header, sizeof(header)); \
 	_bolt_ipc_receive(fd, &event, sizeof(event)); \
-	CefRefPtr<Browser::WindowOSR> window = this->GetWindowFromFDAndIDs(client, header.plugin_id, header.window_id); \
+	CefRefPtr<Browser::WindowOSR> window = this->GetOsrWindowFromFDAndIDs(client, header.plugin_id, header.window_id); \
 	if (window) window->HANDLER(&event); \
 	break; \
 }
@@ -404,12 +451,22 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 		DEF_OSR_EVENT(MOUSELEAVE, HandleMouseLeave, MouseMotionEvent)
 #undef DEF_OSR_EVENT
 
-		case IPC_MSG_OSRPLUGINMESSAGE: {
-			BoltIPCOsrPluginMessageHeader header;
+		case IPC_MSG_PLUGINMESSAGE: {
+			BoltIPCPluginMessageHeader header;
 			_bolt_ipc_receive(fd, &header, sizeof(header));
 			uint8_t* content = new uint8_t[header.message_size];
 			_bolt_ipc_receive(fd, content, header.message_size);
-			CefRefPtr<Browser::WindowOSR> window = this->GetWindowFromFDAndIDs(client, header.plugin_id, header.window_id);
+			CefRefPtr<Browser::PluginWindow> window = this->GetExternalWindowFromFDAndIDs(client, header.plugin_id, header.window_id);
+			if (window) window->HandlePluginMessage(content, header.message_size);
+			delete[] content;
+			break;
+		}
+		case IPC_MSG_OSRPLUGINMESSAGE: {
+			BoltIPCPluginMessageHeader header;
+			_bolt_ipc_receive(fd, &header, sizeof(header));
+			uint8_t* content = new uint8_t[header.message_size];
+			_bolt_ipc_receive(fd, content, header.message_size);
+			CefRefPtr<Browser::WindowOSR> window = this->GetOsrWindowFromFDAndIDs(client, header.plugin_id, header.window_id);
 			if (window) window->HandlePluginMessage(content, header.message_size);
 			delete[] content;
 			break;
@@ -469,7 +526,10 @@ void Browser::Client::StartPlugin(uint64_t client_id, std::string id, std::strin
 				for (CefRefPtr<WindowOSR>& w: (*it)->windows_osr) {
 					w->Close();
 				}
-				if ((*it)->windows_osr.empty()) {
+				for (CefRefPtr<PluginWindow>& w: (*it)->windows) {
+					w->Close();
+				}
+				if ((*it)->windows.empty() && (*it)->windows_osr.empty()) {
 					g.plugins.erase(it);
 				}
 				break;
@@ -508,10 +568,13 @@ void Browser::Client::StopPlugin(uint64_t client_id, uint64_t uid) {
 				*header = { .plugin_id = (*it)->uid };
 				_bolt_ipc_send(g.fd, buf, sizeof(buf));
 				(*it)->deleted = true;
+				for (CefRefPtr<PluginWindow>& w: (*it)->windows) {
+					w->Close();
+				}
 				for (CefRefPtr<WindowOSR>& w: (*it)->windows_osr) {
 					w->Close();
 				}
-				if ((*it)->windows_osr.empty()) {
+				if ((*it)->windows.empty() && (*it)->windows_osr.empty()) {
 					g.plugins.erase(it);
 				}
 				break;
@@ -534,12 +597,22 @@ void Browser::Client::CleanupClientPlugins(int fd) {
 				),
 				p->windows_osr.end()
 			);
+			p->windows.erase(
+				std::remove_if(
+					p->windows.begin(),
+					p->windows.end(),
+					[](const CefRefPtr<PluginWindow>& window){ return window->IsDeleted(); }
+				),
+				p->windows.end()
+			);
 		}
 		it->plugins.erase(
 			std::remove_if(
 				it->plugins.begin(),
 				it->plugins.end(),
-				[](const CefRefPtr<ActivePlugin>& plugin) { return plugin->deleted && plugin->windows_osr.size() == 0; }
+				[](const CefRefPtr<ActivePlugin>& plugin) {
+					return plugin->deleted && plugin->windows_osr.size() == 0 && plugin->windows.size() == 0;
+				}
 			),
 			it->plugins.end()
 		);

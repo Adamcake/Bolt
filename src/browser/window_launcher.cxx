@@ -136,8 +136,11 @@ Browser::Launcher::Launcher(
 	this->plugin_config_path.append("plugins.json");
 #endif
 
-	CefString url = this->BuildURL();
-	this->Init(this, details, url, show_devtools);
+	this->Init(this->BuildURL());
+}
+
+CefRefPtr<CefRequestHandler> Browser::Launcher::GetRequestHandler() {
+	return this;
 }
 
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandler(
