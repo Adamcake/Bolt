@@ -8,16 +8,18 @@ on:
       - master # Automatically build on pull request to master
   release:
     types: 
-      - published # Automatically build and publish artifacts on release (gated behind ENABLE_WINDOWS_RELEASES)
+      - published # Automatically build on release
 
 env:
-  CEF_VERSION: '114.0.5735.199'
+  WINDOWS_CEF_VERSION: '114.0.5735.199'
+  LINUX_CEF_VERSION: '114.0.5735.134'
   LUAJIT_VERSION: '2.1'
-  ENABLE_WINDOWS_RELEASES: 'false'
+  ENABLE_WINDOWS_RELEASES: 'true'
+  ENABLE_LINUX_RELEASES: 'true'
 
 jobs:
   build-windows-project:          
-    name: Build Project
+    name: Build Windows
     runs-on: windows-2022
     steps:
       - name: Checkout Project
@@ -77,12 +79,12 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: Bolt\cef\dist
-          key: 'windows-cef-${{ env.CEF_VERSION }}'
+          key: 'windows-cef-${{ env.WINDOWS_CEF_VERSION }}'
 
       - name: Download CEF
         if: steps.restore-cef-cache.outputs.cache-hit != 'true'
         run: |
-          Invoke-WebRequest -Uri 'https://adamcake.com/cef/cef-${{ env.CEF_VERSION }}-windows64-minimal-ungoogled.zip' -OutFile 'cef.zip'
+          Invoke-WebRequest -Uri 'https://adamcake.com/cef/cef-${{ env.WINDOWS_CEF_VERSION }}-windows64-minimal-ungoogled.zip' -OutFile 'cef.zip'
           Expand-Archive -Path 'cef.zip' -DestinationPath 'cef'
           Copy-Item -Path (Get-ChildItem -Path "cef" -Directory | Select-Object -First 1).FullName -Destination "Bolt\cef\dist" -Recurse
 
@@ -91,7 +93,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: Bolt\cef\dist
-          key: 'windows-cef-${{ env.CEF_VERSION }}'
+          key: 'windows-cef-${{ env.WINDOWS_CEF_VERSION }}'
       
       # At this point the file tree looks like
       # D:\a\Bolt\Bolt
@@ -112,7 +114,7 @@ jobs:
         uses: threeal/cmake-action@v2.0.0
         with:
           source-dir: Bolt # The directory where CMakeLists.txt is located
-          build-dir: build # Makes it so that the build directory is set to Bold/build
+          build-dir: build # Makes it so that the build directory is set to Bolt/build
           generator: Visual Studio 17
           options: | 
             BOLT_LUAJIT_DIR=D:\a\Bolt\Bolt\LuaJIT\src
@@ -143,3 +145,76 @@ jobs:
           cd Bolt
           Compress-Archive -Path D:\a\Bolt\Bolt\install-location\bolt-launcher -DestinationPath D:\a\Bolt\Bolt\Bolt-Windows.zip
           gh release upload ${{ github.event.release.tag_name }} D:\a\Bolt\Bolt\Bolt-Windows.zip
+
+  build-linux-project:          
+    name: Build Linux
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout Project
+        uses: actions/checkout@v4.2.0
+        with:
+          submodules: recursive
+
+      - name: Install package dependencies
+        run: sudo apt update && sudo apt install -y libx11-dev libxcb1-dev libarchive-dev libluajit-5.1-dev clang cmake ninja-build
+          
+      - name: Restore CEF from Cache
+        id: restore-cef-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: cef/dist
+          key: 'linux-cef-${{ env.LINUX_CEF_VERSION }}'
+
+      - name: Download CEF
+        if: steps.restore-cef-cache.outputs.cache-hit != 'true'
+        run: |
+          # Download cef and set up the directory structure
+          curl -o cef/cef.tar.gz 'https://adamcake.com/cef/cef-${{ env.LINUX_CEF_VERSION }}-linux-x86_64-minimal-ungoogled.tar.gz'
+          mkdir -p cef/dist
+
+          # Extract the cef tarball and copy the contents to the dist directory
+          tar -xzf cef/cef.tar.gz --directory cef/dist
+
+          cef_content_dir=$(ls -d cef/dist/* | head -n 1)
+          mv "$cef_content_dir"/* cef/dist/
+            
+          # Clean up the extracted directory
+          rm -rf "$cef_content_dir"
+
+      - name: Save CEF to Cache
+        if: steps.restore-cef-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: cef/dist
+          key: 'linux-cef-${{ env.LINUX_CEF_VERSION }}'
+      
+      - name: Build Project
+        uses: threeal/cmake-action@v2.0.0
+        with:
+          build-dir: build # Makes it so that the build directory is set to ./build
+          generator: Ninja
+          options: | 
+            BOLT_LUAJIT_INCLUDE_DIR=/usr/include/luajit-2.1
+            CMAKE_BUILD_TYPE=Release
+          build-args: --config Release -j 4
+      
+      - name: Create Release
+        run: |
+          cmake --install build/ --prefix install
+          chmod +x install/opt/bolt-launcher/bolt
+      
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Bolt-Linux-${{ github.sha }}
+          path: install/opt
+  
+      # Uploads the zip file to the release matching the format of the above step
+      # Such that build artifacts and release artifacts are the same
+      - name: Attach Bolt Artifact to Release
+        if: github.event_name == 'release' && env.ENABLE_LINUX_RELEASES == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          zip -r Bolt-Linux.zip install/opt
+          gh release upload ${{ github.event.release.tag_name }} Bolt-Linux.zip
