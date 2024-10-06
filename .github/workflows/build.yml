@@ -15,7 +15,7 @@ env:
   LINUX_CEF_VERSION: '114.0.5735.134'
   LUAJIT_VERSION: '2.1'
   ENABLE_WINDOWS_RELEASES: 'false'
-  ENABLE_LINUX_RELEASES: 'false'
+  ENABLE_LINUX_RELEASES: 'true'
 
 jobs:
   build-windows-project:          
@@ -207,7 +207,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Bolt-Linux-${{ github.sha }}
-          path: install/opt
+          path: install/opt/
   
       # Uploads the zip file to the release matching the format of the above step
       # Such that build artifacts and release artifacts are the same
@@ -216,5 +216,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          zip -r Bolt-Linux.zip install/opt
+          cd install/opt
+          zip -r ../../Bolt-Linux.zip .
+          cd ../../
           gh release upload ${{ github.event.release.tag_name }} Bolt-Linux.zip
