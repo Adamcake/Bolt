@@ -22,9 +22,12 @@ struct MouseEvent {
     uint8_t mb_middle;
 };
 
-struct ResizeEvent {
+struct RepositionEvent {
+    int16_t x;
+    int16_t y;
     uint16_t width;
     uint16_t height;
+    uint8_t did_resize;
 };
 
 struct MouseMotionEvent {
