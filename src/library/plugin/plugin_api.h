@@ -464,14 +464,29 @@ static int api_window_clear(lua_State*);
 /// surface_subimage for usage.
 static int api_window_subimage(lua_State*);
 
-/// [-2, +0, -]
-/// Sets an event handler for this window for resize events. If the value is a function, it will be
-/// called with one parameter, that being a resize event object. If the value is not a function, it
-/// will not be called, and therefore the plugin will not be notified of resize events.
+/// [-3, +0, -]
+/// Starts repositioning for this window. This function changes how the user's "drag" action is
+/// processed, and would usually be called from the `onmousebutton` callback for the left mouse
+/// button. Repositioning will occur until the user releases the left mouse button or until the
+/// repositioning is cancelled. In the first case, an `onreposition` event will be fired.
 ///
-/// Resizing a window clears the contents to be transparent, so plugins must redraw the whole
-/// window contents in response to a resize event (or any time before it next gets drawn).
-static int api_window_onresize(lua_State*);
+/// This function takes two integer parameters. The first should be negative if the window's left
+/// edge is being dragged, positive if the right edge is being dragged, or zero if neither the left
+/// or right edge is being dragged. The second parameter should be negative if the window's top
+/// edge is being dragged, positive for the window's bottom edge, or zero for neither the top or
+/// bottom edge. Finally, if both are zero, the window will be moved instead of resized.
+static int api_window_startreposition(lua_State*);
+
+/// [-2, +0, -]
+/// Sets an event handler for this window for reposition events. If the value is a function, it
+/// will be called with one parameter, that being a reposition event object. If the value is not a
+/// function, it will not be called, and therefore the plugin will not be notified of reposition
+/// events for this window.
+///
+/// Reposition events refer to the window's position and/or size having changed. If the window was
+/// resized, its new contents will be fully transparent and must be redrawn. Call event:didresize()
+/// to check if that's the case.
+static int api_window_onreposition(lua_State*);
 
 /// [-2, +0, -]
 /// Sets an event handler for this window for mouse motion events. If the value is a function, it
@@ -647,9 +662,14 @@ static int api_render3d_bonetransforms(lua_State*);
 /// `vertexbone()` and `bonetransforms()`.
 static int api_render3d_animated(lua_State*);
 
-/// [-1, +2, -]
-/// Returns the new width and height that the window was resized to.
-static int api_resizeevent_size(lua_State*);
+/// [-1, +4, -]
+/// Returns the new x, y, width and height that the window was repositioned to.
+static int api_repositionevent_xywh(lua_State*);
+
+/// [-1, +1, -]
+/// Returns a boolean indicating whether the window changed size. If true, the contents of the
+/// window were cleared and need to be redrawn.
+static int api_repositionevent_didresize(lua_State*);
 
 /// [-1, +2, -]
 /// Returns the x and y for this mouse event.

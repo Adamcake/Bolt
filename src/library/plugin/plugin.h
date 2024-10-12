@@ -183,6 +183,16 @@ struct EmbeddedWindow {
     struct EmbeddedWindowMetadata metadata;
     RWLock input_lock; // applies to the pending inputs
     struct WindowPendingInput input;
+    int16_t drag_xstart;
+    int16_t drag_ystart;
+    int16_t repos_target_x;
+    int16_t repos_target_y;
+    uint16_t repos_target_w;
+    uint16_t repos_target_h;
+    uint8_t reposition_mode; // 1 if the window is being moved or resized by a mouse action
+    int8_t reposition_w; // negative, positive or 0 to indicate which edge is being moved
+    int8_t reposition_h; // negative, positive or 0 to indicate which edge is being moved
+    uint8_t reposition_threshold; // whether the minimum distance threshold has been met during this repositioning
     uint8_t is_browser;
     uint8_t is_deleted;
     struct BoltSHM browser_shm; // set and initialised only if is_browser
