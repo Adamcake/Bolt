@@ -64,6 +64,7 @@ LARGE_INTEGER performance_frequency;
 #define MESSAGE_CB_REGISTRYNAME "messagecb"
 
 enum {
+    WINDOW_USERDATA,
     WINDOW_ONREPOSITION,
     WINDOW_ONMOUSEMOTION,
     WINDOW_ONMOUSEBUTTON,
@@ -74,6 +75,7 @@ enum {
 };
 
 enum {
+    BROWSER_USERDATA,
     BROWSER_ONCLOSEREQUEST,
     BROWSER_ONMESSAGE,
     BROWSER_EVENT_ENUM_SIZE, // last member of enum
@@ -1385,10 +1387,13 @@ static int api_createwindow(lua_State* state) {
     lua_setmetatable(state, -2);
     next_window_id += 1;
 
-    // create an empty event table in the registry for this window
+    // create an event table in the registry for this window
     lua_getfield(state, LUA_REGISTRYINDEX, WINDOWS_REGISTRYNAME);
     lua_pushinteger(state, window->id);
     lua_createtable(state, WINDOW_EVENT_ENUM_SIZE, 0);
+    lua_pushinteger(state, WINDOW_USERDATA);
+    lua_pushvalue(state, -5);
+    lua_settable(state, -3);
     lua_settable(state, -3);
     lua_pop(state, 1);
 
@@ -1478,10 +1483,13 @@ static int api_createembeddedbrowser(lua_State* state) {
     lua_setmetatable(state, -2);
     next_window_id += 1;
 
-    // create an empty event table in the registry for this window
+    // create an event table in the registry for this window
     lua_getfield(state, LUA_REGISTRYINDEX, BROWSERS_REGISTRYNAME);
     lua_pushinteger(state, window->id);
     lua_createtable(state, BROWSER_EVENT_ENUM_SIZE, 0);
+    lua_pushinteger(state, BROWSER_USERDATA);
+    lua_pushvalue(state, -5);
+    lua_settable(state, -3);
     lua_settable(state, -3);
     lua_pop(state, 1);
 
