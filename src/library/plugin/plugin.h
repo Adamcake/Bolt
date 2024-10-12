@@ -131,6 +131,7 @@ struct PluginManagedFunctions {
     void (*surface_init)(struct SurfaceFunctions*, unsigned int, unsigned int, const void*);
     void (*surface_destroy)(void*);
     void (*surface_resize_and_clear)(void*, unsigned int, unsigned int);
+    void (*draw_region_outline)(int16_t x, int16_t y, uint16_t width, uint16_t height);
 };
 
 struct WindowPendingInput {

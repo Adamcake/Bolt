@@ -476,11 +476,13 @@ void _bolt_plugin_process_windows(uint32_t window_width, uint32_t window_height)
         _bolt_rwlock_unlock_write(&window->input_lock);
 
         if (did_move || did_resize) {
-            window->reposition_mode = false;
-            struct PluginSurfaceUserdata* ud = window->surface_functions.userdata;
-            managed_functions.surface_resize_and_clear(ud, metadata.width, metadata.height);
+            if (did_resize) {
+                struct PluginSurfaceUserdata* ud = window->surface_functions.userdata;
+                managed_functions.surface_resize_and_clear(ud, metadata.width, metadata.height);
+            }
             struct RepositionEvent event = {.x = metadata.x, .y = metadata.y, .width = metadata.width, .height = metadata.height, .did_resize = did_resize};
             _bolt_plugin_window_onreposition(window, &event);
+            window->reposition_mode = false;
         }
 
         if (window->reposition_mode) {
@@ -500,8 +502,10 @@ void _bolt_plugin_process_windows(uint32_t window_width, uint32_t window_height)
                     metadata = window->metadata;
                     _bolt_rwlock_unlock_write(&window->lock);
 
-                    struct PluginSurfaceUserdata* ud = window->surface_functions.userdata;
-                    managed_functions.surface_resize_and_clear(ud, metadata.width, metadata.height);
+                    if (did_resize) {
+                        struct PluginSurfaceUserdata* ud = window->surface_functions.userdata;
+                        managed_functions.surface_resize_and_clear(ud, metadata.width, metadata.height);
+                    }
                     struct RepositionEvent event = {.x = metadata.x, .y = metadata.y, .width = metadata.width, .height = metadata.height, .did_resize = did_resize};
                     _bolt_plugin_window_onreposition(window, &event);
                 }
@@ -553,6 +557,9 @@ void _bolt_plugin_process_windows(uint32_t window_width, uint32_t window_height)
         }
 
         window->surface_functions.draw_to_screen(window->surface_functions.userdata, 0, 0, metadata.width, metadata.height, metadata.x, metadata.y, metadata.width, metadata.height);
+        if (window->reposition_mode && window->reposition_threshold) {
+            managed_functions.draw_region_outline(window->repos_target_x, window->repos_target_y, window->repos_target_w, window->repos_target_h);
+        }
     }
     _bolt_rwlock_unlock_read(&windows->lock);
 
