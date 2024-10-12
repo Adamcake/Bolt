@@ -14,7 +14,7 @@
 
 #include <mutex>
 
-struct ResizeEvent;
+struct RepositionEvent;
 struct MouseMotionEvent;
 struct MouseButtonEvent;
 struct MouseScrollEvent;
@@ -30,7 +30,7 @@ namespace Browser {
 		void Close();
 
 		void HandleAck();
-		void HandleResize(const ResizeEvent*);
+		void HandleReposition(const RepositionEvent*);
 		void HandleMouseMotion(const MouseMotionEvent*);
 		void HandleMouseButton(const MouseButtonEvent*);
 		void HandleMouseButtonUp(const MouseButtonEvent*);
