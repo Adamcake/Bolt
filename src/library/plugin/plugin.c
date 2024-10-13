@@ -790,6 +790,25 @@ void _bolt_plugin_handle_messages() {
                 _bolt_incoming_plugin_msg(state, &header);
                 break;
             }
+            case IPC_MSG_OSRSTARTREPOSITION: {
+                struct BoltIPCOsrStartRepositionHeader header;
+                _bolt_ipc_receive(fd, &header, sizeof(header));
+                uint64_t* window_id_ptr = &header.window_id;
+                _bolt_rwlock_lock_read(&windows.lock);
+                struct EmbeddedWindow** window = (struct EmbeddedWindow**)hashmap_get(windows.map, &window_id_ptr);
+                if (!window) {
+                    _bolt_rwlock_unlock_read(&windows.lock);
+                    break;
+                }
+                uint8_t deleted = (*window)->is_deleted;
+                lua_State* state = (*window)->plugin;
+                _bolt_rwlock_unlock_read(&windows.lock);
+                if (deleted) break;
+                (*window)->reposition_mode = true;
+                (*window)->reposition_w = header.horizontal;
+                (*window)->reposition_h = header.vertical;
+                break;
+            }
             case IPC_MSG_BROWSERCLOSEREQUEST: {
                 struct BoltIPCBrowserCloseRequestHeader header;
                 _bolt_ipc_receive(fd, &header, sizeof(header));
