@@ -1,7 +1,7 @@
 #include "window_plugin_requests.hxx"
 #if defined(BOLT_PLUGINS)
 #include "resource_handler.hxx"
-#include "window_launcher.hxx"
+#include "request.hxx"
 
 void Browser::PluginRequestHandler::HandlePluginMessage(const uint8_t* data, size_t len) {
 	CefRefPtr<CefProcessMessage> message = CefProcessMessage::Create("__bolt_plugin_message");
@@ -80,6 +80,31 @@ CefRefPtr<CefResourceRequestHandler> Browser::PluginRequestHandler::GetResourceR
 			vec[0]->GetBytes(message_size, message);
 			const uint8_t ret = _bolt_ipc_send(this->ClientFD(), buf, bytes);
 			delete[] buf;
+			QSENDSYSTEMERRORIF(ret);
+			QSENDOK();
+		}
+
+		if (api_name == "start-reposition") {
+			uint8_t buf[sizeof(BoltIPCMessageTypeToClient) + sizeof(BoltIPCOsrStartRepositionHeader)];
+			BoltIPCMessageTypeToClient* msg_type = reinterpret_cast<BoltIPCMessageTypeToClient*>(buf);
+			BoltIPCOsrStartRepositionHeader* header = reinterpret_cast<BoltIPCOsrStartRepositionHeader*>(msg_type + 1);
+			*msg_type = IPC_MSG_OSRSTARTREPOSITION;
+			
+			bool has_h = false;
+			bool has_v = false;
+			bool h_valid, v_valid;
+			int64_t h, v;
+			ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
+				PQINT(h)
+				PQINT(v)
+			});
+			QREQPARAMINT(h);
+			QREQPARAMINT(v);
+
+			header->window_id = this->WindowID();
+			header->horizontal = (h == 0) ? 0 : ((h > 0) ? 1 : -1);
+			header->vertical = (v == 0) ? 0 : ((v > 0) ? 1 : -1);
+			const uint8_t ret = _bolt_ipc_send(this->ClientFD(), buf, sizeof(buf));
 			QSENDSYSTEMERRORIF(ret);
 			QSENDOK();
 		}
