@@ -77,6 +77,7 @@ struct GLProcFunctions {
     void (*ShaderSource)(GLuint, GLsizei, const GLchar**, const GLint*);
     void (*TexStorage2D)(GLenum, GLsizei, GLenum, GLsizei, GLsizei);
     void (*Uniform1i)(GLint, GLint);
+    void (*Uniform2i)(GLint, GLint, GLint);
     void (*Uniform4i)(GLint, GLint, GLint, GLint, GLint);
     void (*UniformMatrix4fv)(GLint, GLsizei, GLboolean, const GLfloat*);
     GLboolean (*UnmapBuffer)(GLenum);

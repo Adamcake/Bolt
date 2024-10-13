@@ -34,6 +34,8 @@ LARGE_INTEGER performance_frequency;
 #define API_ADD_SUB(STATE, FUNC, SUB) PUSHSTRING(STATE, #FUNC);lua_pushcfunction(STATE, api_##SUB##_##FUNC);lua_settable(STATE, -3);
 #define API_ADD_SUB_ALIAS(STATE, FUNC, ALIAS, SUB) PUSHSTRING(STATE, #ALIAS);lua_pushcfunction(STATE, api_##SUB##_##FUNC);lua_settable(STATE, -3);
 
+#define WINDOW_MIN_SIZE 20
+
 #define PLUGIN_REGISTRYNAME "plugin"
 #define WINDOWS_REGISTRYNAME "windows"
 #define BROWSERS_REGISTRYNAME "browsers"
@@ -42,7 +44,7 @@ LARGE_INTEGER performance_frequency;
 #define MINIMAP_META_REGISTRYNAME "minimapmeta"
 #define SWAPBUFFERS_META_REGISTRYNAME "swapbuffersmeta"
 #define SURFACE_META_REGISTRYNAME "surfacemeta"
-#define RESIZE_META_REGISTRYNAME "resizemeta"
+#define REPOSITION_META_REGISTRYNAME "repositionmeta"
 #define MOUSEMOTION_META_REGISTRYNAME "mousemotionmeta"
 #define MOUSEBUTTON_META_REGISTRYNAME "mousebuttonmeta"
 #define MOUSEBUTTONUP_META_REGISTRYNAME MOUSEBUTTON_META_REGISTRYNAME
@@ -62,7 +64,8 @@ LARGE_INTEGER performance_frequency;
 #define MESSAGE_CB_REGISTRYNAME "messagecb"
 
 enum {
-    WINDOW_ONRESIZE,
+    WINDOW_USERDATA,
+    WINDOW_ONREPOSITION,
     WINDOW_ONMOUSEMOTION,
     WINDOW_ONMOUSEBUTTON,
     WINDOW_ONMOUSEBUTTONUP,
@@ -72,6 +75,7 @@ enum {
 };
 
 enum {
+    BROWSER_USERDATA,
     BROWSER_ONCLOSEREQUEST,
     BROWSER_ONMESSAGE,
     BROWSER_EVENT_ENUM_SIZE, // last member of enum
@@ -102,7 +106,7 @@ struct Plugin {
 static void _bolt_plugin_ipc_init(BoltSocketType*);
 static void _bolt_plugin_ipc_close(BoltSocketType);
 
-static void _bolt_plugin_window_onresize(struct EmbeddedWindow*, struct ResizeEvent*);
+static void _bolt_plugin_window_onreposition(struct EmbeddedWindow*, struct RepositionEvent*);
 static void _bolt_plugin_window_onmousemotion(struct EmbeddedWindow*, struct MouseMotionEvent*);
 static void _bolt_plugin_window_onmousebutton(struct EmbeddedWindow*, struct MouseButtonEvent*);
 static void _bolt_plugin_window_onmousebuttonup(struct EmbeddedWindow*, struct MouseButtonEvent*);
@@ -312,6 +316,74 @@ uint8_t _bolt_plugin_is_inited() {
     return inited;
 }
 
+// populates the window->repos_target_... variables, without accessing any of the window's mutex-protected members
+#define WINDOW_REPOSITION_THRESHOLD 6
+static void _bolt_window_calc_repos_target(struct EmbeddedWindow* window, const struct EmbeddedWindowMetadata* meta, int16_t x, int16_t y, uint32_t window_width, uint32_t window_height) {
+    int16_t diff_x = x - window->drag_xstart;
+    int16_t diff_y = y - window->drag_ystart;
+    if (abs(diff_x) >= WINDOW_REPOSITION_THRESHOLD || abs(diff_y) >= WINDOW_REPOSITION_THRESHOLD) {
+        window->reposition_threshold = true;
+    }
+    if (!window->reposition_threshold) return;
+    
+    if (window->reposition_w == 0 && window->reposition_h == 0) {
+        // move, no resize
+        window->repos_target_x = meta->x + diff_x;
+        window->repos_target_y = meta->y + diff_y;
+        window->repos_target_w = meta->width;
+        window->repos_target_h = meta->height;
+
+        // clamp
+        if (window->repos_target_x < 0) window->repos_target_x = 0;
+        if (window->repos_target_y < 0) window->repos_target_y = 0;
+        if ((int32_t)window->repos_target_x + (int32_t)window->repos_target_w > (int32_t)window_width) window->repos_target_x = window_width - window->repos_target_w;
+        if ((int32_t)window->repos_target_y + (int32_t)window->repos_target_h > (int32_t)window_height) window->repos_target_y = window_height - window->repos_target_h;
+        return;
+    }
+
+    if (window->reposition_w > 0) {
+        // resize x by the right edge
+        window->repos_target_x = meta->x;
+        window->repos_target_w = meta->width + diff_x;
+        if (meta->width + diff_x < WINDOW_MIN_SIZE) window->repos_target_w = WINDOW_MIN_SIZE;
+        if (window->repos_target_x + window->repos_target_w > window_width) window->repos_target_w = window_width - window->repos_target_x;
+    } else if (window->reposition_w < 0) {
+        // resize x by the left edge
+        if (meta->width - diff_x < WINDOW_MIN_SIZE) diff_x = meta->width - WINDOW_MIN_SIZE;
+        window->repos_target_x = meta->x + diff_x;
+        window->repos_target_w = meta->width - diff_x;
+        if (window->repos_target_x < 0) {
+            window->repos_target_w += window->repos_target_x;
+            window->repos_target_x = 0;
+        }
+    } else {
+        // don't resize x
+        window->repos_target_x = meta->x;
+        window->repos_target_w = meta->width;
+    }
+
+    if (window->reposition_h > 0) {
+        // resize y by the bottom edge
+        window->repos_target_y = meta->y;
+        window->repos_target_h = meta->height + diff_y;
+        if (meta->height + diff_y < WINDOW_MIN_SIZE) window->repos_target_h = WINDOW_MIN_SIZE;
+        if (window->repos_target_y + window->repos_target_h > window_height) window->repos_target_h = window_height - window->repos_target_y;
+    } else if (window->reposition_h < 0) {
+        // resize y by the top edge
+        if (meta->height - diff_y < WINDOW_MIN_SIZE) diff_y = meta->height - WINDOW_MIN_SIZE;
+        window->repos_target_y = meta->y + diff_y;
+        window->repos_target_h = meta->height - diff_y;
+        if (window->repos_target_y < 0) {
+            window->repos_target_h += window->repos_target_y;
+            window->repos_target_y = 0;
+        }
+    } else {
+        // don't resize y
+        window->repos_target_y = meta->y;
+        window->repos_target_h = meta->height;
+    }
+}
+
 void _bolt_plugin_process_windows(uint32_t window_width, uint32_t window_height) {
     struct SwapBuffersEvent event;
     _bolt_plugin_handle_swapbuffers(&event);
@@ -371,6 +443,7 @@ void _bolt_plugin_process_windows(uint32_t window_width, uint32_t window_height)
             continue;
         }
         _bolt_rwlock_lock_write(&window->lock);
+        bool did_move = false;
         bool did_resize = false;
         if (window->metadata.width > window_width) {
             window->metadata.width = window_width;
@@ -382,15 +455,19 @@ void _bolt_plugin_process_windows(uint32_t window_width, uint32_t window_height)
         }
         if (window->metadata.x < 0) {
             window->metadata.x = 0;
+            did_move = true;
         }
         if (window->metadata.y < 0) {
             window->metadata.y = 0;
+            did_move = true;
         }
         if (window->metadata.x + window->metadata.width > window_width) {
             window->metadata.x = window_width - window->metadata.width;
+            did_move = true;
         }
         if (window->metadata.y + window->metadata.height > window_height) {
             window->metadata.y = window_height - window->metadata.height;
+            did_move = true;
         }
         struct EmbeddedWindowMetadata metadata = window->metadata;
         _bolt_rwlock_unlock_write(&window->lock);
@@ -400,56 +477,91 @@ void _bolt_plugin_process_windows(uint32_t window_width, uint32_t window_height)
         memset(&window->input, 0, sizeof(window->input));
         _bolt_rwlock_unlock_write(&window->input_lock);
 
-        if (did_resize) {
-            struct PluginSurfaceUserdata* ud = window->surface_functions.userdata;
-            managed_functions.surface_resize_and_clear(ud, metadata.width, metadata.height);
-            struct ResizeEvent event = {.width = metadata.width, .height = metadata.height};
-            _bolt_plugin_window_onresize(window, &event);
+        if (did_move || did_resize) {
+            if (did_resize) {
+                struct PluginSurfaceUserdata* ud = window->surface_functions.userdata;
+                managed_functions.surface_resize_and_clear(ud, metadata.width, metadata.height);
+            }
+            struct RepositionEvent event = {.x = metadata.x, .y = metadata.y, .width = metadata.width, .height = metadata.height, .did_resize = did_resize};
+            _bolt_plugin_window_onreposition(window, &event);
+            window->reposition_mode = false;
         }
 
-        if (inputs.mouse_motion) {
-            struct MouseMotionEvent event = {.details = inputs.mouse_motion_event};
-            _bolt_plugin_window_onmousemotion(window, &event);
-        }
-        if (inputs.mouse_left) {
-            struct MouseButtonEvent event = {.details = inputs.mouse_left_event, .button = MBLeft};
-            _bolt_plugin_window_onmousebutton(window, &event);
-        }
-        if (inputs.mouse_right) {
-            struct MouseButtonEvent event = {.details = inputs.mouse_right_event, .button = MBRight};
-            _bolt_plugin_window_onmousebutton(window, &event);
-        }
-        if (inputs.mouse_middle) {
-            struct MouseButtonEvent event = {.details = inputs.mouse_middle_event, .button = MBMiddle};
-            _bolt_plugin_window_onmousebutton(window, &event);
-        }
-        if (inputs.mouse_left_up) {
-            struct MouseButtonEvent event = {.details = inputs.mouse_left_up_event, .button = MBLeft};
-            _bolt_plugin_window_onmousebuttonup(window, &event);
-        }
-        if (inputs.mouse_right_up) {
-            struct MouseButtonEvent event = {.details = inputs.mouse_right_up_event, .button = MBRight};
-            _bolt_plugin_window_onmousebuttonup(window, &event);
-        }
-        if (inputs.mouse_middle_up) {
-            struct MouseButtonEvent event = {.details = inputs.mouse_middle_up_event, .button = MBMiddle};
-            _bolt_plugin_window_onmousebuttonup(window, &event);
-        }
-        if (inputs.mouse_scroll_up) {
-            struct MouseScrollEvent event = {.details = inputs.mouse_scroll_up_event, .direction = 1};
-            _bolt_plugin_window_onscroll(window, &event);
-        }
-        if (inputs.mouse_scroll_down) {
-            struct MouseScrollEvent event = {.details = inputs.mouse_scroll_down_event, .direction = 0};
-            _bolt_plugin_window_onscroll(window, &event);
-        }
+        if (window->reposition_mode) {
+            if (inputs.mouse_motion) {
+                _bolt_window_calc_repos_target(window, &metadata, inputs.mouse_motion_event.x, inputs.mouse_motion_event.y, window_width, window_height);
+            }
+            if (inputs.mouse_left_up) {
+                _bolt_window_calc_repos_target(window, &metadata, inputs.mouse_left_up_event.x, inputs.mouse_left_up_event.y, window_width, window_height);
+                if (window->reposition_threshold) {
+                    _bolt_rwlock_lock_write(&window->lock);
+                    did_move = (window->metadata.x != window->repos_target_x) || (window->metadata.y != window->repos_target_y);
+                    did_resize = (window->metadata.width != window->repos_target_w) || (window->metadata.height != window->repos_target_h);
+                    window->metadata.x = window->repos_target_x;
+                    window->metadata.y = window->repos_target_y;
+                    window->metadata.width = window->repos_target_w;
+                    window->metadata.height = window->repos_target_h;
+                    metadata = window->metadata;
+                    _bolt_rwlock_unlock_write(&window->lock);
 
-        if (inputs.mouse_leave) {
-            struct MouseMotionEvent event = {.details = inputs.mouse_motion_event};
-            _bolt_plugin_window_onmouseleave(window, &event);
+                    if (did_resize) {
+                        struct PluginSurfaceUserdata* ud = window->surface_functions.userdata;
+                        managed_functions.surface_resize_and_clear(ud, metadata.width, metadata.height);
+                    }
+                    struct RepositionEvent event = {.x = metadata.x, .y = metadata.y, .width = metadata.width, .height = metadata.height, .did_resize = did_resize};
+                    _bolt_plugin_window_onreposition(window, &event);
+                }
+                window->reposition_mode = false;
+            }
+        } else {
+            if (inputs.mouse_motion) {
+                struct MouseMotionEvent event = {.details = inputs.mouse_motion_event};
+                _bolt_plugin_window_onmousemotion(window, &event);
+            }
+            if (inputs.mouse_left) {
+                window->drag_xstart = inputs.mouse_left_event.x;
+                window->drag_ystart = inputs.mouse_left_event.y;
+                struct MouseButtonEvent event = {.details = inputs.mouse_left_event, .button = MBLeft};
+                _bolt_plugin_window_onmousebutton(window, &event);
+            }
+            if (inputs.mouse_right) {
+                struct MouseButtonEvent event = {.details = inputs.mouse_right_event, .button = MBRight};
+                _bolt_plugin_window_onmousebutton(window, &event);
+            }
+            if (inputs.mouse_middle) {
+                struct MouseButtonEvent event = {.details = inputs.mouse_middle_event, .button = MBMiddle};
+                _bolt_plugin_window_onmousebutton(window, &event);
+            }
+            if (inputs.mouse_left_up) {
+                struct MouseButtonEvent event = {.details = inputs.mouse_left_up_event, .button = MBLeft};
+                _bolt_plugin_window_onmousebuttonup(window, &event);
+            }
+            if (inputs.mouse_right_up) {
+                struct MouseButtonEvent event = {.details = inputs.mouse_right_up_event, .button = MBRight};
+                _bolt_plugin_window_onmousebuttonup(window, &event);
+            }
+            if (inputs.mouse_middle_up) {
+                struct MouseButtonEvent event = {.details = inputs.mouse_middle_up_event, .button = MBMiddle};
+                _bolt_plugin_window_onmousebuttonup(window, &event);
+            }
+            if (inputs.mouse_scroll_up) {
+                struct MouseScrollEvent event = {.details = inputs.mouse_scroll_up_event, .direction = 1};
+                _bolt_plugin_window_onscroll(window, &event);
+            }
+            if (inputs.mouse_scroll_down) {
+                struct MouseScrollEvent event = {.details = inputs.mouse_scroll_down_event, .direction = 0};
+                _bolt_plugin_window_onscroll(window, &event);
+            }
+            if (inputs.mouse_leave) {
+                struct MouseMotionEvent event = {.details = inputs.mouse_motion_event};
+                _bolt_plugin_window_onmouseleave(window, &event);
+            }
         }
 
         window->surface_functions.draw_to_screen(window->surface_functions.userdata, 0, 0, metadata.width, metadata.height, metadata.x, metadata.y, metadata.width, metadata.height);
+        if (window->reposition_mode && window->reposition_threshold) {
+            managed_functions.draw_region_outline(window->repos_target_x, window->repos_target_y, window->repos_target_w, window->repos_target_h);
+        }
     }
     _bolt_rwlock_unlock_read(&windows->lock);
 
@@ -664,6 +776,7 @@ void _bolt_plugin_handle_messages() {
                 _bolt_rwlock_lock_read(&windows.lock);
                 struct EmbeddedWindow** window = (struct EmbeddedWindow**)hashmap_get(windows.map, &window_id_ptr);
                 if (!window) {
+                    _bolt_rwlock_unlock_read(&windows.lock);
                     _bolt_receive_discard(header.message_size);
                     break;
                 }
@@ -675,6 +788,25 @@ void _bolt_plugin_handle_messages() {
                     break;
                 }
                 _bolt_incoming_plugin_msg(state, &header);
+                break;
+            }
+            case IPC_MSG_OSRSTARTREPOSITION: {
+                struct BoltIPCOsrStartRepositionHeader header;
+                _bolt_ipc_receive(fd, &header, sizeof(header));
+                uint64_t* window_id_ptr = &header.window_id;
+                _bolt_rwlock_lock_read(&windows.lock);
+                struct EmbeddedWindow** window = (struct EmbeddedWindow**)hashmap_get(windows.map, &window_id_ptr);
+                if (!window) {
+                    _bolt_rwlock_unlock_read(&windows.lock);
+                    break;
+                }
+                uint8_t deleted = (*window)->is_deleted;
+                lua_State* state = (*window)->plugin;
+                _bolt_rwlock_unlock_read(&windows.lock);
+                if (deleted) break;
+                (*window)->reposition_mode = true;
+                (*window)->reposition_w = header.horizontal;
+                (*window)->reposition_h = header.vertical;
                 break;
             }
             case IPC_MSG_BROWSERCLOSEREQUEST: {
@@ -878,13 +1010,14 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     PUSHSTRING(plugin->state, WINDOW_META_REGISTRYNAME);
     lua_newtable(plugin->state);
     PUSHSTRING(plugin->state, "__index");
-    lua_createtable(plugin->state, 0, 10);
+    lua_createtable(plugin->state, 0, 11);
     API_ADD_SUB(plugin->state, close, window)
     API_ADD_SUB(plugin->state, id, window)
     API_ADD_SUB(plugin->state, size, window)
     API_ADD_SUB(plugin->state, clear, window)
     API_ADD_SUB(plugin->state, subimage, window)
-    API_ADD_SUB(plugin->state, onresize, window)
+    API_ADD_SUB(plugin->state, startreposition, window)
+    API_ADD_SUB(plugin->state, onreposition, window)
     API_ADD_SUB(plugin->state, onmousemotion, window)
     API_ADD_SUB(plugin->state, onmousebutton, window)
     API_ADD_SUB(plugin->state, onmousebuttonup, window)
@@ -915,12 +1048,13 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     lua_settable(plugin->state, -3);
     lua_settable(plugin->state, LUA_REGISTRYINDEX);
 
-    // create the metatable for all ResizeEvent objects
-    PUSHSTRING(plugin->state, RESIZE_META_REGISTRYNAME);
+    // create the metatable for all RepositionEvent objects
+    PUSHSTRING(plugin->state, REPOSITION_META_REGISTRYNAME);
     lua_newtable(plugin->state);
     PUSHSTRING(plugin->state, "__index");
-    lua_createtable(plugin->state, 0, 1);
-    API_ADD_SUB(plugin->state, size, resizeevent)
+    lua_createtable(plugin->state, 0, 2);
+    API_ADD_SUB(plugin->state, xywh, repositionevent)
+    API_ADD_SUB(plugin->state, didresize, repositionevent)
     lua_settable(plugin->state, -3);
     lua_settable(plugin->state, LUA_REGISTRYINDEX);
 
@@ -1074,7 +1208,7 @@ DEFINE_CALLBACK(mousemotion, MOUSEMOTION, MouseMotionEvent)
 DEFINE_CALLBACK(mousebutton, MOUSEBUTTON, MouseButtonEvent)
 DEFINE_CALLBACK(mousebuttonup, MOUSEBUTTONUP, MouseButtonEvent)
 DEFINE_CALLBACK(scroll, SCROLL, MouseScrollEvent)
-DEFINE_WINDOWEVENT(resize, RESIZE, ResizeEvent)
+DEFINE_WINDOWEVENT(reposition, REPOSITION, RepositionEvent)
 DEFINE_WINDOWEVENT(mousemotion, MOUSEMOTION, MouseMotionEvent)
 DEFINE_WINDOWEVENT(mousebutton, MOUSEBUTTON, MouseButtonEvent)
 DEFINE_WINDOWEVENT(mousebuttonup, MOUSEBUTTONUP, MouseButtonEvent)
@@ -1255,6 +1389,7 @@ static int api_createwindow(lua_State* state) {
     struct EmbeddedWindow* window = lua_newuserdata(state, sizeof(struct EmbeddedWindow));
     window->is_deleted = false;
     window->is_browser = false;
+    window->reposition_mode = false;
     window->id = next_window_id;
     window->plugin_id = plugin->id;
     window->plugin = state;
@@ -1264,16 +1399,21 @@ static int api_createwindow(lua_State* state) {
     window->metadata.y = lua_tointeger(state, 2);
     window->metadata.width = lua_tointeger(state, 3);
     window->metadata.height = lua_tointeger(state, 4);
+    if (window->metadata.width < WINDOW_MIN_SIZE) window->metadata.width = WINDOW_MIN_SIZE;
+    if (window->metadata.height < WINDOW_MIN_SIZE) window->metadata.height = WINDOW_MIN_SIZE;
     memset(&window->input, 0, sizeof(window->input));
     managed_functions.surface_init(&window->surface_functions, window->metadata.width, window->metadata.height, NULL);
     lua_getfield(state, LUA_REGISTRYINDEX, WINDOW_META_REGISTRYNAME);
     lua_setmetatable(state, -2);
     next_window_id += 1;
 
-    // create an empty event table in the registry for this window
+    // create an event table in the registry for this window
     lua_getfield(state, LUA_REGISTRYINDEX, WINDOWS_REGISTRYNAME);
     lua_pushinteger(state, window->id);
     lua_createtable(state, WINDOW_EVENT_ENUM_SIZE, 0);
+    lua_pushinteger(state, WINDOW_USERDATA);
+    lua_pushvalue(state, -5);
+    lua_settable(state, -3);
     lua_settable(state, -3);
     lua_pop(state, 1);
 
@@ -1345,6 +1485,7 @@ static int api_createembeddedbrowser(lua_State* state) {
     }
     window->is_deleted = false;
     window->is_browser = true;
+    window->reposition_mode = false;
     window->id = next_window_id;
     window->plugin_id = plugin->id;
     window->plugin = state;
@@ -1354,16 +1495,21 @@ static int api_createembeddedbrowser(lua_State* state) {
     window->metadata.y = lua_tointeger(state, 2);
     window->metadata.width = lua_tointeger(state, 3);
     window->metadata.height = lua_tointeger(state, 4);
+    if (window->metadata.width < WINDOW_MIN_SIZE) window->metadata.width = WINDOW_MIN_SIZE;
+    if (window->metadata.height < WINDOW_MIN_SIZE) window->metadata.height = WINDOW_MIN_SIZE;
     memset(&window->input, 0, sizeof(window->input));
     managed_functions.surface_init(&window->surface_functions, window->metadata.width, window->metadata.height, NULL);
     lua_getfield(state, LUA_REGISTRYINDEX, EMBEDDEDBROWSER_META_REGISTRYNAME);
     lua_setmetatable(state, -2);
     next_window_id += 1;
 
-    // create an empty event table in the registry for this window
+    // create an event table in the registry for this window
     lua_getfield(state, LUA_REGISTRYINDEX, BROWSERS_REGISTRYNAME);
     lua_pushinteger(state, window->id);
     lua_createtable(state, BROWSER_EVENT_ENUM_SIZE, 0);
+    lua_pushinteger(state, BROWSER_USERDATA);
+    lua_pushvalue(state, -5);
+    lua_settable(state, -3);
     lua_settable(state, -3);
     lua_pop(state, 1);
 
@@ -1728,6 +1874,18 @@ static int api_window_subimage(lua_State* state) {
     return 1;
 }
 
+static int api_window_startreposition(lua_State* state) {
+    _bolt_check_argc(state, 3, "window_startreposition");
+    struct EmbeddedWindow* window = lua_touserdata(state, 1);
+    const lua_Integer xscale = lua_tointeger(state, 2);
+    const lua_Integer yscale = lua_tointeger(state, 3);
+    window->reposition_mode = true;
+    window->reposition_threshold = false;
+    window->reposition_w = (xscale == 0) ? 0 : ((xscale > 0) ? 1 : -1);
+    window->reposition_h = (yscale == 0) ? 0 : ((yscale > 0) ? 1 : -1);
+    return 0;
+}
+
 static int api_render3d_vertexcount(lua_State* state) {
     _bolt_check_argc(state, 1, "render3d_vertexcount");
     const struct Render3D* render = lua_touserdata(state, 1);
@@ -1959,12 +2117,21 @@ static int api_render3d_animated(lua_State* state) {
     return 1;
 }
 
-static int api_resizeevent_size(lua_State* state) {
-    _bolt_check_argc(state, 1, "resizeevent_size");
-    struct ResizeEvent* event = lua_touserdata(state, 1);
+static int api_repositionevent_xywh(lua_State* state) {
+    _bolt_check_argc(state, 1, "resizeevent_xywh");
+    const struct RepositionEvent* event = lua_touserdata(state, 1);
+    lua_pushinteger(state, event->x);
+    lua_pushinteger(state, event->y);
     lua_pushinteger(state, event->width);
     lua_pushinteger(state, event->height);
-    return 2;
+    return 4;
+}
+
+static int api_repositionevent_didresize(lua_State* state) {
+    _bolt_check_argc(state, 1, "repositionevent_didresize");
+    const struct RepositionEvent* event = lua_touserdata(state, 1);
+    lua_pushboolean(state, event->did_resize);
+    return 1;
 }
 
 static int api_mouseevent_xy(lua_State* state) {

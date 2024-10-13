@@ -443,7 +443,7 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 	if (window) window->HANDLER(&event); \
 	break; \
 }
-		DEF_OSR_EVENT(RESIZE, HandleResize, ResizeEvent)
+		DEF_OSR_EVENT(REPOSITION, HandleReposition, RepositionEvent)
 		DEF_OSR_EVENT(MOUSEMOTION, HandleMouseMotion, MouseMotionEvent)
 		DEF_OSR_EVENT(MOUSEBUTTON, HandleMouseButton, MouseButtonEvent)
 		DEF_OSR_EVENT(MOUSEBUTTONUP, HandleMouseButtonUp, MouseButtonEvent)

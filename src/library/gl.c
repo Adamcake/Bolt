@@ -36,6 +36,9 @@ static GLint program_direct_surface_sampler;
 static GLint program_direct_surface_d_xywh;
 static GLint program_direct_surface_s_xywh;
 static GLint program_direct_surface_src_wh_dest_wh;
+static GLuint program_region;
+static GLint program_region_xywh;
+static GLint program_region_dest_wh;
 static GLuint program_direct_vao;
 static GLuint buffer_vertices_square;
 
@@ -67,6 +70,28 @@ static const GLchar program_direct_fs[] = "#version 330 core\n"
 "uniform ivec4 src_wh_dest_wh;"
 "void main() {"
   "col = texture(tex, ((vPos * s_xywh.pq) + s_xywh.st) / src_wh_dest_wh.st);"
+"}";
+
+// "region" program draws an outline of alternating black and white pixels on a rectangular region of the screen
+static const GLchar program_region_vs[] = "#version 330 core\n"
+"layout (location = 0) in vec2 aPos;"
+"out vec2 vPos;"
+"uniform ivec4 xywh;"
+"uniform ivec2 dest_wh;"
+"void main() {"
+  "vPos = aPos;"
+  "gl_Position = vec4(((((aPos * xywh.pq) + xywh.st) * vec2(2.0, 2.0) / vec2(dest_wh)) - vec2(1.0, 1.0)) * vec2(1.0, -1.0), 0.0, 1.0);"
+"}";
+static const GLchar program_region_fs[] = "#version 330 core\n"
+"in vec2 vPos;"
+"layout (location = 0) out vec4 col;"
+"uniform ivec4 xywh;"
+"void main() {"
+  "float xpixel = vPos.x * xywh.p;"
+  "float ypixel = vPos.y * xywh.q;"
+  "float rgb = mod(floor(xpixel / 2.0) + floor(ypixel / 2.0), 2.0) >= 1.0 ? 1.0 : 0.0;"
+  "float alpha = (xpixel >= 6.0 && xpixel < (xywh.p - 6.0) && ypixel >= 6.0 && ypixel < (xywh.q - 6.0)) ? 0.0 : 1.0;"
+  "col = vec4(rgb, rgb, rgb, alpha);"
 "}";
 
 static struct GLProgram* _bolt_context_get_program(struct GLContext*, GLuint);
@@ -102,6 +127,7 @@ static void _bolt_gl_plugin_surface_clear(void* userdata, double r, double g, do
 static void _bolt_gl_plugin_surface_subimage(void* userdata, int x, int y, int w, int h, const void* pixels, uint8_t is_bgra);
 static void _bolt_gl_plugin_surface_drawtoscreen(void* userdata, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh);
 static void _bolt_gl_plugin_surface_drawtosurface(void* userdata, void* target, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh);
+static void _bolt_gl_plugin_draw_region_outline(int16_t x, int16_t y, uint16_t width, uint16_t height);
 
 #define MAX_TEXTURE_UNITS 4096 // would be nice if there was a way to query this at runtime, but it would be awkward to set up
 #define BUFFER_LIST_CAPACITY 256 * 256
@@ -517,6 +543,7 @@ static void _bolt_gl_load(void* (*GetProcAddress)(const char*)) {
     INIT_GL_FUNC(ShaderSource)
     INIT_GL_FUNC(TexStorage2D)
     INIT_GL_FUNC(Uniform1i)
+    INIT_GL_FUNC(Uniform2i)
     INIT_GL_FUNC(Uniform4i)
     INIT_GL_FUNC(UniformMatrix4fv)
     INIT_GL_FUNC(UnmapBuffer)
@@ -569,6 +596,27 @@ static void _bolt_gl_init() {
     gl.DeleteShader(direct_screen_vs);
     gl.DeleteShader(direct_surface_vs);
     gl.DeleteShader(direct_fs);
+
+    GLuint region_vs = gl.CreateShader(GL_VERTEX_SHADER);
+    source = &program_region_vs[0];
+    size = sizeof(program_region_vs) - sizeof(*program_region_vs);
+    gl.ShaderSource(region_vs, 1, &source, &size);
+    gl.CompileShader(region_vs);
+
+    GLuint region_fs = gl.CreateShader(GL_FRAGMENT_SHADER);
+    source = &program_region_fs[0];
+    size = sizeof(program_region_fs) - sizeof(*program_region_fs);
+    gl.ShaderSource(region_fs, 1, &source, &size);
+    gl.CompileShader(region_fs);
+
+    program_region = gl.CreateProgram();
+    gl.AttachShader(program_region, region_vs);
+    gl.AttachShader(program_region, region_fs);
+    gl.LinkProgram(program_region);
+    program_region_xywh = gl.GetUniformLocation(program_region, "xywh");
+    program_region_dest_wh = gl.GetUniformLocation(program_region, "dest_wh");
+    gl.DeleteShader(region_vs);
+    gl.DeleteShader(region_fs);
 
     gl.GenVertexArrays(1, &program_direct_vao);
     gl.BindVertexArray(program_direct_vao);
@@ -1195,6 +1243,7 @@ void _bolt_gl_onMakeCurrent(void* context) {
             .surface_init = _bolt_gl_plugin_surface_init,
             .surface_destroy = _bolt_gl_plugin_surface_destroy,
             .surface_resize_and_clear = _bolt_gl_plugin_surface_resize,
+            .draw_region_outline = _bolt_gl_plugin_draw_region_outline,
         };
         _bolt_plugin_init(&functions);
     }
@@ -1803,6 +1852,22 @@ static void _bolt_gl_plugin_surface_drawtosurface(void* _userdata, void* _target
     lgl->Viewport(c->viewport_x, c->viewport_y, c->viewport_w, c->viewport_h);
     const struct GLTexture2D* original_tex = c->texture_units[c->active_texture];
     lgl->BindTexture(GL_TEXTURE_2D, original_tex ? original_tex->id : 0);
+    gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, c->current_draw_framebuffer);
+    gl.BindVertexArray(c->bound_vao->id);
+    gl.UseProgram(c->bound_program ? c->bound_program->id : 0);
+}
+
+static void _bolt_gl_plugin_draw_region_outline(int16_t x, int16_t y, uint16_t width, uint16_t height) {
+    struct GLContext* c = _bolt_context();
+    gl.UseProgram(program_region);
+    gl.BindVertexArray(program_direct_vao);
+    gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+    lgl->Viewport(0, 0, gl_width, gl_height);
+    gl.Uniform4i(program_region_xywh, x, y, width, height);
+    gl.Uniform2i(program_region_dest_wh, gl_width, gl_height);
+    lgl->DrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+    lgl->Viewport(c->viewport_x, c->viewport_y, c->viewport_w, c->viewport_h);
     gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, c->current_draw_framebuffer);
     gl.BindVertexArray(c->bound_vao->id);
     gl.UseProgram(c->bound_program ? c->bound_program->id : 0);

@@ -1,5 +1,6 @@
 #include "window_launcher.hxx"
 #include "resource_handler.hxx"
+#include "request.hxx"
 
 #include <archive.h>
 #include <archive_entry.h>
@@ -77,7 +78,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<C
 #if defined(BOLT_PLUGINS)
 	bool plugin_loader = false;
 #endif
-	this->ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
+	ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
 		PQSTRING(hash)
 		PQSTRING(config_uri)
 		PQSTRING(jx_session_id)
@@ -299,7 +300,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 	bool has_jx_character_id = false;
 	std::string jx_display_name;
 	bool has_jx_display_name = false;
-	this->ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
+	ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
 		PQSTRING(jar_path)
 		PQSTRING(id)
 		PQSTRING(jx_session_id)
@@ -411,7 +412,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<
 	bool has_jx_character_id = false;
 	std::string jx_display_name;
 	bool has_jx_display_name = false;
-	this->ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
+	ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
 		PQSTRING(version)
 		PQSTRING(jx_session_id)
 		PQSTRING(jx_character_id)

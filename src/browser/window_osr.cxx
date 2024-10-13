@@ -129,12 +129,12 @@ void Browser::WindowOSR::HandleAck() {
 	this->stored_lock.unlock();
 }
 
-void Browser::WindowOSR::HandleResize(const ResizeEvent* event) {
+void Browser::WindowOSR::HandleReposition(const RepositionEvent* event) {
 	this->size_lock.lock();
 	this->width = event->width;
 	this->height = event->height;
 	this->size_lock.unlock();
-	if (this->browser) this->browser->GetHost()->WasResized();
+	if (this->browser && event->did_resize) this->browser->GetHost()->WasResized();
 }
 
 static void MouseEventToCef(const MouseEvent* in, CefMouseEvent* out) {

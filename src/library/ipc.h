@@ -25,7 +25,7 @@ enum BoltIPCMessageTypeToHost {
     IPC_MSG_CLOSEBROWSER_EXTERNAL,
     IPC_MSG_CLOSEBROWSER_OSR,
     IPC_MSG_OSRUPDATE_ACK,
-    IPC_MSG_EVRESIZE,
+    IPC_MSG_EVREPOSITION,
     IPC_MSG_EVMOUSEMOTION,
     IPC_MSG_EVMOUSEBUTTON,
     IPC_MSG_EVMOUSEBUTTONUP,
@@ -41,6 +41,7 @@ enum BoltIPCMessageTypeToClient {
     IPC_MSG_OSRUPDATE,
     IPC_MSG_EXTERNALBROWSERMESSAGE,
     IPC_MSG_OSRBROWSERMESSAGE,
+    IPC_MSG_OSRSTARTREPOSITION,
     IPC_MSG_BROWSERCLOSEREQUEST,
 };
 
@@ -123,6 +124,13 @@ struct BoltIPCBrowserMessageHeader {
     uint64_t window_id;
     uint64_t plugin_id;
     size_t message_size;
+};
+
+/// Header for BoltMessageTypeToClient::IPC_MSG_OSRSTARTREPOSITION
+struct BoltIPCOsrStartRepositionHeader {
+    uint64_t window_id;
+    int8_t horizontal; // -1 for left edge, 1 for right edge
+    int8_t vertical; // -1 for top edge, 1 for bottom edge
 };
 
 /// Header for BoltMessageTypeToClient::IPC_MSG_BROWSERCLOSEREQUEST
