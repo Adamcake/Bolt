@@ -1,5 +1,6 @@
 #include "window_launcher.hxx"
 #include "resource_handler.hxx"
+#include "request.hxx"
 
 #include <iostream>
 #include <shellapi.h>
