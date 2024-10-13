@@ -2,8 +2,7 @@
 #include "window_launcher.hxx"
 #include "include/internal/cef_types.h"
 #include "resource_handler.hxx"
-
-#include "include/cef_parser.h"
+#include "request.hxx"
 
 #include <fcntl.h>
 #include <fmt/core.h>
@@ -177,7 +176,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 		CefString code;
 		bool has_state = false;
 		CefString state;
-		this->ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
+		ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
 			PQCEFSTRING(code)
 			PQCEFSTRING(state)
 		}, ',');
@@ -302,7 +301,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 #if defined(BOLT_PLUGINS)
 			QSTRING path;
 			bool has_path = false;
-			this->ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
+			ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
 				PQSTRING(path)
 			});
 			QREQPARAM(path);
@@ -333,7 +332,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 			uint64_t client;
 			bool has_client  = false;
 			bool client_valid = false;
-			this->ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
+			ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
 				PQCEFSTRING(id)
 				PQCEFSTRING(path)
 				PQCEFSTRING(main)
@@ -359,7 +358,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 			uint64_t uid;
 			bool has_uid = false;
 			bool uid_valid = false;
-			this->ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
+			ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
 				PQINT(client)
 				PQINT(uid)
 			});
@@ -530,26 +529,6 @@ void Browser::Launcher::Refresh() const {
 	// override the default behaviour, which would be to call ReloadIgnoreCache() (a.k.a. ctrl+f5)
 	// because if certain config files have changed, we need to set different URL params than before
 	this->browser->GetMainFrame()->LoadURL(this->BuildURL());
-}
-
-void Browser::Launcher::ParseQuery(std::string_view query, std::function<void(const std::string_view&, const std::string_view&)> callback, char delim) {
-	size_t pos = 0;
-	while (true) {
-		const size_t next_and = query.find(delim, pos);
-		const size_t next_eq = query.find('=', pos);
-		if (next_eq == std::string_view::npos) break;
-		else if (next_and != std::string_view::npos && next_eq > next_and) {
-			pos = next_and + 1;
-			continue;
-		}
-		const bool is_last = next_and == std::string_view::npos;
-		const auto end = is_last ? query.end() : query.begin() + next_and;
-		const std::string_view key(query.begin() + pos, query.begin() + next_eq);
-		const std::string_view val(query.begin() + next_eq + 1, end);
-		callback(key, val);
-		if (is_last) break;
-		pos = next_and + 1;
-	}
 }
 
 void Browser::Launcher::NotifyClosed() {
