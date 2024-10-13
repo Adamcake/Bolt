@@ -776,6 +776,7 @@ void _bolt_plugin_handle_messages() {
                 _bolt_rwlock_lock_read(&windows.lock);
                 struct EmbeddedWindow** window = (struct EmbeddedWindow**)hashmap_get(windows.map, &window_id_ptr);
                 if (!window) {
+                    _bolt_rwlock_unlock_read(&windows.lock);
                     _bolt_receive_discard(header.message_size);
                     break;
                 }
