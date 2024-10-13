@@ -224,7 +224,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Exe(CefRefPtr<C
 #if defined(BOLT_PLUGINS)
 	bool plugin_loader = false;
 #endif
-	this->ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
+	ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
 		PQSTRING(hash)
 		PQSTRING(config_uri)
 		PQSTRING(jx_session_id)
@@ -323,7 +323,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchOsrsExe(CefRefPtr<
 	bool has_jx_character_id = false;
 	std::wstring jx_display_name;
 	bool has_jx_display_name = false;
-	this->ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
+	ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
 		PQSTRING(hash)
 		PQSTRING(jx_session_id)
 		PQSTRING(jx_character_id)
@@ -410,7 +410,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 		has_jx_character_id = false,
 		has_jx_display_name = false;
 
-	this->ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
+	ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
 		PQSTRING(jar_path)
 		PQSTRING(id)
 		PQSTRING(jx_session_id)
@@ -487,7 +487,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<
 		has_jx_character_id = false,
 		has_jx_display_name = false;
 
-	this->ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
+	ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
 		PQSTRING(version)
 		PQSTRING(jx_session_id)
 		PQSTRING(jx_character_id)
