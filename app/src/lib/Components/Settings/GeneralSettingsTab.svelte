@@ -43,3 +43,12 @@
 		class="ml-2"
 	/>
 </div>
+<div class="mx-auto p-2">
+	<label for="close_after_launch">Close Bolt after launching a game: </label>
+	<input
+		id="close_after_launch"
+		type="checkbox"
+		bind:checked={$config.close_after_launch}
+		class="ml-2"
+	/>
+</div>

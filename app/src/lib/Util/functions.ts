@@ -31,8 +31,9 @@ export function launchRS3Linux(
 		xml.onreadystatechange = () => {
 			if (xml.readyState == 4) {
 				logger.info(`Game launch status: '${xml.responseText.trim()}'`);
-				if (xml.status == 200 && hash) {
-					bolt.rs3DebInstalledHash = hash;
+				if (xml.status == 200) {
+					if (hash) bolt.rs3DebInstalledHash = hash;
+					if (config.close_after_launch && !config.rs_plugin_loader) window.close();
 				}
 			}
 		};
@@ -100,6 +101,7 @@ export function launchRuneLite(
 ) {
 	BoltService.saveConfig();
 	const launchPath = configure ? '/launch-runelite-jar-configure?' : '/launch-runelite-jar?';
+	const config = get(GlobalState.config);
 
 	const launch = (id?: string | null, jar?: unknown, jarPath?: unknown) => {
 		const xml = new XMLHttpRequest();
@@ -109,21 +111,22 @@ export function launchRuneLite(
 		if (jx_session_id) params.jx_session_id = jx_session_id;
 		if (jx_character_id) params.jx_character_id = jx_character_id;
 		if (jx_display_name) params.jx_display_name = jx_display_name;
-		if (get(GlobalState.config).flatpak_rich_presence) params.flatpak_rich_presence = '';
+		if (config.flatpak_rich_presence) params.flatpak_rich_presence = '';
 		xml.open(jar ? 'POST' : 'GET', launchPath.concat(new URLSearchParams(params).toString()), true);
 		xml.onreadystatechange = () => {
 			if (xml.readyState == 4) {
 				logger.info(`Game launch status: '${xml.responseText.trim()}'`);
-				if (xml.status == 200 && id) {
-					bolt.runeLiteInstalledId = id;
+				if (xml.status == 200) {
+					if (id) bolt.runeLiteInstalledId = id;
+					if (config.close_after_launch) window.close();
 				}
 			}
 		};
 		xml.send(<string>jar);
 	};
 
-	if (get(GlobalState.config).runelite_use_custom_jar) {
-		launch(null, null, get(GlobalState.config).runelite_custom_jar);
+	if (config.runelite_use_custom_jar) {
+		launch(null, null, config.runelite_custom_jar);
 		return;
 	}
 
@@ -179,6 +182,7 @@ export function launchHdos(
 	jx_display_name: string
 ) {
 	BoltService.saveConfig();
+	const config = get(GlobalState.config);
 
 	const launch = (version?: string, jar?: string) => {
 		const xml = new XMLHttpRequest();
@@ -191,8 +195,9 @@ export function launchHdos(
 		xml.onreadystatechange = () => {
 			if (xml.readyState == 4) {
 				logger.info(`Game launch status: '${xml.responseText.trim()}'`);
-				if (xml.status == 200 && version) {
-					bolt.hdosInstalledVersion = version;
+				if (xml.status == 200) {
+					if (version) bolt.hdosInstalledVersion = version;
+					if (config.close_after_launch) window.close();
 				}
 			}
 		};
@@ -301,12 +306,12 @@ export async function launchOfficialClient(
 
 	const launch = async (hash?: string, exe?: Promise<ArrayBuffer>) => {
 		const params: Record<string, string> = {};
+		const config = get(GlobalState.config);
 		if (hash) params.hash = hash;
 		if (jx_session_id) params.jx_session_id = jx_session_id;
 		if (jx_character_id) params.jx_character_id = jx_character_id;
 		if (jx_display_name) params.jx_display_name = jx_display_name;
 		if (!osrs) {
-			const config = get(GlobalState.config);
 			if (config.rs_plugin_loader) params.plugin_loader = '1';
 			params.config_uri =
 				config.use_custom_rs_config_uri && config.rs_config_uri
@@ -322,8 +327,9 @@ export async function launchOfficialClient(
 			}
 		);
 		response.text().then((text) => logger.info(`Game launch status: '${text.trim()}'`));
-		if (response.status == 200 && hash) {
-			installedHash = hash;
+		if (response.status == 200) {
+			if (hash) installedHash = hash;
+			if (config.close_after_launch && (osrs || !config.rs_plugin_loader)) window.close();
 		}
 	};
 

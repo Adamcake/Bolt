@@ -132,7 +132,14 @@ function addMessageListeners(): void {
 				break;
 			}
 			case 'gameClientList':
-				clientList.set(event.data.clients);
+				if (
+					get(GlobalState.config).close_after_launch &&
+					event.data.clients.length > get(clientList).length
+				) {
+					window.close();
+				} else {
+					clientList.set(event.data.clients);
+				}
 				break;
 			default: {
 				const type = (event.data as { type: string | undefined })?.type ?? 'no type provided';
