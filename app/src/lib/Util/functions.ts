@@ -3,6 +3,7 @@ import { bolt } from '$lib/State/Bolt';
 import { GlobalState } from '$lib/State/GlobalState';
 import { type Direct6Token } from '$lib/Util/interfaces';
 import { logger } from '$lib/Util/Logger';
+import { runeliteLastUpdateCheck } from '$lib/Util/store';
 import { get } from 'svelte/store';
 
 // asynchronously download and launch RS3's official .deb client using the given env variables
@@ -130,6 +131,15 @@ export function launchRuneLite(
 		return;
 	}
 
+	const cooldownMillis = 2 * 60 * 1000;
+	if (bolt.runeLiteInstalledId !== null) {
+		const timeLast = get(runeliteLastUpdateCheck);
+		if (timeLast !== null && timeLast + cooldownMillis > Date.now()) {
+			launch();
+			return;
+		}
+	}
+
 	const xml = new XMLHttpRequest();
 	const url = 'https://api.github.com/repos/runelite/launcher/releases';
 	xml.open('GET', url, true);
@@ -148,6 +158,7 @@ export function launchRuneLite(
 					xmlRl.onreadystatechange = () => {
 						if (xmlRl.readyState == 4) {
 							if (xmlRl.status == 200) {
+								runeliteLastUpdateCheck.set(Date.now());
 								launch(runelite.id, xmlRl.response);
 							} else {
 								logger.error(
@@ -164,11 +175,12 @@ export function launchRuneLite(
 					};
 					xmlRl.send();
 				} else {
-					logger.info('Latest JAR is already installed');
+					runeliteLastUpdateCheck.set(Date.now());
 					launch();
 				}
 			} else {
-				logger.error(`Error from ${url}: ${xml.status}: ${xml.responseText}`);
+				logger.error(`Failed to check for RuneLite updates: ${xml.status}: ${xml.responseText}`);
+				launch();
 			}
 		}
 	};
