@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21) # Minimum CEF requirement, but building with the latest cmake is strongly recommended
-project(Bolt VERSION 0.9 LANGUAGES C CXX)
+project(Bolt VERSION 0.10 LANGUAGES C CXX)
 
 if(NOT WIN32)
     # name of application in metadata, defaulting to "BoltLauncher", but usually overridden to "com.adamcake.Bolt" by flatpak for example
@@ -65,6 +65,18 @@ if(NOT WIN32)
         "    </screenshot>"
         "</screenshots>"
         "<releases>"
+        "    <release version=\"0.10.0\" date=\"2024-10-15\">"
+        "        <url type=\"details\">https://github.com/Adamcake/Bolt/releases/tag/0.10.0</url>"
+        "        <description>"
+        "            <p>New features, new icon</p>"
+        "            <ul>"
+        "                <li>Added 'PSA' banner messages from the official launcher about game downtime - can be turned off in general settings</li>"
+        "                <li>Added a setting to automatically close the launcher after successfully launching a game</li>"
+        "                <li>Fixed a rate-limiting issue seen by some players when trying to launch RuneLite</li>"
+        "                <li>Bolt's icon has been converted to a scalable SVG and given a bit more of a modern look - thanks to lazyscape on Discord</li>"
+        "            </ul>"
+        "        </description>"
+        "    </release>"
         "    <release version=\"0.9.0\" date=\"2024-05-12\">"
         "        <url type=\"details\">https://github.com/Adamcake/Bolt/releases/tag/0.9.0</url>"
         "        <description>"
