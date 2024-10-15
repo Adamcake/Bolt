@@ -119,7 +119,7 @@ export function launchRuneLite(
 				logger.info(`Game launch status: '${xml.responseText.trim()}'`);
 				if (xml.status == 200) {
 					if (id) bolt.runeLiteInstalledId = id;
-					if (config.close_after_launch) window.close();
+					if (config.close_after_launch && !configure) window.close();
 				}
 			}
 		};
