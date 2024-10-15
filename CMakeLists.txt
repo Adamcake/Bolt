@@ -279,7 +279,9 @@ endif()
 
 # compile an auto-generator, then use it to auto-generate a C++ file containing icon data
 set(BOLT_ICON_DIR "${CMAKE_CURRENT_SOURCE_DIR}/icon")
-add_executable(icon_gen icon/generator.cxx modules/lodepng/lodepng.cpp)
+add_executable(icon_gen icon/generator.cxx modules/spng/spng/spng.c src/miniz/miniz.c)
+target_include_directories(icon_gen PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/miniz")
+target_compile_definitions(icon_gen PUBLIC SPNG_STATIC=1 SPNG_USE_MINIZ=1)
 set_target_properties(icon_gen PROPERTIES CXX_STANDARD 20 CXX_EXTENSIONS OFF)
 add_custom_command(
     OUTPUT client_cmake_gen.cxx
@@ -375,8 +377,5 @@ if(NOT WIN32)
     install(FILES "${CMAKE_CURRENT_BINARY_DIR}/bolt.desktop" DESTINATION "${BOLT_SHAREDIR}/applications/" RENAME "${BOLT_META_NAME}.desktop")
     install(FILES "${CMAKE_CURRENT_BINARY_DIR}/bolt.game.desktop" DESTINATION "${BOLT_SHAREDIR}/applications/" RENAME "${BOLT_META_NAME}.${BOLT_GAME_NAME}.desktop")
     install(FILES "${CMAKE_CURRENT_BINARY_DIR}/metainfo.xml" DESTINATION "${BOLT_SHAREDIR}/metainfo/" RENAME "${BOLT_META_NAME}.metainfo.xml")
-    install(FILES "${BOLT_ICON_DIR}/16.png" DESTINATION "${BOLT_SHAREDIR}/icons/hicolor/16x16/apps/" RENAME "${BOLT_META_NAME}.png")
-    install(FILES "${BOLT_ICON_DIR}/32.png" DESTINATION "${BOLT_SHAREDIR}/icons/hicolor/32x32/apps/" RENAME "${BOLT_META_NAME}.png")
-    install(FILES "${BOLT_ICON_DIR}/64.png" DESTINATION "${BOLT_SHAREDIR}/icons/hicolor/64x64/apps/" RENAME "${BOLT_META_NAME}.png")
-    install(FILES "${BOLT_ICON_DIR}/256.png" DESTINATION "${BOLT_SHAREDIR}/icons/hicolor/256x256/apps/" RENAME "${BOLT_META_NAME}.png")
+    install(FILES "${BOLT_ICON_DIR}/bolt.svg" DESTINATION "${BOLT_SHAREDIR}/icons/hicolor/scalable/apps/" RENAME "${BOLT_META_NAME}.svg")
 endif()
