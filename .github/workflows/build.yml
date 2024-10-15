@@ -10,11 +10,15 @@ on:
     types: 
       - published # Automatically build on release
 
+# Grant content write permissions so that the actions can attach artifacts to the releases 
+permissions:
+  contents: write
+  
 env:
   WINDOWS_CEF_VERSION: '114.0.5735.199'
   LINUX_CEF_VERSION: '114.0.5735.134'
   LUAJIT_VERSION: '2.1'
-  ENABLE_WINDOWS_RELEASES: 'false'
+  ENABLE_WINDOWS_RELEASES: 'true'
   ENABLE_LINUX_RELEASES: 'true'
 
 jobs:
