@@ -49,6 +49,8 @@ namespace Browser {
 		bool OnProcessMessageReceived(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, CefProcessId, CefRefPtr<CefProcessMessage>) override;
 
 		void GetViewRect(CefRefPtr<CefBrowser> browser, CefRect& rect) override;
+		void OnPopupShow(CefRefPtr<CefBrowser> browser, bool show) override;
+		void OnPopupSize(CefRefPtr<CefBrowser> browser, const CefRect& rect) override;
 		void OnPaint(CefRefPtr<CefBrowser> browser, PaintElementType type, const RectList& dirtyRects, const void* buffer, int width, int height) override;
 
 		bool OnBeforePopup(

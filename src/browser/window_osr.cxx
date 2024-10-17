@@ -221,8 +221,45 @@ void Browser::WindowOSR::GetViewRect(CefRefPtr<CefBrowser> browser, CefRect& rec
 	this->size_lock.unlock();
 }
 
+void Browser::WindowOSR::OnPopupShow(CefRefPtr<CefBrowser> browser, bool show) {
+	uint8_t buf[sizeof(BoltIPCMessageTypeToClient) + sizeof(BoltIPCOsrPopupVisibilityHeader)];
+	BoltIPCMessageTypeToClient* msg_type = reinterpret_cast<BoltIPCMessageTypeToClient*>(buf);
+	BoltIPCOsrPopupVisibilityHeader* header = reinterpret_cast<BoltIPCOsrPopupVisibilityHeader*>(msg_type + 1);
+	*msg_type = IPC_MSG_OSRPOPUPVISIBILITY;
+	*header = { .window_id = this->WindowID(), .visible = show };
+	_bolt_ipc_send(this->client_fd, buf, sizeof(buf));
+}
+
+void Browser::WindowOSR::OnPopupSize(CefRefPtr<CefBrowser> browser, const CefRect& rect) {
+	// Despite the function name, we don't actually use the size from here at all, we get that in OnPaint.
+	// This function actually also gives us updates to the X and Y of the popup, which we do need.
+	uint8_t buf[sizeof(BoltIPCMessageTypeToClient) + sizeof(BoltIPCOsrPopupPositionHeader)];
+	BoltIPCMessageTypeToClient* msg_type = reinterpret_cast<BoltIPCMessageTypeToClient*>(buf);
+	BoltIPCOsrPopupPositionHeader* header = reinterpret_cast<BoltIPCOsrPopupPositionHeader*>(msg_type + 1);
+	*msg_type = IPC_MSG_OSRPOPUPPOSITION;
+	*header = { .window_id = this->WindowID(), .x = rect.x, .y = rect.y };
+	_bolt_ipc_send(this->client_fd, buf, sizeof(buf));
+}
+
 void Browser::WindowOSR::OnPaint(CefRefPtr<CefBrowser> browser, PaintElementType type, const RectList& dirtyRects, const void* buffer, int width, int height) {
 	if (this->deleted || dirtyRects.empty()) return;
+
+	if (type == PET_POPUP) {
+		const size_t rgba_bytes = width * height * 4;
+		const size_t bytes = sizeof(BoltIPCMessageTypeToClient) + sizeof(BoltIPCOsrPopupContentsHeader) + rgba_bytes;
+		uint8_t* buf = new uint8_t[bytes];
+		BoltIPCMessageTypeToClient* msg_type = reinterpret_cast<BoltIPCMessageTypeToClient*>(buf);
+		BoltIPCOsrPopupContentsHeader* header = reinterpret_cast<BoltIPCOsrPopupContentsHeader*>(msg_type + 1);
+		uint8_t* rgba = reinterpret_cast<uint8_t*>(header + 1);
+		*msg_type = IPC_MSG_OSRPOPUPCONTENTS;
+		*header = { .window_id = this->WindowID(), .width = width, .height = height };
+		memcpy(rgba, buffer, rgba_bytes);
+		_bolt_ipc_send(this->client_fd, buf, bytes);
+		delete[] buf;
+		return;
+	}
+
+	if (type != PET_VIEW) return;
 
 	const size_t length = (size_t)width * (size_t)height * 4;
 	this->stored_lock.lock();
