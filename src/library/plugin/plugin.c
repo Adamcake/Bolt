@@ -559,6 +559,9 @@ void _bolt_plugin_process_windows(uint32_t window_width, uint32_t window_height)
         }
 
         window->surface_functions.draw_to_screen(window->surface_functions.userdata, 0, 0, metadata.width, metadata.height, metadata.x, metadata.y, metadata.width, metadata.height);
+        if (window->popup_shown && window->popup_initialised) {
+            window->popup_surface_functions.draw_to_screen(window->popup_surface_functions.userdata, 0, 0, window->popup_meta.width, window->popup_meta.height, metadata.x + window->popup_meta.x, metadata.y + window->popup_meta.y, window->popup_meta.width, window->popup_meta.height);
+        }
         if (window->reposition_mode && window->reposition_threshold) {
             managed_functions.draw_region_outline(window->repos_target_x, window->repos_target_y, window->repos_target_w, window->repos_target_h);
         }
@@ -584,6 +587,9 @@ void _bolt_plugin_process_windows(uint32_t window_width, uint32_t window_height)
                 lua_pop(window->plugin, 1);
 
                 managed_functions.surface_destroy(window->surface_functions.userdata);
+                if (window->is_browser && window->popup_initialised) {
+                    managed_functions.surface_destroy(window->popup_surface_functions.userdata);
+                }
                 _bolt_rwlock_destroy(&window->lock);
                 hashmap_delete(windows->map, &window);
                 iter = 0;
@@ -748,6 +754,64 @@ void _bolt_plugin_handle_messages() {
                     _bolt_ipc_send(fd, &msg_type, sizeof(msg_type));
                     _bolt_ipc_send(fd, &ack_header, sizeof(ack_header));
                 }
+                break;
+            }
+            case IPC_MSG_OSRPOPUPCONTENTS: {
+                struct BoltIPCOsrPopupContentsHeader header;
+                _bolt_ipc_receive(fd, &header, sizeof(header));
+                size_t rgba_size = (size_t)header.width * (size_t)header.height * 4;
+                uint64_t* window_id_ptr = &header.window_id;
+                _bolt_rwlock_lock_read(&windows.lock);
+                struct EmbeddedWindow** window = (struct EmbeddedWindow**)hashmap_get(windows.map, &window_id_ptr);
+                if (!window) {
+                    _bolt_rwlock_unlock_read(&windows.lock);
+                    _bolt_receive_discard(rgba_size);
+                    break;
+                }
+                uint8_t deleted = (*window)->is_deleted;
+                lua_State* state = (*window)->plugin;
+                _bolt_rwlock_unlock_read(&windows.lock);
+                if (deleted) {
+                    _bolt_receive_discard(rgba_size);
+                    break;
+                }
+
+                void* rgba = lua_newuserdata(state, rgba_size);
+                struct EmbeddedWindowMetadata* meta = &(*window)->popup_meta;
+                _bolt_ipc_receive(fd, rgba, rgba_size);
+                if (!(*window)->popup_initialised) {
+                    managed_functions.surface_init(&(*window)->popup_surface_functions, header.width, header.height, NULL);
+                    (*window)->popup_initialised = true;
+                } else if (header.width != (*window)->popup_meta.width || header.height != (*window)->popup_meta.height) {
+                    managed_functions.surface_resize_and_clear((*window)->popup_surface_functions.userdata, header.width, header.height);
+                }
+                meta->width = header.width;
+                meta->height = header.height;
+                (*window)->popup_surface_functions.subimage((*window)->popup_surface_functions.userdata, 0, 0, header.width, header.height, rgba, true);
+                lua_pop(state, 1);
+                break;
+            }
+            case IPC_MSG_OSRPOPUPPOSITION: {
+                struct BoltIPCOsrPopupPositionHeader header;
+                _bolt_ipc_receive(fd, &header, sizeof(header));
+                uint64_t* window_id_ptr = &header.window_id;
+                _bolt_rwlock_lock_read(&windows.lock);
+                struct EmbeddedWindow** window = (struct EmbeddedWindow**)hashmap_get(windows.map, &window_id_ptr);
+                _bolt_rwlock_unlock_read(&windows.lock);
+                if (!window) break;
+                (*window)->popup_meta.x = header.x;
+                (*window)->popup_meta.y = header.y;
+                break;
+            }
+            case IPC_MSG_OSRPOPUPVISIBILITY: {
+                struct BoltIPCOsrPopupVisibilityHeader header;
+                _bolt_ipc_receive(fd, &header, sizeof(header));
+                uint64_t* window_id_ptr = &header.window_id;
+                _bolt_rwlock_lock_read(&windows.lock);
+                struct EmbeddedWindow** window = (struct EmbeddedWindow**)hashmap_get(windows.map, &window_id_ptr);
+                _bolt_rwlock_unlock_read(&windows.lock);
+                if (!window) break;
+                (*window)->popup_shown = header.visible;
                 break;
             }
             case IPC_MSG_EXTERNALBROWSERMESSAGE: {
@@ -1389,6 +1453,7 @@ static int api_createwindow(lua_State* state) {
     struct EmbeddedWindow* window = lua_newuserdata(state, sizeof(struct EmbeddedWindow));
     window->is_deleted = false;
     window->is_browser = false;
+    window->popup_shown = false;
     window->reposition_mode = false;
     window->id = next_window_id;
     window->plugin_id = plugin->id;
@@ -1485,6 +1550,10 @@ static int api_createembeddedbrowser(lua_State* state) {
     }
     window->is_deleted = false;
     window->is_browser = true;
+    window->popup_shown = false;
+    window->popup_initialised = false;
+    window->popup_meta.x = 0;
+    window->popup_meta.y = 0;
     window->reposition_mode = false;
     window->id = next_window_id;
     window->plugin_id = plugin->id;

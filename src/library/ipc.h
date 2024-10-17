@@ -39,6 +39,9 @@ enum BoltIPCMessageTypeToClient {
     IPC_MSG_STARTPLUGIN,
     IPC_MSG_HOST_STOPPED_PLUGIN,
     IPC_MSG_OSRUPDATE,
+    IPC_MSG_OSRPOPUPCONTENTS,
+    IPC_MSG_OSRPOPUPPOSITION,
+    IPC_MSG_OSRPOPUPVISIBILITY,
     IPC_MSG_EXTERNALBROWSERMESSAGE,
     IPC_MSG_OSRBROWSERMESSAGE,
     IPC_MSG_OSRSTARTREPOSITION,
@@ -117,6 +120,26 @@ struct BoltIPCOsrUpdateRect {
     int y;
     int w;
     int h;
+};
+
+/// Header for BoltIPCMessageTypeToClient::IPC_MSG_OSRPOPUPCONTENTS
+struct BoltIPCOsrPopupContentsHeader {
+    uint64_t window_id;
+    int width;
+    int height;
+};
+
+/// Header for BoltIPCMessageTypeToClient::IPC_MSG_OSRPOPUPPOSITION
+struct BoltIPCOsrPopupPositionHeader {
+    uint64_t window_id;
+    int x;
+    int y;
+};
+
+/// Header for BoltIPCMessageTypeToClient::IPC_MSG_OSRPOPUPVISIBILITY
+struct BoltIPCOsrPopupVisibilityHeader {
+    uint64_t window_id;
+    uint8_t visible;
 };
 
 /// Header for BoltMessageTypeToClient::IPC_MSG_EXTERNALBROWSERMESSAGE and BoltMessageTypeToClient::IPC_MSG_OSRBROWSERMESSAGE

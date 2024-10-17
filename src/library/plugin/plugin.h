@@ -196,7 +196,13 @@ struct EmbeddedWindow {
     uint8_t reposition_threshold; // whether the minimum distance threshold has been met during this repositioning
     uint8_t is_browser;
     uint8_t is_deleted;
-    struct BoltSHM browser_shm; // set and initialised only if is_browser
+
+    /* everything below here is initialised only if is_browser, except as noted */
+    struct BoltSHM browser_shm;
+    struct EmbeddedWindowMetadata popup_meta;
+    struct SurfaceFunctions popup_surface_functions;
+    uint8_t popup_shown; // always false for non-browser
+    uint8_t popup_initialised;
 };
 
 struct WindowInfo {
