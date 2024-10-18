@@ -162,7 +162,8 @@ static int api_createbrowser(lua_State*);
 /// A browser cannot be changed from embedded to external, nor vice versa, after creation.
 ///
 /// All of the member functions of embedded browser objects can be found in this file, prefixed
-/// with "api_embeddedbrowser_".
+/// with "api_embeddedbrowser_" and "api_browser_on". (i.e. event handler functions are shared
+/// between embedded and non-embedded browsers)
 static int api_createembeddedbrowser(lua_State*);
 
 /// [-1, +0, -]
@@ -766,12 +767,3 @@ static int api_embeddedbrowser_close(lua_State*);
 /// the Lua string that was passed to this function. Note that the string will be transferred
 /// exactly as it appeared in Lua, byte-for-byte - it will not be decoded or re-encoded in any way.
 static int api_embeddedbrowser_sendmessage(lua_State*);
-
-/// [-2, +0, -]
-/// Sets an event handler for this embedded browser for message events. If the value is a function,
-/// it will be called with one parameter, that being a string. If the value is not a function, it
-/// will not be called, and therefore the plugin will not be notified of messages.
-///
-/// A message event is fired when the embedded browser calls the "send-message" endpoint
-/// from Javascript.
-static int api_embeddedbrowser_onmessage(lua_State*);

@@ -46,6 +46,7 @@ enum BoltIPCMessageTypeToClient {
     IPC_MSG_OSRBROWSERMESSAGE,
     IPC_MSG_OSRSTARTREPOSITION,
     IPC_MSG_BROWSERCLOSEREQUEST,
+    IPC_MSG_OSRCLOSEREQUEST,
 };
 
 /// Header for BoltIPCMessageTypeToHost::IPC_MSG_IDENTIFY
@@ -160,6 +161,11 @@ struct BoltIPCOsrStartRepositionHeader {
 struct BoltIPCBrowserCloseRequestHeader {
     uint64_t window_id;
     uint64_t plugin_id;
+};
+
+/// Header for BoltMessageTypeToClient::IPC_MSG_OSRCLOSEREQUEST
+struct BoltIPCOsrCloseRequestHeader {
+    uint64_t window_id;
 };
 
 #if defined(__cplusplus)
