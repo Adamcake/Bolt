@@ -91,17 +91,7 @@ bool Browser::Window::CanClose(CefRefPtr<CefWindow> win) {
 		window->browser->GetHost()->CloseBrowser(true);
 	}
 
-	// CEF will call CefLifeSpanHandler::DoClose (implemented in Client), giving us a chance to
-	// do cleanup and then call TryCloseBrowser() a second time.
-	// This strategy is suggested by official examples, e.g. cefsimple:
-	// https://github.com/chromiumembedded/cef/blob/5735/tests/cefsimple/simple_app.cc#L38-L45
-	CefRefPtr<CefBrowser> browser = this->browser_view->GetBrowser();
-	if (browser) {
-		browser->GetHost()->CloseDevTools();
-		return browser->GetHost()->TryCloseBrowser();
-	} else {
-		return true;
-	}
+	return true;
 }
 
 CefSize Browser::Window::GetPreferredSize(CefRefPtr<CefView>) {
