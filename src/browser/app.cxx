@@ -43,7 +43,9 @@ void Browser::App::OnBrowserCreated(CefRefPtr<CefBrowser> browser, CefRefPtr<Cef
 }
 
 void Browser::App::OnContextCreated(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefRefPtr<CefV8Context> context) {
-	context->GetGlobal()->SetValue("s", CefV8Value::CreateFunction("s", this), V8_PROPERTY_ATTRIBUTE_READONLY);
+	const CefRefPtr<CefV8Value> global = context->GetGlobal();
+	global->SetValue("s", CefV8Value::CreateFunction("s", this), V8_PROPERTY_ATTRIBUTE_READONLY);
+	global->SetValue("close", CefV8Value::CreateUndefined(), V8_PROPERTY_ATTRIBUTE_READONLY);
 }
 
 void Browser::App::OnUncaughtException(
