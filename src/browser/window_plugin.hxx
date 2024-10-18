@@ -16,6 +16,7 @@ namespace Browser {
 		BoltSocketType ClientFD() const override;
 		CefRefPtr<FileManager::FileManager> FileManager() const override;
 		CefRefPtr<CefBrowser> Browser() const override;
+		void HandlePluginCloseRequest() override;
 
 		bool OnBeforePopup(
 			CefRefPtr<CefBrowser>,

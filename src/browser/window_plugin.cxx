@@ -52,6 +52,15 @@ CefRefPtr<CefBrowser> Browser::PluginWindow::Browser() const {
 	return this->browser;
 }
 
+void Browser::PluginWindow::HandlePluginCloseRequest() {
+	uint8_t buf[sizeof(BoltIPCMessageTypeToClient) + sizeof(BoltIPCBrowserCloseRequestHeader)];
+	BoltIPCMessageTypeToClient* msg_type = reinterpret_cast<BoltIPCMessageTypeToClient*>(buf);
+	BoltIPCBrowserCloseRequestHeader* header = reinterpret_cast<BoltIPCBrowserCloseRequestHeader*>(msg_type + 1);
+	*msg_type = IPC_MSG_BROWSERCLOSEREQUEST;
+	*header = { .window_id = this->window_id, .plugin_id = this->plugin_id };
+	_bolt_ipc_send(this->client_fd, buf, sizeof(buf));
+}
+
 bool Browser::PluginWindow::OnBeforePopup(
 	CefRefPtr<CefBrowser> browser,
 	CefRefPtr<CefFrame> frame,
@@ -83,12 +92,7 @@ bool Browser::PluginWindow::CanClose(CefRefPtr<CefWindow> win) {
 	if (this->closing) {
 		return Browser::Window::CanClose(win);
 	}
-	uint8_t buf[sizeof(BoltIPCMessageTypeToClient) + sizeof(BoltIPCCloseBrowserHeader)];
-	BoltIPCMessageTypeToClient* msg_type = reinterpret_cast<BoltIPCMessageTypeToClient*>(buf);
-	BoltIPCBrowserCloseRequestHeader* header = reinterpret_cast<BoltIPCBrowserCloseRequestHeader*>(msg_type + 1);
-	*msg_type = IPC_MSG_BROWSERCLOSEREQUEST;
-	*header = { .window_id = this->window_id, .plugin_id = this->plugin_id };
-	_bolt_ipc_send(this->client_fd, buf, sizeof(buf));
+	this->HandlePluginCloseRequest();
 	return false;
 }
 

@@ -98,6 +98,15 @@ CefRefPtr<CefBrowser> Browser::WindowOSR::Browser() const {
 	return this->browser;
 }
 
+void Browser::WindowOSR::HandlePluginCloseRequest() {
+	uint8_t buf[sizeof(BoltIPCMessageTypeToClient) + sizeof(BoltIPCOsrCloseRequestHeader)];
+	BoltIPCMessageTypeToClient* msg_type = reinterpret_cast<BoltIPCMessageTypeToClient*>(buf);
+	BoltIPCOsrCloseRequestHeader* header = reinterpret_cast<BoltIPCOsrCloseRequestHeader*>(msg_type + 1);
+	*msg_type = IPC_MSG_OSRCLOSEREQUEST;
+	*header = { .window_id = this->window_id };
+	_bolt_ipc_send(this->client_fd, buf, sizeof(buf));
+}
+
 void Browser::WindowOSR::HandleAck() {
 	if (this->deleted) return;
 	this->stored_lock.lock();

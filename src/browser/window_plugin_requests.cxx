@@ -84,6 +84,11 @@ CefRefPtr<CefResourceRequestHandler> Browser::PluginRequestHandler::GetResourceR
 			QSENDOK();
 		}
 
+		if (api_name == "close-request") {
+			this->HandlePluginCloseRequest();
+			QSENDOK();
+		}
+
 		if (api_name == "start-reposition") {
 			uint8_t buf[sizeof(BoltIPCMessageTypeToClient) + sizeof(BoltIPCOsrStartRepositionHeader)];
 			BoltIPCMessageTypeToClient* msg_type = reinterpret_cast<BoltIPCMessageTypeToClient*>(buf);

@@ -27,6 +27,7 @@ namespace Browser {
 		virtual BoltSocketType ClientFD() const = 0;
 		virtual CefRefPtr<FileManager::FileManager> FileManager() const = 0;
 		virtual CefRefPtr<CefBrowser> Browser() const = 0;
+		virtual void HandlePluginCloseRequest() = 0;
 
 		private:
 			BoltIPCMessageTypeToClient message_type;
