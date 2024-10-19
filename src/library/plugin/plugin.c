@@ -659,7 +659,32 @@ static void _bolt_receive_discard(uint64_t amount) {
     }
 }
 
-static void _bolt_incoming_plugin_msg(lua_State* state, struct BoltIPCBrowserMessageHeader* header) {
+/// can return nullptr if the browser is nonexistent or deleted
+static struct ExternalBrowser* get_externalbrowser(const uint64_t plugin_id, const uint64_t* window_id) {
+    const struct Plugin p = {.id = plugin_id};
+    const struct Plugin* pp = &p;
+    struct Plugin** plugin = (struct Plugin**)hashmap_get(plugins, &pp);
+    if (!plugin) return NULL;
+    struct ExternalBrowser** browser = (struct ExternalBrowser**)hashmap_get((*plugin)->external_browsers, &window_id);
+    if (!browser) return NULL;
+    return *browser;
+}
+
+/// can return nullptr if the window is nonexistent or deleted
+static struct EmbeddedWindow* get_embeddedwindow(const uint64_t* window_id) {
+    _bolt_rwlock_lock_read(&windows.lock);
+    struct EmbeddedWindow** pwindow = (struct EmbeddedWindow**)hashmap_get(windows.map, &window_id);
+    if (!pwindow) {
+        _bolt_rwlock_unlock_read(&windows.lock);
+        return NULL;
+    }
+    struct EmbeddedWindow* window = *pwindow;
+    _bolt_rwlock_unlock_read(&windows.lock);
+    if (window->is_deleted) return NULL;
+    return window;
+}
+
+static void handle_plugin_message(lua_State* state, struct BoltIPCBrowserMessageHeader* header) {
     void* newud = lua_newuserdata(state, header->message_size); /*stack: message ud*/
     _bolt_ipc_receive(fd, newud, header->message_size);
     lua_getfield(state, LUA_REGISTRYINDEX, BROWSERS_REGISTRYNAME); /*stack: message ud, window table*/
@@ -686,7 +711,7 @@ static void _bolt_incoming_plugin_msg(lua_State* state, struct BoltIPCBrowserMes
     }
 }
 
-static void _bolt_incoming_plugin_closerequest(lua_State* state, uint64_t window_id) {
+static void handle_close_request(lua_State* state, uint64_t window_id) {
     lua_getfield(state, LUA_REGISTRYINDEX, BROWSERS_REGISTRYNAME); /*stack: window table*/
     lua_pushinteger(state, window_id); /*stack: window table, window id*/
     lua_gettable(state, -2); /*stack: window table, event table*/
@@ -709,224 +734,172 @@ static void _bolt_incoming_plugin_closerequest(lua_State* state, uint64_t window
     }
 }
 
+#define IPCCASE(NAME, STRUCT) case IPC_MSG_##NAME: { \
+    struct BoltIPC##STRUCT##Header header; \
+    _bolt_ipc_receive(fd, &header, sizeof(header)); \
+    handle_ipc_##NAME(&header); \
+    break; \
+}
+
+#define IPCCASEWINDOW(NAME, STRUCT) case IPC_MSG_##NAME: { \
+    struct BoltIPC##STRUCT##Header header; \
+    _bolt_ipc_receive(fd, &header, sizeof(header)); \
+    struct EmbeddedWindow* window = get_embeddedwindow(&header.window_id); \
+    if (window) handle_ipc_##NAME(&header, window); \
+    break; \
+}
+
+#define IPCCASEWINDOWTAIL(NAME, STRUCT) case IPC_MSG_##NAME: { \
+    struct BoltIPC##STRUCT##Header header; \
+    _bolt_ipc_receive(fd, &header, sizeof(header)); \
+    struct EmbeddedWindow* window = get_embeddedwindow(&header.window_id); \
+    if (window) handle_ipc_##NAME(&header, window); \
+    else _bolt_receive_discard(get_tail_ipc_##STRUCT(&header)); \
+    break; \
+}
+
+#define IPCCASEBROWSER(NAME, STRUCT) case IPC_MSG_##NAME: { \
+    struct BoltIPC##STRUCT##Header header; \
+    _bolt_ipc_receive(fd, &header, sizeof(header)); \
+    struct ExternalBrowser* window = get_externalbrowser(header.plugin_id, &header.window_id); \
+    if (window) handle_ipc_##NAME(&header, window); \
+    break; \
+}
+
+#define IPCCASEBROWSERTAIL(NAME, STRUCT) case IPC_MSG_##NAME: { \
+    struct BoltIPC##STRUCT##Header header; \
+    _bolt_ipc_receive(fd, &header, sizeof(header)); \
+    struct ExternalBrowser* window = get_externalbrowser(header.plugin_id, &header.window_id); \
+    if (window) handle_ipc_##NAME(&header, window); \
+    else _bolt_receive_discard(get_tail_ipc_##STRUCT(&header)); \
+    break; \
+}
+
+static void handle_ipc_STARTPLUGIN(struct BoltIPCStartPluginHeader* header) {
+    // note: incoming messages are sanitised by the UI, by replacing `\` with `/` and     
+    // making sure to leave a trailing slash, when initiating this type of message
+    // (see PluginMenu.svelte)
+    struct Plugin* plugin = malloc(sizeof(struct Plugin));
+    plugin->external_browsers = hashmap_new(sizeof(struct ExternalBrowser), 8, 0, 0, _bolt_window_map_hash, _bolt_window_map_compare, NULL, NULL);
+    plugin->state = luaL_newstate();
+    plugin->id = header->uid;
+    plugin->path = malloc(header->path_size);
+    plugin->path_length = header->path_size;
+    plugin->is_deleted = false;
+    _bolt_ipc_receive(fd, plugin->path, header->path_size);
+    char* full_path = lua_newuserdata(plugin->state, header->path_size + header->main_size + 1);
+    memcpy(full_path, plugin->path, header->path_size);
+    _bolt_ipc_receive(fd, full_path + header->path_size, header->main_size);
+    full_path[header->path_size + header->main_size] = '\0';
+    if (_bolt_plugin_add(full_path, plugin)) {
+        lua_pop(plugin->state, 1);
+    } else {
+        _bolt_plugin_notify_stopped(header->uid);
+        plugin->is_deleted = true;
+    }
+}
+
+static void handle_ipc_HOST_STOPPED_PLUGIN(struct BoltIPCHostStoppedPluginHeader* header) {
+    _bolt_plugin_stop(header->plugin_id);
+}
+
+static size_t get_tail_ipc_OsrUpdate(const struct BoltIPCOsrUpdateHeader* header) {
+    return (size_t)header->width * (size_t)header->height * 4;
+}
+
+static void handle_ipc_OSRUPDATE(struct BoltIPCOsrUpdateHeader* header, struct EmbeddedWindow* window) {
+    struct BoltIPCOsrUpdateRect rect;
+    if (header->needs_remap) {
+        _bolt_plugin_shm_remap(&window->browser_shm, get_tail_ipc_OsrUpdate(header), header->needs_remap);
+    }
+    for (uint32_t i = 0; i < header->rect_count; i += 1) {
+        // the backend needs contiguous pixels for the rectangle, so here we ignore
+        // the width of the damage and instead update every row of pixels in the
+        // damage area. that way we have contiguous pixels straight out of the shm file.
+        // would it be faster to allocate and build a contiguous pixel rect and use
+        // that as the subimage? probably not.
+        _bolt_ipc_receive(fd, &rect, sizeof(rect));
+        const void* data_ptr = (const void*)((uint8_t*)window->browser_shm.file + (header->width * rect.y * 4));
+        window->surface_functions.subimage(window->surface_functions.userdata, 0, rect.y, header->width, rect.h, data_ptr, 1);
+    }
+    const enum BoltIPCMessageTypeToHost msg_type = IPC_MSG_OSRUPDATE_ACK;
+    const struct BoltIPCOsrUpdateAckHeader ack_header = { .window_id = header->window_id, .plugin_id = window->plugin_id };
+    _bolt_ipc_send(fd, &msg_type, sizeof(msg_type));
+    _bolt_ipc_send(fd, &ack_header, sizeof(ack_header));
+}
+
+static size_t get_tail_ipc_OsrPopupContents(const struct BoltIPCOsrPopupContentsHeader* header) {
+    return (size_t)header->width * (size_t)header->height * 4;
+}
+
+static void handle_ipc_OSRPOPUPCONTENTS(struct BoltIPCOsrPopupContentsHeader* header, struct EmbeddedWindow* window) {
+    const size_t rgba_size = get_tail_ipc_OsrPopupContents(header);
+    void* rgba = lua_newuserdata(window->plugin, rgba_size);
+    struct EmbeddedWindowMetadata* meta = &window->popup_meta;
+    _bolt_ipc_receive(fd, rgba, rgba_size);
+    if (!window->popup_initialised) {
+        managed_functions.surface_init(&window->popup_surface_functions, header->width, header->height, NULL);
+        window->popup_initialised = true;
+    } else if (header->width != window->popup_meta.width || header->height != window->popup_meta.height) {
+        managed_functions.surface_resize_and_clear(window->popup_surface_functions.userdata, header->width, header->height);
+    }
+    meta->width = header->width;
+    meta->height = header->height;
+    window->popup_surface_functions.subimage(window->popup_surface_functions.userdata, 0, 0, header->width, header->height, rgba, true);
+    lua_pop(window->plugin, 1);
+}
+
+static void handle_ipc_OSRPOPUPPOSITION(struct BoltIPCOsrPopupPositionHeader* header, struct EmbeddedWindow* window) {
+    window->popup_meta.x = header->x;
+    window->popup_meta.y = header->y;
+}
+
+static void handle_ipc_OSRPOPUPVISIBILITY(struct BoltIPCOsrPopupVisibilityHeader* header, struct EmbeddedWindow* window) {
+    window->popup_shown = header->visible;
+}
+
+static size_t get_tail_ipc_BrowserMessage(const struct BoltIPCBrowserMessageHeader* header) {
+    return header->message_size;
+}
+
+static void handle_ipc_EXTERNALBROWSERMESSAGE(struct BoltIPCBrowserMessageHeader* header, struct ExternalBrowser* browser) {
+    handle_plugin_message(browser->plugin->state, header);
+}
+
+static void handle_ipc_OSRBROWSERMESSAGE(struct BoltIPCBrowserMessageHeader* header, struct EmbeddedWindow* window) {
+    handle_plugin_message(window->plugin, header);
+}
+
+static void handle_ipc_OSRSTARTREPOSITION(struct BoltIPCOsrStartRepositionHeader* header, struct EmbeddedWindow* window) {
+    window->reposition_mode = true;
+    window->reposition_w = header->horizontal;
+    window->reposition_h = header->vertical;
+}
+
+static void handle_ipc_BROWSERCLOSEREQUEST(struct BoltIPCBrowserCloseRequestHeader* header, struct ExternalBrowser* browser) {
+    handle_close_request(browser->plugin->state, header->window_id);
+}
+
+static void handle_ipc_OSRCLOSEREQUEST(struct BoltIPCOsrCloseRequestHeader* header, struct EmbeddedWindow* window) {
+    handle_close_request(window->plugin, header->window_id);
+}
+
 void _bolt_plugin_handle_messages() {
     enum BoltIPCMessageTypeToHost msg_type;
     while (_bolt_ipc_poll(fd)) {
         if (_bolt_ipc_receive(fd, &msg_type, sizeof(msg_type)) != 0) break;
         switch (msg_type) {
-            case IPC_MSG_STARTPLUGIN: {
-                // note: incoming messages are sanitised by the UI, by replacing `\` with `/` and
-                // making sure to leave a trailing slash, when initiating this type of message
-                // (see PluginMenu.svelte)
-                struct Plugin* plugin = malloc(sizeof(struct Plugin));
-                plugin->external_browsers = hashmap_new(sizeof(struct ExternalBrowser), 8, 0, 0, _bolt_window_map_hash, _bolt_window_map_compare, NULL, NULL);
-                struct BoltIPCStartPluginHeader header;
-                plugin->state = luaL_newstate();
-                _bolt_ipc_receive(fd, &header, sizeof(header));
-                plugin->id = header.uid;
-                plugin->path = malloc(header.path_size);
-                plugin->path_length = header.path_size;
-                plugin->is_deleted = false;
-                _bolt_ipc_receive(fd, plugin->path, header.path_size);
-                char* full_path = lua_newuserdata(plugin->state, header.path_size + header.main_size + 1);
-                memcpy(full_path, plugin->path, header.path_size);
-                _bolt_ipc_receive(fd, full_path + header.path_size, header.main_size);
-                full_path[header.path_size + header.main_size] = '\0';
-                if (_bolt_plugin_add(full_path, plugin)) {
-                    lua_pop(plugin->state, 1);
-                } else {
-                    _bolt_plugin_notify_stopped(header.uid);
-                    plugin->is_deleted = true;
-                }
-                break;
-            }
-            case IPC_MSG_HOST_STOPPED_PLUGIN: {
-                struct BoltIPCHostStoppedPluginHeader header;
-                _bolt_ipc_receive(fd, &header, sizeof(header));
-                _bolt_plugin_stop(header.plugin_id);
-                break;
-            }
-            case IPC_MSG_OSRUPDATE: {
-                struct BoltIPCOsrUpdateHeader header;
-                struct BoltIPCOsrUpdateRect rect;
-                _bolt_ipc_receive(fd, &header, sizeof(header));
-                
-                uint64_t* window_id_ptr = &header.window_id;
-                _bolt_rwlock_lock_read(&windows.lock);
-                struct EmbeddedWindow** window = (struct EmbeddedWindow**)hashmap_get(windows.map, &window_id_ptr);
-                _bolt_rwlock_unlock_read(&windows.lock);
-                if (window && !(*window)->is_deleted && header.needs_remap) {
-                    _bolt_plugin_shm_remap(&(*window)->browser_shm, (size_t)header.width * (size_t)header.height * 4, header.needs_remap);
-                }
-                for (uint32_t i = 0; i < header.rect_count; i += 1) {
-                    _bolt_ipc_receive(fd, &rect, sizeof(rect));
-                    if (window && !(*window)->is_deleted) {
-                        // the backend needs contiguous pixels for the rectangle, so here we ignore
-                        // the width of the damage and instead update every row of pixels in the
-                        // damage area. that way we have contiguous pixels straight out of the shm file.
-                        // would it be faster to allocate and build a contiguous pixel rect and use
-                        // that as the subimage? probably not.
-                        const void* data_ptr = (const void*)((uint8_t*)(*window)->browser_shm.file + (header.width * rect.y * 4));
-                        (*window)->surface_functions.subimage((*window)->surface_functions.userdata, 0, rect.y, header.width, rect.h, data_ptr, 1);
-                    }
-                }
-
-                if (window && !(*window)->is_deleted) {
-                    const enum BoltIPCMessageTypeToHost msg_type = IPC_MSG_OSRUPDATE_ACK;
-                    struct BoltIPCOsrUpdateAckHeader ack_header = { .window_id = header.window_id, .plugin_id = (*window)->plugin_id };
-                    _bolt_ipc_send(fd, &msg_type, sizeof(msg_type));
-                    _bolt_ipc_send(fd, &ack_header, sizeof(ack_header));
-                }
-                break;
-            }
-            case IPC_MSG_OSRPOPUPCONTENTS: {
-                struct BoltIPCOsrPopupContentsHeader header;
-                _bolt_ipc_receive(fd, &header, sizeof(header));
-                size_t rgba_size = (size_t)header.width * (size_t)header.height * 4;
-                uint64_t* window_id_ptr = &header.window_id;
-                _bolt_rwlock_lock_read(&windows.lock);
-                struct EmbeddedWindow** window = (struct EmbeddedWindow**)hashmap_get(windows.map, &window_id_ptr);
-                if (!window) {
-                    _bolt_rwlock_unlock_read(&windows.lock);
-                    _bolt_receive_discard(rgba_size);
-                    break;
-                }
-                uint8_t deleted = (*window)->is_deleted;
-                lua_State* state = (*window)->plugin;
-                _bolt_rwlock_unlock_read(&windows.lock);
-                if (deleted) {
-                    _bolt_receive_discard(rgba_size);
-                    break;
-                }
-
-                void* rgba = lua_newuserdata(state, rgba_size);
-                struct EmbeddedWindowMetadata* meta = &(*window)->popup_meta;
-                _bolt_ipc_receive(fd, rgba, rgba_size);
-                if (!(*window)->popup_initialised) {
-                    managed_functions.surface_init(&(*window)->popup_surface_functions, header.width, header.height, NULL);
-                    (*window)->popup_initialised = true;
-                } else if (header.width != (*window)->popup_meta.width || header.height != (*window)->popup_meta.height) {
-                    managed_functions.surface_resize_and_clear((*window)->popup_surface_functions.userdata, header.width, header.height);
-                }
-                meta->width = header.width;
-                meta->height = header.height;
-                (*window)->popup_surface_functions.subimage((*window)->popup_surface_functions.userdata, 0, 0, header.width, header.height, rgba, true);
-                lua_pop(state, 1);
-                break;
-            }
-            case IPC_MSG_OSRPOPUPPOSITION: {
-                struct BoltIPCOsrPopupPositionHeader header;
-                _bolt_ipc_receive(fd, &header, sizeof(header));
-                uint64_t* window_id_ptr = &header.window_id;
-                _bolt_rwlock_lock_read(&windows.lock);
-                struct EmbeddedWindow** window = (struct EmbeddedWindow**)hashmap_get(windows.map, &window_id_ptr);
-                _bolt_rwlock_unlock_read(&windows.lock);
-                if (!window) break;
-                (*window)->popup_meta.x = header.x;
-                (*window)->popup_meta.y = header.y;
-                break;
-            }
-            case IPC_MSG_OSRPOPUPVISIBILITY: {
-                struct BoltIPCOsrPopupVisibilityHeader header;
-                _bolt_ipc_receive(fd, &header, sizeof(header));
-                uint64_t* window_id_ptr = &header.window_id;
-                _bolt_rwlock_lock_read(&windows.lock);
-                struct EmbeddedWindow** window = (struct EmbeddedWindow**)hashmap_get(windows.map, &window_id_ptr);
-                _bolt_rwlock_unlock_read(&windows.lock);
-                if (!window) break;
-                (*window)->popup_shown = header.visible;
-                break;
-            }
-            case IPC_MSG_EXTERNALBROWSERMESSAGE: {
-                struct BoltIPCBrowserMessageHeader header;
-                _bolt_ipc_receive(fd, &header, sizeof(header));
-                struct Plugin p = {.id = header.plugin_id};
-                struct Plugin* pp = &p;
-                uint64_t* window_id_ptr = &header.window_id;
-                struct Plugin** plugin = (struct Plugin**)hashmap_get(plugins, &pp);
-                if (!plugin) {
-                    _bolt_receive_discard(header.message_size);
-                    break;
-                }
-                struct ExternalBrowser** browser = (struct ExternalBrowser**)hashmap_get((*plugin)->external_browsers, &window_id_ptr);
-                if (!browser) {
-                    _bolt_receive_discard(header.message_size);
-                    break;
-                }
-                _bolt_incoming_plugin_msg((*browser)->plugin->state, &header);
-                break;
-            }
-            case IPC_MSG_OSRBROWSERMESSAGE: {
-                struct BoltIPCBrowserMessageHeader header;
-                _bolt_ipc_receive(fd, &header, sizeof(header));
-                uint64_t* window_id_ptr = &header.window_id;
-                _bolt_rwlock_lock_read(&windows.lock);
-                struct EmbeddedWindow** window = (struct EmbeddedWindow**)hashmap_get(windows.map, &window_id_ptr);
-                if (!window) {
-                    _bolt_rwlock_unlock_read(&windows.lock);
-                    _bolt_receive_discard(header.message_size);
-                    break;
-                }
-                uint8_t deleted = (*window)->is_deleted;
-                lua_State* state = (*window)->plugin;
-                _bolt_rwlock_unlock_read(&windows.lock);
-                if (deleted) {
-                    _bolt_receive_discard(header.message_size);
-                    break;
-                }
-                _bolt_incoming_plugin_msg(state, &header);
-                break;
-            }
-            case IPC_MSG_OSRSTARTREPOSITION: {
-                struct BoltIPCOsrStartRepositionHeader header;
-                _bolt_ipc_receive(fd, &header, sizeof(header));
-                uint64_t* window_id_ptr = &header.window_id;
-                _bolt_rwlock_lock_read(&windows.lock);
-                struct EmbeddedWindow** window = (struct EmbeddedWindow**)hashmap_get(windows.map, &window_id_ptr);
-                if (!window) {
-                    _bolt_rwlock_unlock_read(&windows.lock);
-                    break;
-                }
-                uint8_t deleted = (*window)->is_deleted;
-                lua_State* state = (*window)->plugin;
-                _bolt_rwlock_unlock_read(&windows.lock);
-                if (deleted) break;
-                (*window)->reposition_mode = true;
-                (*window)->reposition_w = header.horizontal;
-                (*window)->reposition_h = header.vertical;
-                break;
-            }
-            case IPC_MSG_BROWSERCLOSEREQUEST: {
-                struct BoltIPCBrowserCloseRequestHeader header;
-                _bolt_ipc_receive(fd, &header, sizeof(header));
-                struct Plugin p = {.id = header.plugin_id};
-                struct Plugin* pp = &p;
-                uint64_t* window_id_ptr = &header.window_id;
-                struct Plugin** plugin = (struct Plugin**)hashmap_get(plugins, &pp);
-                if (!plugin) break;
-                struct ExternalBrowser** browser = (struct ExternalBrowser**)hashmap_get((*plugin)->external_browsers, &window_id_ptr);
-                if (!browser) break;
-                lua_State* state = (*plugin)->state;
-                _bolt_incoming_plugin_closerequest(state, header.window_id);
-                break;
-            }
-            case IPC_MSG_OSRCLOSEREQUEST: {
-                struct BoltIPCOsrCloseRequestHeader header;
-                _bolt_ipc_receive(fd, &header, sizeof(header));
-                uint64_t* window_id_ptr = &header.window_id;
-                _bolt_rwlock_lock_read(&windows.lock);
-                struct EmbeddedWindow** window = (struct EmbeddedWindow**)hashmap_get(windows.map, &window_id_ptr);
-                if (!window) {
-                    _bolt_rwlock_unlock_read(&windows.lock);
-                    break;
-                }
-                uint8_t deleted = (*window)->is_deleted;
-                lua_State* state = (*window)->plugin;
-                _bolt_rwlock_unlock_read(&windows.lock);
-                if (deleted) break;
-                _bolt_incoming_plugin_closerequest(state, header.window_id);
-                break;
-            }
+            IPCCASE(STARTPLUGIN, StartPlugin)
+            IPCCASE(HOST_STOPPED_PLUGIN, HostStoppedPlugin)
+            IPCCASEWINDOWTAIL(OSRUPDATE, OsrUpdate)
+            IPCCASEWINDOWTAIL(OSRPOPUPCONTENTS, OsrPopupContents)
+            IPCCASEWINDOW(OSRPOPUPPOSITION, OsrPopupPosition)
+            IPCCASEWINDOW(OSRPOPUPVISIBILITY, OsrPopupVisibility)
+            IPCCASEBROWSERTAIL(EXTERNALBROWSERMESSAGE, BrowserMessage)
+            IPCCASEWINDOWTAIL(OSRBROWSERMESSAGE, BrowserMessage)
+            IPCCASEWINDOW(OSRSTARTREPOSITION, OsrStartReposition)
+            IPCCASEBROWSER(BROWSERCLOSEREQUEST, BrowserCloseRequest)
+            IPCCASEWINDOW(OSRCLOSEREQUEST, OsrCloseRequest)
             default:
                 printf("unknown message type %i\n", (int)msg_type);
                 break;
