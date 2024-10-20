@@ -136,7 +136,7 @@ function addMessageListeners(): void {
 					get(GlobalState.config).close_after_launch &&
 					event.data.clients.length > get(clientList).length
 				) {
-					window.close();
+					fetch('/close');
 				} else {
 					clientList.set(event.data.clients);
 				}

@@ -34,7 +34,7 @@ export function launchRS3Linux(
 				logger.info(`Game launch status: '${xml.responseText.trim()}'`);
 				if (xml.status == 200) {
 					if (hash) bolt.rs3DebInstalledHash = hash;
-					if (config.close_after_launch && !config.rs_plugin_loader) window.close();
+					if (config.close_after_launch && !config.rs_plugin_loader) fetch('/close');
 				}
 			}
 		};
@@ -119,7 +119,7 @@ export function launchRuneLite(
 				logger.info(`Game launch status: '${xml.responseText.trim()}'`);
 				if (xml.status == 200) {
 					if (id) bolt.runeLiteInstalledId = id;
-					if (config.close_after_launch && !configure) window.close();
+					if (config.close_after_launch && !configure) fetch('/close');
 				}
 			}
 		};
@@ -209,7 +209,7 @@ export function launchHdos(
 				logger.info(`Game launch status: '${xml.responseText.trim()}'`);
 				if (xml.status == 200) {
 					if (version) bolt.hdosInstalledVersion = version;
-					if (config.close_after_launch) window.close();
+					if (config.close_after_launch) fetch('/close');
 				}
 			}
 		};
@@ -341,7 +341,7 @@ export async function launchOfficialClient(
 		response.text().then((text) => logger.info(`Game launch status: '${text.trim()}'`));
 		if (response.status == 200) {
 			if (hash) installedHash = hash;
-			if (config.close_after_launch && (osrs || !config.rs_plugin_loader)) window.close();
+			if (config.close_after_launch && (osrs || !config.rs_plugin_loader)) fetch('/close');
 		}
 	};
 

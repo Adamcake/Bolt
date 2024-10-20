@@ -33,7 +33,7 @@ The initial request to `launcher.html` may have any of the following query param
 
 The following tasks are achieved by making web requests to `https://bolt-internal/`. All queries will respond with 200 if the request is successful, or otherwise 4xx or 5xx with a plain text error message. The requests are as follows:
 
--   `/close`: [deprecated] causes the process to exit.
+-   `/close`: asynchronously closes the launcher window. Unload handlers will be called as normal. This exists as a workaround for `window.close()` being unavailable in Bolt's CEF implementation.
 -   `/save-credentials`: saves user credentials to a file, so they may be restored and passed via the `credentials` param next time the program starts. This request must be a POST. Any POST data will be saved to the file as-is, overwriting the existing file if any. This request should be made immediately after the credentials object changes, since almost any change completely invalidates the old file contents.
 -   `/save-config`: saves user configuration to a file, so it may be restored and passed via the `config` param next time the program starts. This request must be a POST. Any POST data will be saved to the file as-is, overwriting the existing file if any. Unlike credentials, config changes are a fairly low priority and can be left until some time later, such as the `onunload` event.
 -   `/open-external-url`: attempts to open a URL in the user's browser. This request must be a POST, with the POST data containing the URL to open. The URL must start with `http://` or `https://`.

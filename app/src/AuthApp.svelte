@@ -52,7 +52,7 @@
 
 	function fail(reason: string) {
 		message({ type: 'authFailed', reason });
-		window.close();
+		fetch('/close');
 	}
 
 	/**
@@ -81,7 +81,7 @@
 			if (!sessionId) return fail('sessionId is null');
 
 			message({ type: 'authSessionUpdate', sessionId });
-			window.close();
+			fetch('/close');
 		} else {
 			fail(
 				'Authentication server did not response with the appropriate parameters. Please try again later.'
