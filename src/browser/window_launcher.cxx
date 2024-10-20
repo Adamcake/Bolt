@@ -403,6 +403,12 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 		if (path == "/json-file-picker") {
 			return new FilePicker(browser, {".json"});
 		}
+
+		// instruction to close the launcher UI window
+		if (path == "/close") {
+			this->browser->GetHost()->CloseBrowser(false);
+			QSENDOK();
+		}
 	}
 
 	// internal hashmap of filenames - allowed to fetch these either if the request is from an internal origin,
