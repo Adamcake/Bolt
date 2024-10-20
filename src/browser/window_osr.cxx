@@ -72,7 +72,7 @@ bool Browser::WindowOSR::IsDeleted() {
 
 void Browser::WindowOSR::Close() {
 	if (this->browser) {
-		this->browser->GetHost()->CloseBrowser(true);
+		this->browser->GetHost()->CloseBrowser(false);
 	} else {
 		this->pending_delete = true;
 	}
@@ -219,7 +219,7 @@ bool Browser::WindowOSR::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser,
 	if (!(this->browser && this->browser->IsSame(browser))) return false;
 	const CefString name = message->GetName();
 	if (name == "__bolt_pluginbrowser_close") {
-		this->browser->GetHost()->CloseBrowser(true);
+		this->browser->GetHost()->TryCloseBrowser();
 	}
 	return false;
 }
