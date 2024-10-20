@@ -1,11 +1,21 @@
 #include "browser/client.hxx"
 #include "browser.hxx"
 #include "include/cef_life_span_handler.h"
+#include "include/cef_task.h"
 #include "include/views/cef_window.h"
 
 #include <algorithm>
 
 #include <fmt/core.h>
+
+struct CloseTask: public CefTask {
+	CloseTask(CefRefPtr<Browser::Window> window): window(window) {}
+	void Execute() override { window->Close(); }
+	private:
+		CefRefPtr<Browser::Window> window;
+		IMPLEMENT_REFCOUNTING(CloseTask);
+		DISALLOW_COPY_AND_ASSIGN(CloseTask);
+};
 
 Browser::Window::Window(CefRefPtr<Browser::Client> client, Browser::Details details, CefString url, bool show_devtools):
 	browser_count(0), client(client.get()), show_devtools(show_devtools), details(details), window(nullptr), browser_view(nullptr), browser(nullptr), pending_child(nullptr), pending_delete(false)
@@ -149,10 +159,14 @@ void Browser::Window::Focus() const {
 
 void Browser::Window::Close() {
 	fmt::print("[B] Close this={}\n", reinterpret_cast<uintptr_t>(this));
-	if (this->browser) {
-		this->browser->GetHost()->CloseBrowser(true);
+	if (CefCurrentlyOn(TID_UI)) {
+		if (this->browser) {
+			this->browser->GetHost()->TryCloseBrowser();
+		} else {
+			this->pending_delete = true;
+		}
 	} else {
-		this->pending_delete = true;
+		CefPostTask(TID_UI, new CloseTask(this));
 	}
 }
 
@@ -206,7 +220,7 @@ void Browser::Window::OnAfterCreated(CefRefPtr<CefBrowser> browser) {
 	if (this->pending_delete) {
 		// calling CloseBrowser here would lead to a segmentation fault in CEF because we're still
 		// technically in the create function, which is going to assume the browser still exists.
-		browser->GetMainFrame()->SendProcessMessage(PID_RENDERER, CefProcessMessage::Create("__bolt_pluginbrowser_close"));
+		CefPostTask(TID_UI, new CloseTask(this));
 	}
 }
 
