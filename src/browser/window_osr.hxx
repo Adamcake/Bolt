@@ -12,8 +12,6 @@
 #include "window_plugin_requests.hxx"
 #include "../file_manager/directory.hxx"
 
-#include <mutex>
-
 struct RepositionEvent;
 struct MouseMotionEvent;
 struct MouseButtonEvent;

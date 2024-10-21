@@ -5,6 +5,8 @@
 #include "../file_manager.hxx"
 #include "include/cef_request_handler.h"
 
+#include <mutex>
+
 namespace Browser {
 	/// Abstract class handling requests from plugin-managed browsers
 	struct PluginRequestHandler: public CefRequestHandler {
