@@ -8,7 +8,7 @@
 
 namespace Browser {
 	struct PluginWindow: public Window, PluginRequestHandler {
-		PluginWindow(CefRefPtr<Client> main_client, Details details, const char* url, CefRefPtr<FileManager::Directory> file_manager, BoltSocketType fd, uint64_t id, uint64_t plugin_id, bool show_devtools);
+		PluginWindow(CefRefPtr<Client> main_client, Details details, const char* url, CefRefPtr<FileManager::Directory> file_manager, BoltSocketType fd, std::mutex* send_lock, uint64_t id, uint64_t plugin_id, bool show_devtools);
 		bool IsDeleted() const;
 
 		uint64_t WindowID() const override;

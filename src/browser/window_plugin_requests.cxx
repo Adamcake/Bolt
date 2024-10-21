@@ -69,17 +69,16 @@ CefRefPtr<CefResourceRequestHandler> Browser::PluginRequestHandler::GetResourceR
 			CefPostData::ElementVector vec;
 			post_data->GetElements(vec);
 			size_t message_size = vec[0]->GetBytesCount();
-
-			const size_t bytes = sizeof(BoltIPCMessageTypeToClient) + sizeof(BoltIPCBrowserMessageHeader) + message_size;
-			uint8_t* buf = new uint8_t[bytes];
-			BoltIPCMessageTypeToClient* msg_type = reinterpret_cast<BoltIPCMessageTypeToClient*>(buf);
-			BoltIPCBrowserMessageHeader* header = reinterpret_cast<BoltIPCBrowserMessageHeader*>(msg_type + 1);
-			void* message = reinterpret_cast<void*>(header + 1);
-			*msg_type = this->message_type;
-			*header = {.window_id = this->WindowID(), .plugin_id = this->PluginID(), .message_size = message_size};
+			uint8_t* message = new uint8_t[message_size];
 			vec[0]->GetBytes(message_size, message);
-			const uint8_t ret = _bolt_ipc_send(this->ClientFD(), buf, bytes);
-			delete[] buf;
+
+			const BoltIPCBrowserMessageHeader header = { .window_id = this->WindowID(), .plugin_id = this->PluginID(), .message_size = message_size };
+			this->send_lock->lock();
+			const uint8_t ret = _bolt_ipc_send(this->ClientFD(), &this->message_type, sizeof(this->message_type))
+				|| _bolt_ipc_send(this->ClientFD(), &header, sizeof(header))
+				|| _bolt_ipc_send(this->ClientFD(), message, message_size);
+			this->send_lock->unlock();
+			delete[] message;
 			QSENDSYSTEMERRORIF(ret);
 			QSENDOK();
 		}
@@ -90,10 +89,8 @@ CefRefPtr<CefResourceRequestHandler> Browser::PluginRequestHandler::GetResourceR
 		}
 
 		if (api_name == "start-reposition") {
-			uint8_t buf[sizeof(BoltIPCMessageTypeToClient) + sizeof(BoltIPCOsrStartRepositionHeader)];
-			BoltIPCMessageTypeToClient* msg_type = reinterpret_cast<BoltIPCMessageTypeToClient*>(buf);
-			BoltIPCOsrStartRepositionHeader* header = reinterpret_cast<BoltIPCOsrStartRepositionHeader*>(msg_type + 1);
-			*msg_type = IPC_MSG_OSRSTARTREPOSITION;
+			const BoltIPCMessageTypeToClient msg_type = IPC_MSG_OSRSTARTREPOSITION;
+			BoltIPCOsrStartRepositionHeader header;
 			
 			bool has_h = false;
 			bool has_v = false;
@@ -106,10 +103,13 @@ CefRefPtr<CefResourceRequestHandler> Browser::PluginRequestHandler::GetResourceR
 			QREQPARAMINT(h);
 			QREQPARAMINT(v);
 
-			header->window_id = this->WindowID();
-			header->horizontal = (h == 0) ? 0 : ((h > 0) ? 1 : -1);
-			header->vertical = (v == 0) ? 0 : ((v > 0) ? 1 : -1);
-			const uint8_t ret = _bolt_ipc_send(this->ClientFD(), buf, sizeof(buf));
+			header.window_id = this->WindowID();
+			header.horizontal = (h == 0) ? 0 : ((h > 0) ? 1 : -1);
+			header.vertical = (v == 0) ? 0 : ((v > 0) ? 1 : -1);
+			this->send_lock->lock();
+			const uint8_t ret = _bolt_ipc_send(this->ClientFD(), &msg_type, sizeof(msg_type))
+				|| _bolt_ipc_send(this->ClientFD(), &header, sizeof(header));
+			this->send_lock->unlock();
 			QSENDSYSTEMERRORIF(ret);
 			QSENDOK();
 		}

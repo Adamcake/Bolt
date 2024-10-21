@@ -177,6 +177,7 @@ namespace Browser {
 
 				std::vector<CefRefPtr<ActivePlugin>> plugins;
 			};
+			std::mutex send_lock; // would be great to have this per-GameClient but C++ doesn't like that
 			std::thread ipc_thread;
 			BoltSocketType ipc_fd;
 			CefRefPtr<CefBrowserView> ipc_view;

@@ -8,7 +8,7 @@
 namespace Browser {
 	/// Abstract class handling requests from plugin-managed browsers
 	struct PluginRequestHandler: public CefRequestHandler {
-		PluginRequestHandler(BoltIPCMessageTypeToClient message_type): message_type(message_type) {}
+		PluginRequestHandler(BoltIPCMessageTypeToClient message_type, std::mutex* send_lock): message_type(message_type), send_lock(send_lock) {}
 
 		void HandlePluginMessage(const uint8_t*, size_t);
 
@@ -28,6 +28,9 @@ namespace Browser {
 		virtual CefRefPtr<FileManager::FileManager> FileManager() const = 0;
 		virtual CefRefPtr<CefBrowser> Browser() const = 0;
 		virtual void HandlePluginCloseRequest() = 0;
+
+		protected:
+			std::mutex* send_lock;
 
 		private:
 			BoltIPCMessageTypeToClient message_type;

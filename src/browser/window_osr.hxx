@@ -23,7 +23,7 @@ namespace Browser {
 	struct Client;
 
 	struct WindowOSR: public CefClient, CefLifeSpanHandler, CefRenderHandler, PluginRequestHandler {
-		WindowOSR(CefString url, int width, int height, BoltSocketType client_fd, Client* main_client, int pid, uint64_t window_id, uint64_t plugin_id, CefRefPtr<FileManager::Directory>);
+		WindowOSR(CefString url, int width, int height, BoltSocketType client_fd, Client* main_client, std::mutex* send_lock, int pid, uint64_t window_id, uint64_t plugin_id, CefRefPtr<FileManager::Directory>);
 
 		bool IsDeleted();
 

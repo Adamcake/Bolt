@@ -16,24 +16,21 @@
 #include "resource_handler.hxx"
 #include "../library/event.h"
 
-static void SendUpdateMsg(BoltSocketType fd, uint64_t id, int width, int height, void* needs_remap, const CefRect* rects, uint32_t rect_count) {
-	const size_t bytes = sizeof(BoltIPCMessageTypeToClient) + sizeof(BoltIPCOsrUpdateHeader) + (rect_count * sizeof(BoltIPCOsrUpdateRect));
-	uint8_t* buf = new uint8_t[bytes];
-	BoltIPCMessageTypeToClient* msg_type = reinterpret_cast<BoltIPCMessageTypeToClient*>(buf);
-	BoltIPCOsrUpdateHeader* header = reinterpret_cast<BoltIPCOsrUpdateHeader*>(msg_type + 1);
-	BoltIPCOsrUpdateRect* ipc_rects = reinterpret_cast<BoltIPCOsrUpdateRect*>(header + 1);
-	*msg_type = IPC_MSG_OSRUPDATE;
-	*header = { .rect_count = rect_count, .window_id = id, .needs_remap = needs_remap, .width = width, .height = height };
-
+static void SendUpdateMsg(BoltSocketType fd, std::mutex* send_lock, uint64_t id, int width, int height, void* needs_remap, const CefRect* rects, uint32_t rect_count) {
+	const BoltIPCMessageTypeToClient msg_type = IPC_MSG_OSRUPDATE;
+	const BoltIPCOsrUpdateHeader header = { .rect_count = rect_count, .window_id = id, .needs_remap = needs_remap, .width = width, .height = height };
+	send_lock->lock();
+	_bolt_ipc_send(fd, &msg_type, sizeof(msg_type));
+	_bolt_ipc_send(fd, &header, sizeof(header));
 	for (uint32_t i = 0; i < rect_count; i += 1) {
-		ipc_rects[i] = { .x = rects[i].x, .y = rects[i].y, .w = rects[i].width, .h = rects[i].height };
+		const BoltIPCOsrUpdateRect rect = { .x = rects[i].x, .y = rects[i].y, .w = rects[i].width, .h = rects[i].height };
+		_bolt_ipc_send(fd, &rect, sizeof(rect));
 	}
-	_bolt_ipc_send(fd, buf, bytes);
-	delete[] buf;
+	send_lock->unlock();
 }
 
-Browser::WindowOSR::WindowOSR(CefString url, int width, int height, BoltSocketType client_fd, Browser::Client* main_client, int pid, uint64_t window_id, uint64_t plugin_id, CefRefPtr<FileManager::Directory> file_manager):
-	PluginRequestHandler(IPC_MSG_OSRBROWSERMESSAGE),
+Browser::WindowOSR::WindowOSR(CefString url, int width, int height, BoltSocketType client_fd, Browser::Client* main_client, std::mutex* send_lock, int pid, uint64_t window_id, uint64_t plugin_id, CefRefPtr<FileManager::Directory> file_manager):
+	PluginRequestHandler(IPC_MSG_OSRBROWSERMESSAGE, send_lock),
 	deleted(false), pending_delete(false), client_fd(client_fd), width(width), height(height), browser(nullptr), window_id(window_id),
 	plugin_id(plugin_id), main_client(main_client), stored(nullptr), remote_has_remapped(false), remote_is_idle(true), file_manager(file_manager)
 {
@@ -99,12 +96,12 @@ CefRefPtr<CefBrowser> Browser::WindowOSR::Browser() const {
 }
 
 void Browser::WindowOSR::HandlePluginCloseRequest() {
-	uint8_t buf[sizeof(BoltIPCMessageTypeToClient) + sizeof(BoltIPCOsrCloseRequestHeader)];
-	BoltIPCMessageTypeToClient* msg_type = reinterpret_cast<BoltIPCMessageTypeToClient*>(buf);
-	BoltIPCOsrCloseRequestHeader* header = reinterpret_cast<BoltIPCOsrCloseRequestHeader*>(msg_type + 1);
-	*msg_type = IPC_MSG_OSRCLOSEREQUEST;
-	*header = { .window_id = this->window_id };
-	_bolt_ipc_send(this->client_fd, buf, sizeof(buf));
+	BoltIPCMessageTypeToClient msg_type = IPC_MSG_OSRCLOSEREQUEST;
+	BoltIPCOsrCloseRequestHeader header = { .window_id = this->window_id };
+	this->send_lock->lock();
+	_bolt_ipc_send(this->client_fd, &msg_type, sizeof(msg_type));
+	_bolt_ipc_send(this->client_fd, &header, sizeof(header));
+	this->send_lock->unlock();
 }
 
 void Browser::WindowOSR::HandleAck() {
@@ -129,7 +126,7 @@ void Browser::WindowOSR::HandleAck() {
 			this->mapping_size = length;
 		}
 		memcpy(this->file, this->stored, length);
-		SendUpdateMsg(this->client_fd, this->window_id, this->stored_width, this->stored_height, needs_remap, &this->stored_damage, 1);
+		SendUpdateMsg(this->client_fd, this->send_lock, this->window_id, this->stored_width, this->stored_height, needs_remap, &this->stored_damage, 1);
 		::free(this->stored);
 		this->stored = nullptr;
 	} else {
@@ -231,40 +228,36 @@ void Browser::WindowOSR::GetViewRect(CefRefPtr<CefBrowser> browser, CefRect& rec
 }
 
 void Browser::WindowOSR::OnPopupShow(CefRefPtr<CefBrowser> browser, bool show) {
-	uint8_t buf[sizeof(BoltIPCMessageTypeToClient) + sizeof(BoltIPCOsrPopupVisibilityHeader)];
-	BoltIPCMessageTypeToClient* msg_type = reinterpret_cast<BoltIPCMessageTypeToClient*>(buf);
-	BoltIPCOsrPopupVisibilityHeader* header = reinterpret_cast<BoltIPCOsrPopupVisibilityHeader*>(msg_type + 1);
-	*msg_type = IPC_MSG_OSRPOPUPVISIBILITY;
-	*header = { .window_id = this->WindowID(), .visible = show };
-	_bolt_ipc_send(this->client_fd, buf, sizeof(buf));
+	const BoltIPCMessageTypeToClient msg_type = IPC_MSG_OSRPOPUPVISIBILITY;
+	const BoltIPCOsrPopupVisibilityHeader header = { .window_id = this->WindowID(), .visible = show };
+	this->send_lock->lock();
+	_bolt_ipc_send(this->client_fd, &msg_type, sizeof(msg_type));
+	_bolt_ipc_send(this->client_fd, &header, sizeof(header));
+	this->send_lock->unlock();
 }
 
 void Browser::WindowOSR::OnPopupSize(CefRefPtr<CefBrowser> browser, const CefRect& rect) {
 	// Despite the function name, we don't actually use the size from here at all, we get that in OnPaint.
 	// This function actually also gives us updates to the X and Y of the popup, which we do need.
-	uint8_t buf[sizeof(BoltIPCMessageTypeToClient) + sizeof(BoltIPCOsrPopupPositionHeader)];
-	BoltIPCMessageTypeToClient* msg_type = reinterpret_cast<BoltIPCMessageTypeToClient*>(buf);
-	BoltIPCOsrPopupPositionHeader* header = reinterpret_cast<BoltIPCOsrPopupPositionHeader*>(msg_type + 1);
-	*msg_type = IPC_MSG_OSRPOPUPPOSITION;
-	*header = { .window_id = this->WindowID(), .x = rect.x, .y = rect.y };
-	_bolt_ipc_send(this->client_fd, buf, sizeof(buf));
+	const BoltIPCMessageTypeToClient msg_type = IPC_MSG_OSRPOPUPPOSITION;
+	const BoltIPCOsrPopupPositionHeader header = { .window_id = this->WindowID(), .x = rect.x, .y = rect.y };
+	this->send_lock->lock();
+	_bolt_ipc_send(this->client_fd, &msg_type, sizeof(msg_type));
+	_bolt_ipc_send(this->client_fd, &header, sizeof(header));
+	this->send_lock->unlock();
 }
 
 void Browser::WindowOSR::OnPaint(CefRefPtr<CefBrowser> browser, PaintElementType type, const RectList& dirtyRects, const void* buffer, int width, int height) {
 	if (this->deleted || dirtyRects.empty()) return;
 
 	if (type == PET_POPUP) {
-		const size_t rgba_bytes = width * height * 4;
-		const size_t bytes = sizeof(BoltIPCMessageTypeToClient) + sizeof(BoltIPCOsrPopupContentsHeader) + rgba_bytes;
-		uint8_t* buf = new uint8_t[bytes];
-		BoltIPCMessageTypeToClient* msg_type = reinterpret_cast<BoltIPCMessageTypeToClient*>(buf);
-		BoltIPCOsrPopupContentsHeader* header = reinterpret_cast<BoltIPCOsrPopupContentsHeader*>(msg_type + 1);
-		uint8_t* rgba = reinterpret_cast<uint8_t*>(header + 1);
-		*msg_type = IPC_MSG_OSRPOPUPCONTENTS;
-		*header = { .window_id = this->WindowID(), .width = width, .height = height };
-		memcpy(rgba, buffer, rgba_bytes);
-		_bolt_ipc_send(this->client_fd, buf, bytes);
-		delete[] buf;
+		const BoltIPCMessageTypeToClient msg_type = IPC_MSG_OSRPOPUPCONTENTS;
+		const BoltIPCOsrPopupContentsHeader header = { .window_id = this->WindowID(), .width = width, .height = height };
+		this->send_lock->lock();
+		_bolt_ipc_send(this->client_fd, &msg_type, sizeof(msg_type));
+		_bolt_ipc_send(this->client_fd, &header, sizeof(header));
+		_bolt_ipc_send(this->client_fd, buffer, (size_t)width * (size_t)height * 4);
+		this->send_lock->unlock();
 		return;
 	}
 
@@ -305,7 +298,7 @@ void Browser::WindowOSR::OnPaint(CefRefPtr<CefBrowser> browser, PaintElementType
 			needs_remap = (void*)1;
 #endif
 		}
-		SendUpdateMsg(this->client_fd, this->window_id, width, height, needs_remap, dirtyRects.data(), dirtyRects.size());
+		SendUpdateMsg(this->client_fd, this->send_lock, this->window_id, width, height, needs_remap, dirtyRects.data(), dirtyRects.size());
 		this->remote_has_remapped = true;
 		this->remote_is_idle = false;
 	} else {
