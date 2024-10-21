@@ -243,11 +243,10 @@ struct GLContext {
     GLenum active_texture;
     GLuint current_draw_framebuffer;
     GLuint current_read_framebuffer;
-    GLuint game_view_framebuffer;
-    GLuint game_view_tex;
-    GLuint game_view_tex_front;
+    GLuint game_view_part_framebuffer;
+    GLint game_view_sSourceTex;
+    GLint game_view_sSceneHDRTex;
     GLint target_3d_tex;
-    GLint target_minimap_tex;
     GLint game_view_x;
     GLint game_view_y;
     GLint game_view_w;
@@ -255,7 +254,8 @@ struct GLContext {
     uint8_t is_attached;
     uint8_t deferred_destroy;
     uint8_t is_shared_owner;
-    uint8_t need_3d_tex;
+    uint8_t recalculate_3d_target;
+    uint8_t does_blit_3d_target;
     GLint viewport_x;
     GLint viewport_y;
     GLsizei viewport_w;

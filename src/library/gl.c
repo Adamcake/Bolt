@@ -11,7 +11,7 @@
 
 // don't change this part, change the line above this instead
 #if defined(VERBOSE)
-#define LOG printf
+#define LOG(...) printf(__VA_ARGS__);fflush(stdout)
 #else
 #define LOG(...)
 #endif
@@ -358,10 +358,10 @@ static void _bolt_glcontext_init(struct GLContext* context, void* egl_context, v
     memset(context, 0, sizeof(*context));
     context->id = (uintptr_t)egl_context;
     context->texture_units = calloc(MAX_TEXTURE_UNITS, sizeof(unsigned int));
-    context->game_view_tex = -1;
-    context->target_3d_tex = -1;
-    context->game_view_framebuffer = -1;
-    context->need_3d_tex = 0;
+    context->game_view_part_framebuffer = -1;
+    context->game_view_sSourceTex = -1;
+    context->does_blit_3d_target = false;
+    context->recalculate_3d_target = false;
     if (shared) {
         context->programs = shared->programs;
         context->buffers = shared->buffers;
@@ -1148,21 +1148,23 @@ static void _bolt_glBlitFramebuffer(GLint srcX0, GLint srcY0, GLint srcX1, GLint
     LOG("glBlitFramebuffer\n");
     gl.BlitFramebuffer(srcX0, srcY0, srcX1, srcY1, dstX0, dstY0, dstX1, dstY1, mask, filter);
     struct GLContext* c = _bolt_context();
-    if (c->current_draw_framebuffer == 0 && c->game_view_framebuffer != c->current_read_framebuffer) {
-        c->game_view_framebuffer = c->current_read_framebuffer;
+    if (c->current_draw_framebuffer == 0 && c->game_view_part_framebuffer != c->current_read_framebuffer) {
+        c->game_view_part_framebuffer = c->current_read_framebuffer;
+        c->recalculate_3d_target = true;
+        c->game_view_sSourceTex = -1;
+        c->does_blit_3d_target = false;
         c->game_view_x = dstX0;
         c->game_view_y = dstY0;
-        c->need_3d_tex = 1;
-        printf("new game_view_framebuffer %u...\n", c->current_read_framebuffer);
-    } else if (c->need_3d_tex) {
-        int draw_tex;
-        gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
-        if (draw_tex == c->game_view_tex) {
-            c->need_3d_tex = 0;
-            c->game_view_w = dstX1 - dstX0;
-            c->game_view_h = dstY1 - dstY0;
-            gl.GetFramebufferAttachmentParameteriv(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &c->target_3d_tex);
-            printf("new target_3d_tex %i\n", c->target_3d_tex);
+        printf("new game_view_part_framebuffer %u...\n", c->current_read_framebuffer);
+    } else if (srcX0 == 0 && dstX0 == 0 && srcY0 == 0 && dstY0 == 0 && srcX1 == dstX1 && srcY1 == dstY1) {
+        GLint tex_id;
+        gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &tex_id);
+        struct GLTexture2D* target_tex = _bolt_context_get_texture(c, tex_id);
+        if (!c->does_blit_3d_target && target_tex && target_tex->width == srcX1 && target_tex->height == srcY1 && target_tex->id == c->game_view_sSceneHDRTex) {
+            printf("does blit to sSceneHDRTex from fb %u\n", c->current_read_framebuffer);
+            c->does_blit_3d_target = true;
+            gl.GetFramebufferAttachmentParameteriv(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &tex_id);
+            c->target_3d_tex = tex_id;
         }
     }
     LOG("glBlitFramebuffer end\n");
@@ -1202,7 +1204,7 @@ void* _bolt_gl_GetProcAddress(const char* name) {
 void _bolt_gl_onSwapBuffers(uint32_t window_width, uint32_t window_height) {
     gl_width = window_width;
     gl_height = window_height;
-    if (_bolt_plugin_is_inited()) _bolt_plugin_process_windows(window_width, window_height);
+    if (_bolt_plugin_is_inited()) _bolt_plugin_end_frame(window_width, window_height);
 }
 
 void _bolt_gl_onCreateContext(void* context, void* shared_context, const struct GLLibFunctions* libgl, void* (*GetProcAddress)(const char*), bool is_important) {
@@ -1452,45 +1454,79 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
     }
 }
 
+/*
+some notes on this game's OpenGL rendering pipeline for the 3D view
+
+the pipeline changes based on two things:
+- anti-aliasing graphics setting
+- whether the game view fills the entire window
+if either of these conditions changes, old textures and framebuffers are destroyed and new ones are created.
+the same generally happens when the window is resized.
+
+pipelines for different anti-aliasing settings are as follows:
+
+None: backbuffer <- blit* <- sSceneHDRTex <- (individual 3d objects)
+FXAA: backbuffer <- blit* <- sSourceTex <- sSceneHDRTex <- (individual 3d objects)
+MSAA: backbuffer <- blit* <- sSceneHDRTex <- full-blit <- (individual 3d objects)
+FXAA+MSAA: backbuffer <- blit* <- sSourceTex <- sSceneHDRTex <- full-blit <- (individual 3d objects)
+
+*blits to the game view area of the screen; omitted if the game view fills the entire window
+
+sSourceTex and sSceneHDRTex anre 6-vertex renders using glDrawArrays, the individual objects are drawn using glDrawElements.
+in summary, the texture to track is always sSceneHDRTex or the one that full-blits to sSceneHDRTex if any.
+*/
 void _bolt_gl_onDrawArrays(GLenum mode, GLint first, GLsizei count) {
     struct GLContext* c = _bolt_context();
-    GLint draw_tex;
-    gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
-    struct GLTexture2D* tex = _bolt_context_get_texture(c, draw_tex);
-    if (c->bound_program->is_minimap && tex->width == GAME_MINIMAP_BIG_SIZE && tex->height == GAME_MINIMAP_BIG_SIZE) {
+    GLint target_tex_id;
+    gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &target_tex_id);
+    struct GLTexture2D* target_tex = _bolt_context_get_texture(c, target_tex_id);
+
+    if (c->bound_program->is_minimap && target_tex->width == GAME_MINIMAP_BIG_SIZE && target_tex->height == GAME_MINIMAP_BIG_SIZE) {
         GLint ubo_binding, ubo_view_index;
         gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ViewTransforms, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
         gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, (GLuint)ubo_binding, &ubo_view_index);
         const float* camera_position = (float*)((uint8_t*)(_bolt_context_get_buffer(c, ubo_view_index)->data) + c->bound_program->offset_uCameraPosition);
-        tex->is_minimap_tex_big = 1;
-        tex->minimap_center_x = camera_position[0];
-        tex->minimap_center_y = camera_position[2];
+        target_tex->is_minimap_tex_big = 1;
+        target_tex->minimap_center_x = camera_position[0];
+        target_tex->minimap_center_y = camera_position[2];
     } else if (mode == GL_TRIANGLE_STRIP && count == 4) {
         if (c->bound_program->loc_sSceneHDRTex != -1) {
-            GLint game_view_tex;
-            gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_sSceneHDRTex, &game_view_tex);
-            if (c->current_draw_framebuffer == 0 && c->game_view_tex_front != c->texture_units[game_view_tex]->id) {
-                c->game_view_tex = c->texture_units[game_view_tex]->id;
-                c->game_view_tex_front = c->game_view_tex;
-                c->current_draw_framebuffer = -1;
+            GLint source_tex_unit;
+            gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_sSceneHDRTex, &source_tex_unit);
+            struct GLTexture2D* source_tex = c->texture_units[source_tex_unit];
+            if (c->current_draw_framebuffer == 0 && c->game_view_sSceneHDRTex != source_tex->id) {
+                c->game_view_sSceneHDRTex = source_tex->id;
+                c->target_3d_tex = c->game_view_sSceneHDRTex;
                 c->game_view_x = 0;
                 c->game_view_y = 0;
-                c->need_3d_tex = 1;
-                printf("new direct game_view_tex %u...\n", c->game_view_tex);
-            } else if (c->need_3d_tex == 1 && c->game_view_framebuffer == c->current_draw_framebuffer) {
-                c->game_view_tex = c->texture_units[game_view_tex]->id;
-                c->game_view_tex_front = c->game_view_tex;
-                printf("new game_view_tex %u...\n", c->game_view_tex);
+                c->game_view_w = source_tex->width;
+                c->game_view_h = source_tex->height;
+                c->recalculate_3d_target = false;
+                c->does_blit_3d_target = false;
+                printf("new direct target_3d_tex %i\n", c->target_3d_tex);
+            } else if (c->recalculate_3d_target && (c->game_view_part_framebuffer == c->current_draw_framebuffer || c->game_view_sSourceTex == target_tex_id)) {
+                c->game_view_sSceneHDRTex = source_tex->id;
+                c->target_3d_tex = c->game_view_sSceneHDRTex;
+                c->game_view_w = source_tex->width;
+                c->game_view_h = source_tex->height;
+                c->recalculate_3d_target = false;
+                printf("new target_3d_tex %i\n", c->target_3d_tex);
             }
         } else if (c->bound_program->loc_sSourceTex != -1) {
-            if (c->need_3d_tex == 1 && draw_tex == c->game_view_tex) {
-                GLint game_view_tex;
-                gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_sSourceTex, &game_view_tex);
-                c->game_view_tex = c->texture_units[game_view_tex]->id;
-                printf("updated direct game_view_tex to %u...\n", c->game_view_tex);
-                c->need_3d_tex += 1;
+            GLint source_tex_unit;
+            gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_sSourceTex, &source_tex_unit);
+            struct GLTexture2D* source_tex = c->texture_units[source_tex_unit];
+            if (c->current_draw_framebuffer == 0 && c->game_view_sSourceTex != source_tex->id) {
+                c->game_view_sSourceTex = source_tex->id;
+                c->does_blit_3d_target = false;
+                c->game_view_x = 0;
+                c->game_view_y = 0;
+                c->recalculate_3d_target = true;
+                printf("new direct sSourceTex %i...\n", c->game_view_sSourceTex);
+            } else if (c->recalculate_3d_target && c->game_view_part_framebuffer == c->current_draw_framebuffer) {
+                c->game_view_sSourceTex = source_tex->id;
+                printf("new sSourceTex %i...\n", c->game_view_sSourceTex);
             }
-
         }
     }
 }

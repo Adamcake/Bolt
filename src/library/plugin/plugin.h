@@ -259,9 +259,11 @@ void _bolt_plugin_init(const struct PluginManagedFunctions*);
 /// the returned value could be invalidated immediately by another thread calling plugin_init.
 uint8_t _bolt_plugin_is_inited();
 
-/// Processes events for all plugin windows/browsers and renders them. Needs the width and height
+/// Sends a SwapBuffers event to all plugins, sends various queued I/O events to the relevant plugins,
+/// and finalises other tasks such as the rendering of overlays. Should be called once per frame, from a
+/// SwapBuffers hook, BEFORE allowing the SwapBuffers function to run normally. Pass the width and height
 /// of the game view.
-void _bolt_plugin_process_windows(uint32_t, uint32_t);
+void _bolt_plugin_end_frame(uint32_t, uint32_t);
 
 /// Close the plugin library.
 void _bolt_plugin_close();
@@ -301,9 +303,6 @@ void _bolt_plugin_shm_resize(struct BoltSHM* shm, size_t length);
 /// Update mapping of an inbound SHM object according to its new size. `handle` is the new Windows
 /// HANDLE object, created by the host using DuplicateHandle, and is unused on non-Windows systems.
 void _bolt_plugin_shm_remap(struct BoltSHM* shm, size_t length, void* handle);
-
-/// Sends a SwapBuffers event to all plugins.
-void _bolt_plugin_handle_swapbuffers(struct SwapBuffersEvent*);
 
 /// Sends a RenderBatch2D to all plugins.
 void _bolt_plugin_handle_render2d(struct RenderBatch2D*);

@@ -118,6 +118,7 @@ static void _bolt_plugin_handle_mousebuttonup(struct MouseButtonEvent*);
 static void _bolt_plugin_handle_scroll(struct MouseScrollEvent*);
 
 static void _bolt_plugin_stop(uint64_t id);
+static void _bolt_plugin_handle_swapbuffers(struct SwapBuffersEvent*);
 
 struct ExternalBrowser {
     uint64_t id;
@@ -194,6 +195,9 @@ static int api_on##APINAME(lua_State* state) { \
     lua_settable(state, LUA_REGISTRYINDEX); \
     return 0; \
 }
+
+// same as DEFINE_CALLBACK except _bolt_plugin_handle_... will be defined as static
+#define DEFINE_CALLBACK_STATIC(APINAME, REGNAME, STRUCTNAME) static DEFINE_CALLBACK(APINAME, REGNAME, STRUCTNAME)
 
 // macro for defining function "api_window_on*" and "_bolt_plugin_window_on*"
 // e.g. DEFINE_WINDOWEVENT(resize, RESIZE, ResizeEvent)
@@ -384,7 +388,7 @@ static void _bolt_window_calc_repos_target(struct EmbeddedWindow* window, const 
     }
 }
 
-void _bolt_plugin_process_windows(uint32_t window_width, uint32_t window_height) {
+void _bolt_plugin_end_frame(uint32_t window_width, uint32_t window_height) {
     struct SwapBuffersEvent event;
     _bolt_plugin_handle_swapbuffers(&event);
     _bolt_plugin_handle_messages();
@@ -1259,7 +1263,7 @@ void _bolt_plugin_ipc_close(BoltSocketType fd) {
     errno = olderr;
 }
 
-DEFINE_CALLBACK(swapbuffers, SWAPBUFFERS, SwapBuffersEvent)
+DEFINE_CALLBACK_STATIC(swapbuffers, SWAPBUFFERS, SwapBuffersEvent)
 DEFINE_CALLBACK(render2d, BATCH2D, RenderBatch2D)
 DEFINE_CALLBACK(render3d, RENDER3D, Render3D)
 DEFINE_CALLBACK(minimap, MINIMAP, RenderMinimapEvent)
