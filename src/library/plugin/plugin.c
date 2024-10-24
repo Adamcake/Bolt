@@ -876,8 +876,13 @@ static void handle_ipc_OSRBROWSERMESSAGE(struct BoltIPCBrowserMessageHeader* hea
 
 static void handle_ipc_OSRSTARTREPOSITION(struct BoltIPCOsrStartRepositionHeader* header, struct EmbeddedWindow* window) {
     window->reposition_mode = true;
+    window->reposition_threshold = false;
     window->reposition_w = header->horizontal;
     window->reposition_h = header->vertical;
+}
+
+static void handle_ipc_OSRCANCELREPOSITION(struct BoltIPCOsrCancelRepositionHeader* header, struct EmbeddedWindow* window) {
+    window->reposition_mode = false;
 }
 
 static void handle_ipc_BROWSERCLOSEREQUEST(struct BoltIPCBrowserCloseRequestHeader* header, struct ExternalBrowser* browser) {
@@ -902,6 +907,7 @@ void _bolt_plugin_handle_messages() {
             IPCCASEBROWSERTAIL(EXTERNALBROWSERMESSAGE, BrowserMessage)
             IPCCASEWINDOWTAIL(OSRBROWSERMESSAGE, BrowserMessage)
             IPCCASEWINDOW(OSRSTARTREPOSITION, OsrStartReposition)
+            IPCCASEWINDOW(OSRCANCELREPOSITION, OsrCancelReposition)
             IPCCASEBROWSER(BROWSERCLOSEREQUEST, BrowserCloseRequest)
             IPCCASEWINDOW(OSRCLOSEREQUEST, OsrCloseRequest)
             default:
@@ -1072,13 +1078,14 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     PUSHSTRING(plugin->state, WINDOW_META_REGISTRYNAME);
     lua_newtable(plugin->state);
     PUSHSTRING(plugin->state, "__index");
-    lua_createtable(plugin->state, 0, 11);
+    lua_createtable(plugin->state, 0, 12);
     API_ADD_SUB(plugin->state, close, window)
     API_ADD_SUB(plugin->state, id, window)
     API_ADD_SUB(plugin->state, size, window)
     API_ADD_SUB(plugin->state, clear, window)
     API_ADD_SUB(plugin->state, subimage, window)
     API_ADD_SUB(plugin->state, startreposition, window)
+    API_ADD_SUB(plugin->state, cancelreposition, window)
     API_ADD_SUB(plugin->state, onreposition, window)
     API_ADD_SUB(plugin->state, onmousemotion, window)
     API_ADD_SUB(plugin->state, onmousebutton, window)
@@ -1091,9 +1098,11 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     PUSHSTRING(plugin->state, BROWSER_META_REGISTRYNAME);
     lua_newtable(plugin->state);
     PUSHSTRING(plugin->state, "__index");
-    lua_createtable(plugin->state, 0, 3);
+    lua_createtable(plugin->state, 0, 6);
     API_ADD_SUB(plugin->state, close, browser)
     API_ADD_SUB(plugin->state, sendmessage, browser)
+    API_ADD_SUB(plugin->state, startreposition, window)
+    API_ADD_SUB(plugin->state, cancelreposition, window)
     API_ADD_SUB(plugin->state, oncloserequest, browser)
     API_ADD_SUB(plugin->state, onmessage, browser)
     lua_settable(plugin->state, -3);
@@ -1951,6 +1960,13 @@ static int api_window_startreposition(lua_State* state) {
     window->reposition_threshold = false;
     window->reposition_w = (xscale == 0) ? 0 : ((xscale > 0) ? 1 : -1);
     window->reposition_h = (yscale == 0) ? 0 : ((yscale > 0) ? 1 : -1);
+    return 0;
+}
+
+static int api_window_cancelreposition(lua_State* state) {
+    _bolt_check_argc(state, 3, "window_cancelreposition");
+    struct EmbeddedWindow* window = lua_touserdata(state, 1);
+    window->reposition_mode = false;
     return 0;
 }
 

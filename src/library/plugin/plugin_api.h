@@ -478,6 +478,11 @@ static int api_window_subimage(lua_State*);
 /// bottom edge. Finally, if both are zero, the window will be moved instead of resized.
 static int api_window_startreposition(lua_State*);
 
+/// [-1, +0, -]
+/// Cancels repositioning for this window. If the window is in the process of being repositioned by
+/// the user dragging it, that will be cancelled and no repositioning will take place.
+static int api_window_cancelreposition(lua_State*);
+
 /// [-2, +0, -]
 /// Sets an event handler for this window for reposition events. If the value is a function, it
 /// will be called with one parameter, that being a reposition event object. If the value is not a
