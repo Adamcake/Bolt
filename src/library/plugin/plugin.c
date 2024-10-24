@@ -86,6 +86,11 @@ static struct PluginManagedFunctions managed_functions;
 static uint64_t next_window_id;
 static struct WindowInfo windows;
 
+static struct SurfaceFunctions overlay;
+static uint32_t overlay_width;
+static uint32_t overlay_height;
+static uint8_t overlay_inited;
+
 static bool inited = false;
 static int _bolt_api_init(lua_State* state);
 
@@ -265,6 +270,9 @@ void _bolt_plugin_on_startup() {
     windows.map = hashmap_new(sizeof(struct EmbeddedWindow*), 8, 0, 0, _bolt_window_map_hash, _bolt_window_map_compare, NULL, NULL);
     _bolt_rwlock_init(&windows.lock);
     memset(&windows.input, 0, sizeof(windows.input));
+    overlay_width = 0;
+    overlay_height = 0;
+    overlay_inited = false;
 #if defined(_WIN32)
     QueryPerformanceFrequency(&performance_frequency);
 #endif
@@ -389,8 +397,17 @@ static void _bolt_window_calc_repos_target(struct EmbeddedWindow* window, const 
 }
 
 void _bolt_plugin_end_frame(uint32_t window_width, uint32_t window_height) {
-    struct SwapBuffersEvent event;
-    _bolt_plugin_handle_swapbuffers(&event);
+    if (window_width != overlay_width || window_height != overlay_height) {
+        if (overlay_inited) {
+            managed_functions.surface_resize_and_clear(overlay.userdata, window_width, window_height);
+        } else {
+            managed_functions.surface_init(&overlay, window_width, window_height, NULL);
+            overlay_inited = true;
+        }
+        overlay_width = window_width;
+        overlay_height = window_height;
+    }
+
     _bolt_plugin_handle_messages();
     struct WindowInfo* windows = _bolt_plugin_windowinfo();
 
@@ -562,12 +579,12 @@ void _bolt_plugin_end_frame(uint32_t window_width, uint32_t window_height) {
             }
         }
 
-        window->surface_functions.draw_to_screen(window->surface_functions.userdata, 0, 0, metadata.width, metadata.height, metadata.x, metadata.y, metadata.width, metadata.height);
+        window->surface_functions.draw_to_surface(window->surface_functions.userdata, overlay.userdata, 0, 0, metadata.width, metadata.height, metadata.x, metadata.y, metadata.width, metadata.height);
         if (window->popup_shown && window->popup_initialised) {
-            window->popup_surface_functions.draw_to_screen(window->popup_surface_functions.userdata, 0, 0, window->popup_meta.width, window->popup_meta.height, metadata.x + window->popup_meta.x, metadata.y + window->popup_meta.y, window->popup_meta.width, window->popup_meta.height);
+            window->popup_surface_functions.draw_to_surface(window->popup_surface_functions.userdata, overlay.userdata, 0, 0, window->popup_meta.width, window->popup_meta.height, metadata.x + window->popup_meta.x, metadata.y + window->popup_meta.y, window->popup_meta.width, window->popup_meta.height);
         }
         if (window->reposition_mode && window->reposition_threshold) {
-            managed_functions.draw_region_outline(window->repos_target_x, window->repos_target_y, window->repos_target_w, window->repos_target_h);
+            managed_functions.draw_region_outline(overlay.userdata, window->repos_target_x, window->repos_target_y, window->repos_target_w, window->repos_target_h);
         }
     }
     _bolt_rwlock_unlock_read(&windows->lock);
@@ -611,6 +628,11 @@ void _bolt_plugin_end_frame(uint32_t window_width, uint32_t window_height) {
             iter = 0;
         }
     }
+
+    struct SwapBuffersEvent event;
+    _bolt_plugin_handle_swapbuffers(&event);
+    overlay.draw_to_screen(overlay.userdata, 0, 0, window_width, window_height, 0, 0, window_width, window_height);
+    overlay.clear(overlay.userdata, 0.0, 0.0, 0.0, 0.0);
 }
 
 void _bolt_plugin_close() {
@@ -1824,6 +1846,7 @@ static int api_surface_subimage(lua_State* state) {
 
 static int api_surface_drawtoscreen(lua_State* state) {
     _bolt_check_argc(state, 9, "surface_drawtoscreen");
+    if (!overlay_inited) return 0;
     const struct SurfaceFunctions* functions = lua_touserdata(state, 1);
     const int sx = lua_tointeger(state, 2);
     const int sy = lua_tointeger(state, 3);
@@ -1833,7 +1856,7 @@ static int api_surface_drawtoscreen(lua_State* state) {
     const int dy = lua_tointeger(state, 7);
     const int dw = lua_tointeger(state, 8);
     const int dh = lua_tointeger(state, 9);
-    functions->draw_to_screen(functions->userdata, sx, sy, sw, sh, dx, dy, dw, dh);
+    functions->draw_to_surface(functions->userdata, overlay.userdata, sx, sy, sw, sh, dx, dy, dw, dh);
     return 0;
 }
 

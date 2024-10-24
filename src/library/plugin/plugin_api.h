@@ -422,8 +422,7 @@ static int api_surface_clear(lua_State*);
 static int api_surface_subimage(lua_State*);
 
 /// [-9, +0, -]
-/// Draws a section of the surface directly onto a section of the screen's backbuffer. If used
-/// outside a swapbuffers event, this is unlikely to have any visible effect.
+/// Draws a section of the surface directly onto the screen.
 ///
 /// Paramaters are source X,Y,W,H followed by destination X,Y,W,H, all in pixels.
 static int api_surface_drawtoscreen(lua_State*);

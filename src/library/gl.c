@@ -80,7 +80,7 @@ static const GLchar program_region_vs[] = "#version 330 core\n"
 "uniform ivec2 dest_wh;"
 "void main() {"
   "vPos = aPos;"
-  "gl_Position = vec4(((((aPos * xywh.pq) + xywh.st) * vec2(2.0, 2.0) / vec2(dest_wh)) - vec2(1.0, 1.0)) * vec2(1.0, -1.0), 0.0, 1.0);"
+  "gl_Position = vec4(((((aPos * xywh.pq) + xywh.st) * vec2(2.0, 2.0) / vec2(dest_wh)) - vec2(1.0, 1.0)), 0.0, 1.0);"
 "}";
 static const GLchar program_region_fs[] = "#version 330 core\n"
 "in vec2 vPos;"
@@ -127,7 +127,7 @@ static void _bolt_gl_plugin_surface_clear(void* userdata, double r, double g, do
 static void _bolt_gl_plugin_surface_subimage(void* userdata, int x, int y, int w, int h, const void* pixels, uint8_t is_bgra);
 static void _bolt_gl_plugin_surface_drawtoscreen(void* userdata, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh);
 static void _bolt_gl_plugin_surface_drawtosurface(void* userdata, void* target, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh);
-static void _bolt_gl_plugin_draw_region_outline(int16_t x, int16_t y, uint16_t width, uint16_t height);
+static void _bolt_gl_plugin_draw_region_outline(void* userdata, int16_t x, int16_t y, uint16_t width, uint16_t height);
 
 #define MAX_TEXTURE_UNITS 4096 // would be nice if there was a way to query this at runtime, but it would be awkward to set up
 #define BUFFER_LIST_CAPACITY 256 * 256
@@ -1893,11 +1893,12 @@ static void _bolt_gl_plugin_surface_drawtosurface(void* _userdata, void* _target
     gl.UseProgram(c->bound_program ? c->bound_program->id : 0);
 }
 
-static void _bolt_gl_plugin_draw_region_outline(int16_t x, int16_t y, uint16_t width, uint16_t height) {
+static void _bolt_gl_plugin_draw_region_outline(void* userdata, int16_t x, int16_t y, uint16_t width, uint16_t height) {
+    struct PluginSurfaceUserdata* target = userdata;
     struct GLContext* c = _bolt_context();
     gl.UseProgram(program_region);
     gl.BindVertexArray(program_direct_vao);
-    gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+    gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, target->framebuffer);
     lgl->Viewport(0, 0, gl_width, gl_height);
     gl.Uniform4i(program_region_xywh, x, y, width, height);
     gl.Uniform2i(program_region_dest_wh, gl_width, gl_height);
