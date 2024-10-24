@@ -114,6 +114,17 @@ CefRefPtr<CefResourceRequestHandler> Browser::PluginRequestHandler::GetResourceR
 			QSENDOK();
 		}
 
+		if (api_name == "cancel-reposition") {
+			const BoltIPCMessageTypeToClient msg_type = IPC_MSG_OSRCANCELREPOSITION;
+			const BoltIPCOsrCancelRepositionHeader header = { .window_id = this->WindowID() };
+			this->send_lock->lock();
+			const uint8_t ret = _bolt_ipc_send(this->ClientFD(), &msg_type, sizeof(msg_type))
+				|| _bolt_ipc_send(this->ClientFD(), &header, sizeof(header));
+			this->send_lock->unlock();
+			QSENDSYSTEMERRORIF(ret);
+			QSENDOK();
+		}
+
 		// no API endpoint matched, so respond 404
 		QSENDNOTFOUND();
 	}
