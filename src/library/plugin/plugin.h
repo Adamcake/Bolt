@@ -203,6 +203,7 @@ struct EmbeddedWindow {
     uint8_t capture_ready;
     uint8_t popup_shown; // always false for non-browser
     uint8_t popup_initialised;
+    uint64_t capture_id;
     struct BoltSHM browser_shm;
     struct EmbeddedWindowMetadata popup_meta;
     struct SurfaceFunctions popup_surface_functions;

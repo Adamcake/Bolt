@@ -140,6 +140,7 @@ struct ExternalBrowser {
     struct Plugin* plugin;
     uint8_t do_capture;
     uint8_t capture_ready;
+    uint64_t capture_id;
 };
 
 void _bolt_plugin_free(struct Plugin* const* plugin) {
@@ -700,11 +701,12 @@ static void _bolt_process_captures(uint32_t window_width, uint32_t window_height
                 .capture_id = capture_id,
                 .width = window_width,
                 .height = window_height,
-                .needs_remap = need_remap,
+                .needs_remap = need_remap || (capture_id != window->capture_id),
             };
             _bolt_ipc_send(fd, &msg_type, sizeof(msg_type));
             _bolt_ipc_send(fd, &header, sizeof(header));
             window->capture_ready = false;
+            window->capture_id = capture_id;
         }
     }
     _bolt_rwlock_unlock_read(&windows.lock);
@@ -726,11 +728,12 @@ static void _bolt_process_captures(uint32_t window_width, uint32_t window_height
                     .capture_id = capture_id,
                     .width = window_width,
                     .height = window_height,
-                    .needs_remap = need_remap,
+                    .needs_remap = need_remap || (capture_id != browser->capture_id),
                 };
                 _bolt_ipc_send(fd, &msg_type, sizeof(msg_type));
                 _bolt_ipc_send(fd, &header, sizeof(header));
                 browser->capture_ready = false;
+                browser->capture_id = capture_id;
             }
         }
     }
@@ -1680,6 +1683,7 @@ static int api_createbrowser(lua_State* state) {
     browser->plugin_id = plugin->id;
     browser->plugin = plugin;
     browser->do_capture = false;
+    browser->capture_id = 0;
     lua_getfield(state, LUA_REGISTRYINDEX, BROWSER_META_REGISTRYNAME);
     lua_setmetatable(state, -2);
     next_window_id += 1;
@@ -1731,6 +1735,7 @@ static int api_createembeddedbrowser(lua_State* state) {
     window->is_browser = true;
     window->popup_shown = false;
     window->do_capture = false;
+    window->capture_id = 0;
     window->popup_initialised = false;
     window->popup_meta.x = 0;
     window->popup_meta.y = 0;
