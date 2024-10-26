@@ -128,6 +128,7 @@ static void _bolt_gl_plugin_surface_subimage(void* userdata, int x, int y, int w
 static void _bolt_gl_plugin_surface_drawtoscreen(void* userdata, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh);
 static void _bolt_gl_plugin_surface_drawtosurface(void* userdata, void* target, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh);
 static void _bolt_gl_plugin_draw_region_outline(void* userdata, int16_t x, int16_t y, uint16_t width, uint16_t height);
+static void _bolt_gl_plugin_read_screen_pixels(uint32_t width, uint32_t height, void* data);
 
 #define MAX_TEXTURE_UNITS 4096 // would be nice if there was a way to query this at runtime, but it would be awkward to set up
 #define BUFFER_LIST_CAPACITY 256 * 256
@@ -1246,6 +1247,7 @@ void _bolt_gl_onMakeCurrent(void* context) {
             .surface_destroy = _bolt_gl_plugin_surface_destroy,
             .surface_resize_and_clear = _bolt_gl_plugin_surface_resize,
             .draw_region_outline = _bolt_gl_plugin_draw_region_outline,
+            .read_screen_pixels = _bolt_gl_plugin_read_screen_pixels,
         };
         _bolt_plugin_init(&functions);
     }
@@ -1908,4 +1910,8 @@ static void _bolt_gl_plugin_draw_region_outline(void* userdata, int16_t x, int16
     gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, c->current_draw_framebuffer);
     gl.BindVertexArray(c->bound_vao->id);
     gl.UseProgram(c->bound_program ? c->bound_program->id : 0);
+}
+
+static void _bolt_gl_plugin_read_screen_pixels(uint32_t width, uint32_t height, void* data) {
+    lgl->ReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, data);
 }

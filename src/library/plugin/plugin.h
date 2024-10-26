@@ -132,6 +132,7 @@ struct PluginManagedFunctions {
     void (*surface_destroy)(void*);
     void (*surface_resize_and_clear)(void*, unsigned int, unsigned int);
     void (*draw_region_outline)(void* target, int16_t x, int16_t y, uint16_t width, uint16_t height);
+    void (*read_screen_pixels)(uint32_t width, uint32_t height, void* data);
 };
 
 struct WindowPendingInput {
@@ -197,12 +198,15 @@ struct EmbeddedWindow {
     uint8_t is_browser;
     uint8_t is_deleted;
 
-    /* everything below here is initialised only if is_browser, except as noted */
+    /* everything below here is used and initialised only if is_browser, except as noted */
+    uint8_t do_capture; // always false for non-browser
+    uint8_t capture_ready;
+    uint8_t popup_shown; // always false for non-browser
+    uint8_t popup_initialised;
+    uint64_t capture_id;
     struct BoltSHM browser_shm;
     struct EmbeddedWindowMetadata popup_meta;
     struct SurfaceFunctions popup_surface_functions;
-    uint8_t popup_shown; // always false for non-browser
-    uint8_t popup_initialised;
 };
 
 struct WindowInfo {
@@ -291,6 +295,10 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin);
 /// `tag` and `id` are unused on Windows. The above rules must be followed for posix-compliant systems,
 /// since all shm objects must be named (usually in /dev/shm), to ensure all names are unique.
 uint8_t _bolt_plugin_shm_open_inbound(struct BoltSHM* shm, const char* tag, uint64_t id);
+
+/// Similar to open_inbound, but will be opened in write-only mode with the host typically using
+/// read-only mode. The mapping will always be named using the tag and id, even on Windows.
+uint8_t _bolt_plugin_shm_open_outbound(struct BoltSHM* shm, size_t size, const char* tag, uint64_t id);
 
 /// Close and delete an SHM object. The library needs to ensure that the browser host process has
 /// been informed and won't try to use this SHM object anymore, before calling this function on it.

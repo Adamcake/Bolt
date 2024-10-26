@@ -201,6 +201,8 @@ static void _bolt_init_libgl(unsigned long addr, const Elf32_Word* gnu_hash_tabl
     if (sym) libgl.GenTextures = sym->st_value + libgl_addr;
     sym = _bolt_lookup_symbol("glGetError", gnu_hash_table, hash_table, string_table, symbol_table);
     if (sym) libgl.GetError = sym->st_value + libgl_addr;
+    sym = _bolt_lookup_symbol("glReadPixels", gnu_hash_table, hash_table, string_table, symbol_table);
+    if (sym) libgl.ReadPixels = sym->st_value + libgl_addr;
     sym = _bolt_lookup_symbol("glTexParameteri", gnu_hash_table, hash_table, string_table, symbol_table);
     if (sym) libgl.TexParameteri = sym->st_value + libgl_addr;
     sym = _bolt_lookup_symbol("glTexSubImage2D", gnu_hash_table, hash_table, string_table, symbol_table);

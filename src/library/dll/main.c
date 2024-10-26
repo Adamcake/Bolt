@@ -102,6 +102,7 @@ DWORD __stdcall BOLT_STUB_ENTRYNAME(struct PluginInjectParams* data) {
     libgl.Flush = (void(*)(void))data->pGetProcAddress(libgl_module, "glFlush");
     libgl.GenTextures = (void(*)(GLsizei, GLuint*))data->pGetProcAddress(libgl_module, "glGenTextures");
     libgl.GetError = (GLenum(*)(void))data->pGetProcAddress(libgl_module, "glGetError");
+    libgl.ReadPixels = (void(*)(GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, void*))data->pGetProcAddress(libgl_module, "glReadPixels");
     libgl.TexParameteri = (void(*)(GLenum, GLenum, GLfloat))data->pGetProcAddress(libgl_module, "glTexParameteri");
     libgl.TexSubImage2D = (void(*)(GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, const void*))data->pGetProcAddress(libgl_module, "glTexSubImage2D");
     libgl.Viewport = (void(*)(GLint, GLint, GLsizei, GLsizei))data->pGetProcAddress(libgl_module, "glViewport");

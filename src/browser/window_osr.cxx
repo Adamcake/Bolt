@@ -29,8 +29,8 @@ static void SendUpdateMsg(BoltSocketType fd, std::mutex* send_lock, uint64_t id,
 	send_lock->unlock();
 }
 
-Browser::WindowOSR::WindowOSR(CefString url, int width, int height, BoltSocketType client_fd, Browser::Client* main_client, std::mutex* send_lock, int pid, uint64_t window_id, uint64_t plugin_id, CefRefPtr<FileManager::Directory> file_manager):
-	PluginRequestHandler(IPC_MSG_OSRBROWSERMESSAGE, send_lock),
+Browser::WindowOSR::WindowOSR(CefString url, int width, int height, BoltSocketType client_fd, Browser::Client* main_client, std::mutex* send_lock, std::filesystem::path runtime_dir, int pid, uint64_t window_id, uint64_t plugin_id, CefRefPtr<FileManager::Directory> file_manager):
+	PluginRequestHandler(IPC_MSG_OSRBROWSERMESSAGE, send_lock, runtime_dir),
 	deleted(false), pending_delete(false), client_fd(client_fd), width(width), height(height), browser(nullptr), window_id(window_id),
 	plugin_id(plugin_id), main_client(main_client), stored(nullptr), remote_has_remapped(false), remote_is_idle(true), file_manager(file_manager)
 {
@@ -217,6 +217,16 @@ bool Browser::WindowOSR::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser,
 	const CefString name = message->GetName();
 	if (name == "__bolt_pluginbrowser_close") {
 		this->browser->GetHost()->TryCloseBrowser();
+		return true;
+	}
+	if (name == "__bolt_plugin_capture_done") {
+		const BoltIPCMessageTypeToClient msg_type = IPC_MSG_OSRCAPTUREDONE;
+		const BoltIPCOsrCaptureDoneHeader header = { .window_id = this->WindowID() };
+		this->send_lock->lock();
+		_bolt_ipc_send(this->client_fd, &msg_type, sizeof(msg_type));
+		_bolt_ipc_send(this->client_fd, &header, sizeof(header));
+		this->send_lock->unlock();
+		return true;
 	}
 	return false;
 }

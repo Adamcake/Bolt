@@ -393,7 +393,7 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 				.resizeable = true,
 				.frame = true,
 			};
-			plugin->windows.push_back(new Browser::PluginWindow(this, details, url, plugin, fd, &this->send_lock, header.window_id, header.plugin_id, false));
+			plugin->windows.push_back(new Browser::PluginWindow(this, details, url, plugin, fd, &this->send_lock, this->runtime_dir, header.window_id, header.plugin_id, false));
 			delete[] url;
 			break;
 		}
@@ -406,7 +406,7 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 
 			CefRefPtr<ActivePlugin> plugin = this->GetPluginFromFDAndID(client, header.plugin_id);
 			if (plugin) {
-				CefRefPtr<Browser::WindowOSR> window = new Browser::WindowOSR(CefString((char*)url), header.w, header.h, fd, this, &this->send_lock, header.pid, header.window_id, header.plugin_id, plugin);
+				CefRefPtr<Browser::WindowOSR> window = new Browser::WindowOSR(CefString((char*)url), header.w, header.h, fd, this, &this->send_lock, this->runtime_dir, header.pid, header.window_id, header.plugin_id, plugin);
 				plugin->windows_osr.push_back(window);
 			}
 			delete[] url;
@@ -431,6 +431,20 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 			_bolt_ipc_receive(fd, &header, sizeof(header));
 			CefRefPtr<Browser::WindowOSR> window = this->GetOsrWindowFromFDAndIDs(client, header.plugin_id, header.window_id);
 			if (window) window->HandleAck();
+			break;
+		}
+		case IPC_MSG_CAPTURENOTIFY_EXTERNAL: {
+			BoltIPCCaptureNotifyHeader header;
+			_bolt_ipc_receive(fd, &header, sizeof(header));
+			CefRefPtr<Browser::PluginWindow> window = this->GetExternalWindowFromFDAndIDs(client, header.plugin_id, header.window_id);
+			if (window && !window->IsDeleted()) window->HandleCaptureNotify(header.pid, header.capture_id, header.width, header.height, header.needs_remap != 0);
+			break;
+		}
+		case IPC_MSG_CAPTURENOTIFY_OSR: {
+			BoltIPCCaptureNotifyHeader header;
+			_bolt_ipc_receive(fd, &header, sizeof(header));
+			CefRefPtr<Browser::WindowOSR> window = this->GetOsrWindowFromFDAndIDs(client, header.plugin_id, header.window_id);
+			if (window && !window->IsDeleted()) window->HandleCaptureNotify(header.pid, header.capture_id, header.width, header.height, header.needs_remap != 0);
 			break;
 		}
 
