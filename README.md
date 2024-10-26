@@ -59,6 +59,7 @@ Now you can start building. Open a command window or terminal in the root direct
 
 ### Linux
 
+If building with GCC, you need version 13.1 or later. If building with Clang, you need version 14 or later.
 - `cmake -S . -B build -D CMAKE_BUILD_TYPE=Release`
   - note: you'll need to specify either `-D BOLT_LUAJIT_INCLUDE_DIR=/usr/include/luajit-2.1` OR `-D BOLT_SKIP_LIBRARIES=1` depending on whether you want to build the plugin library
   - note: build types "Debug" and "Release" are supported
