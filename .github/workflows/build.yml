@@ -152,7 +152,7 @@ jobs:
 
   build-linux-project:          
     name: Build Linux
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout Project
         uses: actions/checkout@v4.2.0
