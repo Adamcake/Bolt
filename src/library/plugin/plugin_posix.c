@@ -21,6 +21,23 @@ uint8_t _bolt_plugin_shm_open_inbound(struct BoltSHM* shm, const char* tag, uint
     return 1;
 }
 
+uint8_t _bolt_plugin_shm_open_outbound(struct BoltSHM* shm, size_t size, const char* tag, uint64_t id) {
+    char buf[256];
+    snprintf(buf, sizeof(buf), "/bolt-%i-%s-%lu", getpid(), tag, id);
+    shm->fd = shm_open(buf, O_RDONLY | O_CREAT | O_TRUNC, 0644);
+    if (shm->fd == -1) {
+        printf("failed to create shm object '%s': %i\n", buf, errno);
+        return 0;
+    }
+    if (ftruncate(shm->fd, size)) {
+        printf("failed to truncate shm object to size %llu: %i\n", (unsigned long long)size, errno);
+        close(shm->fd);
+        return 0;
+    }
+    shm->file = mmap(NULL, size, PROT_WRITE, MAP_SHARED, shm->fd, 0);
+    return 1;
+}
+
 void _bolt_plugin_shm_close(struct BoltSHM* shm) {
     close(shm->fd);
 }

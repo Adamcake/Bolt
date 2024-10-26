@@ -737,6 +737,22 @@ static int api_browser_close(lua_State*);
 /// exactly as it appeared in Lua, byte-for-byte - it will not be decoded or re-encoded in any way.
 static int api_browser_sendmessage(lua_State*);
 
+/// [-1, +0, -]
+/// Enables screen capture for this browser. The screen contents will be sent to the browser using
+/// the postMessage function. The event's data will be an object with "type": "screenCapture",
+/// "width" and "height" will be integers indicating the size of the captured area, and "content"
+/// will be an ArrayBuffer containing RGB data of length (width * height * 3).
+///
+/// The data will be sent using a shared memory mapping, so the overhead is much lower than it
+/// would be to send all the data every frame using sendmessage. However, the reading and writing
+/// is a synchronous back-and-forth process, so not every frame will be captured; some frames must
+/// be dropped if the previous frame hasn't finished being processed yet.
+static int api_browser_enablecapture(lua_State*);
+
+/// [-1, +0, -]
+/// Disables screen capture for this browser.
+static int api_browser_disablecapture(lua_State*);
+
 /// [-2, +0, -]
 /// Sets an event handler for this browser for close requests. If the value is a function, it will
 /// be called with no parameters when the browser window has requested to close, such as by the
@@ -771,3 +787,19 @@ static int api_embeddedbrowser_close(lua_State*);
 /// the Lua string that was passed to this function. Note that the string will be transferred
 /// exactly as it appeared in Lua, byte-for-byte - it will not be decoded or re-encoded in any way.
 static int api_embeddedbrowser_sendmessage(lua_State*);
+
+/// [-1, +0, -]
+/// Enables screen capture for this browser. The screen contents will be sent to the browser using
+/// the postMessage function. The event's data will be an object with "type": "screenCapture",
+/// "width" and "height" will be integers indicating the size of the captured area, and "content"
+/// will be an ArrayBuffer containing RGB data of length (width * height * 3).
+///
+/// The data will be sent using a shared memory mapping, so the overhead is much lower than it
+/// would be to send all the data every frame using sendmessage. However, the reading and writing
+/// is a synchronous back-and-forth process, so not every frame will be captured; some frames must
+/// be dropped if the previous frame hasn't finished being processed yet.
+static int api_embeddedbrowser_enablecapture(lua_State*);
+
+/// [-1, +0, -]
+/// Disables screen capture for this browser.
+static int api_embeddedbrowser_disablecapture(lua_State*);

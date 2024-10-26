@@ -96,6 +96,12 @@ static int _bolt_api_init(lua_State* state);
 
 static BoltSocketType fd = 0;
 
+static struct BoltSHM capture_shm;
+static uint64_t capture_id;
+static uint32_t capture_width;
+static uint32_t capture_height;
+static uint8_t capture_inited;
+
 // a currently-running plugin.
 // note "path" is not null-terminated, and must always be converted to use '/' as path-separators
 // and must always end with a trailing separator by the time it's received by this process.
@@ -103,6 +109,7 @@ struct Plugin {
     lua_State* state;
     uint64_t id; // refers to this specific activation of the plugin, not the plugin in general
     struct hashmap* external_browsers;
+    size_t ext_browser_capture_count;
     char* path;
     uint32_t path_length;
     uint8_t is_deleted;
@@ -129,6 +136,8 @@ struct ExternalBrowser {
     uint64_t id;
     uint64_t plugin_id;
     struct Plugin* plugin;
+    uint8_t do_capture;
+    uint8_t capture_ready;
 };
 
 void _bolt_plugin_free(struct Plugin* const* plugin) {
@@ -396,25 +405,35 @@ static void _bolt_window_calc_repos_target(struct EmbeddedWindow* window, const 
     }
 }
 
-void _bolt_plugin_end_frame(uint32_t window_width, uint32_t window_height) {
-    if (window_width != overlay_width || window_height != overlay_height) {
-        if (overlay_inited) {
-            managed_functions.surface_resize_and_clear(overlay.userdata, window_width, window_height);
-        } else {
-            managed_functions.surface_init(&overlay, window_width, window_height, NULL);
-            overlay_inited = true;
+static void _bolt_process_plugins(uint8_t* need_capture, uint8_t* capture_ready) {
+    size_t iter = 0;
+    void* item;
+    while (hashmap_iter(plugins, &iter, &item)) {
+        struct Plugin* plugin = *(struct Plugin**)item;
+        if (plugin->is_deleted) {
+            hashmap_free(plugin->external_browsers);
+            hashmap_delete(plugins, &plugin);
+            iter = 0;
+            continue;
         }
-        overlay_width = window_width;
-        overlay_height = window_height;
+        if (plugin->ext_browser_capture_count == 0) continue;
+        void* item2;
+        size_t iter2 = 0;
+        while (hashmap_iter(plugin->external_browsers, &iter2, &item2)) {
+            struct ExternalBrowser* browser = *(struct ExternalBrowser**)item2;
+            if (browser->do_capture) {
+                *need_capture = true;
+                if (!browser->capture_ready) *capture_ready = false;
+            }
+        }
     }
+}
 
-    _bolt_plugin_handle_messages();
-    struct WindowInfo* windows = _bolt_plugin_windowinfo();
-
-    _bolt_rwlock_lock_write(&windows->input_lock);
-    struct WindowPendingInput inputs = windows->input;
-    memset(&windows->input, 0, sizeof(windows->input));
-    _bolt_rwlock_unlock_write(&windows->input_lock);
+static void _bolt_process_embedded_windows(uint32_t window_width, uint32_t window_height, uint8_t* need_capture, uint8_t* capture_ready) {
+    _bolt_rwlock_lock_write(&windows.input_lock);
+    struct WindowPendingInput inputs = windows.input;
+    memset(&windows.input, 0, sizeof(windows.input));
+    _bolt_rwlock_unlock_write(&windows.input_lock);
 
     if (inputs.mouse_motion) {
         struct MouseMotionEvent event = {.details = inputs.mouse_motion_event};
@@ -454,15 +473,21 @@ void _bolt_plugin_end_frame(uint32_t window_width, uint32_t window_height) {
     }
 
     bool any_deleted = false;
-    _bolt_rwlock_lock_read(&windows->lock);
+    _bolt_rwlock_lock_read(&windows.lock);
     size_t iter = 0;
     void* item;
-    while (hashmap_iter(windows->map, &iter, &item)) {
+    while (hashmap_iter(windows.map, &iter, &item)) {
         struct EmbeddedWindow* window = *(struct EmbeddedWindow**)item;
         if (window->is_deleted) {
             any_deleted = true;
             continue;
         }
+
+        if (window->do_capture) {
+            *need_capture = true;
+            if (!window->capture_ready) *capture_ready = false;
+        }
+
         _bolt_rwlock_lock_write(&window->lock);
         bool did_move = false;
         bool did_resize = false;
@@ -587,12 +612,12 @@ void _bolt_plugin_end_frame(uint32_t window_width, uint32_t window_height) {
             managed_functions.draw_region_outline(overlay.userdata, window->repos_target_x, window->repos_target_y, window->repos_target_w, window->repos_target_h);
         }
     }
-    _bolt_rwlock_unlock_read(&windows->lock);
+    _bolt_rwlock_unlock_read(&windows.lock);
 
     if (any_deleted) {
-        _bolt_rwlock_lock_write(&windows->lock);
+        _bolt_rwlock_lock_write(&windows.lock);
         iter = 0;
-        while (hashmap_iter(windows->map, &iter, &item)) {
+        while (hashmap_iter(windows.map, &iter, &item)) {
             struct EmbeddedWindow* window = *(struct EmbeddedWindow**)item;
             if (window->is_deleted) {
                 if (window->is_browser) {
@@ -612,21 +637,53 @@ void _bolt_plugin_end_frame(uint32_t window_width, uint32_t window_height) {
                     managed_functions.surface_destroy(window->popup_surface_functions.userdata);
                 }
                 _bolt_rwlock_destroy(&window->lock);
-                hashmap_delete(windows->map, &window);
+                hashmap_delete(windows.map, &window);
                 iter = 0;
             }
         }
-        _bolt_rwlock_unlock_write(&windows->lock);
+        _bolt_rwlock_unlock_write(&windows.lock);
+    }
+}
+
+void _bolt_plugin_end_frame(uint32_t window_width, uint32_t window_height) {
+    if (window_width != overlay_width || window_height != overlay_height) {
+        if (overlay_inited) {
+            managed_functions.surface_resize_and_clear(overlay.userdata, window_width, window_height);
+        } else {
+            managed_functions.surface_init(&overlay, window_width, window_height, NULL);
+            overlay_inited = true;
+        }
+        overlay_width = window_width;
+        overlay_height = window_height;
     }
 
-    iter = 0;
-    while (hashmap_iter(plugins, &iter, &item)) {
-        struct Plugin* plugin = *(struct Plugin**)item;
-        if (plugin->is_deleted) {
-            hashmap_free(plugin->external_browsers);
-            hashmap_delete(plugins, &plugin);
-            iter = 0;
+    uint8_t need_capture = false;
+    uint8_t capture_ready = true;
+    _bolt_plugin_handle_messages();
+    _bolt_process_embedded_windows(window_width, window_height, &need_capture, &capture_ready);
+    _bolt_process_plugins(&need_capture, &capture_ready);
+
+    if (need_capture && capture_ready) {
+        const size_t capture_bytes = window_width * window_height * 4;
+        uint8_t need_remap;
+        if (!capture_inited) {
+            _bolt_plugin_shm_open_outbound(&capture_shm, capture_bytes, "sc", next_window_id);
+            capture_inited = true;
+            capture_id = next_window_id;
+            capture_width = window_width;
+            capture_height = window_height;
+            need_remap = true;
+            next_window_id += 1;
+        } else if (capture_width != window_width || capture_height != window_height) {
+            _bolt_plugin_shm_resize(&capture_shm, capture_bytes);
+            capture_width = window_width;
+            capture_height = window_height;
+            need_remap = true;
         }
+        managed_functions.read_screen_pixels(window_width, window_height, capture_shm.file);
+    } else if (!need_capture && capture_inited) {
+        _bolt_plugin_shm_close(&capture_shm);
+        capture_inited = false;
     }
 
     struct SwapBuffersEvent event;
@@ -659,6 +716,10 @@ void _bolt_plugin_close() {
     }
     
     hashmap_free(plugins);
+    if (capture_inited) {
+        _bolt_plugin_shm_close(&capture_shm);
+        capture_inited = false;
+    }
     inited = 0;
 }
 
@@ -811,6 +872,7 @@ static void handle_ipc_STARTPLUGIN(struct BoltIPCStartPluginHeader* header) {
     plugin->id = header->uid;
     plugin->path = malloc(header->path_size);
     plugin->path_length = header->path_size;
+    plugin->ext_browser_capture_count = 0;
     plugin->is_deleted = false;
     _bolt_ipc_receive(fd, plugin->path, header->path_size);
     char* full_path = lua_newuserdata(plugin->state, header->path_size + header->main_size + 1);
@@ -1120,9 +1182,11 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     PUSHSTRING(plugin->state, BROWSER_META_REGISTRYNAME);
     lua_newtable(plugin->state);
     PUSHSTRING(plugin->state, "__index");
-    lua_createtable(plugin->state, 0, 6);
+    lua_createtable(plugin->state, 0, 8);
     API_ADD_SUB(plugin->state, close, browser)
     API_ADD_SUB(plugin->state, sendmessage, browser)
+    API_ADD_SUB(plugin->state, enablecapture, browser)
+    API_ADD_SUB(plugin->state, disablecapture, browser)
     API_ADD_SUB(plugin->state, startreposition, window)
     API_ADD_SUB(plugin->state, cancelreposition, window)
     API_ADD_SUB(plugin->state, oncloserequest, browser)
@@ -1137,6 +1201,8 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     lua_createtable(plugin->state, 0, 4);
     API_ADD_SUB(plugin->state, close, embeddedbrowser)
     API_ADD_SUB(plugin->state, sendmessage, embeddedbrowser)
+    API_ADD_SUB(plugin->state, enablecapture, embeddedbrowser)
+    API_ADD_SUB(plugin->state, disablecapture, embeddedbrowser)
     API_ADD_SUB(plugin->state, oncloserequest, browser)
     API_ADD_SUB(plugin->state, onmessage, browser)
     lua_settable(plugin->state, -3);
@@ -1484,6 +1550,7 @@ static int api_createwindow(lua_State* state) {
     window->is_deleted = false;
     window->is_browser = false;
     window->popup_shown = false;
+    window->do_capture = false;
     window->reposition_mode = false;
     window->id = next_window_id;
     window->plugin_id = plugin->id;
@@ -1581,6 +1648,7 @@ static int api_createembeddedbrowser(lua_State* state) {
     window->is_deleted = false;
     window->is_browser = true;
     window->popup_shown = false;
+    window->do_capture = false;
     window->popup_initialised = false;
     window->popup_meta.x = 0;
     window->popup_meta.y = 0;
@@ -2317,6 +2385,7 @@ static int api_scroll_direction(lua_State* state) {
 static int api_browser_close(lua_State* state) {
     _bolt_check_argc(state, 1, "browser_close");
     struct ExternalBrowser* browser = lua_touserdata(state, 1);
+    if (browser->do_capture) browser->plugin->ext_browser_capture_count += 1;
     hashmap_delete(browser->plugin->external_browsers, &browser);
 
     const enum BoltIPCMessageTypeToHost msg_type = IPC_MSG_CLOSEBROWSER_EXTERNAL;
@@ -2346,6 +2415,25 @@ static int api_browser_sendmessage(lua_State* state) {
     _bolt_ipc_send(fd, &msg_type, sizeof(msg_type));
     _bolt_ipc_send(fd, &header, sizeof(header));
     _bolt_ipc_send(fd, str, len);
+    return 0;
+}
+
+static int api_browser_enablecapture(lua_State* state) {
+    _bolt_check_argc(state, 1, "browser_enablecapture");
+    struct ExternalBrowser* window = lua_touserdata(state, 1);
+    if (!window->do_capture) {
+        window->plugin->ext_browser_capture_count += 1;
+        window->do_capture = true;
+        window->capture_ready = true;
+    }
+    return 0;
+}
+
+static int api_browser_disablecapture(lua_State* state) {
+    _bolt_check_argc(state, 1, "browser_disablecapture");
+    struct ExternalBrowser* window = lua_touserdata(state, 1);
+    if (window->do_capture) window->plugin->ext_browser_capture_count -= 1;
+    window->do_capture = false;
     return 0;
 }
 
@@ -2415,5 +2503,25 @@ static int api_embeddedbrowser_sendmessage(lua_State* state) {
     _bolt_ipc_send(fd, &msg_type, sizeof(msg_type));
     _bolt_ipc_send(fd, &header, sizeof(header));
     _bolt_ipc_send(fd, str, len);
+    return 0;
+}
+
+static int api_embeddedbrowser_enablecapture(lua_State* state) {
+    _bolt_check_argc(state, 1, "embeddedbrowser_enablecapture");
+    struct EmbeddedWindow* window = lua_touserdata(state, 1);
+    if (!window->do_capture) {
+        next_window_id += 1;
+        window->do_capture = true;
+        window->capture_ready = true;
+    }
+    return 0;
+}
+
+static int api_embeddedbrowser_disablecapture(lua_State* state) {
+    _bolt_check_argc(state, 1, "embeddedbrowser_disablecapture");
+    struct EmbeddedWindow* window = lua_touserdata(state, 1);
+    if (window->do_capture) {
+        window->do_capture = false;
+    }
     return 0;
 }

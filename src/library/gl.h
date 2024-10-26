@@ -96,6 +96,7 @@ struct GLLibFunctions {
     void (*Flush)(void);
     void (*GenTextures)(GLsizei, GLuint*);
     GLenum (*GetError)(void);
+    void (*ReadPixels)(GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, void*);
     void (*TexParameteri)(GLenum, GLenum, GLfloat);
     void (*TexSubImage2D)(GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, const void*);
     void (*Viewport)(GLint, GLint, GLsizei, GLsizei);
@@ -104,6 +105,7 @@ struct GLLibFunctions {
 /* consts used from libgl */
 #define GL_TEXTURE 5890
 #define GL_TEXTURE_2D 3553
+#define GL_RGB 6407
 #define GL_RGBA 6408
 #define GL_BGRA 32993
 #define GL_UNSIGNED_BYTE 5121
