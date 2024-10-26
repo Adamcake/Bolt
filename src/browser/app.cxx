@@ -199,7 +199,7 @@ bool Browser::App::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRe
 					CloseHandle(shm_handle);
 				}
 				shm_handle = CreateFileMappingW(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, (DWORD)size, path.c_str());
-				shm_file = MapViewOfFile(shm->handle, FILE_MAP_READ, 0, 0, size);
+				shm_file = MapViewOfFile(shm_handle, FILE_MAP_READ, 0, 0, size);
 #else
 				if (list->GetType(2) == VTYPE_STRING) {
 					const std::string path = list->GetString(2).ToString();
