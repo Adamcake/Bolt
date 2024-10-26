@@ -741,7 +741,8 @@ static int api_browser_sendmessage(lua_State*);
 /// Enables screen capture for this browser. The screen contents will be sent to the browser using
 /// the postMessage function. The event's data will be an object with "type": "screenCapture",
 /// "width" and "height" will be integers indicating the size of the captured area, and "content"
-/// will be an ArrayBuffer containing RGB data of length (width * height * 3).
+/// will be an ArrayBuffer of length (width * height * 3). The contents will be three bytes per
+/// pixel, in RGB format, in row-major order, starting with the bottom-left pixel.
 ///
 /// The data will be sent using a shared memory mapping, so the overhead is much lower than it
 /// would be to send all the data every frame using sendmessage. However, the reading and writing
@@ -792,7 +793,8 @@ static int api_embeddedbrowser_sendmessage(lua_State*);
 /// Enables screen capture for this browser. The screen contents will be sent to the browser using
 /// the postMessage function. The event's data will be an object with "type": "screenCapture",
 /// "width" and "height" will be integers indicating the size of the captured area, and "content"
-/// will be an ArrayBuffer containing RGB data of length (width * height * 3).
+/// will be an ArrayBuffer of length (width * height * 3). The contents will be three bytes per
+/// pixel, in RGB format, in row-major order, starting with the bottom-left pixel.
 ///
 /// The data will be sent using a shared memory mapping, so the overhead is much lower than it
 /// would be to send all the data every frame using sendmessage. However, the reading and writing
