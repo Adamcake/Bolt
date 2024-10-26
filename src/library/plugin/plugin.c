@@ -97,10 +97,12 @@ static int _bolt_api_init(lua_State* state);
 static BoltSocketType fd = 0;
 
 static struct BoltSHM capture_shm;
+static uint64_t next_capture_time = 0;
 static uint64_t capture_id;
 static uint32_t capture_width;
 static uint32_t capture_height;
 static uint8_t capture_inited;
+#define CAPTURE_COOLDOWN_MICROS 250000
 
 // a currently-running plugin.
 // note "path" is not null-terminated, and must always be converted to use '/' as path-separators
@@ -282,6 +284,7 @@ void _bolt_plugin_on_startup() {
     overlay_width = 0;
     overlay_height = 0;
     overlay_inited = false;
+    capture_inited = false;
 #if defined(_WIN32)
     QueryPerformanceFrequency(&performance_frequency);
 #endif
@@ -335,6 +338,23 @@ static int _bolt_api_init(lua_State* state) {
 
 uint8_t _bolt_plugin_is_inited() {
     return inited;
+}
+
+// true on success
+static uint8_t monotonic_microseconds(uint64_t* microseconds) {
+#if defined(_WIN32)
+    LARGE_INTEGER ticks;
+    if (QueryPerformanceCounter(&ticks)) {
+        *nanos = (ticks.QuadPart * 1000000) / performance_frequency.QuadPart;
+        return true;
+    }
+    return false;
+#else
+    struct timespec s;
+    clock_gettime(CLOCK_MONOTONIC_RAW, &s);
+    *microseconds = (s.tv_sec * 1000000) + (s.tv_nsec / 1000);
+    return true;
+#endif
 }
 
 // populates the window->repos_target_... variables, without accessing any of the window's mutex-protected members
@@ -645,6 +665,77 @@ static void _bolt_process_embedded_windows(uint32_t window_width, uint32_t windo
     }
 }
 
+// does a screen capture, then notifies all the browsers. don't call if any browser isn't ready yet.
+static void _bolt_process_captures(uint32_t window_width, uint32_t window_height) {
+    const size_t capture_bytes = window_width * window_height * 3;
+    uint8_t need_remap = false;
+    if (!capture_inited) {
+        _bolt_plugin_shm_open_outbound(&capture_shm, capture_bytes, "sc", next_window_id);
+        capture_inited = true;
+        capture_id = next_window_id;
+        capture_width = window_width;
+        capture_height = window_height;
+        need_remap = true;
+        next_window_id += 1;
+    } else if (capture_width != window_width || capture_height != window_height) {
+        _bolt_plugin_shm_resize(&capture_shm, capture_bytes);
+        capture_width = window_width;
+        capture_height = window_height;
+        need_remap = true;
+    }
+    managed_functions.read_screen_pixels(window_width, window_height, capture_shm.file);
+    
+    _bolt_rwlock_lock_read(&windows.lock);
+    size_t iter = 0;
+    void* item;
+    while (hashmap_iter(windows.map, &iter, &item)) {
+        struct EmbeddedWindow* window = *(struct EmbeddedWindow**)item;
+        if (window->is_deleted) continue;
+        if (window->do_capture) {
+            const enum BoltIPCMessageTypeToHost msg_type = IPC_MSG_CAPTURENOTIFY_OSR;
+            const struct BoltIPCCaptureNotifyHeader header = {
+                .plugin_id = window->plugin_id,
+                .window_id = window->id,
+                .pid = getpid(),
+                .capture_id = capture_id,
+                .width = window_width,
+                .height = window_height,
+                .needs_remap = need_remap,
+            };
+            _bolt_ipc_send(fd, &msg_type, sizeof(msg_type));
+            _bolt_ipc_send(fd, &header, sizeof(header));
+            window->capture_ready = false;
+        }
+    }
+    _bolt_rwlock_unlock_read(&windows.lock);
+
+    iter = 0;
+    while (hashmap_iter(plugins, &iter, &item)) {
+        struct Plugin* plugin = *(struct Plugin**)item;
+        if (plugin->is_deleted || (plugin->ext_browser_capture_count == 0)) continue;
+        void* item2;
+        size_t iter2 = 0;
+        while (hashmap_iter(plugin->external_browsers, &iter2, &item2)) {
+            struct ExternalBrowser* browser = *(struct ExternalBrowser**)item2;
+            if (browser->do_capture) {
+                const enum BoltIPCMessageTypeToHost msg_type = IPC_MSG_CAPTURENOTIFY_EXTERNAL;
+                    const struct BoltIPCCaptureNotifyHeader header = {
+                    .plugin_id = browser->plugin_id,
+                    .window_id = browser->id,
+                    .pid = getpid(),
+                    .capture_id = capture_id,
+                    .width = window_width,
+                    .height = window_height,
+                    .needs_remap = need_remap,
+                };
+                _bolt_ipc_send(fd, &msg_type, sizeof(msg_type));
+                _bolt_ipc_send(fd, &header, sizeof(header));
+                browser->capture_ready = false;
+            }
+        }
+    }
+}
+
 void _bolt_plugin_end_frame(uint32_t window_width, uint32_t window_height) {
     if (window_width != overlay_width || window_height != overlay_height) {
         if (overlay_inited) {
@@ -663,24 +754,12 @@ void _bolt_plugin_end_frame(uint32_t window_width, uint32_t window_height) {
     _bolt_process_embedded_windows(window_width, window_height, &need_capture, &capture_ready);
     _bolt_process_plugins(&need_capture, &capture_ready);
 
-    if (need_capture && capture_ready) {
-        const size_t capture_bytes = window_width * window_height * 4;
-        uint8_t need_remap;
-        if (!capture_inited) {
-            _bolt_plugin_shm_open_outbound(&capture_shm, capture_bytes, "sc", next_window_id);
-            capture_inited = true;
-            capture_id = next_window_id;
-            capture_width = window_width;
-            capture_height = window_height;
-            need_remap = true;
-            next_window_id += 1;
-        } else if (capture_width != window_width || capture_height != window_height) {
-            _bolt_plugin_shm_resize(&capture_shm, capture_bytes);
-            capture_width = window_width;
-            capture_height = window_height;
-            need_remap = true;
-        }
-        managed_functions.read_screen_pixels(window_width, window_height, capture_shm.file);
+    uint64_t micros = 0;
+    monotonic_microseconds(&micros);
+    if (need_capture && capture_ready && (micros >= next_capture_time)) {
+        _bolt_process_captures(window_width, window_height);
+        next_capture_time = micros + CAPTURE_COOLDOWN_MICROS;
+        if (next_capture_time < micros) next_capture_time = micros;
     } else if (!need_capture && capture_inited) {
         _bolt_plugin_shm_close(&capture_shm);
         capture_inited = false;
@@ -977,6 +1056,14 @@ static void handle_ipc_OSRCLOSEREQUEST(struct BoltIPCOsrCloseRequestHeader* head
     handle_close_request(window->plugin, header->window_id);
 }
 
+static void handle_ipc_EXTERNALCAPTUREDONE(struct BoltIPCExternalCaptureDoneHeader* header, struct ExternalBrowser* browser) {
+    browser->capture_ready = true;
+}
+
+static void handle_ipc_OSRCAPTUREDONE(struct BoltIPCOsrCaptureDoneHeader* header, struct EmbeddedWindow* window) {
+    window->capture_ready = true;
+}
+
 void _bolt_plugin_handle_messages() {
     enum BoltIPCMessageTypeToHost msg_type;
     while (_bolt_ipc_poll(fd)) {
@@ -994,6 +1081,8 @@ void _bolt_plugin_handle_messages() {
             IPCCASEWINDOW(OSRCANCELREPOSITION, OsrCancelReposition)
             IPCCASEBROWSER(BROWSERCLOSEREQUEST, BrowserCloseRequest)
             IPCCASEWINDOW(OSRCLOSEREQUEST, OsrCloseRequest)
+            IPCCASEBROWSER(EXTERNALCAPTUREDONE, ExternalCaptureDone)
+            IPCCASEWINDOW(OSRCAPTUREDONE, OsrCaptureDone)
             default:
                 printf("unknown message type %i\n", (int)msg_type);
                 break;
@@ -1410,20 +1499,12 @@ static int api_close(lua_State* state) {
 
 static int api_time(lua_State* state) {
     _bolt_check_argc(state, 0, "time");
-#if defined(_WIN32)
-    LARGE_INTEGER ticks;
-    if (QueryPerformanceCounter(&ticks)) {
-        const uint64_t microseconds = (ticks.QuadPart * 1000000) / performance_frequency.QuadPart;
-        lua_pushinteger(state, microseconds);
+    uint64_t micros;
+    if (monotonic_microseconds(&micros)) {
+        lua_pushinteger(state, micros);
     } else {
         lua_pushnil(state);
     }
-#else
-    struct timespec s;
-    clock_gettime(CLOCK_MONOTONIC_RAW, &s);
-    const uint64_t microseconds = (s.tv_sec * 1000000) + (s.tv_nsec / 1000);
-    lua_pushinteger(state, microseconds);
-#endif
     return 1;
 }
 
@@ -1598,6 +1679,7 @@ static int api_createbrowser(lua_State* state) {
     browser->id = next_window_id;
     browser->plugin_id = plugin->id;
     browser->plugin = plugin;
+    browser->do_capture = false;
     lua_getfield(state, LUA_REGISTRYINDEX, BROWSER_META_REGISTRYNAME);
     lua_setmetatable(state, -2);
     next_window_id += 1;

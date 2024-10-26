@@ -745,9 +745,9 @@ static int api_browser_sendmessage(lua_State*);
 /// pixel, in RGB format, in row-major order, starting with the bottom-left pixel.
 ///
 /// The data will be sent using a shared memory mapping, so the overhead is much lower than it
-/// would be to send all the data every frame using sendmessage. However, the reading and writing
-/// is a synchronous back-and-forth process, so not every frame will be captured; some frames must
-/// be dropped if the previous frame hasn't finished being processed yet.
+/// would be to send all the data using sendmessage. However, downloading screen contents from the
+/// GPU will still slow the game down (takes around 2 to 5 milliseconds depending on window size),
+/// so Bolt will limit itself to capturing 4 frames per second via this function.
 static int api_browser_enablecapture(lua_State*);
 
 /// [-1, +0, -]
@@ -797,9 +797,9 @@ static int api_embeddedbrowser_sendmessage(lua_State*);
 /// pixel, in RGB format, in row-major order, starting with the bottom-left pixel.
 ///
 /// The data will be sent using a shared memory mapping, so the overhead is much lower than it
-/// would be to send all the data every frame using sendmessage. However, the reading and writing
-/// is a synchronous back-and-forth process, so not every frame will be captured; some frames must
-/// be dropped if the previous frame hasn't finished being processed yet.
+/// would be to send all the data using sendmessage. However, downloading screen contents from the
+/// GPU will still slow the game down (takes around 2 to 5 milliseconds depending on window size),
+/// so Bolt will limit itself to capturing 4 frames per second via this function.
 static int api_embeddedbrowser_enablecapture(lua_State*);
 
 /// [-1, +0, -]
