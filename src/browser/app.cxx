@@ -6,6 +6,18 @@
 
 #include <fmt/core.h>
 
+#if defined(_WIN32)
+#include <Windows.h>
+static HANDLE shm_handle;
+#else
+#include <sys/mman.h>
+#include <fcntl.h>
+static int shm_fd;
+#endif
+static void* shm_file;
+static size_t shm_length;
+static bool shm_inited = false;
+
 class ArrayBufferReleaseCallbackFree: public CefV8ArrayBufferReleaseCallback {
 	void ReleaseBuffer(void* buffer) override {
 		::free(buffer);
@@ -169,6 +181,74 @@ bool Browser::App::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRe
 			fmt::print("[R] warning: window.postMessage is not a function, {} will be ignored\n", name.ToString());
 		}
 		context->Exit();
+		return true;
+	}
+
+	if (name == "__bolt_plugin_capture") {
+		CefRefPtr<CefListValue> list = message->GetArgumentList();
+		if (list->GetSize() >= 2) {
+			const int width = list->GetInt(0);
+			const int height = list->GetInt(1);
+			const size_t size = (size_t)width * (size_t)height * 3;
+
+			if (list->GetSize() != 2) {
+#if defined(_WIN32)
+				const std::wstring path = list->GetString(2).ToWString();
+				if (shm_inited) {
+					UnmapViewOfFile(shm_file);
+					CloseHandle(shm_handle);
+				}
+				shm_handle = CreateFileMappingW(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, (DWORD)size, path.c_str());
+				shm_file = MapViewOfFile(shm->handle, FILE_MAP_READ, 0, 0, size);
+#else
+				if (list->GetType(2) == VTYPE_STRING) {
+					const std::string path = list->GetString(2).ToString();
+					if (shm_inited) {
+						munmap(shm_file, shm_length);
+						close(shm_fd);
+					}
+					shm_fd = shm_open(path.c_str(), O_RDWR, 0644);
+					shm_file = mmap(NULL, size, PROT_READ, MAP_SHARED, shm_fd, 0);
+					fmt::print("[R] shm named-remap '{}' -> {}, {}\n", path, shm_fd, (unsigned long long)shm_file);
+				} else if (shm_inited) {
+					shm_file = mremap(shm_file, shm_length, size, MREMAP_MAYMOVE);
+					fmt::print("[R] shm unnamed-remap -> {} ({})\n", (unsigned long long)shm_file, errno);
+				} else {
+					fmt::print("[R] warning: shm not set up and wasn't provided with enough information to do setup; {} will be ignored\n", name.ToString());
+					return true;
+				}
+#endif
+				shm_length = size;
+				shm_inited = true;
+			}
+
+			CefRefPtr<CefV8ArrayBufferReleaseCallback> cb = new ArrayBufferReleaseCallbackFree();
+			void* buffer = malloc(size);
+			memcpy(buffer, shm_file, size);
+
+			CefRefPtr<CefProcessMessage> response_message = CefProcessMessage::Create("__bolt_plugin_capture_done");
+			frame->SendProcessMessage(PID_BROWSER, response_message);
+
+			CefRefPtr<CefV8Context> context = frame->GetV8Context();
+			context->Enter();
+			CefRefPtr<CefV8Value> content = CefV8Value::CreateArrayBuffer(buffer, size, cb);
+			CefRefPtr<CefV8Value> dict = CefV8Value::CreateObject(nullptr, nullptr);
+			dict->SetValue("type", CefV8Value::CreateString("screenCapture"), V8_PROPERTY_ATTRIBUTE_READONLY);
+			dict->SetValue("content", content, V8_PROPERTY_ATTRIBUTE_READONLY);
+			dict->SetValue("width", CefV8Value::CreateInt(width), V8_PROPERTY_ATTRIBUTE_READONLY);
+			dict->SetValue("height", CefV8Value::CreateInt(height), V8_PROPERTY_ATTRIBUTE_READONLY);
+			CefV8ValueList value_list = {dict, CefV8Value::CreateString("*")};
+			CefRefPtr<CefV8Value> post_message = context->GetGlobal()->GetValue("postMessage");
+			if (post_message->IsFunction()) {
+				post_message->ExecuteFunctionWithContext(context, nullptr, value_list);
+			} else {
+				fmt::print("[R] warning: window.postMessage is not a function, {} will be ignored\n", name.ToString());
+			}
+			context->Exit();
+		} else {
+			fmt::print("[R] warning: too few arguments, {} will be ignored\n", name.ToString());
+		}
+
 		return true;
 	}
 

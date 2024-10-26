@@ -3,6 +3,8 @@
 #include "resource_handler.hxx"
 #include "request.hxx"
 
+#include <format>
+
 void Browser::PluginRequestHandler::HandlePluginMessage(const uint8_t* data, size_t len) {
 	CefRefPtr<CefProcessMessage> message = CefProcessMessage::Create("__bolt_plugin_message");
 	CefRefPtr<CefListValue> list = message->GetArgumentList();
@@ -10,6 +12,33 @@ void Browser::PluginRequestHandler::HandlePluginMessage(const uint8_t* data, siz
 	list->SetBinary(0, CefBinaryValue::Create(data, len));
 	CefRefPtr<CefBrowser> browser = this->Browser();
 	if (browser) browser->GetMainFrame()->SendProcessMessage(PID_RENDERER, message);
+}
+
+void Browser::PluginRequestHandler::HandleCaptureNotify(uint64_t pid, uint64_t capture_id, int width, int height, bool needs_remap) {
+	CefRefPtr<CefProcessMessage> message = CefProcessMessage::Create("__bolt_plugin_capture");
+	CefRefPtr<CefListValue> list = message->GetArgumentList();
+	if (needs_remap) {
+		list->SetSize(3);
+#if defined(_WIN32)
+		std::filesystem::path shm_path = this->runtime_dir;
+		shm_path.append(std::format("bolt-{}-sc-{}", pid, capture_id));
+		list->SetString(2, shm_path.string());
+#else
+		if (capture_id != this->current_capture_id) {
+			const CefString str = std::format("/bolt-{}-sc-{}", pid, capture_id);
+			list->SetString(2, str);
+		} else {
+			list->SetNull(2);
+		}
+#endif
+	} else {
+		list->SetSize(2);
+	}
+	list->SetInt(0, width);
+	list->SetInt(1, height);
+	CefRefPtr<CefBrowser> browser = this->Browser();
+	if (browser) browser->GetMainFrame()->SendProcessMessage(PID_RENDERER, message);
+	this->current_capture_id = capture_id;
 }
 
 CefRefPtr<CefResourceRequestHandler> Browser::PluginRequestHandler::GetResourceRequestHandler(

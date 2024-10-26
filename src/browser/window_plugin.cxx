@@ -17,8 +17,8 @@ struct InitTask: public CefTask {
 		DISALLOW_COPY_AND_ASSIGN(InitTask);
 };
 
-Browser::PluginWindow::PluginWindow(CefRefPtr<Client> main_client, Details details, const char* url, CefRefPtr<FileManager::Directory> file_manager, BoltSocketType fd, std::mutex* send_lock, uint64_t id, uint64_t plugin_id, bool show_devtools):
-	PluginRequestHandler(IPC_MSG_EXTERNALBROWSERMESSAGE, send_lock),
+Browser::PluginWindow::PluginWindow(CefRefPtr<Client> main_client, Details details, const char* url, CefRefPtr<FileManager::Directory> file_manager, BoltSocketType fd, std::mutex* send_lock, std::filesystem::path runtime_dir, uint64_t id, uint64_t plugin_id, bool show_devtools):
+	PluginRequestHandler(IPC_MSG_EXTERNALBROWSERMESSAGE, send_lock, runtime_dir),
 	Window(main_client, details, show_devtools),
 	file_manager(file_manager), client_fd(fd), window_id(id), plugin_id(plugin_id), closing(false), deleted(false)
 {
@@ -78,6 +78,21 @@ bool Browser::PluginWindow::OnBeforePopup(
 ) {
 	// block popup creation: plugin windows can't have child windows
 	return true;
+}
+
+bool Browser::PluginWindow::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefProcessId process, CefRefPtr<CefProcessMessage> message) {
+	if (!(this->browser && this->browser->IsSame(browser))) return false;
+	const CefString name = message->GetName();
+	if (name == "__bolt_plugin_capture_done") {
+		const BoltIPCMessageTypeToClient msg_type = IPC_MSG_EXTERNALCAPTUREDONE;
+		const BoltIPCExternalCaptureDoneHeader header = { .window_id = this->window_id, .plugin_id = this->plugin_id };
+		this->send_lock->lock();
+		_bolt_ipc_send(this->client_fd, &msg_type, sizeof(msg_type));
+		_bolt_ipc_send(this->client_fd, &header, sizeof(header));
+		this->send_lock->unlock();
+		return true;
+	}
+	return false;
 }
 
 CefRefPtr<CefRequestHandler> Browser::PluginWindow::GetRequestHandler() {
