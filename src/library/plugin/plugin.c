@@ -346,7 +346,7 @@ static uint8_t monotonic_microseconds(uint64_t* microseconds) {
 #if defined(_WIN32)
     LARGE_INTEGER ticks;
     if (QueryPerformanceCounter(&ticks)) {
-        *nanos = (ticks.QuadPart * 1000000) / performance_frequency.QuadPart;
+        *microseconds = (ticks.QuadPart * 1000000) / performance_frequency.QuadPart;
         return true;
     }
     return false;
