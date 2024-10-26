@@ -33,6 +33,8 @@ enum BoltIPCMessageTypeToHost {
     IPC_MSG_EVMOUSELEAVE,
     IPC_MSG_PLUGINMESSAGE,
     IPC_MSG_OSRPLUGINMESSAGE,
+    IPC_MSG_CAPTURENOTIFY_EXTERNAL,
+    IPC_MSG_CAPTURENOTIFY_OSR,
 };
 
 enum BoltIPCMessageTypeToClient {
@@ -48,6 +50,8 @@ enum BoltIPCMessageTypeToClient {
     IPC_MSG_OSRCANCELREPOSITION,
     IPC_MSG_BROWSERCLOSEREQUEST,
     IPC_MSG_OSRCLOSEREQUEST,
+    IPC_MSG_EXTERNALCAPTUREDONE,
+    IPC_MSG_OSRCAPTUREDONE,
 };
 
 /// Header for BoltIPCMessageTypeToHost::IPC_MSG_IDENTIFY
@@ -93,6 +97,17 @@ struct BoltIPCPluginMessageHeader {
     uint64_t plugin_id;
     uint64_t window_id;
     size_t message_size;
+};
+
+/// Header for BoltMessageTypeToHost::IPC_MSG_CAPTURENOTIFY_*
+struct BoltIPCCaptureNotifyHeader {
+    uint64_t plugin_id;
+    uint64_t window_id;
+    uint64_t pid;
+    uint64_t capture_id;
+    uint32_t width;
+    uint32_t height;
+    uint8_t needs_remap;
 };
 
 /// Header for BoltIPCMessageTypeToClient::IPC_MSG_STARTPLUGIN
@@ -171,6 +186,17 @@ struct BoltIPCBrowserCloseRequestHeader {
 
 /// Header for BoltMessageTypeToClient::IPC_MSG_OSRCLOSEREQUEST
 struct BoltIPCOsrCloseRequestHeader {
+    uint64_t window_id;
+};
+
+/// Header for BoltMessageTypeToClient::IPC_MSG_EXTERNALCAPTUREDONE
+struct BoltIPCExternalCaptureDoneHeader {
+    uint64_t window_id;
+    uint64_t plugin_id;
+};
+
+/// Header for BoltMessageTypeToClient::IPC_MSG_OSRCAPTUREDONE
+struct BoltIPCOsrCaptureDoneHeader {
     uint64_t window_id;
 };
 
