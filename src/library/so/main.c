@@ -36,10 +36,6 @@ static uint32_t main_window_height = 0;
 static uint8_t mousein_real = 0;
 static uint8_t mousein_fake = 0;
 
-/* 0 indicates no window */
-static uint64_t last_mouseevent_window_id = 0;
-static uint64_t grabbed_window_id = 0;
-
 static const char* libc_name = "libc.so.6";
 static const char* libegl_name = "libEGL.so.1";
 static const char* libgl_name = "libGL.so.1";
@@ -408,10 +404,6 @@ unsigned int eglTerminate(void* display) {
     return 1;
 }
 
-static uint8_t _bolt_point_in_rect(int16_t x, int16_t y, int rx, int ry, int rw, int rh) {
-    return rx <= x && rx + rw > x && ry <= y && ry + rh > y;
-}
-
 static void _bolt_mouseevent_from_xcb(int16_t x, int16_t y, uint32_t detail, struct MouseEvent* out) {
     out->x = x;
     out->y = y;
@@ -426,114 +418,10 @@ static void _bolt_mouseevent_from_xcb(int16_t x, int16_t y, uint32_t detail, str
     out->mb_middle = (detail >> 9) & 1;
 }
 
-#define GRAB_TYPE_NONE 0
-#define GRAB_TYPE_START 1
-#define GRAB_TYPE_STOP 2
-static uint8_t _bolt_handle_mouse_event(int16_t x, int16_t y, uint32_t detail, ptrdiff_t bool_offset, ptrdiff_t event_offset, uint8_t grab_type) {
+static uint8_t handle_mouse_event(int16_t x, int16_t y, uint32_t detail, ptrdiff_t bool_offset, ptrdiff_t event_offset, uint8_t grab_type) {
     struct MouseEvent event;
     _bolt_mouseevent_from_xcb(x, y, detail, &event);
-
-    struct WindowInfo* windows = _bolt_plugin_windowinfo();
-    uint8_t ret = true;
-    _bolt_rwlock_lock_read(&windows->lock);
-
-    // if the left mouse button is being held, try to route this event to the window that was clicked on
-    if (event.mb_left || grab_type == GRAB_TYPE_STOP) {
-        // we can only use this route if the grabbed window actually exists, otherwise fall through.
-        // that will also happen if the actual game window was grabbed, since that has ID 0, which is not a valid hashmap entry.
-        uint64_t* pp = &grabbed_window_id;
-        struct EmbeddedWindow* const* const window = hashmap_get(windows->map, &pp);
-        if (grab_type == GRAB_TYPE_STOP) grabbed_window_id = 0;
-        if (window) {
-            // `window` grabs this input, so route everything here then return.
-            uint8_t do_mouseleave = 0;
-            _bolt_rwlock_lock_read(&(*window)->lock);
-            // if this input is a left-mouse-button-release, then the window has been un-grabbed, so
-            // figure out if we need to send a mouseleave event to the grabbed window. do this by
-            // checking if the cursor is currently in the window's rectangle.
-            if (grab_type == GRAB_TYPE_STOP) {
-                do_mouseleave = !_bolt_point_in_rect(x, y, (*window)->metadata.x, (*window)->metadata.y, (*window)->metadata.width, (*window)->metadata.height);
-            }
-            // offset the x and y to be relative to the embedded window instead of the game client area
-            event.x -= (*window)->metadata.x;
-            event.y -= (*window)->metadata.y;
-            _bolt_rwlock_unlock_read(&(*window)->lock);
-
-            // write the relevant events to the window
-            _bolt_rwlock_lock_write(&(*window)->input_lock);
-            *(uint8_t*)(((void*)&(*window)->input) + bool_offset) = 1;
-            *(struct MouseEvent*)(((void*)&(*window)->input) + event_offset) = event;
-            if (do_mouseleave) {
-                (*window)->input.mouse_leave = 1;
-                (*window)->input.mouse_leave_event = event;
-            }
-            _bolt_rwlock_unlock_write(&(*window)->input_lock);
-
-            // save this window as the most recent one to receive an event, unlock the windows mutex
-            // before returning, then return 0 to indicate that this event shouldn't be forwarded to the game
-            _bolt_rwlock_unlock_read(&windows->lock);
-            last_mouseevent_window_id = (*window)->id;
-            return 0;
-        }
-    }
-
-    // normal route - look through all the windows to find one that's under the cursor
-    size_t iter = 0;
-    void* item;
-    const uint64_t* pp = &last_mouseevent_window_id;
-    struct EmbeddedWindow* const* mouseleave_window = hashmap_get(windows->map, &pp);
-    while (hashmap_iter(windows->map, &iter, &item)) {
-        struct EmbeddedWindow* const* const window = item;
-
-        // if the mouse is in this rect, set `ret` to false, to 0 that this event shouldn't be
-        // forwarded to the game, and that this loop shouldn't continue after this iteration.
-        _bolt_rwlock_lock_read(&(*window)->lock);
-        if (_bolt_point_in_rect(x, y, (*window)->metadata.x, (*window)->metadata.y, (*window)->metadata.width, (*window)->metadata.height)) {
-            // offset the x and y to be relative to the embedded window instead of the game client area
-            event.x -= (*window)->metadata.x;
-            event.y -= (*window)->metadata.y;
-            ret = false;
-        }
-        _bolt_rwlock_unlock_read(&(*window)->lock);
-
-        if (!ret) {
-            // if this is the same window as the previous one that received a mouse event, set
-            // `mouseleave_window` to null, to indicate that no mouseleave event needs to be sent
-            // anywhere. otherwise, leave it set, but update `last_mouseevent_window_id`.
-            if (last_mouseevent_window_id == (*window)->id) mouseleave_window = NULL;
-            else last_mouseevent_window_id = (*window)->id;
-            mousein_fake = false;
-            if (grab_type == GRAB_TYPE_START) grabbed_window_id = (*window)->id;
-
-            // write the relevant event to this window
-            _bolt_rwlock_lock_write(&(*window)->input_lock);
-            (*window)->input.mouse_leave = 0;
-            *(uint8_t*)(((void*)&(*window)->input) + bool_offset) = 1;
-            *(struct MouseEvent*)(((void*)&(*window)->input) + event_offset) = event;
-            _bolt_rwlock_unlock_write(&(*window)->input_lock);
-            break;
-        }
-    }
-    // if a window needs to receive a mouseleave event, set it now before unlocking the windows mutex.
-    if (mouseleave_window) {
-        _bolt_rwlock_lock_write(&(*mouseleave_window)->input_lock);
-        (*mouseleave_window)->input.mouse_leave = 1;
-        (*mouseleave_window)->input.mouse_leave_event = event;
-        _bolt_rwlock_unlock_write(&(*mouseleave_window)->input_lock);
-    }
-    _bolt_rwlock_unlock_read(&windows->lock);
-
-    // if `ret` is false, this event was consumed by an embedded window, so return 0 immediately to indicate that.
-    // otherwise, set relevant events and variables for the game window, and return 1.
-    if (!ret) return 0;
-    last_mouseevent_window_id = 0;
-    mousein_fake = true;
-    mousein_real = true;
-    _bolt_rwlock_lock_write(&windows->input_lock);
-    *(uint8_t*)(((void*)&windows->input) + bool_offset) = 1;
-    *(struct MouseEvent*)(((void*)&windows->input) + event_offset) = event;
-    _bolt_rwlock_unlock_write(&windows->input_lock);
-    return 1;
+    return _bolt_plugin_handle_mouse_event(&event, bool_offset, event_offset, grab_type, &mousein_fake, &mousein_real);
 }
 
 // returns true if the event should be passed on to the window, false if not
@@ -557,7 +445,7 @@ static uint8_t _bolt_handle_xcb_event(xcb_connection_t* c, xcb_generic_event_t* 
             switch (event->event_type) {
                 case XCB_INPUT_MOTION: { // when mouse moves (not drag) inside the game window
                     xcb_input_motion_event_t* event = (xcb_input_motion_event_t*)e;
-                    return _bolt_handle_mouse_event(event->event_x >> 16, event->event_y >> 16, event->mods.effective, offsetof(struct WindowPendingInput, mouse_motion), offsetof(struct WindowPendingInput, mouse_motion_event), GRAB_TYPE_NONE);
+                    return handle_mouse_event(event->event_x >> 16, event->event_y >> 16, event->mods.effective, offsetof(struct WindowPendingInput, mouse_motion), offsetof(struct WindowPendingInput, mouse_motion_event), GRAB_TYPE_NONE);
                 }
                 case XCB_INPUT_RAW_MOTION: // when mouse moves (not drag) anywhere globally on the PC
                 case XCB_INPUT_RAW_BUTTON_PRESS: // when pressing a mouse button anywhere globally on the PC
@@ -574,15 +462,15 @@ static uint8_t _bolt_handle_xcb_event(xcb_connection_t* c, xcb_generic_event_t* 
             if (event->event != main_window_xcb) return true;
             switch (event->detail) {
                 case 1:
-                    return _bolt_handle_mouse_event(event->event_x, event->event_y, event->state, offsetof(struct WindowPendingInput, mouse_left), offsetof(struct WindowPendingInput, mouse_left_event), GRAB_TYPE_START);
+                    return handle_mouse_event(event->event_x, event->event_y, event->state, offsetof(struct WindowPendingInput, mouse_left), offsetof(struct WindowPendingInput, mouse_left_event), GRAB_TYPE_START);
                 case 2:
-                    return _bolt_handle_mouse_event(event->event_x, event->event_y, event->state, offsetof(struct WindowPendingInput, mouse_middle), offsetof(struct WindowPendingInput, mouse_middle_event), GRAB_TYPE_NONE);
+                    return handle_mouse_event(event->event_x, event->event_y, event->state, offsetof(struct WindowPendingInput, mouse_middle), offsetof(struct WindowPendingInput, mouse_middle_event), GRAB_TYPE_NONE);
                 case 3:
-                    return _bolt_handle_mouse_event(event->event_x, event->event_y, event->state, offsetof(struct WindowPendingInput, mouse_right), offsetof(struct WindowPendingInput, mouse_right_event), GRAB_TYPE_NONE);
+                    return handle_mouse_event(event->event_x, event->event_y, event->state, offsetof(struct WindowPendingInput, mouse_right), offsetof(struct WindowPendingInput, mouse_right_event), GRAB_TYPE_NONE);
                 case 4:
-                    return _bolt_handle_mouse_event(event->event_x, event->event_y, event->state, offsetof(struct WindowPendingInput, mouse_scroll_up), offsetof(struct WindowPendingInput, mouse_scroll_up_event), GRAB_TYPE_NONE);
+                    return handle_mouse_event(event->event_x, event->event_y, event->state, offsetof(struct WindowPendingInput, mouse_scroll_up), offsetof(struct WindowPendingInput, mouse_scroll_up_event), GRAB_TYPE_NONE);
                 case 5:
-                    return _bolt_handle_mouse_event(event->event_x, event->event_y, event->state, offsetof(struct WindowPendingInput, mouse_scroll_down), offsetof(struct WindowPendingInput, mouse_scroll_down_event), GRAB_TYPE_NONE);
+                    return handle_mouse_event(event->event_x, event->event_y, event->state, offsetof(struct WindowPendingInput, mouse_scroll_down), offsetof(struct WindowPendingInput, mouse_scroll_down_event), GRAB_TYPE_NONE);
             }
             break;
         }
@@ -591,11 +479,11 @@ static uint8_t _bolt_handle_xcb_event(xcb_connection_t* c, xcb_generic_event_t* 
             if (event->event != main_window_xcb) return true;
             switch (event->detail) {
                 case 1:
-                    return _bolt_handle_mouse_event(event->event_x, event->event_y, event->state, offsetof(struct WindowPendingInput, mouse_left_up), offsetof(struct WindowPendingInput, mouse_left_up_event), GRAB_TYPE_STOP);
+                    return handle_mouse_event(event->event_x, event->event_y, event->state, offsetof(struct WindowPendingInput, mouse_left_up), offsetof(struct WindowPendingInput, mouse_left_up_event), GRAB_TYPE_STOP);
                 case 2:
-                    return _bolt_handle_mouse_event(event->event_x, event->event_y, event->state, offsetof(struct WindowPendingInput, mouse_middle_up), offsetof(struct WindowPendingInput, mouse_middle_up_event), GRAB_TYPE_NONE);
+                    return handle_mouse_event(event->event_x, event->event_y, event->state, offsetof(struct WindowPendingInput, mouse_middle_up), offsetof(struct WindowPendingInput, mouse_middle_up_event), GRAB_TYPE_NONE);
                 case 3:
-                    return _bolt_handle_mouse_event(event->event_x, event->event_y, event->state, offsetof(struct WindowPendingInput, mouse_right_up), offsetof(struct WindowPendingInput, mouse_right_up_event), GRAB_TYPE_NONE);
+                    return handle_mouse_event(event->event_x, event->event_y, event->state, offsetof(struct WindowPendingInput, mouse_right_up), offsetof(struct WindowPendingInput, mouse_right_up_event), GRAB_TYPE_NONE);
                 case 4:
                 case 5: {
                     // for mousewheel-up events, we don't need to do anything with them, but we do
@@ -622,14 +510,14 @@ static uint8_t _bolt_handle_xcb_event(xcb_connection_t* c, xcb_generic_event_t* 
         case XCB_MOTION_NOTIFY: { // when mouse moves while dragging from inside the game window
             xcb_motion_notify_event_t* event = (xcb_motion_notify_event_t*)e;
             if (event->event != main_window_xcb) return true;
-            return _bolt_handle_mouse_event(event->event_x, event->event_y, event->state, offsetof(struct WindowPendingInput, mouse_motion), offsetof(struct WindowPendingInput, mouse_motion_event), GRAB_TYPE_NONE);
+            return handle_mouse_event(event->event_x, event->event_y, event->state, offsetof(struct WindowPendingInput, mouse_motion), offsetof(struct WindowPendingInput, mouse_motion_event), GRAB_TYPE_NONE);
         }
         case XCB_ENTER_NOTIFY: {
             xcb_enter_notify_event_t* event = (xcb_enter_notify_event_t*)e;
             if (event->event != main_window_xcb) return true;
 
             // treat an enter event like a motion event, but also update mouse-in state
-            const uint8_t ret = _bolt_handle_mouse_event(event->event_x, event->event_y, event->state, offsetof(struct WindowPendingInput, mouse_motion), offsetof(struct WindowPendingInput, mouse_motion_event), GRAB_TYPE_NONE);
+            const uint8_t ret = handle_mouse_event(event->event_x, event->event_y, event->state, offsetof(struct WindowPendingInput, mouse_motion), offsetof(struct WindowPendingInput, mouse_motion_event), GRAB_TYPE_NONE);
             mousein_real = 1;
             mousein_fake = ret;
             return ret;

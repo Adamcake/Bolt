@@ -104,6 +104,10 @@ static uint32_t capture_height;
 static uint8_t capture_inited;
 #define CAPTURE_COOLDOWN_MICROS 250000
 
+/* 0 indicates no window */
+static uint64_t last_mouseevent_window_id = 0;
+static uint64_t grabbed_window_id = 0;
+
 // a currently-running plugin.
 // note "path" is not null-terminated, and must always be converted to use '/' as path-separators
 // and must always end with a trailing separator by the time it's received by this process.
@@ -1095,6 +1099,113 @@ void _bolt_plugin_handle_messages() {
                 break;
         }
     }
+}
+
+static uint8_t point_in_rect(int x, int y, int rx, int ry, int rw, int rh) {
+    return rx <= x && rx + rw > x && ry <= y && ry + rh > y;
+}
+
+uint8_t _bolt_plugin_handle_mouse_event(struct MouseEvent* event, ptrdiff_t bool_offset, ptrdiff_t event_offset, uint8_t grab_type, uint8_t* mousein_fake, uint8_t* mousein_real) {
+    uint8_t ret = true;
+    _bolt_rwlock_lock_read(&windows.lock);
+
+    // if the left mouse button is being held, try to route this event to the window that was clicked on
+    if (event->mb_left || grab_type == GRAB_TYPE_STOP) {
+        // we can only use this route if the grabbed window actually exists, otherwise fall through.
+        // that will also happen if the actual game window was grabbed, since that has ID 0, which is not a valid hashmap entry.
+        uint64_t* pp = &grabbed_window_id;
+        struct EmbeddedWindow* const* const window = hashmap_get(windows.map, &pp);
+        if (grab_type == GRAB_TYPE_STOP) grabbed_window_id = 0;
+        if (window) {
+            // `window` grabs this input, so route everything here then return.
+            uint8_t do_mouseleave = 0;
+            _bolt_rwlock_lock_read(&(*window)->lock);
+            // if this input is a left-mouse-button-release, then the window has been un-grabbed, so
+            // figure out if we need to send a mouseleave event to the grabbed window. do this by
+            // checking if the cursor is currently in the window's rectangle.
+            if (grab_type == GRAB_TYPE_STOP) {
+                do_mouseleave = !point_in_rect(event->x, event->y, (*window)->metadata.x, (*window)->metadata.y, (*window)->metadata.width, (*window)->metadata.height);
+            }
+            // offset the x and y to be relative to the embedded window instead of the game client area
+            event->x -= (*window)->metadata.x;
+            event->y -= (*window)->metadata.y;
+            _bolt_rwlock_unlock_read(&(*window)->lock);
+
+            // write the relevant events to the window
+            _bolt_rwlock_lock_write(&(*window)->input_lock);
+            *(uint8_t*)(((uint8_t*)&(*window)->input) + bool_offset) = 1;
+            *(struct MouseEvent*)(((uint8_t*)&(*window)->input) + event_offset) = *event;
+            if (do_mouseleave) {
+                (*window)->input.mouse_leave = 1;
+                (*window)->input.mouse_leave_event = *event;
+            }
+            _bolt_rwlock_unlock_write(&(*window)->input_lock);
+
+            // save this window as the most recent one to receive an event, unlock the windows mutex
+            // before returning, then return 0 to indicate that this event shouldn't be forwarded to the game
+            _bolt_rwlock_unlock_read(&windows.lock);
+            last_mouseevent_window_id = (*window)->id;
+            return false;
+        }
+    }
+
+    // normal route - look through all the windows to find one that's under the cursor
+    size_t iter = 0;
+    void* item;
+    const uint64_t* pp = &last_mouseevent_window_id;
+    struct EmbeddedWindow* const* mouseleave_window = hashmap_get(windows.map, &pp);
+    while (hashmap_iter(windows.map, &iter, &item)) {
+        struct EmbeddedWindow* const* const window = item;
+
+        // if the mouse is in this rect, set `ret` to false, to 0 that this event shouldn't be
+        // forwarded to the game, and that this loop shouldn't continue after this iteration.
+        _bolt_rwlock_lock_read(&(*window)->lock);
+        if (point_in_rect(event->x, event->y, (*window)->metadata.x, (*window)->metadata.y, (*window)->metadata.width, (*window)->metadata.height)) {
+            // offset the x and y to be relative to the embedded window instead of the game client area
+            event->x -= (*window)->metadata.x;
+            event->y -= (*window)->metadata.y;
+            ret = false;
+        }
+        _bolt_rwlock_unlock_read(&(*window)->lock);
+
+        if (!ret) {
+            // if this is the same window as the previous one that received a mouse event, set
+            // `mouseleave_window` to null, to indicate that no mouseleave event needs to be sent
+            // anywhere. otherwise, leave it set, but update `last_mouseevent_window_id`.
+            if (last_mouseevent_window_id == (*window)->id) mouseleave_window = NULL;
+            else last_mouseevent_window_id = (*window)->id;
+            if (mousein_fake) *mousein_fake = false;
+            if (grab_type == GRAB_TYPE_START) grabbed_window_id = (*window)->id;
+
+            // write the relevant event to this window
+            _bolt_rwlock_lock_write(&(*window)->input_lock);
+            (*window)->input.mouse_leave = 0;
+            *(uint8_t*)(((uint8_t*)&(*window)->input) + bool_offset) = 1;
+            *(struct MouseEvent*)(((uint8_t*)&(*window)->input) + event_offset) = *event;
+            _bolt_rwlock_unlock_write(&(*window)->input_lock);
+            break;
+        }
+    }
+    // if a window needs to receive a mouseleave event, set it now before unlocking the windows mutex.
+    if (mouseleave_window) {
+        _bolt_rwlock_lock_write(&(*mouseleave_window)->input_lock);
+        (*mouseleave_window)->input.mouse_leave = 1;
+        (*mouseleave_window)->input.mouse_leave_event = *event;
+        _bolt_rwlock_unlock_write(&(*mouseleave_window)->input_lock);
+    }
+    _bolt_rwlock_unlock_read(&windows.lock);
+
+    // if `ret` is false, this event was consumed by an embedded window, so return 0 immediately to indicate that.
+    // otherwise, set relevant events and variables for the game window, and return 1.
+    if (!ret) return false;
+    last_mouseevent_window_id = 0;
+    if (mousein_fake) *mousein_fake = true;
+    if (mousein_real) *mousein_real = true;
+    _bolt_rwlock_lock_write(&windows.input_lock);
+    *(uint8_t*)(((uint8_t*)&windows.input) + bool_offset) = 1;
+    *(struct MouseEvent*)(((uint8_t*)&windows.input) + event_offset) = *event;
+    _bolt_rwlock_unlock_write(&windows.input_lock);
+    return true;
 }
 
 uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {

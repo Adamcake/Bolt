@@ -10,6 +10,10 @@ struct RenderBatch2D;
 struct Plugin;
 struct lua_State;
 
+#define GRAB_TYPE_NONE 0
+#define GRAB_TYPE_START 1
+#define GRAB_TYPE_STOP 2
+
 /// Struct containing "vtable" callback information for RenderBatch2D's list of vertices.
 /// Unless stated otherwise, functions will be called with three params: the index, the specified
 /// userdata, and an output pointer, which must be able to index the returned number of items.
@@ -288,6 +292,10 @@ void _bolt_plugin_handle_messages();
 /// Returns 0 on success or 1 on failure.
 uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin);
 
+/// Handles any mouse event, returning true if the event was consumed or false if the event should
+/// be passed to the game window. Offsets are into the WindowPendingInput struct. grab_type will be
+/// one of the GRAB_TYPE_ defined values. Booleans are write-only and may be NULL.
+uint8_t _bolt_plugin_handle_mouse_event(struct MouseEvent* event, ptrdiff_t bool_offset, ptrdiff_t event_offset, uint8_t grab_type, uint8_t* mousein_fake, uint8_t* mousein_real);
 
 /// Create an inbound SHM handle with a tag and ID. This pairing of tag and ID must not have been
 /// used for any SHM object previously during this run of the plugin loader. This is usually
