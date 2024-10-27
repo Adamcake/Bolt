@@ -163,13 +163,13 @@ struct BoltSHM {
 #if defined(_WIN32)
     HANDLE handle;
 #else
+    size_t map_length;
     int fd;
     int unlink_pid; // if 0, don't unlink
 #endif
     const char* tag;
     uint64_t id;
     void* file;
-    size_t map_length;
 };
 
 struct EmbeddedWindowMetadata {

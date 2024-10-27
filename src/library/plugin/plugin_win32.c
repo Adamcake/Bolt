@@ -44,5 +44,4 @@ void _bolt_plugin_shm_remap(struct BoltSHM* shm, size_t length, void* handle) {
     _bolt_plugin_shm_close(shm);
     shm->handle = (HANDLE)handle;
     shm->file = MapViewOfFile(shm->handle, FILE_MAP_READ, 0, 0, length);
-    shm->map_length = length;
 }
