@@ -15,9 +15,16 @@ void Browser::PluginRequestHandler::HandlePluginMessage(const uint8_t* data, siz
 }
 
 void Browser::PluginRequestHandler::HandleCaptureNotify(uint64_t pid, uint64_t capture_id, int width, int height, bool needs_remap) {
+	CefRefPtr<CefBrowser> browser = this->Browser();
+	if (!browser) {
+		// can't process this yet - inform the game process that we're done and don't do any further handling
+		this->SendCaptureDone();
+		return;
+	}
+
 	CefRefPtr<CefProcessMessage> message = CefProcessMessage::Create("__bolt_plugin_capture");
 	CefRefPtr<CefListValue> list = message->GetArgumentList();
-	if (needs_remap) {
+	if (needs_remap || capture_id != this->current_capture_id) {
 		list->SetSize(3);
 #if !defined(_WIN32)
 		if (capture_id != this->current_capture_id) {
@@ -34,8 +41,7 @@ void Browser::PluginRequestHandler::HandleCaptureNotify(uint64_t pid, uint64_t c
 	}
 	list->SetInt(0, width);
 	list->SetInt(1, height);
-	CefRefPtr<CefBrowser> browser = this->Browser();
-	if (browser) browser->GetMainFrame()->SendProcessMessage(PID_RENDERER, message);
+	browser->GetMainFrame()->SendProcessMessage(PID_RENDERER, message);
 	this->current_capture_id = capture_id;
 }
 

@@ -32,6 +32,7 @@ namespace Browser {
 		virtual CefRefPtr<FileManager::FileManager> FileManager() const = 0;
 		virtual CefRefPtr<CefBrowser> Browser() const = 0;
 		virtual void HandlePluginCloseRequest() = 0;
+		virtual void SendCaptureDone() const = 0;
 
 		protected:
 			std::mutex* send_lock;

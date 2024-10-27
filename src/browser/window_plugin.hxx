@@ -17,6 +17,7 @@ namespace Browser {
 		CefRefPtr<FileManager::FileManager> FileManager() const override;
 		CefRefPtr<CefBrowser> Browser() const override;
 		void HandlePluginCloseRequest() override;
+		void SendCaptureDone() const override;
 
 		bool OnBeforePopup(
 			CefRefPtr<CefBrowser>,

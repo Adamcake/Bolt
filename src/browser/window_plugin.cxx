@@ -62,6 +62,15 @@ void Browser::PluginWindow::HandlePluginCloseRequest() {
 	this->send_lock->unlock();
 }
 
+void Browser::PluginWindow::SendCaptureDone() const {
+	const BoltIPCMessageTypeToClient msg_type = IPC_MSG_EXTERNALCAPTUREDONE;
+	const BoltIPCExternalCaptureDoneHeader header = { .window_id = this->window_id, .plugin_id = this->plugin_id };
+	this->send_lock->lock();
+	_bolt_ipc_send(this->client_fd, &msg_type, sizeof(msg_type));
+	_bolt_ipc_send(this->client_fd, &header, sizeof(header));
+	this->send_lock->unlock();
+}
+
 bool Browser::PluginWindow::OnBeforePopup(
 	CefRefPtr<CefBrowser> browser,
 	CefRefPtr<CefFrame> frame,
@@ -84,12 +93,7 @@ bool Browser::PluginWindow::OnProcessMessageReceived(CefRefPtr<CefBrowser> brows
 	if (!(this->browser && this->browser->IsSame(browser))) return false;
 	const CefString name = message->GetName();
 	if (name == "__bolt_plugin_capture_done") {
-		const BoltIPCMessageTypeToClient msg_type = IPC_MSG_EXTERNALCAPTUREDONE;
-		const BoltIPCExternalCaptureDoneHeader header = { .window_id = this->window_id, .plugin_id = this->plugin_id };
-		this->send_lock->lock();
-		_bolt_ipc_send(this->client_fd, &msg_type, sizeof(msg_type));
-		_bolt_ipc_send(this->client_fd, &header, sizeof(header));
-		this->send_lock->unlock();
+		this->SendCaptureDone();
 		return true;
 	}
 	return false;

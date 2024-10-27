@@ -104,6 +104,15 @@ void Browser::WindowOSR::HandlePluginCloseRequest() {
 	this->send_lock->unlock();
 }
 
+void Browser::WindowOSR::SendCaptureDone() const {
+	const BoltIPCMessageTypeToClient msg_type = IPC_MSG_OSRCAPTUREDONE;
+	const BoltIPCOsrCaptureDoneHeader header = { .window_id = this->WindowID() };
+	this->send_lock->lock();
+	_bolt_ipc_send(this->client_fd, &msg_type, sizeof(msg_type));
+	_bolt_ipc_send(this->client_fd, &header, sizeof(header));
+	this->send_lock->unlock();
+}
+
 void Browser::WindowOSR::HandleAck() {
 	if (this->deleted) return;
 	this->stored_lock.lock();
@@ -220,12 +229,7 @@ bool Browser::WindowOSR::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser,
 		return true;
 	}
 	if (name == "__bolt_plugin_capture_done") {
-		const BoltIPCMessageTypeToClient msg_type = IPC_MSG_OSRCAPTUREDONE;
-		const BoltIPCOsrCaptureDoneHeader header = { .window_id = this->WindowID() };
-		this->send_lock->lock();
-		_bolt_ipc_send(this->client_fd, &msg_type, sizeof(msg_type));
-		_bolt_ipc_send(this->client_fd, &header, sizeof(header));
-		this->send_lock->unlock();
+		this->SendCaptureDone();
 		return true;
 	}
 	return false;
