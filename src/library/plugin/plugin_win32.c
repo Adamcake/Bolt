@@ -10,7 +10,7 @@ uint8_t _bolt_plugin_shm_open_inbound(struct BoltSHM* shm, const char* tag, uint
 
 uint8_t _bolt_plugin_shm_open_outbound(struct BoltSHM* shm, size_t size, const char* tag, uint64_t id) {
     wchar_t buf[256];
-    _snwprintf(buf, 256, "/bolt-%i-%s-%llu", getpid(), tag, id);
+    _snwprintf(buf, 256, L"/bolt-%i-%hs-%llu", getpid(), tag, id);
     shm->handle = CreateFileMappingW(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, (DWORD)size, buf);
     shm->file = MapViewOfFile(shm->handle, FILE_MAP_WRITE, 0, 0, size);
     return 1;
