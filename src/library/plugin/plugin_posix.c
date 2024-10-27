@@ -19,6 +19,8 @@ uint8_t _bolt_plugin_shm_open_inbound(struct BoltSHM* shm, const char* tag, uint
     }
     shm->file = NULL;
     shm->unlink_pid = 0;
+    shm->tag = tag;
+    shm->id = id;
     return 1;
 }
 
@@ -37,8 +39,8 @@ uint8_t _bolt_plugin_shm_open_outbound(struct BoltSHM* shm, size_t size, const c
         return 0;
     }
     shm->file = mmap(NULL, size, PROT_WRITE, MAP_SHARED, shm->fd, 0);
-    shm->unlink_tag = tag;
-    shm->unlink_id = id;
+    shm->tag = tag;
+    shm->id = id;
     return 1;
 }
 
@@ -47,7 +49,7 @@ void _bolt_plugin_shm_close(struct BoltSHM* shm) {
     close(shm->fd);
     if (shm->unlink_pid > 0) {
         char buf[256];
-        snprintf(buf, sizeof(buf), "/bolt-%i-%s-%lu", shm->unlink_pid, shm->unlink_tag, shm->unlink_id);
+        snprintf(buf, sizeof(buf), "/bolt-%i-%s-%lu", shm->unlink_pid, shm->tag, shm->id);
         shm_unlink(buf);
     }
 }

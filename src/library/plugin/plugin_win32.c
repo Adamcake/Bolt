@@ -2,17 +2,25 @@
 
 #include <Windows.h>
 
+static void shm_map_readwrite(struct BoltSHM* shm, size_t size) {
+    wchar_t buf[256];
+    _snwprintf(buf, 256, L"/bolt-%i-%hs-%llu", getpid(), shm->tag, shm->id);
+    shm->handle = CreateFileMappingW(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, (DWORD)size, buf);
+    shm->file = MapViewOfFile(shm->handle, FILE_MAP_WRITE, 0, 0, size);
+}
+
 uint8_t _bolt_plugin_shm_open_inbound(struct BoltSHM* shm, const char* tag, uint64_t id) {
     shm->handle = NULL;
     shm->file = NULL;
+    shm->tag = tag;
+    shm->id = id;
     return 1;
 }
 
 uint8_t _bolt_plugin_shm_open_outbound(struct BoltSHM* shm, size_t size, const char* tag, uint64_t id) {
-    wchar_t buf[256];
-    _snwprintf(buf, 256, L"/bolt-%i-%hs-%llu", getpid(), tag, id);
-    shm->handle = CreateFileMappingW(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, (DWORD)size, buf);
-    shm->file = MapViewOfFile(shm->handle, FILE_MAP_WRITE, 0, 0, size);
+    shm->tag = tag;
+    shm->id = id;
+    shm_map_readwrite(shm, size);
     return 1;
 }
 
@@ -25,11 +33,11 @@ void _bolt_plugin_shm_close(struct BoltSHM* shm) {
     }
 }
 
-void _bolt_plugin_shm_resize(struct BoltSHM* shm, size_t length) {
+void _bolt_plugin_shm_resize(struct BoltSHM* shm, size_t size) {
     UnmapViewOfFile(shm->file);
-    CloseHandle(shm->handle);
-    shm->handle = CreateFileMappingW(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, (DWORD)length, NULL);
-    shm->file = MapViewOfFile(shm->handle, FILE_MAP_WRITE, 0, 0, length);
+    HANDLE old_handle = shm->handle;
+    shm_map_readwrite(shm, size);
+    CloseHandle(old_handle);
 }
 
 void _bolt_plugin_shm_remap(struct BoltSHM* shm, size_t length, void* handle) {
