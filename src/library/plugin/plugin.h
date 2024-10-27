@@ -164,6 +164,9 @@ struct BoltSHM {
     HANDLE handle;
 #else
     int fd;
+    int unlink_pid; // if 0, don't unlink
+    const char* unlink_tag;
+    uint64_t unlink_id;
 #endif
     void* file;
     size_t map_length;
