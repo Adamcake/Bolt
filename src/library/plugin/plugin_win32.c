@@ -33,9 +33,10 @@ void _bolt_plugin_shm_close(struct BoltSHM* shm) {
     }
 }
 
-void _bolt_plugin_shm_resize(struct BoltSHM* shm, size_t size) {
+void _bolt_plugin_shm_resize(struct BoltSHM* shm, size_t size, uint64_t new_id) {
     UnmapViewOfFile(shm->file);
     HANDLE old_handle = shm->handle;
+    shm->id = new_id;
     shm_map_readwrite(shm, size);
     CloseHandle(old_handle);
 }

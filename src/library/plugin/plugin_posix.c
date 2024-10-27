@@ -54,7 +54,7 @@ void _bolt_plugin_shm_close(struct BoltSHM* shm) {
     }
 }
 
-void _bolt_plugin_shm_resize(struct BoltSHM* shm, size_t length) {
+void _bolt_plugin_shm_resize(struct BoltSHM* shm, size_t length, uint64_t new_id) {
     if (ftruncate(shm->fd, length)) {
         printf("failed to truncate shm object to size %llu: %i\n", (unsigned long long)length, errno);
         return;

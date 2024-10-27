@@ -308,8 +308,8 @@ uint8_t _bolt_plugin_shm_open_outbound(struct BoltSHM* shm, size_t size, const c
 void _bolt_plugin_shm_close(struct BoltSHM* shm);
 
 /// Resize an outbound SHM object. The SHM object is assumed to be outbound, i.e. that this process
-/// has WRITE permission only.
-void _bolt_plugin_shm_resize(struct BoltSHM* shm, size_t length);
+/// has WRITE permission only. `new_id` is used on Windows only.
+void _bolt_plugin_shm_resize(struct BoltSHM* shm, size_t length, uint64_t new_id);
 
 /// Update mapping of an inbound SHM object according to its new size. `handle` is the new Windows
 /// HANDLE object, created by the host using DuplicateHandle, and is unused on non-Windows systems.

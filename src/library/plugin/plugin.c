@@ -679,7 +679,11 @@ static void _bolt_process_captures(uint32_t window_width, uint32_t window_height
         need_remap = true;
         next_window_id += 1;
     } else if (capture_width != window_width || capture_height != window_height) {
-        _bolt_plugin_shm_resize(&capture_shm, capture_bytes);
+        _bolt_plugin_shm_resize(&capture_shm, capture_bytes, next_window_id);
+#if defined(_WIN32)
+        capture_id = next_window_id;
+        next_window_id += 1;
+#endif
         capture_width = window_width;
         capture_height = window_height;
         need_remap = true;
