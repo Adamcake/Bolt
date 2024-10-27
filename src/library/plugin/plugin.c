@@ -108,6 +108,8 @@ static uint8_t capture_inited;
 static uint64_t last_mouseevent_window_id = 0;
 static uint64_t grabbed_window_id = 0;
 
+uint64_t _bolt_plugin_get_last_mouseevent_windowid() { return last_mouseevent_window_id; }
+
 // a currently-running plugin.
 // note "path" is not null-terminated, and must always be converted to use '/' as path-separators
 // and must always end with a trailing separator by the time it's received by this process.

@@ -297,6 +297,9 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin);
 /// one of the GRAB_TYPE_ defined values. Booleans are write-only and may be NULL.
 uint8_t _bolt_plugin_handle_mouse_event(struct MouseEvent* event, ptrdiff_t bool_offset, ptrdiff_t event_offset, uint8_t grab_type, uint8_t* mousein_fake, uint8_t* mousein_real);
 
+/// Returns the ID of the last window to receive an event, or 0 for the game window.
+uint64_t _bolt_plugin_get_last_mouseevent_windowid();
+
 /// Create an inbound SHM handle with a tag and ID. This pairing of tag and ID must not have been
 /// used for any SHM object previously during this run of the plugin loader. This is usually
 /// achieved by assigning ID values incrementally, starting at 1. The tag should be short - usually

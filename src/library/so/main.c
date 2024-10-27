@@ -418,6 +418,10 @@ static void _bolt_mouseevent_from_xcb(int16_t x, int16_t y, uint32_t detail, str
     out->mb_middle = (detail >> 9) & 1;
 }
 
+static uint8_t point_in_rect(int x, int y, int rx, int ry, int rw, int rh) {
+    return rx <= x && rx + rw > x && ry <= y && ry + rh > y;
+}
+
 static uint8_t handle_mouse_event(int16_t x, int16_t y, uint32_t detail, ptrdiff_t bool_offset, ptrdiff_t event_offset, uint8_t grab_type) {
     struct MouseEvent event;
     _bolt_mouseevent_from_xcb(x, y, detail, &event);
@@ -496,7 +500,7 @@ static uint8_t _bolt_handle_xcb_event(xcb_connection_t* c, xcb_generic_event_t* 
                     while (hashmap_iter(windows->map, &iter, &item)) {
                         struct EmbeddedWindow** window = item;
                         _bolt_rwlock_lock_read(&(*window)->lock);
-                        const uint8_t in_window = _bolt_point_in_rect(event->event_x, event->event_y, (*window)->metadata.x, (*window)->metadata.y, (*window)->metadata.width, (*window)->metadata.height);
+                        const uint8_t in_window = point_in_rect(event->event_x, event->event_y, (*window)->metadata.x, (*window)->metadata.y, (*window)->metadata.width, (*window)->metadata.height);
                         _bolt_rwlock_unlock_read(&(*window)->lock);
                         ret &= !in_window;
                         if (!ret) break;
@@ -529,7 +533,8 @@ static uint8_t _bolt_handle_xcb_event(xcb_connection_t* c, xcb_generic_event_t* 
             // set mouse-leave event if there's an embedded window that needed one
             struct WindowInfo* windows = _bolt_plugin_windowinfo();
             _bolt_rwlock_lock_read(&windows->lock);
-            const uint64_t* pp = &last_mouseevent_window_id;
+            const uint64_t p = _bolt_plugin_get_last_mouseevent_windowid();
+            const uint64_t* pp = &p;
             struct EmbeddedWindow* const* window = hashmap_get(windows->map, &pp);
             if (window) {
                 _bolt_rwlock_lock_read(&(*window)->lock);
