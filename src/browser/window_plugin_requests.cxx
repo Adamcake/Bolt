@@ -19,14 +19,12 @@ void Browser::PluginRequestHandler::HandleCaptureNotify(uint64_t pid, uint64_t c
 	CefRefPtr<CefListValue> list = message->GetArgumentList();
 	if (needs_remap) {
 		list->SetSize(3);
-#if defined(_WIN32)
-		std::filesystem::path shm_path = this->runtime_dir;
-		shm_path.append(std::format("bolt-{}-sc-{}", pid, capture_id));
-		list->SetString(2, shm_path.string());
-#else
+#if !defined(_WIN32)
 		if (capture_id != this->current_capture_id) {
-			const CefString str = std::format("/bolt-{}-sc-{}", pid, capture_id);
-			list->SetString(2, str);
+#endif
+		const CefString str = std::format("/bolt-{}-sc-{}", pid, capture_id);
+		list->SetString(2, str);
+#if !defined(_WIN32)
 		} else {
 			list->SetNull(2);
 		}

@@ -17,8 +17,8 @@ struct InitTask: public CefTask {
 		DISALLOW_COPY_AND_ASSIGN(InitTask);
 };
 
-Browser::PluginWindow::PluginWindow(CefRefPtr<Client> main_client, Details details, const char* url, CefRefPtr<FileManager::Directory> file_manager, BoltSocketType fd, std::mutex* send_lock, std::filesystem::path runtime_dir, uint64_t id, uint64_t plugin_id, bool show_devtools):
-	PluginRequestHandler(IPC_MSG_EXTERNALBROWSERMESSAGE, send_lock, runtime_dir),
+Browser::PluginWindow::PluginWindow(CefRefPtr<Client> main_client, Details details, const char* url, CefRefPtr<FileManager::Directory> file_manager, BoltSocketType fd, std::mutex* send_lock, uint64_t id, uint64_t plugin_id, bool show_devtools):
+	PluginRequestHandler(IPC_MSG_EXTERNALBROWSERMESSAGE, send_lock),
 	Window(main_client, details, show_devtools),
 	file_manager(file_manager), client_fd(fd), window_id(id), plugin_id(plugin_id), closing(false), deleted(false)
 {

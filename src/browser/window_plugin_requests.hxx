@@ -1,6 +1,5 @@
 #ifndef _BOLT_WINDOW_PLUGIN_REQUESTS_HXX
 #define _BOLT_WINDOW_PLUGIN_REQUESTS_HXX
-#include <filesystem>
 #if defined(BOLT_PLUGINS)
 #include "../library/ipc.h"
 #include "../file_manager.hxx"
@@ -11,8 +10,8 @@
 namespace Browser {
 	/// Abstract class handling requests from plugin-managed browsers
 	struct PluginRequestHandler: public CefRequestHandler {
-		PluginRequestHandler(BoltIPCMessageTypeToClient message_type, std::mutex* send_lock, std::filesystem::path runtime_dir):
-			message_type(message_type), send_lock(send_lock), runtime_dir(runtime_dir), current_capture_id(-1) {}
+		PluginRequestHandler(BoltIPCMessageTypeToClient message_type, std::mutex* send_lock):
+			message_type(message_type), send_lock(send_lock), current_capture_id(-1) {}
 
 		void HandlePluginMessage(const uint8_t*, size_t);
 		void HandleCaptureNotify(uint64_t, uint64_t, int, int, bool);
@@ -36,7 +35,6 @@ namespace Browser {
 
 		protected:
 			std::mutex* send_lock;
-			std::filesystem::path runtime_dir;
 			uint64_t current_capture_id;
 
 		private:

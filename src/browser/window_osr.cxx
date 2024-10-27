@@ -29,8 +29,8 @@ static void SendUpdateMsg(BoltSocketType fd, std::mutex* send_lock, uint64_t id,
 	send_lock->unlock();
 }
 
-Browser::WindowOSR::WindowOSR(CefString url, int width, int height, BoltSocketType client_fd, Browser::Client* main_client, std::mutex* send_lock, std::filesystem::path runtime_dir, int pid, uint64_t window_id, uint64_t plugin_id, CefRefPtr<FileManager::Directory> file_manager):
-	PluginRequestHandler(IPC_MSG_OSRBROWSERMESSAGE, send_lock, runtime_dir),
+Browser::WindowOSR::WindowOSR(CefString url, int width, int height, BoltSocketType client_fd, Browser::Client* main_client, std::mutex* send_lock, int pid, uint64_t window_id, uint64_t plugin_id, CefRefPtr<FileManager::Directory> file_manager):
+	PluginRequestHandler(IPC_MSG_OSRBROWSERMESSAGE, send_lock),
 	deleted(false), pending_delete(false), client_fd(client_fd), width(width), height(height), browser(nullptr), window_id(window_id),
 	plugin_id(plugin_id), main_client(main_client), stored(nullptr), remote_has_remapped(false), remote_is_idle(true), file_manager(file_manager)
 {
