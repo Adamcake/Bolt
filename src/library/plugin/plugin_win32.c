@@ -2,8 +2,6 @@
 
 #include <Windows.h>
 
-#define BUFSIZE 4096
-
 uint8_t _bolt_plugin_shm_open_inbound(struct BoltSHM* shm, const char* tag, uint64_t id) {
     shm->handle = NULL;
     shm->file = NULL;
@@ -11,11 +9,8 @@ uint8_t _bolt_plugin_shm_open_inbound(struct BoltSHM* shm, const char* tag, uint
 }
 
 uint8_t _bolt_plugin_shm_open_outbound(struct BoltSHM* shm, size_t size, const char* tag, uint64_t id) {
-    wchar_t buf[BUFSIZE];
-    const char* runtime_dir = getenv("appdata");
-    if (_snwprintf(buf, BUFSIZE - 1, "%s\\bolt-launcher\\run\\bolt-%i-%s-%llu", runtime_dir, getpid(), tag, id) >= (BUFSIZE - 1)) {
-        return 0;
-    }
+    wchar_t buf[256];
+    _snwprintf(buf, 256, "/bolt-%i-%s-%llu", getpid(), tag, id);
     shm->handle = CreateFileMappingW(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, (DWORD)size, buf);
     shm->file = MapViewOfFile(shm->handle, FILE_MAP_WRITE, 0, 0, size);
     return 1;
