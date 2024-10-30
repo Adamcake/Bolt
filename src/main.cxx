@@ -92,6 +92,14 @@ int BoltRunBrowserProcess(CefMainArgs main_args, CefRefPtr<Browser::App> cef_app
 	// Give CEF a place to put its cache stuff - default location is next to the exe which is not OK
 	std::filesystem::path cef_cache_path = data_dir;
 	cef_cache_path.append("CefCache");
+	if (std::filesystem::exists(cef_cache_path)) {
+		std::error_code err;
+		std::filesystem::remove_all(cef_cache_path, err);
+		if (err.value()) {
+			fmt::print("Can't delete CefCache: error {} '{}'\n", err.value(), err.message());
+			return err.value();
+		}
+	}
 	std::filesystem::create_directories(cef_cache_path);
 #if defined(_WIN32)
 	const wchar_t* cache_path = cef_cache_path.c_str();
