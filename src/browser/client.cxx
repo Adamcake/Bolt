@@ -1,5 +1,6 @@
 #include "client.hxx"
 #include "include/internal/cef_string.h"
+#include <filesystem>
 
 #if defined(BOLT_PLUGINS)
 #include "window_osr.hxx"
@@ -548,15 +549,33 @@ void Browser::Client::StartPlugin(uint64_t client_id, std::string id, std::strin
 				}
 				break;
 			}
+
+			std::filesystem::path config_path = this->config_dir;
+			config_path.append("plugins");
+			config_path.append(id);
+			std::error_code err;
+			std::filesystem::create_directories(config_path, err);
+			const std::string config = config_path.string() + '/';
+			if (err.value()) {
+				fmt::print("[B] couldn't start plugin: failed to create plugin config directory '{}'\n", config);
+				break;
+			}
+
 			g.plugins.push_back(new ActivePlugin(this->next_plugin_uid, id, path, false));
 
 			const BoltIPCMessageTypeToClient msg_type = IPC_MSG_STARTPLUGIN;
-			const BoltIPCStartPluginHeader header = { .uid = this->next_plugin_uid, .path_size = static_cast<uint32_t>(path.size()), .main_size = static_cast<uint32_t>(main.size()) };
+			const BoltIPCStartPluginHeader header = {
+				.uid = this->next_plugin_uid,
+				.path_size = static_cast<uint32_t>(path.size()),
+				.main_size = static_cast<uint32_t>(main.size()),
+				.config_path_size = static_cast<uint32_t>(config.size()),
+			};
 			this->send_lock.lock();
 			_bolt_ipc_send(g.fd, &msg_type, sizeof(msg_type));
 			_bolt_ipc_send(g.fd, &header, sizeof(header));
 			_bolt_ipc_send(g.fd, path.data(), path.size());
 			_bolt_ipc_send(g.fd, main.data(), main.size());
+			_bolt_ipc_send(g.fd, config.data(), config.size());
 			this->send_lock.unlock();
 			this->next_plugin_uid += 1;
 			break;
