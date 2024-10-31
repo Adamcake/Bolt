@@ -85,6 +85,12 @@ int BoltRunBrowserProcess(CefMainArgs main_args, CefRefPtr<Browser::App> cef_app
 	settings.log_severity = LOGSEVERITY_WARNING; // Print warnings and errors only
 	settings.command_line_args_disabled = false; // Needed because we append args
 	settings.uncaught_exception_stack_size = 8;  // Number of call stack frames given in unhandled exception events
+#if defined(BOLT_RESOURCES_PATH)
+	cef_string_from_utf8(BOLT_RESOURCES_PATH, sizeof(BOLT_RESOURCES_PATH) - sizeof(*BOLT_RESOURCES_PATH), &settings.resources_dir_path);
+#endif
+#if defined(BOLT_LOCALES_PATH)
+	cef_string_from_utf8(BOLT_LOCALES_PATH, sizeof(BOLT_LOCALES_PATH) - sizeof(*BOLT_LOCALES_PATH), &settings.locales_dir_path);
+#endif
 #if defined(BOLT_PLUGINS)
 	settings.windowless_rendering_enabled = true; // Needed for embedded plugin browsers
 #endif
