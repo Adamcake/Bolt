@@ -72,6 +72,18 @@ If building with GCC, you need version 13.1 or later. If building with Clang, yo
 
 After that, the helper script `./build/bolt.sh` can be used to launch Bolt from its staging location.
 
+Lastly, here are some optional settings which may be useful if you're integrating with another build system:
+- `-D BOLT_META_NAME=`: the application's metadata name; default is "BoltLauncher"
+- `-D BOLT_CEF_INSTALLDIR=`: the directory (after the install prefix) where the binaries will be installed; default is "opt"
+- `-D BOLT_BINDIR=`: the directory (after the install prefix) where the `bolt` binary will be installed; default is "usr/local/bin"
+- `-D BOLT_LIBDIR=`: the directory (after the install prefix) where bolt's libraries, if any, will be installed; default is "usr/local/lib"
+- `-D BOLT_SHAREDIR=`: the directory (after the install prefix) where metadata will be installed; default is "usr/local/share"
+- `-D BOLT_CEF_INCLUDEPATH=`: the absolute path to the location **CONTAINING** CEF's "include" directory (but not to the include directory itself); default is the value of CEF_ROOT
+- `-D BOLT_LIBCEF_DIRECTORY=`: the absolute path to a directory containing a pre-installed copy of libcef.so for linking against. if set, the directory containing libcef.so in CEF_ROOT will not be installed, and will therefore be unused. if unset, libcef.so will be found in the Debug or Release directory of CEF_ROOT.
+- `-D BOLT_CEF_RESOURCEDIR_OVERRIDE=`: the absolute path to a pre-installed CEF resource directory. if set, the path will be hardcoded into the application as a string, and the "Resources" directory from CEF_ROOT will not be installed, and will therefore be unused.
+- `-D BOLT_CEF_DLLWRAPPER=`: the absolute path to a `.a` file which will be used instead of compiling libcef_dll_wrapper out of CEF_ROOT
+- `-D BOLT_SKIP_RPATH=1`: instead of setting bolt's runpath to $ORIGIN, it won't be set at all - useful only if you're intending to set it yourself
+
 ### Windows
 
 Windows builds have only been tested using Visual Studio 2022 (a.k.a. Visual Studio 17) in Release mode, per recommendations by chromium/cef. Other configurations may work but have not been tested.
