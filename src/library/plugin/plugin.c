@@ -151,12 +151,12 @@ struct ExternalBrowser {
     uint64_t capture_id;
 };
 
-void _bolt_plugin_free(struct Plugin* const* plugin) {
-    hashmap_free((*plugin)->external_browsers);
-    free((*plugin)->path);
-    free((*plugin)->config_path);
-    lua_close((*plugin)->state);
-    free(*plugin);
+void _bolt_plugin_free(struct Plugin* plugin) {
+    hashmap_free(plugin->external_browsers);
+    free(plugin->path);
+    free(plugin->config_path);
+    lua_close(plugin->state);
+    free(plugin);
 }
 
 static int _bolt_window_map_compare(const void* a, const void* b, void* udata) {
@@ -446,8 +446,8 @@ static void _bolt_process_plugins(uint8_t* need_capture, uint8_t* capture_ready)
     while (hashmap_iter(plugins, &iter, &item)) {
         struct Plugin* plugin = *(struct Plugin**)item;
         if (plugin->is_deleted) {
-            _bolt_plugin_free(&plugin);
             hashmap_delete(plugins, &plugin);
+            _bolt_plugin_free(plugin);
             iter = 0;
             continue;
         }
@@ -812,7 +812,7 @@ void _bolt_plugin_close() {
     iter = 0;
     while (hashmap_iter(plugins, &iter, &item)) {
         struct Plugin* plugin = *(struct Plugin**)item;
-        if (!plugin->is_deleted) _bolt_plugin_free(&plugin);
+        _bolt_plugin_free(plugin);
     }
     
     hashmap_free(plugins);
