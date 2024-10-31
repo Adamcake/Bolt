@@ -92,6 +92,35 @@ static int api_datetime(lua_State*);
 /// game-time. There is no way to get the user's timezone information via Bolt.
 static int api_weekday(lua_State*);
 
+/// [-1, +1, -]
+/// Loads the file into a Lua string and returns it. The file will be located relative to the
+/// plugin directory. Either '/' or '\' may be used as file separators, regardless of OS, and it
+/// makes no difference if the path does or doesn't start with a file separator. In the case of an
+/// error, this function will return nil. The most likely cause of failure is that the file doesn't
+/// exist.
+///
+/// The plugin directory is read-only. For writeable files, use `saveconfig` and `loadconfig`.
+static int api_loadfile(lua_State*);
+
+/// [-1, +1, -]
+/// Loads the file into a Lua string and returns it. The file will be located relative to the
+/// plugin's config directory, the exact location of which depends on the user's OS. Either '/' or
+/// '\' may be used as file separators, regardless of OS, and it makes no difference if the path
+/// does or doesn't start with a file separator. In the case of an error, this function will return
+/// nil. The most likely cause of failure is that the file doesn't exist.
+static int api_loadconfig(lua_State*);
+
+/// [-2, +1, -]
+/// Saves the Lua string in the second parameter into a file identified by the first parameter. The
+/// file will be located relative to the plugin's config directory, the exact location of which
+/// depends on the user's OS. Either '/' or '\' may be used as file separators, regardless of OS,
+/// and it makes no difference if the path does or doesn't start with a file separator.
+/// 
+/// This function returns a boolean: if the file is saved successfully this function will return
+/// true. If not, it will return false. The most likely cause of failure is that the file already
+/// exists and is locked for writing, such as by the user having it open in a text editor.
+static int api_saveconfig(lua_State*);
+
 /// [-2, +1, -]
 /// Creates a surface with the given width and height, and returns it as a userdata object. The
 /// surface will initially be fully transparent.

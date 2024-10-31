@@ -120,6 +120,8 @@ struct Plugin {
     size_t ext_browser_capture_count;
     char* path;
     uint32_t path_length;
+    char* config_path;
+    uint32_t config_path_length;
     uint8_t is_deleted;
 };
 
@@ -150,6 +152,9 @@ struct ExternalBrowser {
 };
 
 void _bolt_plugin_free(struct Plugin* const* plugin) {
+    hashmap_free((*plugin)->external_browsers);
+    free((*plugin)->path);
+    free((*plugin)->config_path);
     lua_close((*plugin)->state);
     free(*plugin);
 }
@@ -319,13 +324,16 @@ void _bolt_plugin_init(const struct PluginManagedFunctions* functions) {
 }
 
 static int _bolt_api_init(lua_State* state) {
-    lua_createtable(state, 0, 20);
+    lua_createtable(state, 0, 22);
     API_ADD(apiversion)
     API_ADD(checkversion)
     API_ADD(close)
     API_ADD(time)
     API_ADD(datetime)
     API_ADD(weekday)
+    API_ADD(loadfile)
+    API_ADD(loadconfig)
+    API_ADD(saveconfig)
     API_ADD(onrender2d)
     API_ADD(onrender3d)
     API_ADD(onminimap)
@@ -438,7 +446,7 @@ static void _bolt_process_plugins(uint8_t* need_capture, uint8_t* capture_ready)
     while (hashmap_iter(plugins, &iter, &item)) {
         struct Plugin* plugin = *(struct Plugin**)item;
         if (plugin->is_deleted) {
-            hashmap_free(plugin->external_browsers);
+            _bolt_plugin_free(&plugin);
             hashmap_delete(plugins, &plugin);
             iter = 0;
             continue;
@@ -955,7 +963,7 @@ static void handle_close_request(lua_State* state, uint64_t window_id) {
 }
 
 static void handle_ipc_STARTPLUGIN(struct BoltIPCStartPluginHeader* header) {
-    // note: incoming messages are sanitised by the UI, by replacing `\` with `/` and     
+    // note: incoming messages are sanitised by the UI, by replacing `\` with `/` and
     // making sure to leave a trailing slash, when initiating this type of message
     // (see PluginMenu.svelte)
     struct Plugin* plugin = malloc(sizeof(struct Plugin));
@@ -964,12 +972,15 @@ static void handle_ipc_STARTPLUGIN(struct BoltIPCStartPluginHeader* header) {
     plugin->id = header->uid;
     plugin->path = malloc(header->path_size);
     plugin->path_length = header->path_size;
+    plugin->config_path = malloc(header->config_path_size);
+    plugin->config_path_length = header->config_path_size;
     plugin->ext_browser_capture_count = 0;
     plugin->is_deleted = false;
     _bolt_ipc_receive(fd, plugin->path, header->path_size);
     char* full_path = lua_newuserdata(plugin->state, header->path_size + header->main_size + 1);
     memcpy(full_path, plugin->path, header->path_size);
     _bolt_ipc_receive(fd, full_path + header->path_size, header->main_size);
+    _bolt_ipc_receive(fd, plugin->config_path, header->config_path_size);
     full_path[header->path_size + header->main_size] = '\0';
     if (_bolt_plugin_add(full_path, plugin)) {
         lua_pop(plugin->state, 1);
@@ -1646,6 +1657,111 @@ static int api_weekday(lua_State* state) {
     const time_t t = time(NULL);
     const struct tm* time = gmtime(&t);
     lua_pushinteger(state, time->tm_wday + 1);
+    return 1;
+}
+
+static int api_loadfile(lua_State* state) {
+    _bolt_check_argc(state, 1, "loadfile");
+    lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME);
+    const struct Plugin* plugin = lua_touserdata(state, -1);
+    size_t path_length;
+    const char* path = lua_tolstring(state, 1, &path_length);
+    const size_t full_path_length = plugin->path_length + path_length + 1;
+    char* full_path = lua_newuserdata(state, full_path_length);
+    memcpy(full_path, plugin->path, plugin->path_length);
+    memcpy(full_path + plugin->path_length, path, path_length + 1);
+    for (char* c = full_path + plugin->path_length; *c; c += 1) {
+        if (*c == '\\') *c = '/';
+    }
+
+    FILE* f = fopen(full_path, "rb");
+    if (!f) {
+        lua_pop(state, 2);
+        lua_pushnil(state);
+        return 1;
+    }
+    fseek(f, 0, SEEK_END);
+    const long file_size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    void* content = lua_newuserdata(state, file_size);
+    if (fread(content, 1, file_size, f) < file_size) {
+        lua_pop(state, 3);
+        lua_pushnil(state);
+        fclose(f);
+        return 1;
+    }
+    fclose(f);
+    lua_pop(state, 3);
+    lua_pushlstring(state, content, file_size);
+    return 1;
+}
+
+static int api_loadconfig(lua_State* state) {
+    _bolt_check_argc(state, 1, "loadfile");
+    lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME);
+    const struct Plugin* plugin = lua_touserdata(state, -1);
+    size_t path_length;
+    const char* path = lua_tolstring(state, 1, &path_length);
+    const size_t full_path_length = plugin->config_path_length + path_length + 1;
+    char* full_path = lua_newuserdata(state, full_path_length);
+    memcpy(full_path, plugin->config_path, plugin->config_path_length);
+    memcpy(full_path + plugin->config_path_length, path, path_length + 1);
+    for (char* c = full_path + plugin->config_path_length; *c; c += 1) {
+        if (*c == '\\') *c = '/';
+    }
+
+    FILE* f = fopen(full_path, "rb");
+    if (!f) {
+        lua_pop(state, 2);
+        lua_pushnil(state);
+        return 1;
+    }
+    fseek(f, 0, SEEK_END);
+    const long file_size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    void* content = lua_newuserdata(state, file_size);
+    if (fread(content, 1, file_size, f) < file_size) {
+        lua_pop(state, 3);
+        lua_pushnil(state);
+        fclose(f);
+        return 1;
+    }
+    fclose(f);
+    lua_pop(state, 3);
+    lua_pushlstring(state, content, file_size);
+    return 1;
+}
+
+static int api_saveconfig(lua_State* state) {
+    _bolt_check_argc(state, 2, "savefile");
+    size_t path_length, content_length;
+    const char* path = lua_tolstring(state, 1, &path_length);
+    const char* content = lua_tolstring(state, 2, &content_length);
+    lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME);
+    const struct Plugin* plugin = lua_touserdata(state, -1);
+    const size_t full_path_length = plugin->config_path_length + path_length + 1;
+    char* full_path = lua_newuserdata(state, full_path_length);
+    memcpy(full_path, plugin->config_path, plugin->config_path_length);
+    memcpy(full_path + plugin->config_path_length, path, path_length + 1);
+    for (char* c = full_path + plugin->config_path_length; *c; c += 1) {
+        if (*c == '\\') *c = '/';
+    }
+
+    FILE* f = fopen(full_path, "wb");
+    if (!f) {
+        lua_pop(state, 2);
+        lua_pushboolean(state, false);
+        return 1;
+    }
+    if (fwrite(content, sizeof(*content), content_length, f) < content_length) {
+        lua_pop(state, 2);
+        lua_pushboolean(state, false);
+        fclose(f);
+        return 1;
+    }
+    fclose(f);
+    lua_pop(state, 2);
+    lua_pushboolean(state, true);
     return 1;
 }
 
