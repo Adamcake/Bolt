@@ -115,6 +115,7 @@ struct BoltIPCStartPluginHeader {
     uint64_t uid;
     uint32_t path_size;
     uint32_t main_size;
+    uint32_t config_path_size;
 };
 
 /// Header for BoltIPCMessageTypeToClient::IPC_MSG_HOST_STOPPED_PLUGIN
