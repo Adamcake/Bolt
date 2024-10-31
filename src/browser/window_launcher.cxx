@@ -404,9 +404,9 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 			return new FilePicker(browser, {".json"});
 		}
 
-		// instruction to close the launcher UI window
+		// instruction to close the window which sent this request
 		if (path == "/close") {
-			this->browser->GetHost()->CloseBrowser(false);
+			browser->GetHost()->CloseBrowser(false);
 			QSENDOK();
 		}
 	}
