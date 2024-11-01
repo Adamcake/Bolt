@@ -15,6 +15,7 @@ namespace Browser {
 
 		void HandlePluginMessage(const uint8_t*, size_t);
 		void HandleCaptureNotify(uint64_t, uint64_t, int, int, bool);
+		void NotifyBrowserCreated(CefRefPtr<CefBrowser>);
 
 		CefRefPtr<CefResourceRequestHandler> GetResourceRequestHandler(
 			CefRefPtr<CefBrowser>,
@@ -40,6 +41,7 @@ namespace Browser {
 
 		private:
 			BoltIPCMessageTypeToClient message_type;
+			std::vector<CefRefPtr<CefProcessMessage>> pending_messages;
 	};
 }
 

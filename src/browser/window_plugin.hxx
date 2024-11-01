@@ -35,6 +35,7 @@ namespace Browser {
 		) override;
 
 		bool OnProcessMessageReceived(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, CefProcessId, CefRefPtr<CefProcessMessage>) override;
+		void OnAfterCreated(CefRefPtr<CefBrowser>) override;
 
 		CefRefPtr<CefRequestHandler> GetRequestHandler() override;
 		void Close() override;

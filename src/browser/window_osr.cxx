@@ -368,6 +368,8 @@ void Browser::WindowOSR::OnAfterCreated(CefRefPtr<CefBrowser> browser) {
 		// calling CloseBrowser here would lead to a segmentation fault in CEF because we're still
 		// technically in the create function, which is going to assume the browser still exists.
 		browser->GetMainFrame()->SendProcessMessage(PID_RENDERER, CefProcessMessage::Create("__bolt_pluginbrowser_close"));
+	} else {
+		this->NotifyBrowserCreated(browser);
 	}
 }
 

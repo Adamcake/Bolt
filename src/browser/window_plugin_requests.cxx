@@ -11,7 +11,11 @@ void Browser::PluginRequestHandler::HandlePluginMessage(const uint8_t* data, siz
 	list->SetSize(1);
 	list->SetBinary(0, CefBinaryValue::Create(data, len));
 	CefRefPtr<CefBrowser> browser = this->Browser();
-	if (browser) browser->GetMainFrame()->SendProcessMessage(PID_RENDERER, message);
+	if (browser) {
+		browser->GetMainFrame()->SendProcessMessage(PID_RENDERER, message);
+	} else {
+		this->pending_messages.push_back(message);
+	}
 }
 
 void Browser::PluginRequestHandler::HandleCaptureNotify(uint64_t pid, uint64_t capture_id, int width, int height, bool needs_remap) {
@@ -43,6 +47,13 @@ void Browser::PluginRequestHandler::HandleCaptureNotify(uint64_t pid, uint64_t c
 	list->SetInt(1, height);
 	browser->GetMainFrame()->SendProcessMessage(PID_RENDERER, message);
 	this->current_capture_id = capture_id;
+}
+
+void Browser::PluginRequestHandler::NotifyBrowserCreated(CefRefPtr<CefBrowser> browser) {
+	for (CefRefPtr<CefProcessMessage> message: this->pending_messages) {
+		browser->GetMainFrame()->SendProcessMessage(PID_RENDERER, message);
+	}
+	this->pending_messages.clear();
 }
 
 CefRefPtr<CefResourceRequestHandler> Browser::PluginRequestHandler::GetResourceRequestHandler(

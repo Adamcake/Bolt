@@ -99,6 +99,13 @@ bool Browser::PluginWindow::OnProcessMessageReceived(CefRefPtr<CefBrowser> brows
 	return false;
 }
 
+void Browser::PluginWindow::OnAfterCreated(CefRefPtr<CefBrowser> browser) {
+	Browser::Window::OnAfterCreated(browser);
+	if (!this->pending_delete) {
+		this->NotifyBrowserCreated(browser);
+	}
+}
+
 CefRefPtr<CefRequestHandler> Browser::PluginWindow::GetRequestHandler() {
 	return this;
 }
