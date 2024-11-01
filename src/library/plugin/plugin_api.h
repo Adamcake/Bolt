@@ -520,6 +520,10 @@ static int api_window_cancelreposition(lua_State*);
 /// Reposition events refer to the window's position and/or size having changed. If the window was
 /// resized, its new contents will be fully transparent and must be redrawn. Call event:didresize()
 /// to check if that's the case.
+///
+/// Note that when repositioning ends by the user releasing the mouse button, this event will be
+/// fired even if the position and size didn't actually change. This is primarily because there
+/// would be no other way for the plugin to know when repositioning has ended.
 static int api_window_onreposition(lua_State*);
 
 /// [-2, +0, -]

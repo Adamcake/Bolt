@@ -575,9 +575,9 @@ static void _bolt_process_embedded_windows(uint32_t window_width, uint32_t windo
             if (inputs.mouse_left_up) {
                 _bolt_window_calc_repos_target(window, &metadata, inputs.mouse_left_up_event.x, inputs.mouse_left_up_event.y, window_width, window_height);
                 if (window->reposition_threshold) {
-                    _bolt_rwlock_lock_write(&window->lock);
-                    did_move = (window->metadata.x != window->repos_target_x) || (window->metadata.y != window->repos_target_y);
+                    //did_move = (window->metadata.x != window->repos_target_x) || (window->metadata.y != window->repos_target_y);
                     did_resize = (window->metadata.width != window->repos_target_w) || (window->metadata.height != window->repos_target_h);
+                    _bolt_rwlock_lock_write(&window->lock);
                     window->metadata.x = window->repos_target_x;
                     window->metadata.y = window->repos_target_y;
                     window->metadata.width = window->repos_target_w;
@@ -589,9 +589,11 @@ static void _bolt_process_embedded_windows(uint32_t window_width, uint32_t windo
                         struct PluginSurfaceUserdata* ud = window->surface_functions.userdata;
                         managed_functions.surface_resize_and_clear(ud, metadata.width, metadata.height);
                     }
-                    struct RepositionEvent event = {.x = metadata.x, .y = metadata.y, .width = metadata.width, .height = metadata.height, .did_resize = did_resize};
-                    _bolt_plugin_window_onreposition(window, &event);
+                } else {
+                    did_resize = false;
                 }
+                struct RepositionEvent event = {.x = metadata.x, .y = metadata.y, .width = metadata.width, .height = metadata.height, .did_resize = did_resize};
+                _bolt_plugin_window_onreposition(window, &event);
                 window->reposition_mode = false;
             }
         } else {
