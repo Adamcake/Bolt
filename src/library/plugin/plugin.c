@@ -641,6 +641,12 @@ static void _bolt_process_embedded_windows(uint32_t window_width, uint32_t windo
             }
         }
 
+        // in case it got deleted by one of the handler functions
+        if (window->is_deleted) {
+            any_deleted = true;
+            continue;
+        }
+
         window->surface_functions.draw_to_surface(window->surface_functions.userdata, overlay.userdata, 0, 0, metadata.width, metadata.height, metadata.x, metadata.y, metadata.width, metadata.height);
         if (window->popup_shown && window->popup_initialised) {
             window->popup_surface_functions.draw_to_surface(window->popup_surface_functions.userdata, overlay.userdata, 0, 0, window->popup_meta.width, window->popup_meta.height, metadata.x + window->popup_meta.x, metadata.y + window->popup_meta.y, window->popup_meta.width, window->popup_meta.height);
