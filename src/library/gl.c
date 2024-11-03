@@ -106,16 +106,15 @@ static void _bolt_gl_plugin_drawelements_vertex2d_atlas_xy(size_t index, void* u
 static void _bolt_gl_plugin_drawelements_vertex2d_atlas_wh(size_t index, void* userdata, int32_t* out);
 static void _bolt_gl_plugin_drawelements_vertex2d_uv(size_t index, void* userdata, double* out);
 static void _bolt_gl_plugin_drawelements_vertex2d_colour(size_t index, void* userdata, double* out);
-static void _bolt_gl_plugin_drawelements_vertex3d_xyz(size_t index, void* userdata, int32_t* out);
+static void _bolt_gl_plugin_drawelements_vertex3d_xyz(size_t index, void* userdata, struct Point3D* out);
 static size_t _bolt_gl_plugin_drawelements_vertex3d_atlas_meta(size_t index, void* userdata);
 static void _bolt_gl_plugin_drawelements_vertex3d_meta_xywh(size_t meta, void* userdata, int32_t* out);
 static void _bolt_gl_plugin_drawelements_vertex3d_uv(size_t index, void* userdata, double* out);
 static void _bolt_gl_plugin_drawelements_vertex3d_colour(size_t index, void* userdata, double* out);
 static uint8_t _bolt_gl_plugin_drawelements_vertex3d_boneid(size_t index, void* userdata);
-static void _bolt_gl_plugin_bone_transform(uint8_t bone_id, void* userdata, double* out);
-static void _bolt_gl_plugin_matrix3d_toworldspace(int x, int y, int z, void* userdata, double* out);
-static void _bolt_gl_plugin_matrix3d_toscreenspace(int x, int y, int z, void* userdata, double* out);
-static void _bolt_gl_plugin_matrix3d_worldpos(void* userdata, double* out);
+static void _bolt_gl_plugin_bone_transform(uint8_t bone_id, void* userdata, struct Transform3D* out);
+static void _bolt_gl_plugin_matrix3d_model(void* userdata, struct Transform3D* out);
+static void _bolt_gl_plugin_matrix3d_viewproj(void* userdata, struct Transform3D* out);
 static size_t _bolt_gl_plugin_texture_id(void* userdata);
 static void _bolt_gl_plugin_texture_size(void* userdata, size_t* out);
 static uint8_t _bolt_gl_plugin_texture_compare(void* userdata, size_t x, size_t y, size_t len, const unsigned char* data);
@@ -129,6 +128,7 @@ static void _bolt_gl_plugin_surface_drawtoscreen(void* userdata, int sx, int sy,
 static void _bolt_gl_plugin_surface_drawtosurface(void* userdata, void* target, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh);
 static void _bolt_gl_plugin_draw_region_outline(void* userdata, int16_t x, int16_t y, uint16_t width, uint16_t height);
 static void _bolt_gl_plugin_read_screen_pixels(uint32_t width, uint32_t height, void* data);
+static void _bolt_gl_plugin_game_view_rect(int* x, int* y, int* w, int* h);
 
 #define MAX_TEXTURE_UNITS 4096 // would be nice if there was a way to query this at runtime, but it would be awkward to set up
 #define BUFFER_LIST_CAPACITY 256 * 256
@@ -1248,6 +1248,7 @@ void _bolt_gl_onMakeCurrent(void* context) {
             .surface_resize_and_clear = _bolt_gl_plugin_surface_resize,
             .draw_region_outline = _bolt_gl_plugin_draw_region_outline,
             .read_screen_pixels = _bolt_gl_plugin_read_screen_pixels,
+            .game_view_rect = _bolt_gl_plugin_game_view_rect,
         };
         _bolt_plugin_init(&functions);
     }
@@ -1447,9 +1448,8 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
             render.texture_functions.compare = _bolt_gl_plugin_texture_compare;
             render.texture_functions.data = _bolt_gl_plugin_texture_data;
             render.matrix_functions.userdata = &matrix_userdata;
-            render.matrix_functions.to_world_space = _bolt_gl_plugin_matrix3d_toworldspace;
-            render.matrix_functions.to_screen_space = _bolt_gl_plugin_matrix3d_toscreenspace;
-            render.matrix_functions.world_pos = _bolt_gl_plugin_matrix3d_worldpos;
+            render.matrix_functions.model_matrix = _bolt_gl_plugin_matrix3d_model;
+            render.matrix_functions.viewproj_matrix = _bolt_gl_plugin_matrix3d_viewproj;
 
             _bolt_plugin_handle_render3d(&render);
         }
@@ -1632,14 +1632,17 @@ static void _bolt_gl_plugin_drawelements_vertex2d_colour(size_t index, void* use
     out[3] = (double)colour[0];
 }
 
-static void _bolt_gl_plugin_drawelements_vertex3d_xyz(size_t index, void* userdata, int32_t* out) {
+static void _bolt_gl_plugin_drawelements_vertex3d_xyz(size_t index, void* userdata, struct Point3D* out) {
     struct GLPluginDrawElementsVertex3DUserData* data = userdata;
-    if (!_bolt_get_attr_binding_int(data->c, data->xyz_bone, data->indices[index], 3, out)) {
+    out->integer = true;
+    if (!_bolt_get_attr_binding_int(data->c, data->xyz_bone, data->indices[index], 3, out->xyzh.ints)) {
         float pos[3];
         _bolt_get_attr_binding(data->c, data->xyz_bone, data->indices[index], 3, pos);
-        out[0] = (int32_t)roundf(pos[0]);
-        out[1] = (int32_t)roundf(pos[1]);
-        out[2] = (int32_t)roundf(pos[2]);
+        out->xyzh.ints[0] = (double)pos[0];
+        out->xyzh.ints[1] = (double)pos[1];
+        out->xyzh.ints[2] = (double)pos[2];
+        out->xyzh.ints[3] = 1.0;
+        out->integer = false;
     }
 }
 
@@ -1693,71 +1696,43 @@ static uint8_t _bolt_gl_plugin_drawelements_vertex3d_boneid(size_t index, void* 
     return (uint8_t)(ret[3]);
 }
 
-static void _bolt_gl_plugin_bone_transform(uint8_t bone_id, void* userdata, double* out) {
+static void _bolt_gl_plugin_bone_transform(uint8_t bone_id, void* userdata, struct Transform3D* out) {
     struct GLContext* c = _bolt_context();
     const GLint uniform_loc = c->bound_program->loc_uBoneTransforms + (bone_id * 3);
     GLfloat f[4];
     gl.GetUniformfv(c->bound_program->id, uniform_loc, f);
-    out[0] = (double)f[0];
-    out[1] = (double)f[1];
-    out[2] = (double)f[2];
-    out[3] = 0.0;
-    out[4] = (double)f[3];
+    out->matrix[0] = (double)f[0];
+    out->matrix[1] = (double)f[1];
+    out->matrix[2] = (double)f[2];
+    out->matrix[3] = 0.0;
+    out->matrix[4] = (double)f[3];
     gl.GetUniformfv(c->bound_program->id, uniform_loc + 1, f);
-    out[5] = (double)f[0];
-    out[6] = (double)f[1];
-    out[7] = 0.0;
-    out[8] = (double)f[2];
-    out[9] = (double)f[3];
+    out->matrix[5] = (double)f[0];
+    out->matrix[6] = (double)f[1];
+    out->matrix[7] = 0.0;
+    out->matrix[8] = (double)f[2];
+    out->matrix[9] = (double)f[3];
     gl.GetUniformfv(c->bound_program->id, uniform_loc + 2, f);
-    out[10] = (double)f[0];
-    out[11] = 0.0;
-    out[12] = (double)f[1];
-    out[13] = (double)f[2];
-    out[14] = (double)f[3];
-    out[15] = 1.0;
+    out->matrix[10] = (double)f[0];
+    out->matrix[11] = 0.0;
+    out->matrix[12] = (double)f[1];
+    out->matrix[13] = (double)f[2];
+    out->matrix[14] = (double)f[3];
+    out->matrix[15] = 1.0;
 }
 
-static void _bolt_gl_plugin_matrix3d_toworldspace(int x, int y, int z, void* userdata, double* out) {
+static void _bolt_gl_plugin_matrix3d_model(void* userdata, struct Transform3D* out) {
     const struct GLPlugin3DMatrixUserData* data = userdata;
-    const double dx = (double)x;
-    const double dy = (double)y;
-    const double dz = (double)z;
-    const float* mmx = data->model_matrix;
-    const double outx = (dx * (double)mmx[0]) + (dy * mmx[4]) + (dz * mmx[8]) + mmx[12];
-    const double outy = (dx * (double)mmx[1]) + (dy * mmx[5]) + (dz * mmx[9]) + mmx[13];
-    const double outz = (dx * (double)mmx[2]) + (dy * mmx[6]) + (dz * mmx[10]) + mmx[14];
-    const double homogenous = (dx * (double)mmx[3]) + (dy * mmx[7]) + (dz * mmx[11]) + mmx[15];
-    out[0] = outx / homogenous;
-    out[1] = outy / homogenous;
-    out[2] = outz / homogenous;
+    for (size_t i = 0; i < 16; i += 1) {
+        out->matrix[i] = (double)data->model_matrix[i];
+    }
 }
 
-static void _bolt_gl_plugin_matrix3d_toscreenspace(int x, int y, int z, void* userdata, double* out) {
-    const struct GLContext* c = _bolt_context();
-    struct GLPlugin3DMatrixUserData* data = userdata;
-    const double dx = (double)x;
-    const double dy = (double)y;
-    const double dz = (double)z;
-    const float* mmx = data->model_matrix;
-    const float* vpmx = data->viewproj_matrix;
-    const double mx = (dx * (double)mmx[0]) + (dy * (double)mmx[4]) + (dz * (double)mmx[8]) + (double)mmx[12];
-    const double my = (dx * (double)mmx[1]) + (dy * (double)mmx[5]) + (dz * (double)mmx[9]) + (double)mmx[13];
-    const double mz = (dx * (double)mmx[2]) + (dy * (double)mmx[6]) + (dz * (double)mmx[10]) + (double)mmx[14];
-    const double mh = (dx * (double)mmx[3]) + (dy * (double)mmx[7]) + (dz * (double)mmx[11]) + (double)mmx[15];
-    const double outx = (mx * (double)vpmx[0]) + (my * (double)vpmx[4]) + (mz * (double)vpmx[8]) + (mh * (double)vpmx[12]);
-    const double outy = (mx * (double)vpmx[1]) + (my * (double)vpmx[5]) + (mz * (double)vpmx[9]) + (mh * (double)vpmx[13]);
-    const double homogenous = (mx * (double)vpmx[3]) + (my * (double)vpmx[7]) + (mz * (double)vpmx[11]) + (mh * (double)vpmx[15]);
-    out[0] = (((outx  / homogenous) + 1.0) * c->game_view_w / 2.0) + (double)c->game_view_x;
-    out[1] = (((-outy / homogenous) + 1.0) * c->game_view_h / 2.0) + (double)c->game_view_y;
-}
-
-static void _bolt_gl_plugin_matrix3d_worldpos(void* userdata, double* out) {
-    struct GLPlugin3DMatrixUserData* data = userdata;
-    const float* mmx = data->model_matrix;
-    out[0] = (double)data->model_matrix[12];
-    out[1] = (double)data->model_matrix[13];
-    out[2] = (double)data->model_matrix[14];
+static void _bolt_gl_plugin_matrix3d_viewproj(void* userdata, struct Transform3D* out) {
+    const struct GLPlugin3DMatrixUserData* data = userdata;
+    for (size_t i = 0; i < 16; i += 1) {
+        out->matrix[i] = (double)data->viewproj_matrix[i];
+    }
 }
 
 static size_t _bolt_gl_plugin_texture_id(void* userdata) {
@@ -1914,4 +1889,12 @@ static void _bolt_gl_plugin_draw_region_outline(void* userdata, int16_t x, int16
 
 static void _bolt_gl_plugin_read_screen_pixels(uint32_t width, uint32_t height, void* data) {
     lgl->ReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, data);
+}
+
+static void _bolt_gl_plugin_game_view_rect(int* x, int* y, int* w, int* h) {
+    struct GLContext* c = _bolt_context();
+    *x = c->game_view_x;
+    *y = c->game_view_y;
+    *w = c->game_view_w;
+    *h = c->game_view_h;
 }

@@ -14,6 +14,19 @@ struct lua_State;
 #define GRAB_TYPE_START 1
 #define GRAB_TYPE_STOP 2
 
+struct Transform3D {
+    double matrix[16];
+};
+
+struct Point3D {
+    union {
+        int32_t ints[3];
+        double floats[4];
+    } xyzh;
+    uint8_t integer;
+    uint8_t homogenous;
+};
+
 /// Struct containing "vtable" callback information for RenderBatch2D's list of vertices.
 /// Unless stated otherwise, functions will be called with three params: the index, the specified
 /// userdata, and an output pointer, which must be able to index the returned number of items.
@@ -48,7 +61,7 @@ struct Vertex3DFunctions {
     void* userdata;
 
     /// Returns the vertex X Y and Z, in model coordinates.
-    void (*xyz)(size_t index, void* userdata, int32_t* out);
+    void (*xyz)(size_t index, void* userdata, struct Point3D* out);
 
     /// Returns a meta-ID for the texture associated with this vertex.
     size_t (*atlas_meta)(size_t index, void* userdata);
@@ -66,8 +79,8 @@ struct Vertex3DFunctions {
     /// Returns the ID of the bone this vertex belongs to.
     uint8_t (*bone_id)(size_t index, void* userdata);
 
-    /// Returns the transform matrix for the given bone, as 16 doubles.
-    void (*bone_transform)(uint8_t bone_id, void* userdata, double* out);
+    /// Returns the transform matrix for the given bone.
+    void (*bone_transform)(uint8_t bone_id, void* userdata, struct Transform3D* out);
 };
 
 /// Struct containing "vtable" callback information for textures.
@@ -99,14 +112,11 @@ struct Render3DMatrixFunctions {
     /// Userdata which will be passed to the functions contained in this struct.
     void* userdata;
 
-    /// Converts an XYZ coordinate from model space to world space.
-    void (*to_world_space)(int x, int y, int z, void* userdata, double* out);
+    /// Gets the model matrix for this render.
+    void (*model_matrix)(void* userdata, struct Transform3D* out);
 
-    /// Converts an XYZ coordinate from model space to screen space in pixels.
-    void (*to_screen_space)(int x, int y, int z, void* userdata, double* out);
-
-    /// Gets the world-space coordinate equivalent to (0,0,0) in model space.
-    void (*world_pos)(void* userdata, double* out);
+    /// Gets the combined view-projection matrix for this render.
+    void (*viewproj_matrix)(void* userdata, struct Transform3D* out);
 };
 
 /// Struct containing "vtable" callback information for surfaces.
@@ -137,6 +147,7 @@ struct PluginManagedFunctions {
     void (*surface_resize_and_clear)(void*, unsigned int, unsigned int);
     void (*draw_region_outline)(void* target, int16_t x, int16_t y, uint16_t width, uint16_t height);
     void (*read_screen_pixels)(uint32_t width, uint32_t height, void* data);
+    void (*game_view_rect)(int* x, int* y, int* w, int* h);
 };
 
 struct WindowPendingInput {

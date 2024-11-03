@@ -195,6 +195,12 @@ static int api_createbrowser(lua_State*);
 /// between embedded and non-embedded browsers)
 static int api_createembeddedbrowser(lua_State*);
 
+/// [-3, +1, -]
+/// Creates a Point object from x y and z values. Point objects have functions which are useful for
+/// 3D space calculations. All of the member functions of Point objects can be found in this file,
+/// prefixed with "api_point_".
+static int api_point(lua_State*);
+
 /// [-1, +0, -]
 /// Sets a callback function for SwapBuffers events, overwriting the previous callback, if any.
 /// Passing a non-function (ideally `nil`) will restore the default setting, which is to have no
@@ -565,23 +571,38 @@ static int api_window_onmouseleave(lua_State*);
 /// Returns the number of vertices in a 3D render object (i.e. a model).
 static int api_render3d_vertexcount(lua_State*);
 
-/// [-2, +3, -]
-/// Given an index of a vertex in a model, returns its X Y and Z in model coordinates. More
-/// specifically, this is the default position of this vertex in the model - it is not affected by
-/// any kind of scaling, rotation, movement, or animation that may be happening to the model. To
-/// get this vertex's position in its current animation state, use `vertexanimatedxyz()`.
+/// [-2, +1, -]
+/// Given an index of a vertex in a model, returns a Point object representing its model
+/// coordinates. Specifically, this is the default position of this vertex in the model - it is not
+/// affected by any kind of scaling, rotation, movement, or animation that may be happening to the
+/// model. The Point can be transformed using the transforms available from the Render3D object.
 static int api_render3d_vertexxyz(lua_State*);
 
-/// [-2, +3, -]
-/// Given an index of a vertex in a model, returns its X Y and Z in model coordinates, transformed
-/// from its default position according to its animation state. To get its static default position,
-/// ignoring any animation state, use `vertexxyz()`. Note that due to the transformation involved,
-/// this function returns floating-point values, whereas vertexxyz always returns integers.
+/// [-1, +1, -]
+/// Returns a Transform object representing the model matrix for this render. The model matrix
+/// transforms a point from model coordinates to world coordinates.
+static int api_render3d_modelmatrix(lua_State*);
+
+/// [-1, +1, -]
+/// Returns a Transform object representing the combined view and projection matrix, commonly
+/// called the "viewproj" matrix, for this render. The viewproj matrix transforms a point from
+/// world coordinates to screen coordinates.
+///
+/// After transforming a point into screen coordinates using the viewproj matrix, its X and Y will
+/// be in the range [-1.0, +1.0] if it's on the screen, and its Z will relate to its depth (i.e.
+/// its distance from the screen.) On the Y axis, -1.0 relates to the bottom of the window and 1.0
+/// to the top, meaning it's upside-down compared to Bolt's other screen-space functions. All of
+/// this will be corrected when using the point's `aspixels()` function.
+static int api_render3d_viewprojmatrix(lua_State*);
+
+/// [-2, +1, -]
+/// Given a bone ID, returns the Transform object that would be applied to its static model in
+/// model-space, to transform it to its animated position.
 ///
 /// It is a fatal error to call this function on a render event for a non-animated model, since
 /// non-animated models have no bone transforms that could be queried. To check if the model is
 /// animated, use `animated()`.
-static int api_render3d_vertexanimatedxyz(lua_State*);
+static int api_render3d_boneanimation(lua_State*);
 
 /// [-2, +1, -]
 /// Given an index of a vertex in a model, returns a meta-ID relating to its associated image.
@@ -652,21 +673,6 @@ static int api_render3d_texturecompare(lua_State*);
 /// even more so. Unless you really need to do that, use `texturecompare()` instead.
 static int api_render3d_texturedata(lua_State*);
 
-/// [-4, +3, -]
-/// Converts an XYZ coordinate from model space to world space using this render's model matrix.
-static int api_render3d_toworldspace(lua_State*);
-
-/// [-4, +2, -]
-/// Converts an XYZ coordinate from model space to screen space using this render's model, view,
-/// and projection matrices. Output is in pixels.
-static int api_render3d_toscreenspace(lua_State*);
-
-/// [-1, +3, -]
-/// Returns the world coordinates this model is being rendered at.
-///
-/// Equivalent to `render:toworldspace(0, 0, 0)`
-static int api_render3d_worldposition(lua_State*);
-
 /// [-1, +1, -]
 /// Returns the bone ID of this vertex. Animated models have multiple bones which can move
 /// independently of each other, and this function can be used to find out which bone a vertex
@@ -678,27 +684,38 @@ static int api_render3d_worldposition(lua_State*);
 /// to be meaningless and is usually 0. To check if the model is animated, use `animated()`.
 static int api_render3d_vertexbone(lua_State*);
 
-/// [-1, +9, -]
-/// Given a bone ID, returns the following nine floating-point values in this order: translation X,
-/// Y and Z, in model coordinates; scale factor X, Y and Z; yaw, pitch, and roll, in radians. These
-/// values represent the animation state of this bone during this render.
-///
-/// It is a fatal error to call this function on a render event for a non-animated model, since
-/// non-animated models have no bone transforms that could be queried. To check if the model is
-/// animated, use `animated()`.
-///
-/// The results of this function are imperfect for two reasons. Firstly, the engine doesn't use
-/// static animation frames; instead it interpolates between multiple frames, so the exact state of
-/// animation will depend on the user's FPS. Secondly, these values get pre-multiplied into one big
-/// matrix by the time Bolt can access them. Bolt decomposes the matrix back to its original values
-/// but there will be some loss of precision.
-static int api_render3d_bonetransforms(lua_State*);
-
 /// [-1, +1, -]
 /// Returns a boolean value indicating whether this model is animated. Animated models can have
 /// multiple bones which can move independently of each other. For more information on bones, see
 /// `vertexbone()` and `bonetransforms()`.
 static int api_render3d_animated(lua_State*);
+
+/// [-2, +1, -]
+/// Transforms this Point by a Transform object and returns a new Point. The original Point object
+/// is not modified.
+static int api_point_transform(lua_State*);
+
+/// [-1, +3, -]
+/// Returns the X, Y and Z values for this point.
+static int api_point_get(lua_State*);
+
+/// [-1, +2, -]
+/// For a point that's been transformed into screen space, this function returns its X and Y in
+/// pixels, with (0, 0) being the top-left of the game view.
+static int api_point_aspixels(lua_State*);
+
+/// [-1, +9, -]
+/// Decomposes a transform into the following nine floating-point values in this order: translation
+/// X, Y and Z, in model coordinates; scale factor X, Y and Z; yaw, pitch and roll, in radians.
+///
+/// Matrix decomposition is an experimental feature. It assumes the right-most column of the matrix
+/// to be (0, 0, 0, 1). That will always be the case in transforms returned by `boneanimation()`,
+/// which is the primary intended use of this function.
+static int api_transform_decompose(lua_State*);
+
+/// [-1, +16, -]
+/// Returns the 16 values that compose this matrix, in row-major order.
+static int api_transform_get(lua_State*);
 
 /// [-1, +4, -]
 /// Returns the new x, y, width and height that the window was repositioned to.

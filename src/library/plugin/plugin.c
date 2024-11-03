@@ -40,6 +40,8 @@ LARGE_INTEGER performance_frequency;
 #define BATCH2D_META_REGISTRYNAME "batch2dmeta"
 #define RENDER3D_META_REGISTRYNAME "render3dmeta"
 #define MINIMAP_META_REGISTRYNAME "minimapmeta"
+#define POINT_META_REGISTRYNAME "pointmeta"
+#define TRANSFORM_META_REGISTRYNAME "transformmeta"
 #define SWAPBUFFERS_META_REGISTRYNAME "swapbuffersmeta"
 #define SURFACE_META_REGISTRYNAME "surfacemeta"
 #define REPOSITION_META_REGISTRYNAME "repositionmeta"
@@ -364,6 +366,7 @@ static int _bolt_api_init(lua_State* state) {
     API_ADD(createwindow)
     API_ADD(createbrowser)
     API_ADD(createembeddedbrowser)
+    API_ADD(point)
     return 1;
 }
 
@@ -1345,10 +1348,11 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     lua_pushliteral(plugin->state, RENDER3D_META_REGISTRYNAME);
     lua_newtable(plugin->state);
     lua_pushliteral(plugin->state, "__index");
-    lua_createtable(plugin->state, 0, 18);
+    lua_createtable(plugin->state, 0, 16);
     API_ADD_SUB(plugin->state, vertexcount, render3d)
     API_ADD_SUB(plugin->state, vertexxyz, render3d)
-    API_ADD_SUB(plugin->state, vertexanimatedxyz, render3d)
+    API_ADD_SUB(plugin->state, modelmatrix, render3d)
+    API_ADD_SUB(plugin->state, viewprojmatrix, render3d)
     API_ADD_SUB(plugin->state, vertexmeta, render3d)
     API_ADD_SUB(plugin->state, atlasxywh, render3d)
     API_ADD_SUB(plugin->state, vertexuv, render3d)
@@ -1357,11 +1361,8 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     API_ADD_SUB(plugin->state, texturesize, render3d)
     API_ADD_SUB(plugin->state, texturecompare, render3d)
     API_ADD_SUB(plugin->state, texturedata, render3d)
-    API_ADD_SUB(plugin->state, toworldspace, render3d)
-    API_ADD_SUB(plugin->state, toscreenspace, render3d)
-    API_ADD_SUB(plugin->state, worldposition, render3d)
     API_ADD_SUB(plugin->state, vertexbone, render3d)
-    API_ADD_SUB(plugin->state, bonetransforms, render3d)
+    API_ADD_SUB(plugin->state, boneanimation, render3d)
     API_ADD_SUB(plugin->state, animated, render3d)
     API_ADD_SUB_ALIAS(plugin->state, vertexcolour, vertexcolor, render3d)
     lua_settable(plugin->state, -3);
@@ -1375,6 +1376,27 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     API_ADD_SUB(plugin->state, angle, minimap)
     API_ADD_SUB(plugin->state, scale, minimap)
     API_ADD_SUB(plugin->state, position, minimap)
+    lua_settable(plugin->state, -3);
+    lua_settable(plugin->state, LUA_REGISTRYINDEX);
+
+    // create the metatable for all Point objects
+    lua_pushliteral(plugin->state, POINT_META_REGISTRYNAME);
+    lua_newtable(plugin->state);
+    lua_pushliteral(plugin->state, "__index");
+    lua_createtable(plugin->state, 0, 3);
+    API_ADD_SUB(plugin->state, transform, point)
+    API_ADD_SUB(plugin->state, get, point)
+    API_ADD_SUB(plugin->state, aspixels, point)
+    lua_settable(plugin->state, -3);
+    lua_settable(plugin->state, LUA_REGISTRYINDEX);
+
+    // create the metatable for all Transform objects
+    lua_pushliteral(plugin->state, TRANSFORM_META_REGISTRYNAME);
+    lua_newtable(plugin->state);
+    lua_pushliteral(plugin->state, "__index");
+    lua_createtable(plugin->state, 0, 2);
+    API_ADD_SUB(plugin->state, decompose, transform)
+    API_ADD_SUB(plugin->state, get, transform)
     lua_settable(plugin->state, -3);
     lua_settable(plugin->state, LUA_REGISTRYINDEX);
 
@@ -2019,6 +2041,19 @@ static int api_createembeddedbrowser(lua_State* state) {
     return 1;
 }
 
+static int api_point(lua_State* state) {
+    struct Point3D* point = lua_newuserdata(state, sizeof(struct Point3D));
+    point->xyzh.floats[0] = luaL_checknumber(state, 1);
+    point->xyzh.floats[1] = luaL_checknumber(state, 2);
+    point->xyzh.floats[2] = luaL_checknumber(state, 3);
+    point->xyzh.floats[3] = 1.0;
+    point->integer = false;
+    point->homogenous = false;
+    lua_getfield(state, LUA_REGISTRYINDEX, POINT_META_REGISTRYNAME);
+    lua_setmetatable(state, -2);
+    return 1;
+}
+
 static int api_batch2d_vertexcount(lua_State* state) {
     const struct RenderBatch2D* batch = require_self_userdata(state, "vertexcount");
     lua_pushinteger(state, batch->index_count);
@@ -2150,6 +2185,110 @@ static int api_minimap_position(lua_State* state) {
     lua_pushnumber(state, render->x);
     lua_pushnumber(state, render->y);
     return 2;
+}
+
+static int api_point_transform(lua_State* state) {
+    const struct Point3D* point = require_self_userdata(state, "transform");
+    const struct Transform3D* transform = require_userdata(state, 2, "transform");
+    double x, y, z, h;
+    if (point->integer) {
+        x = (double)point->xyzh.ints[0];
+        y = (double)point->xyzh.ints[1];
+        z = (double)point->xyzh.ints[2];
+        h = 1.0;
+    } else {
+        x = point->xyzh.floats[0];
+        y = point->xyzh.floats[1];
+        z = point->xyzh.floats[2];
+        h = point->xyzh.floats[3];
+    }
+    struct Point3D* out = lua_newuserdata(state, sizeof(struct Point3D));
+    out->xyzh.floats[0] = (x * transform->matrix[0]) + (y * transform->matrix[4]) + (z * transform->matrix[8]) + (h * transform->matrix[12]);
+    out->xyzh.floats[1] = (x * transform->matrix[1]) + (y * transform->matrix[5]) + (z * transform->matrix[9]) + (h * transform->matrix[13]);
+    out->xyzh.floats[2] = (x * transform->matrix[2]) + (y * transform->matrix[6]) + (z * transform->matrix[10]) + (h * transform->matrix[14]);
+    out->xyzh.floats[3] = (x * transform->matrix[3]) + (y * transform->matrix[7]) + (z * transform->matrix[11]) + (h * transform->matrix[15]);
+    out->integer = false;
+    out->homogenous = true;
+    lua_getfield(state, LUA_REGISTRYINDEX, POINT_META_REGISTRYNAME);
+    lua_setmetatable(state, -2);
+    return 1;
+}
+
+static int api_point_get(lua_State* state) {
+    const struct Point3D* point = require_self_userdata(state, "get");
+    if (point->integer) {
+        lua_pushinteger(state, point->xyzh.ints[0]);
+        lua_pushinteger(state, point->xyzh.ints[1]);
+        lua_pushinteger(state, point->xyzh.ints[2]);
+    } else if (!point->homogenous) {
+        lua_pushnumber(state, point->xyzh.floats[0]);
+        lua_pushnumber(state, point->xyzh.floats[1]);
+        lua_pushnumber(state, point->xyzh.floats[2]);
+    } else {
+        lua_pushnumber(state, point->xyzh.floats[0] / point->xyzh.floats[3]);
+        lua_pushnumber(state, point->xyzh.floats[1] / point->xyzh.floats[3]);
+        lua_pushnumber(state, point->xyzh.floats[2] / point->xyzh.floats[3]);
+    }
+    return 3;
+}
+
+static int api_point_aspixels(lua_State* state) {
+    const struct Point3D* point = require_self_userdata(state, "aspixels");
+    double x, y;
+    if (point->integer) {
+        x = (double)point->xyzh.ints[0];
+        y = (double)point->xyzh.ints[1];
+    } else if (!point->homogenous) {
+        x = point->xyzh.floats[0];
+        y = point->xyzh.floats[1];
+    } else {
+        x = point->xyzh.floats[0] / point->xyzh.floats[3];
+        y = point->xyzh.floats[1] / point->xyzh.floats[3];
+    }
+    int game_view_x, game_view_y, game_view_w, game_view_h;
+    managed_functions.game_view_rect(&game_view_x, &game_view_y, &game_view_w, &game_view_h);
+    lua_pushnumber(state, ((x  + 1.0) * game_view_w / 2.0) + (double)game_view_x);
+    lua_pushnumber(state, ((-y + 1.0) * game_view_h / 2.0) + (double)game_view_y);
+    return 2;
+}
+
+#define LENGTH(N1, N2, N3) sqrt((N1 * N1) + (N2 * N2) + (N3 * N3))
+static int api_transform_decompose(lua_State* state) {
+    const struct Transform3D* transform = require_self_userdata(state, "decompose");
+    lua_pushnumber(state, transform->matrix[12]);
+    lua_pushnumber(state, transform->matrix[13]);
+    lua_pushnumber(state, transform->matrix[14]);
+    const double scale_x = LENGTH(transform->matrix[0], transform->matrix[1], transform->matrix[2]);
+    const double scale_y = LENGTH(transform->matrix[4], transform->matrix[5], transform->matrix[6]);
+    const double scale_z = LENGTH(transform->matrix[8], transform->matrix[9], transform->matrix[10]);
+    lua_pushnumber(state, scale_x);
+    lua_pushnumber(state, scale_y);
+    lua_pushnumber(state, scale_z);
+    if (scale_x == 0.0 || scale_y == 0.0 || scale_z == 0.0) {
+        // scale=0 means we can't calculate angles because there would be a division by zero,
+        // and angle is meaningless for a zero-scale model anyway, so just put 0 for all the angles
+        lua_pushnumber(state, 0.0);
+        lua_pushnumber(state, 0.0);
+        lua_pushnumber(state, 0.0);
+    } else {
+        // see https://stackoverflow.com/questions/39128589/decomposing-rotation-matrix-x-y-z-cartesian-angles
+        const double yaw = atan2(-(transform->matrix[8] / scale_z), sqrt((transform->matrix[0] * transform->matrix[0] / (scale_x * scale_x)) + (transform->matrix[4] * transform->matrix[4] / (scale_y * scale_y))));
+        const double pitch = atan2((transform->matrix[9] / scale_z) / cos(yaw), (transform->matrix[10] / scale_z) / cos(yaw));
+        const double roll = atan2((transform->matrix[4] / scale_y) / cos(yaw), (transform->matrix[0] / scale_x) / cos(yaw));
+        lua_pushnumber(state, yaw);
+        lua_pushnumber(state, pitch);
+        lua_pushnumber(state, roll);
+    }
+    return 9;
+}
+#undef LENGTH
+
+static int api_transform_get(lua_State* state) {
+    const struct Transform3D* transform = require_self_userdata(state, "get");
+    for (size_t i = 0; i < 16; i += 1) {
+        lua_pushnumber(state, transform->matrix[i]);
+    }
+    return 16;
 }
 
 static int api_surface_clear(lua_State* state) {
@@ -2312,35 +2451,29 @@ static int api_render3d_vertexcount(lua_State* state) {
 static int api_render3d_vertexxyz(lua_State* state) {
     const struct Render3D* render = require_self_userdata(state, "vertexxyz");
     const lua_Integer index = lua_tointeger(state, 2);
-    int32_t xyz[3];
-    render->vertex_functions.xyz(index - 1, render->vertex_functions.userdata, xyz);
-    lua_pushinteger(state, xyz[0]);
-    lua_pushinteger(state, xyz[1]);
-    lua_pushinteger(state, xyz[2]);
-    return 3;
+    struct Point3D* point = lua_newuserdata(state, sizeof(struct Point3D));
+    render->vertex_functions.xyz(index - 1, render->vertex_functions.userdata, point);
+    lua_getfield(state, LUA_REGISTRYINDEX, POINT_META_REGISTRYNAME);
+    lua_setmetatable(state, -2);
+    return 1;
 }
 
-static int api_render3d_vertexanimatedxyz(lua_State* state) {
-    const struct Render3D* render = require_self_userdata(state, "vertexanimatedxyz");
-    const lua_Integer index = luaL_checkinteger(state, 2);
+static int api_render3d_modelmatrix(lua_State* state) {
+    const struct Render3D* render = require_self_userdata(state, "modelmatrix");
+    struct Transform3D* transform = lua_newuserdata(state, sizeof(struct Transform3D));
+    render->matrix_functions.model_matrix(render->matrix_functions.userdata, transform);
+    lua_getfield(state, LUA_REGISTRYINDEX, TRANSFORM_META_REGISTRYNAME);
+    lua_setmetatable(state, -2);
+    return 1;
+}
 
-    if (!render->is_animated) {
-        lua_pushliteral(state, "render3d_bonetransforms: cannot get bone transforms for non-animated model");
-        lua_error(state);
-    }
-
-    int32_t xyz[3];
-    render->vertex_functions.xyz(index - 1, render->vertex_functions.userdata, xyz);
-    double transform[16];
-    const uint8_t bone_id = render->vertex_functions.bone_id(index - 1, render->vertex_functions.userdata);
-    render->vertex_functions.bone_transform(bone_id, render->vertex_functions.userdata, transform);
-    const double outx = ((double)xyz[0] * transform[0]) + ((double)xyz[1] * transform[4]) + ((double)xyz[2] * transform[8]) + transform[12];
-    const double outy = ((double)xyz[0] * transform[1]) + ((double)xyz[1] * transform[5]) + ((double)xyz[2] * transform[9]) + transform[13];
-    const double outz = ((double)xyz[0] * transform[2]) + ((double)xyz[1] * transform[6]) + ((double)xyz[2] * transform[10]) + transform[14];
-    lua_pushnumber(state, outx);
-    lua_pushnumber(state, outy);
-    lua_pushnumber(state, outz);
-    return 3;
+static int api_render3d_viewprojmatrix(lua_State* state) {
+    const struct Render3D* render = require_self_userdata(state, "viewprojmatrix");
+    struct Transform3D* transform = lua_newuserdata(state, sizeof(struct Transform3D));
+    render->matrix_functions.viewproj_matrix(render->matrix_functions.userdata, transform);
+    lua_getfield(state, LUA_REGISTRYINDEX, TRANSFORM_META_REGISTRYNAME);
+    lua_setmetatable(state, -2);
+    return 1;
 }
 
 static int api_render3d_vertexmeta(lua_State* state) {
@@ -2422,41 +2555,6 @@ static int api_render3d_texturedata(lua_State* state) {
     return 1;
 }
 
-static int api_render3d_toworldspace(lua_State* state) {
-    struct Render3D* render = require_self_userdata(state, "toworldspace");
-    const int x = luaL_checkinteger(state, 2);
-    const int y = luaL_checkinteger(state, 3);
-    const int z = luaL_checkinteger(state, 4);
-    double out[3];
-    render->matrix_functions.to_world_space(x, y, z, render->matrix_functions.userdata, out);
-    lua_pushnumber(state, out[0]);
-    lua_pushnumber(state, out[1]);
-    lua_pushnumber(state, out[2]);
-    return 3;
-}
-
-static int api_render3d_toscreenspace(lua_State* state) {
-    const struct Render3D* render = require_self_userdata(state, "toscreenspace");
-    const int x = luaL_checkinteger(state, 2);
-    const int y = luaL_checkinteger(state, 3);
-    const int z = luaL_checkinteger(state, 4);
-    double out[2];
-    render->matrix_functions.to_screen_space(x, y, z, render->matrix_functions.userdata, out);
-    lua_pushnumber(state, out[0]);
-    lua_pushnumber(state, out[1]);
-    return 2;
-}
-
-static int api_render3d_worldposition(lua_State* state) {
-    const struct Render3D* render = require_self_userdata(state, "worldposition");
-    double out[3];
-    render->matrix_functions.world_pos(render->matrix_functions.userdata, out);
-    lua_pushnumber(state, out[0]);
-    lua_pushnumber(state, out[1]);
-    lua_pushnumber(state, out[2]);
-    return 3;
-}
-
 static int api_render3d_vertexbone(lua_State* state) {
     const struct Render3D* render = require_self_userdata(state, "vertexbone");
     const int index = luaL_checkinteger(state, 2);
@@ -2465,50 +2563,26 @@ static int api_render3d_vertexbone(lua_State* state) {
     return 1;
 }
 
-static int api_render3d_bonetransforms(lua_State* state) {
-    const struct Render3D* render = require_self_userdata(state, "bonetransforms");
-    const int bone_id = luaL_checkinteger(state, 2);
+static int api_render3d_boneanimation(lua_State* state) {
+    const struct Render3D* render = require_self_userdata(state, "boneanimation");
+    const lua_Integer bone_id = luaL_checkinteger(state, 2);
 
     if (!render->is_animated) {
-        lua_pushliteral(state, "render3d_bonetransforms: cannot get bone transforms for non-animated model");
+        lua_pushliteral(state, "boneanimation: cannot get bone transforms for non-animated model");
         lua_error(state);
     }
 
     // not a mistake - game's shader supports values from 0 to 128, inclusive
     if (bone_id < 0 || bone_id > 128) {
-        lua_pushliteral(state, "render3d_bonetransforms: invalid bone ID");
+        lua_pushliteral(state, "boneanimation: invalid bone ID");
         lua_error(state);
     }
 
-#define LENGTH(N1, N2, N3) sqrt((N1 * N1) + (N2 * N2) + (N3 * N3))
-    double transform[16];
-    render->vertex_functions.bone_transform((uint8_t)bone_id, render->vertex_functions.userdata, transform);
-    lua_pushnumber(state, transform[12]);
-    lua_pushnumber(state, transform[13]);
-    lua_pushnumber(state, transform[14]);
-    const double scale_x = LENGTH(transform[0], transform[1], transform[2]);
-    const double scale_y = LENGTH(transform[4], transform[5], transform[6]);
-    const double scale_z = LENGTH(transform[8], transform[9], transform[10]);
-    lua_pushnumber(state, scale_x);
-    lua_pushnumber(state, scale_y);
-    lua_pushnumber(state, scale_z);
-    if (scale_x == 0.0 || scale_y == 0.0 || scale_z == 0.0) {
-        // scale=0 means we can't calculate angles because there would be a division by zero,
-        // and angle is meaningless for a zero-scale model anyway, so just put 0 for all the angles
-        lua_pushnumber(state, 0.0);
-        lua_pushnumber(state, 0.0);
-        lua_pushnumber(state, 0.0);
-    } else {
-        // see https://stackoverflow.com/questions/39128589/decomposing-rotation-matrix-x-y-z-cartesian-angles
-        const double yaw = atan2(-(transform[8] / scale_z), sqrt((transform[0] * transform[0] / (scale_x * scale_x)) + (transform[4] * transform[4] / (scale_y * scale_y))));
-        const double pitch = atan2((transform[9] / scale_z) / cos(yaw), (transform[10] / scale_z) / cos(yaw));
-        const double roll = atan2((transform[4] / scale_y) / cos(yaw), (transform[0] / scale_x) / cos(yaw));
-        lua_pushnumber(state, yaw);
-        lua_pushnumber(state, pitch);
-        lua_pushnumber(state, roll);
-    }
-    return 9;
-#undef LENGTH
+    struct Transform3D* transform = lua_newuserdata(state, sizeof(struct Transform3D));
+    render->vertex_functions.bone_transform(bone_id, render->vertex_functions.userdata, transform);
+    lua_getfield(state, LUA_REGISTRYINDEX, TRANSFORM_META_REGISTRYNAME);
+    lua_setmetatable(state, -2);
+    return 1;
 }
 
 static int api_render3d_animated(lua_State* state) {
