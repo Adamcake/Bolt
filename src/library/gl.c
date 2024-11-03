@@ -1478,10 +1478,11 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
 /*
 some notes on this game's OpenGL rendering pipeline for the 3D view
 
-the pipeline changes based on two things:
+the pipeline changes based on three things:
 - anti-aliasing graphics setting
+- depth-of-field graphics setting (sometimes)
 - whether the game view fills the entire window
-if either of these conditions changes, old textures and framebuffers are destroyed and new ones are created.
+if these conditions change, old textures and framebuffers are destroyed and new ones are created.
 the same generally happens when the window is resized.
 
 pipelines for different anti-aliasing settings are as follows:
@@ -1494,7 +1495,7 @@ FXAA+MSAA: backbuffer <- blit* <- sSourceTex <- sSceneHDRTex <- sSourceTex** <- 
 *blits to the game view area of the screen; omitted if the game view fills the entire window
 **only done if "depth of field" is enabled - identifiable by sBlurNearTex and sBlurFarTex being present
 
-sSourceTex and sSceneHDRTex anre 6-vertex renders using glDrawArrays, the individual objects are drawn using glDrawElements.
+sSourceTex and sSceneHDRTex are 6-vertex renders using glDrawArrays, the individual objects are drawn using glDrawElements.
 
 hunt strategy is as follows:
 1.  start a hunt (recalculate_sSceneHDRTex=true) if part_framebuffer, sSourceTex or sSceneHDRTex are seen to have changed
