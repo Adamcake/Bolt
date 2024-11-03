@@ -362,7 +362,8 @@ static void _bolt_glcontext_init(struct GLContext* context, void* egl_context, v
     context->game_view_part_framebuffer = -1;
     context->game_view_sSourceTex = -1;
     context->does_blit_3d_target = false;
-    context->recalculate_3d_target = false;
+    context->recalculate_sSceneHDRTex = false;
+    context->depth_of_field_enabled = false;
     if (shared) {
         context->programs = shared->programs;
         context->buffers = shared->buffers;
@@ -718,6 +719,7 @@ static void _bolt_glLinkProgram(GLuint program) {
     const GLint loc_uVertexScale = gl.GetUniformLocation(program, "uVertexScale");
     p->loc_sSceneHDRTex = gl.GetUniformLocation(program, "sSceneHDRTex");
     p->loc_sSourceTex = gl.GetUniformLocation(program, "sSourceTex");
+    p->loc_sBlurFarTex = gl.GetUniformLocation(program, "sBlurFarTex");
     p->loc_uBoneTransforms = gl.GetUniformLocation(program, "uBoneTransforms");
 
     const GLchar* view_var_names[] = {"uCameraPosition", "uViewProjMatrix"};
@@ -990,10 +992,18 @@ static void _bolt_glCopyImageSubData(
     gl.CopyImageSubData(srcName, srcTarget, srcLevel, srcX, srcY, srcZ, dstName, dstTarget, dstLevel, dstX, dstY, dstZ, srcWidth, srcHeight, srcDepth);
     struct GLContext* c = _bolt_context();
     if (srcTarget == GL_TEXTURE_2D && dstTarget == GL_TEXTURE_2D && srcLevel == 0 && dstLevel == 0) {
-        struct GLTexture2D* src = _bolt_context_get_texture(c, srcName);
-        struct GLTexture2D* dst = _bolt_context_get_texture(c, dstName);
-        for (GLsizei i = 0; i < srcHeight; i += 1) {
-            memcpy(dst->data + (dstY * dst->width * 4) + (dstX * 4), src->data + (srcY * src->width * 4) + (srcX * 4), srcWidth * 4);
+        const struct GLTexture2D* src = _bolt_context_get_texture(c, srcName);
+        const struct GLTexture2D* dst = _bolt_context_get_texture(c, dstName);
+        if (!c->does_blit_3d_target && c->depth_of_field_enabled && dst->id == c->depth_of_field_sSourceTex) {
+            if (srcX == 0 && srcY == 0 && dstX == 0 && dstY == 0 && src->width == dst->width && src->height == dst->height && src->width == srcWidth && src->height == srcHeight) {
+                printf("copy to depth-of-field tex from tex %i\n", src->id);
+                c->does_blit_3d_target = true;
+                c->target_3d_tex = src->id;
+            }
+        } else if (src->id != c->target_3d_tex) {
+            for (GLsizei i = 0; i < srcHeight; i += 1) {
+                memcpy(dst->data + (dstY * dst->width * 4) + (dstX * 4), src->data + (srcY * src->width * 4) + (srcX * 4), srcWidth * 4);
+            }
         }
     }
     LOG("glCopyImageSubData end\n");
@@ -1151,9 +1161,11 @@ static void _bolt_glBlitFramebuffer(GLint srcX0, GLint srcY0, GLint srcX1, GLint
     struct GLContext* c = _bolt_context();
     if (c->current_draw_framebuffer == 0 && c->game_view_part_framebuffer != c->current_read_framebuffer) {
         c->game_view_part_framebuffer = c->current_read_framebuffer;
-        c->recalculate_3d_target = true;
+        c->recalculate_sSceneHDRTex = true;
+        c->game_view_sSceneHDRTex = -1;
         c->game_view_sSourceTex = -1;
         c->does_blit_3d_target = false;
+        c->depth_of_field_enabled = false;
         c->game_view_x = dstX0;
         c->game_view_y = dstY0;
         printf("new game_view_part_framebuffer %u...\n", c->current_read_framebuffer);
@@ -1161,11 +1173,18 @@ static void _bolt_glBlitFramebuffer(GLint srcX0, GLint srcY0, GLint srcX1, GLint
         GLint tex_id;
         gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &tex_id);
         struct GLTexture2D* target_tex = _bolt_context_get_texture(c, tex_id);
-        if (!c->does_blit_3d_target && target_tex && target_tex->width == srcX1 && target_tex->height == srcY1 && target_tex->id == c->game_view_sSceneHDRTex) {
-            printf("does blit to sSceneHDRTex from fb %u\n", c->current_read_framebuffer);
-            c->does_blit_3d_target = true;
-            gl.GetFramebufferAttachmentParameteriv(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &tex_id);
-            c->target_3d_tex = tex_id;
+        if (!c->does_blit_3d_target && target_tex && target_tex->width == dstX1 && target_tex->height == dstY1) {
+            if (!c->depth_of_field_enabled && target_tex->id == c->game_view_sSceneHDRTex) {
+                printf("does blit to sSceneHDRTex from fb %u\n", c->current_read_framebuffer);
+                c->does_blit_3d_target = true;
+                gl.GetFramebufferAttachmentParameteriv(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &tex_id);
+                c->target_3d_tex = tex_id;
+            } else if (c->depth_of_field_enabled && target_tex->id == c->depth_of_field_sSourceTex) {
+                printf("blit to depth-of-field tex from fb %u\n", c->current_read_framebuffer);
+                c->does_blit_3d_target = true;
+                gl.GetFramebufferAttachmentParameteriv(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &tex_id);
+                c->target_3d_tex = tex_id;
+            }
         }
     }
     LOG("glBlitFramebuffer end\n");
@@ -1467,15 +1486,25 @@ the same generally happens when the window is resized.
 
 pipelines for different anti-aliasing settings are as follows:
 
-None: backbuffer <- blit* <- sSceneHDRTex <- (individual 3d objects)
-FXAA: backbuffer <- blit* <- sSourceTex <- sSceneHDRTex <- (individual 3d objects)
-MSAA: backbuffer <- blit* <- sSceneHDRTex <- full-blit <- (individual 3d objects)
-FXAA+MSAA: backbuffer <- blit* <- sSourceTex <- sSceneHDRTex <- full-blit <- (individual 3d objects)
+None: backbuffer <- blit* <- sSceneHDRTex <- (sSourceTex <- full glCopyImageSubData)** <- (individual 3d objects)
+FXAA: backbuffer <- blit* <- sSourceTex <- sSceneHDRTex <- (sSourceTex <- full glCopyImageSubData)** <- (individual 3d objects)
+MSAA: backbuffer <- blit* <- sSceneHDRTex <- sSourceTex** <- full-blit <- (individual 3d objects)
+FXAA+MSAA: backbuffer <- blit* <- sSourceTex <- sSceneHDRTex <- sSourceTex** <- full-blit <- (individual 3d objects)
 
 *blits to the game view area of the screen; omitted if the game view fills the entire window
+**only done if "depth of field" is enabled - identifiable by sBlurNearTex and sBlurFarTex being present
 
 sSourceTex and sSceneHDRTex anre 6-vertex renders using glDrawArrays, the individual objects are drawn using glDrawElements.
-in summary, the texture to track is always sSceneHDRTex or the one that full-blits to sSceneHDRTex if any.
+
+hunt strategy is as follows:
+1.  start a hunt (recalculate_sSceneHDRTex=true) if part_framebuffer, sSourceTex or sSceneHDRTex are seen to have changed
+2a. find part_framebuffer by looking for any framebuffers that are blitted to the backbuffer
+2b. find sSourceTex by looking for an sSourceTex glDrawArrays call to the backbuffer or the part_framebuffer
+2c. find sSceneHDRTex by looking for an sSceneHDRTex glDrawArrays call to the backbuffer, part_framebuffer, or sSourceTex
+3.  assume sSceneHDRTex is the render target until further notice, and set recalculate_sSceneHDRTex=false
+4.  if a same-size texture is full-blitted to sSceneHDRTex, and depth-of-field is not enabled, take that as the render target
+5a. if a glDrawArrays happens to sSceneHDRTex with sSourceTex and sBlurFarTex present, enable depth-of-field and take depth_of_field_sSourceTex
+5b. if a full-blit or full-glCopyImageSubData occurs targeting depth_of_field_sSourceTex, take that as the render target
 */
 void _bolt_gl_onDrawArrays(GLenum mode, GLint first, GLsizei count) {
     struct GLContext* c = _bolt_context();
@@ -1503,29 +1532,37 @@ void _bolt_gl_onDrawArrays(GLenum mode, GLint first, GLsizei count) {
                 c->game_view_y = 0;
                 c->game_view_w = source_tex->width;
                 c->game_view_h = source_tex->height;
-                c->recalculate_3d_target = false;
+                c->recalculate_sSceneHDRTex = false;
                 c->does_blit_3d_target = false;
-                printf("new direct target_3d_tex %i\n", c->target_3d_tex);
-            } else if (c->recalculate_3d_target && (c->game_view_part_framebuffer == c->current_draw_framebuffer || c->game_view_sSourceTex == target_tex_id)) {
+                c->depth_of_field_enabled = false;
+                printf("new direct sSceneHDRTex %i\n", c->target_3d_tex);
+            } else if (c->recalculate_sSceneHDRTex && !c->depth_of_field_enabled && (c->game_view_part_framebuffer == c->current_draw_framebuffer || c->game_view_sSourceTex == target_tex_id)) {
                 c->game_view_sSceneHDRTex = source_tex->id;
                 c->target_3d_tex = c->game_view_sSceneHDRTex;
                 c->game_view_w = source_tex->width;
                 c->game_view_h = source_tex->height;
-                c->recalculate_3d_target = false;
-                printf("new target_3d_tex %i\n", c->target_3d_tex);
+                c->recalculate_sSceneHDRTex = false;
+                printf("new sSceneHDRTex %i\n", c->target_3d_tex);
             }
         } else if (c->bound_program->loc_sSourceTex != -1) {
             GLint source_tex_unit;
             gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_sSourceTex, &source_tex_unit);
             struct GLTexture2D* source_tex = c->texture_units[source_tex_unit];
-            if (c->current_draw_framebuffer == 0 && c->game_view_sSourceTex != source_tex->id) {
+            if (c->bound_program->loc_sBlurFarTex != -1) {
+                if (c->depth_of_field_enabled || c->game_view_sSceneHDRTex != target_tex->id) return;
+                c->depth_of_field_sSourceTex = source_tex->id;
+                c->depth_of_field_enabled = true;
+                printf("new depth-of-field sSourceTex %i...\n", c->depth_of_field_sSourceTex);
+            } else if (c->current_draw_framebuffer == 0 && c->game_view_sSourceTex != source_tex->id) {
+                c->game_view_sSceneHDRTex = -1;
                 c->game_view_sSourceTex = source_tex->id;
                 c->does_blit_3d_target = false;
+                c->depth_of_field_enabled = false;
                 c->game_view_x = 0;
                 c->game_view_y = 0;
-                c->recalculate_3d_target = true;
+                c->recalculate_sSceneHDRTex = true;
                 printf("new direct sSourceTex %i...\n", c->game_view_sSourceTex);
-            } else if (c->recalculate_3d_target && c->game_view_part_framebuffer == c->current_draw_framebuffer) {
+            } else if (c->recalculate_sSceneHDRTex && c->game_view_part_framebuffer == c->current_draw_framebuffer) {
                 c->game_view_sSourceTex = source_tex->id;
                 printf("new sSourceTex %i...\n", c->game_view_sSourceTex);
             }

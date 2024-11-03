@@ -201,6 +201,7 @@ struct GLProgram {
     GLint loc_uVertexScale;
     GLint loc_sSceneHDRTex;
     GLint loc_sSourceTex;
+    GLint loc_sBlurFarTex;
     GLuint block_index_ViewTransforms;
     GLint offset_uCameraPosition;
     GLint offset_uViewProjMatrix;
@@ -248,6 +249,7 @@ struct GLContext {
     GLuint game_view_part_framebuffer;
     GLint game_view_sSourceTex;
     GLint game_view_sSceneHDRTex;
+    GLint depth_of_field_sSourceTex;
     GLint target_3d_tex;
     GLint game_view_x;
     GLint game_view_y;
@@ -256,8 +258,9 @@ struct GLContext {
     uint8_t is_attached;
     uint8_t deferred_destroy;
     uint8_t is_shared_owner;
-    uint8_t recalculate_3d_target;
+    uint8_t recalculate_sSceneHDRTex;
     uint8_t does_blit_3d_target;
+    uint8_t depth_of_field_enabled;
     GLint viewport_x;
     GLint viewport_y;
     GLsizei viewport_w;
