@@ -2562,7 +2562,7 @@ static int api_render3d_vertexuv(lua_State* state) {
     const struct Render3D* render = require_self_userdata(state, "vertexuv");
     const lua_Integer index = luaL_checkinteger(state, 2);
     double uv[4];
-    render->vertex_functions.uv(index, render->vertex_functions.userdata, uv);
+    render->vertex_functions.uv(index - 1, render->vertex_functions.userdata, uv);
     lua_pushnumber(state, uv[0]);
     lua_pushnumber(state, uv[1]);
     return 2;
@@ -2572,7 +2572,7 @@ static int api_render3d_vertexcolour(lua_State* state) {
     const struct Render3D* render = require_self_userdata(state, "vertexcolour");
     const lua_Integer index = luaL_checkinteger(state, 2);
     double col[4];
-    render->vertex_functions.colour(index, render->vertex_functions.userdata, col);
+    render->vertex_functions.colour(index - 1, render->vertex_functions.userdata, col);
     lua_pushnumber(state, col[0]);
     lua_pushnumber(state, col[1]);
     lua_pushnumber(state, col[2]);
