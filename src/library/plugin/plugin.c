@@ -1427,6 +1427,7 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     API_ADD_SUB(plugin->state, writeinteger, buffer)
     API_ADD_SUB(plugin->state, writenumber, buffer)
     API_ADD_SUB(plugin->state, writestring, buffer)
+    API_ADD_SUB(plugin->state, writebuffer, buffer)
     lua_settable(plugin->state, -3);
     lua_pushliteral(plugin->state, "__gc");
     lua_pushcfunction(plugin->state, buffer_gc);
@@ -2888,5 +2889,13 @@ static int api_buffer_writestring(lua_State* state) {
     const void* data = luaL_checklstring(state, 2, &size);
     const long offset = luaL_checklong(state, 3);
     memcpy((uint8_t*)buffer->data + offset, data, size);
+    return 0;
+}
+
+static int api_buffer_writebuffer(lua_State* state) {
+    const struct FixedBuffer* buffer = require_self_userdata(state, "writebuffer");
+    const struct FixedBuffer* source = require_userdata(state, 2, "writebuffer");
+    const long offset = luaL_checklong(state, 3);
+    memcpy((uint8_t*)buffer->data + offset, source->data, source->size);
     return 0;
 }

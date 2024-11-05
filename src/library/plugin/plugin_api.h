@@ -882,3 +882,8 @@ static int api_buffer_writenumber(lua_State*);
 /// Writes a string into the buffer. The first parameter is the string and the second is the offset
 /// into the buffer where the string should begin.
 static int api_buffer_writestring(lua_State*);
+
+/// [-3, +0, -]
+/// Writes the contents of another buffer into this buffer. The first parameter is the buffer to be
+/// copied from, and the second is the offset in this buffer where it should be copied to.
+static int api_buffer_writebuffer(lua_State*);
