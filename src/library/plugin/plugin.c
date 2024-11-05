@@ -42,6 +42,7 @@ LARGE_INTEGER performance_frequency;
 #define MINIMAP_META_REGISTRYNAME "minimapmeta"
 #define POINT_META_REGISTRYNAME "pointmeta"
 #define TRANSFORM_META_REGISTRYNAME "transformmeta"
+#define BUFFER_META_REGISTRYNAME "buffermeta"
 #define SWAPBUFFERS_META_REGISTRYNAME "swapbuffersmeta"
 #define SURFACE_META_REGISTRYNAME "surfacemeta"
 #define REPOSITION_META_REGISTRYNAME "repositionmeta"
@@ -125,6 +126,20 @@ struct Plugin {
     uint8_t is_deleted;
 };
 
+struct ExternalBrowser {
+    uint64_t id;
+    uint64_t plugin_id;
+    struct Plugin* plugin;
+    uint8_t do_capture;
+    uint8_t capture_ready;
+    uint64_t capture_id;
+};
+
+struct FixedBuffer {
+    void* data;
+    size_t size;
+};
+
 static void _bolt_plugin_ipc_init(BoltSocketType*);
 static void _bolt_plugin_ipc_close(BoltSocketType);
 
@@ -141,15 +156,6 @@ static void _bolt_plugin_handle_scroll(struct MouseScrollEvent*);
 
 static void _bolt_plugin_stop(uint64_t id);
 static void _bolt_plugin_handle_swapbuffers(struct SwapBuffersEvent*);
-
-struct ExternalBrowser {
-    uint64_t id;
-    uint64_t plugin_id;
-    struct Plugin* plugin;
-    uint8_t do_capture;
-    uint8_t capture_ready;
-    uint64_t capture_id;
-};
 
 void _bolt_plugin_free(struct Plugin* plugin) {
     hashmap_free(plugin->external_browsers);
@@ -307,6 +313,12 @@ static int surface_gc(lua_State* state) {
     return 0;
 }
 
+static int buffer_gc(lua_State* state) {
+    const struct FixedBuffer* buffer = lua_touserdata(state, 1);
+    free(buffer->data);
+    return 0;
+}
+
 void _bolt_plugin_on_startup() {
     windows.map = hashmap_new(sizeof(struct EmbeddedWindow*), 8, 0, 0, _bolt_window_map_hash, _bolt_window_map_compare, NULL, NULL);
     _bolt_rwlock_init(&windows.lock);
@@ -367,6 +379,7 @@ static int _bolt_api_init(lua_State* state) {
     API_ADD(createbrowser)
     API_ADD(createembeddedbrowser)
     API_ADD(point)
+    API_ADD(createbuffer)
     return 1;
 }
 
@@ -899,29 +912,35 @@ static struct EmbeddedWindow* get_embeddedwindow(const uint64_t* window_id) {
 }
 
 static void handle_plugin_message(lua_State* state, struct BoltIPCBrowserMessageHeader* header) {
-    void* newud = lua_newuserdata(state, header->message_size); /*stack: message ud*/
-    _bolt_ipc_receive(fd, newud, header->message_size);
-    lua_getfield(state, LUA_REGISTRYINDEX, BROWSERS_REGISTRYNAME); /*stack: message ud, window table*/
-    lua_pushinteger(state, header->window_id); /*stack: message ud, window table, window id*/
-    lua_gettable(state, -2); /*stack: message ud, window table, event table*/
-    lua_pushinteger(state, BROWSER_ONMESSAGE); /*stack: message ud, window table, event table, event id*/
-    lua_gettable(state, -2); /*stack: message ud, window table, event table, function or nil*/
+    lua_getfield(state, LUA_REGISTRYINDEX, BROWSERS_REGISTRYNAME); /*stack: window table*/
+    lua_pushinteger(state, header->window_id); /*stack: window table, window id*/
+    lua_gettable(state, -2); /*stack: window table, event table*/
+    lua_pushinteger(state, BROWSER_ONMESSAGE); /*stack: window table, event table, event id*/
+    lua_gettable(state, -2); /*stack: window table, event table, function or nil*/
     if (lua_isfunction(state, -1)) {
-        lua_pushlstring(state, newud, header->message_size); /*stack: message ud, window table, event table, function, message*/
-
-        if (lua_pcall(state, 1, 0, 0)) { /*stack: message ud, window table, event table, ?error*/
+        void* data = malloc(header->message_size);
+        if (!data) {
+            lua_pushfstring(state, "onmessage: heap error, failed to allocate %i bytes", header->message_size);
+            lua_error(state);
+        }
+        _bolt_ipc_receive(fd, data, header->message_size);
+        struct FixedBuffer* buffer = lua_newuserdata(state, sizeof(struct FixedBuffer)); /*stack: window table, event table, function, message*/
+        buffer->data = data;
+        buffer->size = header->message_size;
+        if (lua_pcall(state, 1, 0, 0)) { /*stack: window table, event table, ?error*/
             const char* e = lua_tolstring(state, -1, 0);
             printf("plugin browser onmessage error: %s\n", e);
-            lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME); /*stack: message ud, window table, event table, error, plugin*/
+            lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME); /*stack: window table, event table, error, plugin*/
             const struct Plugin* plugin = lua_touserdata(state, -1);
-            lua_pop(state, 5); /*stack: (empty)*/
+            lua_pop(state, 4); /*stack: (empty)*/
             _bolt_plugin_stop(plugin->id);
             _bolt_plugin_notify_stopped(plugin->id);
         } else {
-            lua_pop(state, 3); /*stack: (empty)*/
+            lua_pop(state, 2); /*stack: (empty)*/
         }
     } else {
-        lua_pop(state, 4); /*stack: (empty)*/
+        _bolt_receive_discard(header->message_size);
+        lua_pop(state, 3); /*stack: (empty)*/
     }
 }
 
@@ -1400,6 +1419,20 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     lua_settable(plugin->state, -3);
     lua_settable(plugin->state, LUA_REGISTRYINDEX);
 
+    // create the metatable for all Buffer objects
+    lua_pushliteral(plugin->state, BUFFER_META_REGISTRYNAME);
+    lua_newtable(plugin->state);
+    lua_pushliteral(plugin->state, "__index");
+    lua_createtable(plugin->state, 0, 3);
+    API_ADD_SUB(plugin->state, writeinteger, buffer)
+    API_ADD_SUB(plugin->state, writenumber, buffer)
+    API_ADD_SUB(plugin->state, writestring, buffer)
+    lua_settable(plugin->state, -3);
+    lua_pushliteral(plugin->state, "__gc");
+    lua_pushcfunction(plugin->state, buffer_gc);
+    lua_settable(plugin->state, -3);
+    lua_settable(plugin->state, LUA_REGISTRYINDEX);
+
     // create the metatable for all SwapBuffers objects
     lua_pushliteral(plugin->state, SWAPBUFFERS_META_REGISTRYNAME);
     lua_newtable(plugin->state);
@@ -1616,6 +1649,16 @@ void _bolt_plugin_ipc_close(BoltSocketType fd) {
     errno = olderr;
 }
 
+void get_binary_data(lua_State* state, int n, const void** data, size_t* size) {
+    if (lua_isuserdata(state, 2)) {
+        const struct FixedBuffer* buffer = lua_touserdata(state, n);
+        *data = buffer->data;
+        *size = buffer->size;
+    } else {
+        *data = luaL_checklstring(state, n, size);
+    }
+}
+
 DEFINE_CALLBACK_STATIC(swapbuffers, SWAPBUFFERS, SwapBuffersEvent)
 DEFINE_CALLBACK(render2d, BATCH2D, RenderBatch2D)
 DEFINE_CALLBACK(render3d, RENDER3D, Render3D)
@@ -1762,8 +1805,9 @@ static int api_loadconfig(lua_State* state) {
 
 static int api_saveconfig(lua_State* state) {
     size_t path_length, content_length;
+    const void* content;
     const char* path = luaL_checklstring(state, 1, &path_length);
-    const char* content = luaL_checklstring(state, 2, &content_length);
+    get_binary_data(state, 2, &content, &content_length);
     lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME);
     const struct Plugin* plugin = lua_touserdata(state, -1);
     const size_t full_path_length = plugin->config_path_length + path_length + 1;
@@ -1780,7 +1824,7 @@ static int api_saveconfig(lua_State* state) {
         lua_pushboolean(state, false);
         return 1;
     }
-    if (fwrite(content, sizeof(*content), content_length, f) < content_length) {
+    if (fwrite(content, 1, content_length, f) < content_length) {
         lua_pop(state, 2);
         lua_pushboolean(state, false);
         fclose(f);
@@ -1807,7 +1851,8 @@ static int api_createsurfacefromrgba(lua_State* state) {
     const lua_Integer h = luaL_checkinteger(state, 2);
     const size_t req_length = w * h * 4;
     size_t length;
-    const void* rgba = luaL_checklstring(state, 3, &length);
+    const void* rgba;
+    get_binary_data(state, 3, &rgba, &length);
     struct SurfaceFunctions* functions = lua_newuserdata(state, sizeof(struct SurfaceFunctions));
     if (length >= req_length) {
         managed_functions.surface_init(functions, w, h, rgba);
@@ -2054,6 +2099,20 @@ static int api_point(lua_State* state) {
     return 1;
 }
 
+static int api_createbuffer(lua_State* state) {
+    const long size = luaL_checklong(state, 1);
+    struct FixedBuffer* buffer = lua_newuserdata(state, sizeof(struct FixedBuffer));
+    buffer->data = malloc(size);
+    if (!buffer->data) {
+        lua_pushfstring(state, "createbuffer: heap error, failed to allocate %i bytes", size);
+        lua_error(state);
+    }
+    buffer->size = size;
+    lua_getfield(state, LUA_REGISTRYINDEX, BUFFER_META_REGISTRYNAME);
+    lua_setmetatable(state, -2);
+    return 1;
+}
+
 static int api_batch2d_vertexcount(lua_State* state) {
     const struct RenderBatch2D* batch = require_self_userdata(state, "vertexcount");
     lua_pushinteger(state, batch->index_count);
@@ -2152,8 +2211,9 @@ static int api_batch2d_texturecompare(lua_State* state) {
     const size_t x = luaL_checkinteger(state, 2);
     const size_t y = luaL_checkinteger(state, 3);
     size_t data_len;
-    const unsigned char* data = (const unsigned char*)luaL_checklstring(state, 4, &data_len);
-    const uint8_t match = render->texture_functions.compare(render->texture_functions.userdata, x, y, data_len, data);
+    const void* data;
+    get_binary_data(state, 4, &data, &data_len);
+    const uint8_t match = render->texture_functions.compare(render->texture_functions.userdata, x, y, data_len, (const unsigned char*)data);
     lua_pushboolean(state, match);
     return 1;
 }
@@ -2310,7 +2370,8 @@ static int api_surface_subimage(lua_State* state) {
     const lua_Integer h = luaL_checkinteger(state, 5);
     const size_t req_length = w * h * 4;
     size_t length;
-    const void* rgba = luaL_checklstring(state, 6, &length);
+    const void* rgba;
+    get_binary_data(state, 6, &rgba, &length);
     if (length >= req_length) {
         functions->subimage(functions->userdata, x, y, w, h, rgba, 0);
     } else {
@@ -2410,7 +2471,8 @@ static int api_window_subimage(lua_State* state) {
     const lua_Integer h = luaL_checkinteger(state, 5);
     const size_t req_length = w * h * 4;
     size_t length;
-    const void* rgba = luaL_checklstring(state, 6, &length);
+    const void* rgba;
+    get_binary_data(state, 6, &rgba, &length);
     if (length >= req_length) {
         window->surface_functions.subimage(window->surface_functions.userdata, x, y, w, h, rgba, 0);
     } else {
@@ -2539,8 +2601,9 @@ static int api_render3d_texturecompare(lua_State* state) {
     const size_t x = luaL_checkinteger(state, 2);
     const size_t y = luaL_checkinteger(state, 3);
     size_t data_len;
-    const unsigned char* data = (const unsigned char*)lua_tolstring(state, 4, &data_len);
-    const uint8_t match = render->texture_functions.compare(render->texture_functions.userdata, x, y, data_len, data);
+    const void* data;
+    get_binary_data(state, 4, &data, &data_len);
+    const uint8_t match = render->texture_functions.compare(render->texture_functions.userdata, x, y, data_len, (const unsigned char*)data);
     lua_pushboolean(state, match);
     return 1;
 }
@@ -2684,12 +2747,9 @@ static int api_browser_close(lua_State* state) {
 
 static int api_browser_sendmessage(lua_State* state) {
     const struct ExternalBrowser* window = require_self_userdata(state, "sendmessage");
+    const void* str;
     size_t len;
-    const char* str = luaL_checklstring(state, 2, &len);
-    if (len > 0xFFFFFFFF) {
-        lua_pushliteral(state, "browser_sendmessage: message too long");
-        lua_error(state);
-    }
+    get_binary_data(state, 2, &str, &len);
     lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME);
     const struct Plugin* plugin = lua_touserdata(state, -1);
     const uint64_t id = plugin->id;
@@ -2768,12 +2828,9 @@ static int api_embeddedbrowser_close(lua_State* state) {
 
 static int api_embeddedbrowser_sendmessage(lua_State* state) {
     const struct EmbeddedWindow* window = require_self_userdata(state, "sendmessage");
+    const void* str;
     size_t len;
-    const char* str = luaL_checklstring(state, 2, &len);
-    if (len > 0xFFFFFFFF) {
-        lua_pushliteral(state, "embeddedbrowser_sendmessage: message too long");
-        lua_error(state);
-    }
+    get_binary_data(state, 2, &str, &len);
     lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME);
     const struct Plugin* plugin = lua_touserdata(state, -1);
     const uint64_t id = plugin->id;
@@ -2802,5 +2859,34 @@ static int api_embeddedbrowser_disablecapture(lua_State* state) {
     if (window->do_capture) {
         window->do_capture = false;
     }
+    return 0;
+}
+
+static int api_buffer_writeinteger(lua_State* state) {
+    const struct FixedBuffer* buffer = require_self_userdata(state, "writeinteger");
+    const uint64_t value = (uint64_t)luaL_checklong(state, 2);
+    const long offset = luaL_checklong(state, 3);
+    const int width = luaL_checkint(state, 4);
+    for (size_t i = 0; i < width; i += 1) {
+        const uint8_t b = (uint8_t)((value >> (8 * i)) & 0xFF);
+        *((uint8_t*)buffer->data + offset + i) = b;
+    }
+    return 0;
+}
+
+static int api_buffer_writenumber(lua_State* state) {
+    const struct FixedBuffer* buffer = require_self_userdata(state, "writenumber");
+    const double value = (double)luaL_checknumber(state, 2);
+    const long offset = luaL_checklong(state, 3);
+    memcpy((uint8_t*)buffer->data + offset, &value, sizeof(value));
+    return 0;
+}
+
+static int api_buffer_writestring(lua_State* state) {
+    const struct FixedBuffer* buffer = require_self_userdata(state, "writestring");
+    size_t size;
+    const void* data = luaL_checklstring(state, 2, &size);
+    const long offset = luaL_checklong(state, 3);
+    memcpy((uint8_t*)buffer->data + offset, data, size);
     return 0;
 }

@@ -201,6 +201,16 @@ static int api_createembeddedbrowser(lua_State*);
 /// prefixed with "api_point_".
 static int api_point(lua_State*);
 
+/// [-1, +1, m]
+/// Creates a fixed-size Buffer object with the given size. Buffer objects can be used to create
+/// large byte arrays more efficiently by using a string, since string concatenations use a lot of
+/// allocator calls and can't be pre-allocated even if the size is known. For Bolt functions which
+/// use strings as byte-arrays, such as browser:sendmessage, buffers can be used instead.
+///
+/// All of the member functions of Buffer objects can be found in this file, prefixed with
+/// "api_buffer_".
+static int api_createbuffer(lua_State*);
+
 /// [-1, +0, -]
 /// Sets a callback function for SwapBuffers events, overwriting the previous callback, if any.
 /// Passing a non-function (ideally `nil`) will restore the default setting, which is to have no
@@ -855,3 +865,20 @@ static int api_embeddedbrowser_enablecapture(lua_State*);
 /// [-1, +0, -]
 /// Disables screen capture for this browser.
 static int api_embeddedbrowser_disablecapture(lua_State*);
+
+/// [-4, +0, -]
+/// Writes an integer into the buffer. The first parameter is the integer itself, the second is the
+/// offset in the buffer, and the third is the number of bytes the integer will be truncated to.
+/// The integer will be written little-endian.
+static int api_buffer_writeinteger(lua_State*);
+
+/// [-3, +0, -]
+/// Writes a number into the buffer. The first parameter is the number and the second is the offset
+/// in the buffer. The number will be written as a native-endian, 8-byte, double-precision floating
+/// point value.
+static int api_buffer_writenumber(lua_State*);
+
+/// [-3, +0, -]
+/// Writes a string into the buffer. The first parameter is the string and the second is the offset
+/// into the buffer where the string should begin.
+static int api_buffer_writestring(lua_State*);
