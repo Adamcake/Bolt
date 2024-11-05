@@ -2577,7 +2577,7 @@ static int api_render3d_vertexcolour(lua_State* state) {
     lua_pushnumber(state, col[1]);
     lua_pushnumber(state, col[2]);
     lua_pushnumber(state, col[3]);
-    return 2;
+    return 4;
 }
 
 static int api_render3d_textureid(lua_State* state) {
