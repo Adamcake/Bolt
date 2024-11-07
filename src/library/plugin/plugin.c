@@ -9,7 +9,6 @@
 #include <lualib.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 
 #if defined(_WIN32)
 #include <afunix.h>

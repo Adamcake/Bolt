@@ -8,6 +8,7 @@
 #include <lauxlib.h>
 #include <math.h>
 #include <string.h>
+#include <time.h>
 
 #if defined(_WIN32)
 #define getpid _getpid
