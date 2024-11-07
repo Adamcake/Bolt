@@ -1,7 +1,9 @@
 #ifndef _BOLT_LIBRARY_PLUGIN_H_
 #define _BOLT_LIBRARY_PLUGIN_H_
+#include "../ipc.h"
 #include <stddef.h>
 #include <stdint.h>
+#include <lua.h>
 
 #include "../rwlock/rwlock.h"
 #include "../event.h"
@@ -13,6 +15,21 @@ struct lua_State;
 #define GRAB_TYPE_NONE 0
 #define GRAB_TYPE_START 1
 #define GRAB_TYPE_STOP 2
+
+// a currently-running plugin.
+// note "path" is not null-terminated, and must always be converted to use '/' as path-separators
+// and must always end with a trailing separator by the time it's received by this process.
+struct Plugin {
+    lua_State* state;
+    uint64_t id; // refers to this specific activation of the plugin, not the plugin in general
+    struct hashmap* external_browsers;
+    size_t ext_browser_capture_count;
+    char* path;
+    uint32_t path_length;
+    char* config_path;
+    uint32_t config_path_length;
+    uint8_t is_deleted;
+};
 
 struct Transform3D {
     double matrix[16];
@@ -345,5 +362,30 @@ void _bolt_plugin_handle_render3d(struct Render3D*);
 
 /// Sends a RenderMinimap to all plugins.
 void _bolt_plugin_handle_minimap(struct RenderMinimapEvent*);
+
+/// Gets the value from the monotonic microsecond counter, returning true on success or false on failure.
+/// Can only fail on Windows, and even then there are no known cases where it would fail.
+uint8_t _bolt_monotonic_microseconds(uint64_t* microseconds);
+
+/// Marks the plugin and its embedded-windows as deleted
+void _bolt_plugin_stop(uint64_t id);
+
+/// Sends an IPC message notifying the host that a plugin has stopped. This should be done when a plugin
+/// stops itself, but not when it stops due to an instruction from the host, because in that case the host
+/// must already know that the plugin has stopped.
+void _bolt_plugin_notify_stopped(uint64_t id);
+
+/// Gets the global PluginManagedFunctions struct
+const struct PluginManagedFunctions* _bolt_plugin_managed_functions();
+
+/// Returns a new unique window ID and increments the counter
+uint64_t _bolt_plugin_new_windowid();
+
+/// Gets the IPC handle
+BoltSocketType _bolt_plugin_fd();
+
+/// Calls `managed_functions.draw_to_surface` using the internal overlay as the target,
+/// if the overlay is initialised. If not, it does nothing.
+void _bolt_plugin_draw_to_overlay(const struct SurfaceFunctions*, int, int, int, int, int, int, int, int);
 
 #endif

@@ -1,14 +1,12 @@
 #include "../ipc.h"
 
 #include "plugin.h"
+#include "lua.h"
 #include "plugin_api.h"
 #include "../../../modules/hashmap/hashmap.h"
-#include "../../../modules/spng/spng/spng.h"
 
-#include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
-#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -24,63 +22,6 @@ LARGE_INTEGER performance_frequency;
 #include <sys/un.h>
 #include <unistd.h>
 #endif
-
-#define API_VERSION_MAJOR 1
-#define API_VERSION_MINOR 0
-
-#define API_ADD(FUNC) lua_pushliteral(state, #FUNC);lua_pushcfunction(state, api_##FUNC);lua_settable(state, -3);
-#define API_ADD_SUB(STATE, FUNC, SUB) lua_pushliteral(STATE, #FUNC);lua_pushcfunction(STATE, api_##SUB##_##FUNC);lua_settable(STATE, -3);
-#define API_ADD_SUB_ALIAS(STATE, FUNC, ALIAS, SUB) lua_pushliteral(STATE, #ALIAS);lua_pushcfunction(STATE, api_##SUB##_##FUNC);lua_settable(STATE, -3);
-
-#define WINDOW_MIN_SIZE 20
-
-#define PLUGIN_REGISTRYNAME "plugin"
-#define WINDOWS_REGISTRYNAME "windows"
-#define BROWSERS_REGISTRYNAME "browsers"
-#define BATCH2D_META_REGISTRYNAME "batch2dmeta"
-#define RENDER3D_META_REGISTRYNAME "render3dmeta"
-#define MINIMAP_META_REGISTRYNAME "minimapmeta"
-#define POINT_META_REGISTRYNAME "pointmeta"
-#define TRANSFORM_META_REGISTRYNAME "transformmeta"
-#define BUFFER_META_REGISTRYNAME "buffermeta"
-#define SWAPBUFFERS_META_REGISTRYNAME "swapbuffersmeta"
-#define SURFACE_META_REGISTRYNAME "surfacemeta"
-#define REPOSITION_META_REGISTRYNAME "repositionmeta"
-#define MOUSEMOTION_META_REGISTRYNAME "mousemotionmeta"
-#define MOUSEBUTTON_META_REGISTRYNAME "mousebuttonmeta"
-#define MOUSEBUTTONUP_META_REGISTRYNAME MOUSEBUTTON_META_REGISTRYNAME
-#define SCROLL_META_REGISTRYNAME "scrollmeta"
-#define MOUSELEAVE_META_REGISTRYNAME "mouseleavemeta"
-#define WINDOW_META_REGISTRYNAME "windowmeta"
-#define BROWSER_META_REGISTRYNAME "browsermeta"
-#define EMBEDDEDBROWSER_META_REGISTRYNAME "embeddedbrowsermeta"
-#define SWAPBUFFERS_CB_REGISTRYNAME "swapbufferscb"
-#define BATCH2D_CB_REGISTRYNAME "batch2dcb"
-#define RENDER3D_CB_REGISTRYNAME "render3dcb"
-#define MINIMAP_CB_REGISTRYNAME "minimapcb"
-#define MOUSEMOTION_CB_REGISTRYNAME "mousemotioncb"
-#define MOUSEBUTTON_CB_REGISTRYNAME "mousebuttoncb"
-#define MOUSEBUTTONUP_CB_REGISTRYNAME "mousebuttonupcb"
-#define SCROLL_CB_REGISTRYNAME "scrollcb"
-#define MESSAGE_CB_REGISTRYNAME "messagecb"
-
-enum {
-    WINDOW_USERDATA,
-    WINDOW_ONREPOSITION,
-    WINDOW_ONMOUSEMOTION,
-    WINDOW_ONMOUSEBUTTON,
-    WINDOW_ONMOUSEBUTTONUP,
-    WINDOW_ONSCROLL,
-    WINDOW_ONMOUSELEAVE,
-    WINDOW_EVENT_ENUM_SIZE, // last member of enum
-};
-
-enum {
-    BROWSER_USERDATA,
-    BROWSER_ONCLOSEREQUEST,
-    BROWSER_ONMESSAGE,
-    BROWSER_EVENT_ENUM_SIZE, // last member of enum
-};
 
 static struct PluginManagedFunctions managed_functions;
 
@@ -111,35 +52,6 @@ static uint64_t grabbed_window_id = 0;
 
 uint64_t _bolt_plugin_get_last_mouseevent_windowid() { return last_mouseevent_window_id; }
 
-// a currently-running plugin.
-// note "path" is not null-terminated, and must always be converted to use '/' as path-separators
-// and must always end with a trailing separator by the time it's received by this process.
-struct Plugin {
-    lua_State* state;
-    uint64_t id; // refers to this specific activation of the plugin, not the plugin in general
-    struct hashmap* external_browsers;
-    size_t ext_browser_capture_count;
-    char* path;
-    uint32_t path_length;
-    char* config_path;
-    uint32_t config_path_length;
-    uint8_t is_deleted;
-};
-
-struct ExternalBrowser {
-    uint64_t id;
-    uint64_t plugin_id;
-    struct Plugin* plugin;
-    uint8_t do_capture;
-    uint8_t capture_ready;
-    uint64_t capture_id;
-};
-
-struct FixedBuffer {
-    void* data;
-    size_t size;
-};
-
 static void _bolt_plugin_ipc_init(BoltSocketType*);
 static void _bolt_plugin_ipc_close(BoltSocketType);
 
@@ -154,8 +66,21 @@ static void _bolt_plugin_handle_mousebutton(struct MouseButtonEvent*);
 static void _bolt_plugin_handle_mousebuttonup(struct MouseButtonEvent*);
 static void _bolt_plugin_handle_scroll(struct MouseScrollEvent*);
 
-static void _bolt_plugin_stop(uint64_t id);
 static void _bolt_plugin_handle_swapbuffers(struct SwapBuffersEvent*);
+
+const struct PluginManagedFunctions* _bolt_plugin_managed_functions() {
+    return &managed_functions;
+}
+
+uint64_t _bolt_plugin_new_windowid() {
+    const uint64_t ret = next_window_id;
+    next_window_id += 1;
+    return ret;
+}
+
+BoltSocketType _bolt_plugin_fd() {
+    return fd;
+}
 
 void _bolt_plugin_free(struct Plugin* plugin) {
     hashmap_free(plugin->external_browsers);
@@ -186,9 +111,7 @@ static uint64_t _bolt_plugin_map_hash(const void* item, uint64_t seed0, uint64_t
 
 static struct hashmap* plugins;
 
-// macro for defining callback functions "_bolt_plugin_handle_*" and "api_on*"
-// e.g. DEFINE_CALLBACK(swapbuffers, SWAPBUFFERS, SwapBuffersEvent)
-#define DEFINE_CALLBACK(APINAME, REGNAME, STRUCTNAME) \
+#define DEFINE_CALLBACK(APINAME, STRUCTNAME) \
 void _bolt_plugin_handle_##APINAME(struct STRUCTNAME* e) { \
     size_t iter = 0; \
     void* item; \
@@ -197,9 +120,9 @@ void _bolt_plugin_handle_##APINAME(struct STRUCTNAME* e) { \
         if (plugin->is_deleted) continue; \
         void* newud = lua_newuserdata(plugin->state, sizeof(struct STRUCTNAME)); /*stack: userdata*/ \
         memcpy(newud, e, sizeof(struct STRUCTNAME)); \
-        lua_getfield(plugin->state, LUA_REGISTRYINDEX, REGNAME##_META_REGISTRYNAME); /*stack: userdata, metatable*/ \
+        lua_getfield(plugin->state, LUA_REGISTRYINDEX, #APINAME "meta"); /*stack: userdata, metatable*/ \
         lua_setmetatable(plugin->state, -2); /*stack: userdata*/ \
-        lua_pushliteral(plugin->state, REGNAME##_CB_REGISTRYNAME); /*stack: userdata, enumname*/ \
+        lua_pushliteral(plugin->state, #APINAME "cb"); /*stack: userdata, enumname*/ \
         lua_gettable(plugin->state, LUA_REGISTRYINDEX); /*stack: userdata, callback*/ \
         if (!lua_isfunction(plugin->state, -1)) { \
             lua_pop(plugin->state, 2); \
@@ -218,40 +141,11 @@ void _bolt_plugin_handle_##APINAME(struct STRUCTNAME* e) { \
         } \
     } \
 } \
-static int api_on##APINAME(lua_State* state) { \
-    luaL_checkany(state, 1); \
-    lua_pushliteral(state, REGNAME##_CB_REGISTRYNAME); \
-    if (lua_isfunction(state, 1)) { \
-        lua_pushvalue(state, 1); \
-    } else { \
-        lua_pushnil(state); \
-    } \
-    lua_settable(state, LUA_REGISTRYINDEX); \
-    return 0; \
-}
 
 // same as DEFINE_CALLBACK except _bolt_plugin_handle_... will be defined as static
-#define DEFINE_CALLBACK_STATIC(APINAME, REGNAME, STRUCTNAME) static DEFINE_CALLBACK(APINAME, REGNAME, STRUCTNAME)
+#define DEFINE_CALLBACK_STATIC(APINAME, STRUCTNAME) static DEFINE_CALLBACK(APINAME, STRUCTNAME)
 
-// macro for defining function "api_window_on*" and "_bolt_plugin_window_on*"
-// e.g. DEFINE_WINDOWEVENT(resize, RESIZE, ResizeEvent)
 #define DEFINE_WINDOWEVENT(APINAME, REGNAME, EVNAME) \
-static int api_window_on##APINAME(lua_State* state) { \
-    const struct EmbeddedWindow* window = require_self_userdata(state, "on" #APINAME); \
-    luaL_checkany(state, 2); \
-    lua_getfield(state, LUA_REGISTRYINDEX, WINDOWS_REGISTRYNAME); /*stack: window table*/ \
-    lua_pushinteger(state, window->id); /*stack: window table, window id*/ \
-    lua_gettable(state, -2); /*stack: window table, event table*/ \
-    lua_pushinteger(state, WINDOW_ON##REGNAME); /*stack: window table, event table, event id*/ \
-    if (lua_isfunction(state, 2)) { \
-        lua_pushvalue(state, 2); \
-    } else { \
-        lua_pushnil(state); \
-    } /*stack: window table, event table, event id, value*/ \
-    lua_settable(state, -3); /*stack: window table, event table*/ \
-    lua_pop(state, 2); /*stack: (empty)*/ \
-    return 0; \
-} \
 void _bolt_plugin_window_on##APINAME(struct EmbeddedWindow* window, struct EVNAME* event) { \
     if (window->is_deleted) return; \
     lua_State* state = window->plugin; \
@@ -271,7 +165,7 @@ void _bolt_plugin_window_on##APINAME(struct EmbeddedWindow* window, struct EVNAM
     if (lua_isfunction(state, -1)) { \
         void* newud = lua_newuserdata(state, sizeof(struct EVNAME)); /*stack: window table, event table, function, event*/ \
         memcpy(newud, event, sizeof(struct EVNAME)); \
-        lua_getfield(state, LUA_REGISTRYINDEX, REGNAME##_META_REGISTRYNAME); /*stack: window table, event table, function, event, event metatable*/ \
+        lua_getfield(state, LUA_REGISTRYINDEX, #APINAME "meta"); /*stack: window table, event table, function, event, event metatable*/ \
         lua_setmetatable(state, -2); /*stack: window table, event table, function, event*/ \
         if (lua_pcall(state, 1, 0, 0)) { /*stack: window table, event table, ?error*/ \
             const char* e = lua_tolstring(state, -1, 0); \
@@ -287,36 +181,6 @@ void _bolt_plugin_window_on##APINAME(struct EmbeddedWindow* window, struct EVNAM
     } else { \
         lua_pop(state, 3); \
     } \
-}
-
-static void* require_userdata(lua_State* state, int n, const char* apiname) {
-    void* ret = lua_touserdata(state, n);
-    if (!ret) {
-        lua_pushfstring(state, "%s: incorrect argument at position %i, expected userdata", apiname, n);
-        lua_error(state);
-    }
-    return ret;
-}
-
-static void* require_self_userdata(lua_State* state, const char* apiname) {
-    void* ret = lua_touserdata(state, 1);
-    if (!ret) {
-        lua_pushfstring(state, "%s: incorrect first argument, expected userdata (did you mean to use ':' instead of '.'?)", apiname);
-        lua_error(state);
-    }
-    return ret;
-}
-
-static int surface_gc(lua_State* state) {
-    const struct SurfaceFunctions* functions = lua_touserdata(state, 1);
-    managed_functions.surface_destroy(functions->userdata);
-    return 0;
-}
-
-static int buffer_gc(lua_State* state) {
-    const struct FixedBuffer* buffer = lua_touserdata(state, 1);
-    free(buffer->data);
-    return 0;
 }
 
 void _bolt_plugin_on_startup() {
@@ -354,32 +218,7 @@ void _bolt_plugin_init(const struct PluginManagedFunctions* functions) {
 }
 
 static int _bolt_api_init(lua_State* state) {
-    lua_createtable(state, 0, 22);
-    API_ADD(apiversion)
-    API_ADD(checkversion)
-    API_ADD(close)
-    API_ADD(time)
-    API_ADD(datetime)
-    API_ADD(weekday)
-    API_ADD(loadfile)
-    API_ADD(loadconfig)
-    API_ADD(saveconfig)
-    API_ADD(onrender2d)
-    API_ADD(onrender3d)
-    API_ADD(onminimap)
-    API_ADD(onswapbuffers)
-    API_ADD(onmousemotion)
-    API_ADD(onmousebutton)
-    API_ADD(onmousebuttonup)
-    API_ADD(onscroll)
-    API_ADD(createsurface)
-    API_ADD(createsurfacefromrgba)
-    API_ADD(createsurfacefrompng)
-    API_ADD(createwindow)
-    API_ADD(createbrowser)
-    API_ADD(createembeddedbrowser)
-    API_ADD(point)
-    API_ADD(createbuffer)
+    _bolt_api_push_bolt_table(state);
     return 1;
 }
 
@@ -387,8 +226,7 @@ uint8_t _bolt_plugin_is_inited() {
     return inited;
 }
 
-// true on success
-static uint8_t monotonic_microseconds(uint64_t* microseconds) {
+uint8_t _bolt_monotonic_microseconds(uint64_t* microseconds) {
 #if defined(_WIN32)
     LARGE_INTEGER ticks;
     if (QueryPerformanceCounter(&ticks)) {
@@ -725,19 +563,17 @@ static void _bolt_process_captures(uint32_t window_width, uint32_t window_height
     const size_t capture_bytes = window_width * window_height * 3;
     uint8_t need_remap = false;
     if (!capture_inited) {
-        _bolt_plugin_shm_open_outbound(&capture_shm, capture_bytes, "sc", next_window_id);
+        capture_id = _bolt_plugin_new_windowid();
+        _bolt_plugin_shm_open_outbound(&capture_shm, capture_bytes, "sc", capture_id);
         capture_inited = true;
-        capture_id = next_window_id;
         capture_width = window_width;
         capture_height = window_height;
         need_remap = true;
-        next_window_id += 1;
     } else if (capture_width != window_width || capture_height != window_height) {
-        _bolt_plugin_shm_resize(&capture_shm, capture_bytes, next_window_id);
 #if defined(_WIN32)
-        capture_id = next_window_id;
-        next_window_id += 1;
+        capture_id = _bolt_plugin_new_windowid();
 #endif
+        _bolt_plugin_shm_resize(&capture_shm, capture_bytes, capture_id);
         capture_width = window_width;
         capture_height = window_height;
         need_remap = true;
@@ -816,7 +652,7 @@ void _bolt_plugin_end_frame(uint32_t window_width, uint32_t window_height) {
     _bolt_process_plugins(&need_capture, &capture_ready);
 
     uint64_t micros = 0;
-    monotonic_microseconds(&micros);
+    _bolt_monotonic_microseconds(&micros);
     if (need_capture && capture_ready && (micros >= next_capture_time)) {
         _bolt_process_captures(window_width, window_height);
         next_capture_time = micros + CAPTURE_COOLDOWN_MICROS;
@@ -863,7 +699,7 @@ void _bolt_plugin_close() {
     inited = 0;
 }
 
-static void _bolt_plugin_notify_stopped(uint64_t id) {
+void _bolt_plugin_notify_stopped(uint64_t id) {
     const enum BoltIPCMessageTypeToHost msg_type = IPC_MSG_CLIENT_STOPPED_PLUGIN;
     const struct BoltIPCClientStoppedPluginHeader header = { .plugin_id = id };
     _bolt_ipc_send(fd, &msg_type, sizeof(msg_type));
@@ -1267,6 +1103,21 @@ uint8_t _bolt_plugin_handle_mouse_event(struct MouseEvent* event, ptrdiff_t bool
     return true;
 }
 
+DEFINE_CALLBACK_STATIC(swapbuffers, SwapBuffersEvent)
+DEFINE_CALLBACK(render2d, RenderBatch2D)
+DEFINE_CALLBACK(render3d, Render3D)
+DEFINE_CALLBACK(minimap, RenderMinimapEvent)
+DEFINE_CALLBACK(mousemotion, MouseMotionEvent)
+DEFINE_CALLBACK(mousebutton, MouseButtonEvent)
+DEFINE_CALLBACK(mousebuttonup, MouseButtonEvent)
+DEFINE_CALLBACK(scroll, MouseScrollEvent)
+DEFINE_WINDOWEVENT(reposition, REPOSITION, RepositionEvent)
+DEFINE_WINDOWEVENT(mousemotion, MOUSEMOTION, MouseMotionEvent)
+DEFINE_WINDOWEVENT(mousebutton, MOUSEBUTTON, MouseButtonEvent)
+DEFINE_WINDOWEVENT(mousebuttonup, MOUSEBUTTONUP, MouseButtonEvent)
+DEFINE_WINDOWEVENT(scroll, SCROLL, MouseScrollEvent)
+DEFINE_WINDOWEVENT(mouseleave, MOUSELEAVE, MouseMotionEvent)
+
 uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     // load the user-provided string as a lua function, putting that function on the stack
     if (luaL_loadfile(plugin->state, path)) {
@@ -1341,248 +1192,32 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     lua_newtable(plugin->state);
     lua_settable(plugin->state, LUA_REGISTRYINDEX);
 
-    // create the metatable for all RenderBatch2D objects
-    lua_pushliteral(plugin->state, BATCH2D_META_REGISTRYNAME);
-    lua_newtable(plugin->state);
-    lua_pushliteral(plugin->state, "__index");
-    lua_createtable(plugin->state, 0, 14);
-    API_ADD_SUB(plugin->state, vertexcount, batch2d)
-    API_ADD_SUB(plugin->state, verticesperimage, batch2d)
-    API_ADD_SUB(plugin->state, isminimap, batch2d)
-    API_ADD_SUB(plugin->state, targetsize, batch2d)
-    API_ADD_SUB(plugin->state, vertexxy, batch2d)
-    API_ADD_SUB(plugin->state, vertexatlasxy, batch2d)
-    API_ADD_SUB(plugin->state, vertexatlaswh, batch2d)
-    API_ADD_SUB(plugin->state, vertexuv, batch2d)
-    API_ADD_SUB(plugin->state, vertexcolour, batch2d)
-    API_ADD_SUB(plugin->state, textureid, batch2d)
-    API_ADD_SUB(plugin->state, texturesize, batch2d)
-    API_ADD_SUB(plugin->state, texturecompare, batch2d)
-    API_ADD_SUB(plugin->state, texturedata, batch2d)
-    API_ADD_SUB_ALIAS(plugin->state, vertexcolour, vertexcolor, batch2d)
-    lua_settable(plugin->state, -3);
+    // create metatables
+#define SETMETA(NAME) \
+lua_pushliteral(plugin->state, #NAME "meta"); \
+_bolt_api_push_metatable_##NAME(plugin->state); \
+lua_settable(plugin->state, LUA_REGISTRYINDEX);
+    SETMETA(batch2d)
+    SETMETA(render3d)
+    SETMETA(minimap)
+    SETMETA(point)
+    SETMETA(transform)
+    SETMETA(buffer)
+    SETMETA(swapbuffers)
+    SETMETA(surface)
+    SETMETA(window)
+    SETMETA(browser)
+    SETMETA(embeddedbrowser)
+    SETMETA(reposition)
+    SETMETA(mousemotion)
+    SETMETA(mousebutton)
+    SETMETA(scroll)
+    SETMETA(mouseleave)
+    lua_pushliteral(plugin->state, "mousebuttonupmeta");
+    lua_pushliteral(plugin->state, "mousebuttonmeta");
+    lua_gettable(plugin->state, LUA_REGISTRYINDEX);
     lua_settable(plugin->state, LUA_REGISTRYINDEX);
-
-    // create the metatable for all Render3D objects
-    lua_pushliteral(plugin->state, RENDER3D_META_REGISTRYNAME);
-    lua_newtable(plugin->state);
-    lua_pushliteral(plugin->state, "__index");
-    lua_createtable(plugin->state, 0, 16);
-    API_ADD_SUB(plugin->state, vertexcount, render3d)
-    API_ADD_SUB(plugin->state, vertexxyz, render3d)
-    API_ADD_SUB(plugin->state, modelmatrix, render3d)
-    API_ADD_SUB(plugin->state, viewprojmatrix, render3d)
-    API_ADD_SUB(plugin->state, vertexmeta, render3d)
-    API_ADD_SUB(plugin->state, atlasxywh, render3d)
-    API_ADD_SUB(plugin->state, vertexuv, render3d)
-    API_ADD_SUB(plugin->state, vertexcolour, render3d)
-    API_ADD_SUB(plugin->state, textureid, render3d)
-    API_ADD_SUB(plugin->state, texturesize, render3d)
-    API_ADD_SUB(plugin->state, texturecompare, render3d)
-    API_ADD_SUB(plugin->state, texturedata, render3d)
-    API_ADD_SUB(plugin->state, vertexbone, render3d)
-    API_ADD_SUB(plugin->state, boneanimation, render3d)
-    API_ADD_SUB(plugin->state, animated, render3d)
-    API_ADD_SUB_ALIAS(plugin->state, vertexcolour, vertexcolor, render3d)
-    lua_settable(plugin->state, -3);
-    lua_settable(plugin->state, LUA_REGISTRYINDEX);
-
-    // create the metatable for all RenderMinimap objects
-    lua_pushliteral(plugin->state, MINIMAP_META_REGISTRYNAME);
-    lua_newtable(plugin->state);
-    lua_pushliteral(plugin->state, "__index");
-    lua_createtable(plugin->state, 0, 3);
-    API_ADD_SUB(plugin->state, angle, minimap)
-    API_ADD_SUB(plugin->state, scale, minimap)
-    API_ADD_SUB(plugin->state, position, minimap)
-    lua_settable(plugin->state, -3);
-    lua_settable(plugin->state, LUA_REGISTRYINDEX);
-
-    // create the metatable for all Point objects
-    lua_pushliteral(plugin->state, POINT_META_REGISTRYNAME);
-    lua_newtable(plugin->state);
-    lua_pushliteral(plugin->state, "__index");
-    lua_createtable(plugin->state, 0, 3);
-    API_ADD_SUB(plugin->state, transform, point)
-    API_ADD_SUB(plugin->state, get, point)
-    API_ADD_SUB(plugin->state, aspixels, point)
-    lua_settable(plugin->state, -3);
-    lua_settable(plugin->state, LUA_REGISTRYINDEX);
-
-    // create the metatable for all Transform objects
-    lua_pushliteral(plugin->state, TRANSFORM_META_REGISTRYNAME);
-    lua_newtable(plugin->state);
-    lua_pushliteral(plugin->state, "__index");
-    lua_createtable(plugin->state, 0, 2);
-    API_ADD_SUB(plugin->state, decompose, transform)
-    API_ADD_SUB(plugin->state, get, transform)
-    lua_settable(plugin->state, -3);
-    lua_settable(plugin->state, LUA_REGISTRYINDEX);
-
-    // create the metatable for all Buffer objects
-    lua_pushliteral(plugin->state, BUFFER_META_REGISTRYNAME);
-    lua_newtable(plugin->state);
-    lua_pushliteral(plugin->state, "__index");
-    lua_createtable(plugin->state, 0, 3);
-    API_ADD_SUB(plugin->state, writeinteger, buffer)
-    API_ADD_SUB(plugin->state, writenumber, buffer)
-    API_ADD_SUB(plugin->state, writestring, buffer)
-    API_ADD_SUB(plugin->state, writebuffer, buffer)
-    lua_settable(plugin->state, -3);
-    lua_pushliteral(plugin->state, "__gc");
-    lua_pushcfunction(plugin->state, buffer_gc);
-    lua_settable(plugin->state, -3);
-    lua_settable(plugin->state, LUA_REGISTRYINDEX);
-
-    // create the metatable for all SwapBuffers objects
-    lua_pushliteral(plugin->state, SWAPBUFFERS_META_REGISTRYNAME);
-    lua_newtable(plugin->state);
-    lua_pushliteral(plugin->state, "__index");
-    lua_createtable(plugin->state, 0, 0);
-    lua_settable(plugin->state, -3);
-    lua_settable(plugin->state, LUA_REGISTRYINDEX);
-
-    // create the metatable for all Surface objects
-    lua_pushliteral(plugin->state, SURFACE_META_REGISTRYNAME);
-    lua_newtable(plugin->state);
-    lua_pushliteral(plugin->state, "__index");
-    lua_createtable(plugin->state, 0, 5);
-    API_ADD_SUB(plugin->state, clear, surface)
-    API_ADD_SUB(plugin->state, subimage, surface)
-    API_ADD_SUB(plugin->state, drawtoscreen, surface)
-    API_ADD_SUB(plugin->state, drawtosurface, surface)
-    API_ADD_SUB(plugin->state, drawtowindow, surface)
-    lua_settable(plugin->state, -3);
-    lua_pushliteral(plugin->state, "__gc");
-    lua_pushcfunction(plugin->state, surface_gc);
-    lua_settable(plugin->state, -3);
-    lua_settable(plugin->state, LUA_REGISTRYINDEX);
-
-    // create the metatable for all Window objects
-    lua_pushliteral(plugin->state, WINDOW_META_REGISTRYNAME);
-    lua_newtable(plugin->state);
-    lua_pushliteral(plugin->state, "__index");
-    lua_createtable(plugin->state, 0, 12);
-    API_ADD_SUB(plugin->state, close, window)
-    API_ADD_SUB(plugin->state, id, window)
-    API_ADD_SUB(plugin->state, size, window)
-    API_ADD_SUB(plugin->state, clear, window)
-    API_ADD_SUB(plugin->state, subimage, window)
-    API_ADD_SUB(plugin->state, startreposition, window)
-    API_ADD_SUB(plugin->state, cancelreposition, window)
-    API_ADD_SUB(plugin->state, onreposition, window)
-    API_ADD_SUB(plugin->state, onmousemotion, window)
-    API_ADD_SUB(plugin->state, onmousebutton, window)
-    API_ADD_SUB(plugin->state, onmousebuttonup, window)
-    API_ADD_SUB(plugin->state, onscroll, window)
-    lua_settable(plugin->state, -3);
-    lua_settable(plugin->state, LUA_REGISTRYINDEX);
-
-    // create the metatable for all Browser objects
-    lua_pushliteral(plugin->state, BROWSER_META_REGISTRYNAME);
-    lua_newtable(plugin->state);
-    lua_pushliteral(plugin->state, "__index");
-    lua_createtable(plugin->state, 0, 8);
-    API_ADD_SUB(plugin->state, close, browser)
-    API_ADD_SUB(plugin->state, sendmessage, browser)
-    API_ADD_SUB(plugin->state, enablecapture, browser)
-    API_ADD_SUB(plugin->state, disablecapture, browser)
-    API_ADD_SUB(plugin->state, startreposition, window)
-    API_ADD_SUB(plugin->state, cancelreposition, window)
-    API_ADD_SUB(plugin->state, oncloserequest, browser)
-    API_ADD_SUB(plugin->state, onmessage, browser)
-    lua_settable(plugin->state, -3);
-    lua_settable(plugin->state, LUA_REGISTRYINDEX);
-
-    // create the metatable for all EmbeddedBrowser objects
-    lua_pushliteral(plugin->state, EMBEDDEDBROWSER_META_REGISTRYNAME);
-    lua_newtable(plugin->state);
-    lua_pushliteral(plugin->state, "__index");
-    lua_createtable(plugin->state, 0, 4);
-    API_ADD_SUB(plugin->state, close, embeddedbrowser)
-    API_ADD_SUB(plugin->state, sendmessage, embeddedbrowser)
-    API_ADD_SUB(plugin->state, enablecapture, embeddedbrowser)
-    API_ADD_SUB(plugin->state, disablecapture, embeddedbrowser)
-    API_ADD_SUB(plugin->state, oncloserequest, browser)
-    API_ADD_SUB(plugin->state, onmessage, browser)
-    lua_settable(plugin->state, -3);
-    lua_settable(plugin->state, LUA_REGISTRYINDEX);
-
-    // create the metatable for all RepositionEvent objects
-    lua_pushliteral(plugin->state, REPOSITION_META_REGISTRYNAME);
-    lua_newtable(plugin->state);
-    lua_pushliteral(plugin->state, "__index");
-    lua_createtable(plugin->state, 0, 2);
-    API_ADD_SUB(plugin->state, xywh, repositionevent)
-    API_ADD_SUB(plugin->state, didresize, repositionevent)
-    lua_settable(plugin->state, -3);
-    lua_settable(plugin->state, LUA_REGISTRYINDEX);
-
-    // create the metatable for all MouseMotionEvent objects
-    lua_pushliteral(plugin->state, MOUSEMOTION_META_REGISTRYNAME);
-    lua_newtable(plugin->state);
-    lua_pushliteral(plugin->state, "__index");
-    lua_createtable(plugin->state, 0, 8);
-    API_ADD_SUB(plugin->state, xy, mouseevent)
-    API_ADD_SUB(plugin->state, ctrl, mouseevent);
-    API_ADD_SUB(plugin->state, shift, mouseevent);
-    API_ADD_SUB(plugin->state, meta, mouseevent);
-    API_ADD_SUB(plugin->state, alt, mouseevent);
-    API_ADD_SUB(plugin->state, capslock, mouseevent);
-    API_ADD_SUB(plugin->state, numlock, mouseevent);
-    API_ADD_SUB(plugin->state, mousebuttons, mouseevent);
-    lua_settable(plugin->state, -3);
-    lua_settable(plugin->state, LUA_REGISTRYINDEX);
-
-    // create the metatable for all MouseButtonEvent objects
-    lua_pushliteral(plugin->state, MOUSEBUTTON_META_REGISTRYNAME);
-    lua_newtable(plugin->state);
-    lua_pushliteral(plugin->state, "__index");
-    lua_createtable(plugin->state, 0, 9);
-    API_ADD_SUB(plugin->state, xy, mouseevent)
-    API_ADD_SUB(plugin->state, ctrl, mouseevent);
-    API_ADD_SUB(plugin->state, shift, mouseevent);
-    API_ADD_SUB(plugin->state, meta, mouseevent);
-    API_ADD_SUB(plugin->state, alt, mouseevent);
-    API_ADD_SUB(plugin->state, capslock, mouseevent);
-    API_ADD_SUB(plugin->state, numlock, mouseevent);
-    API_ADD_SUB(plugin->state, mousebuttons, mouseevent);
-    API_ADD_SUB(plugin->state, button, mousebutton);
-    lua_settable(plugin->state, -3);
-    lua_settable(plugin->state, LUA_REGISTRYINDEX);
-
-    // create the metatable for all MouseScrollEvent objects
-    lua_pushliteral(plugin->state, SCROLL_META_REGISTRYNAME);
-    lua_newtable(plugin->state);
-    lua_pushliteral(plugin->state, "__index");
-    lua_createtable(plugin->state, 0, 9);
-    API_ADD_SUB(plugin->state, xy, mouseevent)
-    API_ADD_SUB(plugin->state, ctrl, mouseevent);
-    API_ADD_SUB(plugin->state, shift, mouseevent);
-    API_ADD_SUB(plugin->state, meta, mouseevent);
-    API_ADD_SUB(plugin->state, alt, mouseevent);
-    API_ADD_SUB(plugin->state, capslock, mouseevent);
-    API_ADD_SUB(plugin->state, numlock, mouseevent);
-    API_ADD_SUB(plugin->state, mousebuttons, mouseevent);
-    API_ADD_SUB(plugin->state, direction, scroll);
-    lua_settable(plugin->state, -3);
-    lua_settable(plugin->state, LUA_REGISTRYINDEX);
-
-    // create the metatable for all MouseLeaveEvent objects
-    lua_pushliteral(plugin->state, MOUSEMOTION_META_REGISTRYNAME);
-    lua_newtable(plugin->state);
-    lua_pushliteral(plugin->state, "__index");
-    lua_createtable(plugin->state, 0, 8);
-    API_ADD_SUB(plugin->state, xy, mouseevent)
-    API_ADD_SUB(plugin->state, ctrl, mouseevent);
-    API_ADD_SUB(plugin->state, shift, mouseevent);
-    API_ADD_SUB(plugin->state, meta, mouseevent);
-    API_ADD_SUB(plugin->state, alt, mouseevent);
-    API_ADD_SUB(plugin->state, capslock, mouseevent);
-    API_ADD_SUB(plugin->state, numlock, mouseevent);
-    API_ADD_SUB(plugin->state, mousebuttons, mouseevent);
-    lua_settable(plugin->state, -3);
-    lua_settable(plugin->state, LUA_REGISTRYINDEX);
+#undef PUSHMETA
 
     // attempt to run the function
     if (lua_pcall(plugin->state, 0, 0, 0)) {
@@ -1605,7 +1240,7 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
     }
 }
 
-static void _bolt_plugin_stop(uint64_t uid) {
+void _bolt_plugin_stop(uint64_t uid) {
     size_t iter = 0;
     void* item;
     _bolt_rwlock_lock_read(&windows.lock);
@@ -1650,1252 +1285,8 @@ void _bolt_plugin_ipc_close(BoltSocketType fd) {
     errno = olderr;
 }
 
-void get_binary_data(lua_State* state, int n, const void** data, size_t* size) {
-    if (lua_isuserdata(state, 2)) {
-        const struct FixedBuffer* buffer = lua_touserdata(state, n);
-        *data = buffer->data;
-        *size = buffer->size;
-    } else {
-        *data = luaL_checklstring(state, n, size);
+void _bolt_plugin_draw_to_overlay(const struct SurfaceFunctions* from, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh) {
+    if (overlay_inited) {
+        from->draw_to_surface(from->userdata, overlay.userdata, sx, sy, sw, sh, dx, dy, dw, dh);
     }
-}
-
-DEFINE_CALLBACK_STATIC(swapbuffers, SWAPBUFFERS, SwapBuffersEvent)
-DEFINE_CALLBACK(render2d, BATCH2D, RenderBatch2D)
-DEFINE_CALLBACK(render3d, RENDER3D, Render3D)
-DEFINE_CALLBACK(minimap, MINIMAP, RenderMinimapEvent)
-DEFINE_CALLBACK(mousemotion, MOUSEMOTION, MouseMotionEvent)
-DEFINE_CALLBACK(mousebutton, MOUSEBUTTON, MouseButtonEvent)
-DEFINE_CALLBACK(mousebuttonup, MOUSEBUTTONUP, MouseButtonEvent)
-DEFINE_CALLBACK(scroll, SCROLL, MouseScrollEvent)
-DEFINE_WINDOWEVENT(reposition, REPOSITION, RepositionEvent)
-DEFINE_WINDOWEVENT(mousemotion, MOUSEMOTION, MouseMotionEvent)
-DEFINE_WINDOWEVENT(mousebutton, MOUSEBUTTON, MouseButtonEvent)
-DEFINE_WINDOWEVENT(mousebuttonup, MOUSEBUTTONUP, MouseButtonEvent)
-DEFINE_WINDOWEVENT(scroll, SCROLL, MouseScrollEvent)
-DEFINE_WINDOWEVENT(mouseleave, MOUSELEAVE, MouseMotionEvent)
-
-static int api_apiversion(lua_State* state) {
-    lua_pushnumber(state, API_VERSION_MAJOR);
-    lua_pushnumber(state, API_VERSION_MINOR);
-    return 2;
-}
-
-static int api_checkversion(lua_State* state) {
-    lua_Integer expected_major = luaL_checkinteger(state, 1);
-    lua_Integer expected_minor = luaL_checkinteger(state, 2);
-    if (expected_major != API_VERSION_MAJOR) {
-        lua_pushfstring(state, "checkversion major version mismatch: major version is %u, plugin expects %u", API_VERSION_MAJOR, (unsigned int)expected_major);
-        lua_error(state);
-    }
-    if (expected_minor > API_VERSION_MINOR) {
-        lua_pushfstring(state, "checkversion minor version mismatch: minor version is %u, plugin expects at least %u", API_VERSION_MINOR, (unsigned int)expected_minor);
-        lua_error(state);
-    }
-    return 2;
-}
-
-static int api_close(lua_State* state) {
-    lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME);
-    const struct Plugin* plugin = lua_touserdata(state, -1);
-    const uint64_t id = plugin->id;
-    lua_pop(state, 1);
-    _bolt_plugin_stop(id);
-    _bolt_plugin_notify_stopped(id);
-    return 0;
-}
-
-static int api_time(lua_State* state) {
-    uint64_t micros;
-    if (monotonic_microseconds(&micros)) {
-        lua_pushinteger(state, micros);
-    } else {
-        lua_pushnil(state);
-    }
-    return 1;
-}
-
-static int api_datetime(lua_State* state) {
-    const time_t t = time(NULL);
-    const struct tm* time = gmtime(&t);
-    lua_pushinteger(state, time->tm_year + 1900);
-    lua_pushinteger(state, time->tm_mon + 1);
-    lua_pushinteger(state, time->tm_mday);
-    lua_pushinteger(state, time->tm_hour);
-    lua_pushinteger(state, time->tm_min);
-    lua_pushinteger(state, time->tm_sec);
-    return 6;
-}
-
-static int api_weekday(lua_State* state) {
-    const time_t t = time(NULL);
-    const struct tm* time = gmtime(&t);
-    lua_pushinteger(state, time->tm_wday + 1);
-    return 1;
-}
-
-static int api_loadfile(lua_State* state) {
-    lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME);
-    const struct Plugin* plugin = lua_touserdata(state, -1);
-    size_t path_length;
-    const char* path = luaL_checklstring(state, 1, &path_length);
-    const size_t full_path_length = plugin->path_length + path_length + 1;
-    char* full_path = lua_newuserdata(state, full_path_length);
-    memcpy(full_path, plugin->path, plugin->path_length);
-    memcpy(full_path + plugin->path_length, path, path_length + 1);
-    for (char* c = full_path + plugin->path_length; *c; c += 1) {
-        if (*c == '\\') *c = '/';
-    }
-
-    FILE* f = fopen(full_path, "rb");
-    if (!f) {
-        lua_pop(state, 2);
-        lua_pushnil(state);
-        return 1;
-    }
-    fseek(f, 0, SEEK_END);
-    const long file_size = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    void* content = lua_newuserdata(state, file_size);
-    if (fread(content, 1, file_size, f) < file_size) {
-        lua_pop(state, 3);
-        lua_pushnil(state);
-        fclose(f);
-        return 1;
-    }
-    fclose(f);
-    lua_pop(state, 3);
-    lua_pushlstring(state, content, file_size);
-    return 1;
-}
-
-static int api_loadconfig(lua_State* state) {
-    lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME);
-    const struct Plugin* plugin = lua_touserdata(state, -1);
-    size_t path_length;
-    const char* path = luaL_checklstring(state, 1, &path_length);
-    const size_t full_path_length = plugin->config_path_length + path_length + 1;
-    char* full_path = lua_newuserdata(state, full_path_length);
-    memcpy(full_path, plugin->config_path, plugin->config_path_length);
-    memcpy(full_path + plugin->config_path_length, path, path_length + 1);
-    for (char* c = full_path + plugin->config_path_length; *c; c += 1) {
-        if (*c == '\\') *c = '/';
-    }
-
-    FILE* f = fopen(full_path, "rb");
-    if (!f) {
-        lua_pop(state, 2);
-        lua_pushnil(state);
-        return 1;
-    }
-    fseek(f, 0, SEEK_END);
-    const long file_size = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    void* content = lua_newuserdata(state, file_size);
-    if (fread(content, 1, file_size, f) < file_size) {
-        lua_pop(state, 3);
-        lua_pushnil(state);
-        fclose(f);
-        return 1;
-    }
-    fclose(f);
-    lua_pop(state, 3);
-    lua_pushlstring(state, content, file_size);
-    return 1;
-}
-
-static int api_saveconfig(lua_State* state) {
-    size_t path_length, content_length;
-    const void* content;
-    const char* path = luaL_checklstring(state, 1, &path_length);
-    get_binary_data(state, 2, &content, &content_length);
-    lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME);
-    const struct Plugin* plugin = lua_touserdata(state, -1);
-    const size_t full_path_length = plugin->config_path_length + path_length + 1;
-    char* full_path = lua_newuserdata(state, full_path_length);
-    memcpy(full_path, plugin->config_path, plugin->config_path_length);
-    memcpy(full_path + plugin->config_path_length, path, path_length + 1);
-    for (char* c = full_path + plugin->config_path_length; *c; c += 1) {
-        if (*c == '\\') *c = '/';
-    }
-
-    FILE* f = fopen(full_path, "wb");
-    if (!f) {
-        lua_pop(state, 2);
-        lua_pushboolean(state, false);
-        return 1;
-    }
-    if (fwrite(content, 1, content_length, f) < content_length) {
-        lua_pop(state, 2);
-        lua_pushboolean(state, false);
-        fclose(f);
-        return 1;
-    }
-    fclose(f);
-    lua_pop(state, 2);
-    lua_pushboolean(state, true);
-    return 1;
-}
-
-static int api_createsurface(lua_State* state) {
-    const lua_Integer w = luaL_checkinteger(state, 1);
-    const lua_Integer h = luaL_checkinteger(state, 2);
-    struct SurfaceFunctions* functions = lua_newuserdata(state, sizeof(struct SurfaceFunctions));
-    managed_functions.surface_init(functions, w, h, NULL);
-    lua_getfield(state, LUA_REGISTRYINDEX, SURFACE_META_REGISTRYNAME);
-    lua_setmetatable(state, -2);
-    return 1;
-}
-
-static int api_createsurfacefromrgba(lua_State* state) {
-    const lua_Integer w = luaL_checkinteger(state, 1);
-    const lua_Integer h = luaL_checkinteger(state, 2);
-    const size_t req_length = w * h * 4;
-    size_t length;
-    const void* rgba;
-    get_binary_data(state, 3, &rgba, &length);
-    struct SurfaceFunctions* functions = lua_newuserdata(state, sizeof(struct SurfaceFunctions));
-    if (length >= req_length) {
-        managed_functions.surface_init(functions, w, h, rgba);
-    } else {
-        uint8_t* ud = lua_newuserdata(state, req_length);
-        memcpy(ud, rgba, length);
-        memset(ud + length, 0, req_length - length);
-        managed_functions.surface_init(functions, w, h, ud);
-        lua_pop(state, 1);
-    }
-    lua_getfield(state, LUA_REGISTRYINDEX, SURFACE_META_REGISTRYNAME);
-    lua_setmetatable(state, -2);
-    return 1;
-}
-
-static int api_createsurfacefrompng(lua_State* state) {
-    const char extension[] = ".png";
-    size_t rgba_size, path_length;
-    const char* path = luaL_checklstring(state, 1, &path_length);
-    lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME);
-    const struct Plugin* plugin = lua_touserdata(state, -1);
-    const size_t full_path_length = plugin->path_length + path_length + sizeof(extension);
-    char* full_path = lua_newuserdata(state, full_path_length);
-    memcpy(full_path, plugin->path, plugin->path_length);
-    memcpy(full_path + plugin->path_length, path, path_length + 1);
-    for (char* c = full_path + plugin->path_length; *c; c += 1) {
-        if (*c == '.') *c = '/';
-    }
-    memcpy(full_path + plugin->path_length + path_length, extension, sizeof(extension));
-    FILE* f = fopen(full_path, "rb");
-    if (!f) {
-        lua_pushfstring(state, "createsurfacefrompng: error opening file '%s'", (char*)full_path);
-        lua_error(state);
-    }
-    fseek(f, 0, SEEK_END);
-    const long png_size = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    void* png = lua_newuserdata(state, png_size);
-    if (fread(png, 1, png_size, f) < png_size) {
-        fclose(f);
-        lua_pushfstring(state, "createsurfacefrompng: error reading file '%s'", (char*)full_path);
-        lua_error(state);
-    }
-    fclose(f);
-
-#define CALL_SPNG(FUNC, ...) err = FUNC(__VA_ARGS__); if(err){free(rgba);lua_pushfstring(state,"createsurfacefrompng: error decoding file '%s': " #FUNC " returned %i",(char*)full_path,err);lua_error(state);}
-    void* rgba = NULL;
-    int err;
-    spng_ctx* spng = spng_ctx_new(0);
-    CALL_SPNG(spng_set_png_buffer, spng, png, png_size);
-    struct spng_ihdr ihdr;
-    CALL_SPNG(spng_get_ihdr, spng, &ihdr)
-    CALL_SPNG(spng_decoded_image_size, spng, SPNG_FMT_RGBA8, &rgba_size)
-    rgba = malloc(rgba_size);
-    CALL_SPNG(spng_decode_image, spng, rgba, rgba_size, SPNG_FMT_RGBA8, 0)
-    spng_ctx_free(spng);
-    lua_pop(state, 3);
-#undef CALL_SPNG
-
-    lua_pushinteger(state, ihdr.width);
-    lua_pushinteger(state, ihdr.height);
-    struct SurfaceFunctions* functions = lua_newuserdata(state, sizeof(struct SurfaceFunctions));
-    managed_functions.surface_init(functions, ihdr.width, ihdr.height, rgba);
-    lua_getfield(state, LUA_REGISTRYINDEX, SURFACE_META_REGISTRYNAME);
-    lua_setmetatable(state, -2);
-    free(rgba);
-    return 3;
-}
-
-static int api_createwindow(lua_State* state) {
-    lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME);
-    const struct Plugin* plugin = lua_touserdata(state, -1);
-    lua_pop(state, 1);
-    
-    // push a window onto the stack as the return value, then initialise it
-    struct EmbeddedWindow* window = lua_newuserdata(state, sizeof(struct EmbeddedWindow));
-    window->is_deleted = false;
-    window->is_browser = false;
-    window->popup_shown = false;
-    window->do_capture = false;
-    window->reposition_mode = false;
-    window->id = next_window_id;
-    window->plugin_id = plugin->id;
-    window->plugin = state;
-    _bolt_rwlock_init(&window->lock);
-    _bolt_rwlock_init(&window->input_lock);
-    window->metadata.x = luaL_checkinteger(state, 1);
-    window->metadata.y = luaL_checkinteger(state, 2);
-    window->metadata.width = luaL_checkinteger(state, 3);
-    window->metadata.height = luaL_checkinteger(state, 4);
-    if (window->metadata.width < WINDOW_MIN_SIZE) window->metadata.width = WINDOW_MIN_SIZE;
-    if (window->metadata.height < WINDOW_MIN_SIZE) window->metadata.height = WINDOW_MIN_SIZE;
-    memset(&window->input, 0, sizeof(window->input));
-    managed_functions.surface_init(&window->surface_functions, window->metadata.width, window->metadata.height, NULL);
-    lua_getfield(state, LUA_REGISTRYINDEX, WINDOW_META_REGISTRYNAME);
-    lua_setmetatable(state, -2);
-    next_window_id += 1;
-
-    // create an event table in the registry for this window
-    lua_getfield(state, LUA_REGISTRYINDEX, WINDOWS_REGISTRYNAME);
-    lua_pushinteger(state, window->id);
-    lua_createtable(state, WINDOW_EVENT_ENUM_SIZE, 0);
-    lua_pushinteger(state, WINDOW_USERDATA);
-    lua_pushvalue(state, -5);
-    lua_settable(state, -3);
-    lua_settable(state, -3);
-    lua_pop(state, 1);
-
-    // set this window in the hashmap, which is accessible by backends
-    _bolt_rwlock_lock_write(&windows.lock);
-    hashmap_set(windows.map, &window);
-    _bolt_rwlock_unlock_write(&windows.lock);
-    return 1;
-}
-
-static int api_createbrowser(lua_State* state) {
-    lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME);
-    struct Plugin* plugin = lua_touserdata(state, -1);
-    lua_pop(state, 1);
-
-    // push a window onto the stack as the return value, then initialise it
-    struct ExternalBrowser* browser = lua_newuserdata(state, sizeof(struct ExternalBrowser));
-    browser->id = next_window_id;
-    browser->plugin_id = plugin->id;
-    browser->plugin = plugin;
-    browser->do_capture = false;
-    browser->capture_id = 0;
-    lua_getfield(state, LUA_REGISTRYINDEX, BROWSER_META_REGISTRYNAME);
-    lua_setmetatable(state, -2);
-    next_window_id += 1;
-
-    // create an empty event table in the registry for this window
-    lua_getfield(state, LUA_REGISTRYINDEX, BROWSERS_REGISTRYNAME);
-    lua_pushinteger(state, browser->id);
-    lua_createtable(state, BROWSER_EVENT_ENUM_SIZE, 0);
-    lua_settable(state, -3);
-    lua_pop(state, 1);
-
-    // send an IPC message to the host to create a browser
-    const int pid = getpid();
-    size_t url_length;
-    const char* url = luaL_checklstring(state, 3, &url_length);
-    const enum BoltIPCMessageTypeToHost msg_type = IPC_MSG_CREATEBROWSER_EXTERNAL;
-    const struct BoltIPCCreateBrowserHeader header = {
-        .plugin_id = plugin->id,
-        .window_id = browser->id,
-        .url_length = url_length,
-        .pid = pid,
-        .w = luaL_checkinteger(state, 1),
-        .h = luaL_checkinteger(state, 2),
-    };
-    const uint32_t url_length32 = (uint32_t)url_length;
-    _bolt_ipc_send(fd, &msg_type, sizeof(msg_type));
-    _bolt_ipc_send(fd, &header, sizeof(header));
-    _bolt_ipc_send(fd, url, url_length32);
-
-    // add to the hashmap
-    hashmap_set(plugin->external_browsers, &browser);
-    return 1;
-}
-
-static int api_createembeddedbrowser(lua_State* state) {
-    lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME);
-    const struct Plugin* plugin = lua_touserdata(state, -1);
-    lua_pop(state, 1);
-
-    // push a window onto the stack as the return value, then initialise it
-    struct EmbeddedWindow* window = lua_newuserdata(state, sizeof(struct EmbeddedWindow));
-    if (!_bolt_plugin_shm_open_inbound(&window->browser_shm, "eb", next_window_id)) {
-        lua_pushliteral(state, "createembeddedbrowser: failed to create shm object");
-        lua_error(state);
-    }
-    window->is_deleted = false;
-    window->is_browser = true;
-    window->popup_shown = false;
-    window->do_capture = false;
-    window->capture_id = 0;
-    window->popup_initialised = false;
-    window->popup_meta.x = 0;
-    window->popup_meta.y = 0;
-    window->reposition_mode = false;
-    window->id = next_window_id;
-    window->plugin_id = plugin->id;
-    window->plugin = state;
-    _bolt_rwlock_init(&window->lock);
-    _bolt_rwlock_init(&window->input_lock);
-    window->metadata.x = luaL_checkinteger(state, 1);
-    window->metadata.y = luaL_checkinteger(state, 2);
-    window->metadata.width = luaL_checkinteger(state, 3);
-    window->metadata.height = luaL_checkinteger(state, 4);
-    if (window->metadata.width < WINDOW_MIN_SIZE) window->metadata.width = WINDOW_MIN_SIZE;
-    if (window->metadata.height < WINDOW_MIN_SIZE) window->metadata.height = WINDOW_MIN_SIZE;
-    memset(&window->input, 0, sizeof(window->input));
-    managed_functions.surface_init(&window->surface_functions, window->metadata.width, window->metadata.height, NULL);
-    lua_getfield(state, LUA_REGISTRYINDEX, EMBEDDEDBROWSER_META_REGISTRYNAME);
-    lua_setmetatable(state, -2);
-    next_window_id += 1;
-
-    // create an event table in the registry for this window
-    lua_getfield(state, LUA_REGISTRYINDEX, BROWSERS_REGISTRYNAME);
-    lua_pushinteger(state, window->id);
-    lua_createtable(state, BROWSER_EVENT_ENUM_SIZE, 0);
-    lua_pushinteger(state, BROWSER_USERDATA);
-    lua_pushvalue(state, -5);
-    lua_settable(state, -3);
-    lua_settable(state, -3);
-    lua_pop(state, 1);
-
-    // send an IPC message to the host to create an OSR browser
-    const int pid = getpid();
-    size_t url_length;
-    const char* url = luaL_checklstring(state, 5, &url_length);
-    const enum BoltIPCMessageTypeToHost msg_type = IPC_MSG_CREATEBROWSER_OSR;
-    const struct BoltIPCCreateBrowserHeader header = {
-        .plugin_id = plugin->id,
-        .window_id = window->id,
-        .url_length = url_length,
-        .pid = pid,
-        .w = window->metadata.width,
-        .h = window->metadata.height,
-    };
-    const uint32_t url_length32 = (uint32_t)url_length;
-    _bolt_ipc_send(fd, &msg_type, sizeof(msg_type));
-    _bolt_ipc_send(fd, &header, sizeof(header));
-    _bolt_ipc_send(fd, url, url_length32);
-
-    // set this window in the hashmap, which is accessible by backends
-    _bolt_rwlock_lock_write(&windows.lock);
-    hashmap_set(windows.map, &window);
-    _bolt_rwlock_unlock_write(&windows.lock);
-    return 1;
-}
-
-static int api_point(lua_State* state) {
-    struct Point3D* point = lua_newuserdata(state, sizeof(struct Point3D));
-    point->xyzh.floats[0] = luaL_checknumber(state, 1);
-    point->xyzh.floats[1] = luaL_checknumber(state, 2);
-    point->xyzh.floats[2] = luaL_checknumber(state, 3);
-    point->xyzh.floats[3] = 1.0;
-    point->integer = false;
-    point->homogenous = false;
-    lua_getfield(state, LUA_REGISTRYINDEX, POINT_META_REGISTRYNAME);
-    lua_setmetatable(state, -2);
-    return 1;
-}
-
-static int api_createbuffer(lua_State* state) {
-    const long size = luaL_checklong(state, 1);
-    struct FixedBuffer* buffer = lua_newuserdata(state, sizeof(struct FixedBuffer));
-    buffer->data = malloc(size);
-    if (!buffer->data) {
-        lua_pushfstring(state, "createbuffer: heap error, failed to allocate %i bytes", size);
-        lua_error(state);
-    }
-    buffer->size = size;
-    lua_getfield(state, LUA_REGISTRYINDEX, BUFFER_META_REGISTRYNAME);
-    lua_setmetatable(state, -2);
-    return 1;
-}
-
-static int api_batch2d_vertexcount(lua_State* state) {
-    const struct RenderBatch2D* batch = require_self_userdata(state, "vertexcount");
-    lua_pushinteger(state, batch->index_count);
-    return 1;
-}
-
-static int api_batch2d_verticesperimage(lua_State* state) {
-    const struct RenderBatch2D* batch = require_self_userdata(state, "verticesperimage");
-    lua_pushinteger(state, batch->vertices_per_icon);
-    return 1;
-}
-
-static int api_batch2d_isminimap(lua_State* state) {
-    const struct RenderBatch2D* batch = require_self_userdata(state, "isminimap");
-    lua_pushboolean(state, batch->is_minimap);
-    return 1;
-}
-
-static int api_batch2d_targetsize(lua_State* state) {
-    const struct RenderBatch2D* batch = require_self_userdata(state, "targetsize");
-    lua_pushinteger(state, batch->screen_width);
-    lua_pushinteger(state, batch->screen_height);
-    return 2;
-}
-
-static int api_batch2d_vertexxy(lua_State* state) {
-    const struct RenderBatch2D* batch = require_self_userdata(state, "vertexxy");
-    const lua_Integer index = luaL_checkinteger(state, 2);
-    int32_t xy[2];
-    batch->vertex_functions.xy(index - 1, batch->vertex_functions.userdata, xy);
-    lua_pushinteger(state, xy[0]);
-    lua_pushinteger(state, xy[1]);
-    return 2;
-}
-
-static int api_batch2d_vertexatlasxy(lua_State* state) {
-    const struct RenderBatch2D* batch = require_self_userdata(state, "vertexatlasxy");
-    const lua_Integer index = luaL_checkinteger(state, 2);
-    int32_t xy[2];
-    batch->vertex_functions.atlas_xy(index - 1, batch->vertex_functions.userdata, xy);
-    lua_pushinteger(state, xy[0]);
-    lua_pushinteger(state, xy[1]);
-    return 2;
-}
-
-static int api_batch2d_vertexatlaswh(lua_State* state) {
-    const struct RenderBatch2D* batch = require_self_userdata(state, "vertexatlaswh");
-    const lua_Integer index = luaL_checkinteger(state, 2);
-    int32_t wh[2];
-    batch->vertex_functions.atlas_wh(index - 1, batch->vertex_functions.userdata, wh);
-    lua_pushinteger(state, wh[0]);
-    lua_pushinteger(state, wh[1]);
-    return 2;
-}
-
-static int api_batch2d_vertexuv(lua_State* state) {
-    const struct RenderBatch2D* batch = require_self_userdata(state, "vertexuv");
-    const lua_Integer index = lua_tointeger(state, 2);
-    double uv[2];
-    batch->vertex_functions.uv(index - 1, batch->vertex_functions.userdata, uv);
-    lua_pushnumber(state, uv[0]);
-    lua_pushnumber(state, uv[1]);
-    return 2;
-}
-
-static int api_batch2d_vertexcolour(lua_State* state) {
-    const struct RenderBatch2D* batch = require_self_userdata(state, "vertexcolour");
-    const lua_Integer index = luaL_checkinteger(state, 2);
-    double colour[4];
-    batch->vertex_functions.colour(index - 1, batch->vertex_functions.userdata, colour);
-    lua_pushnumber(state, colour[0]);
-    lua_pushnumber(state, colour[1]);
-    lua_pushnumber(state, colour[2]);
-    lua_pushnumber(state, colour[3]);
-    return 4;
-}
-
-static int api_batch2d_textureid(lua_State* state) {
-    const struct RenderBatch2D* render = require_self_userdata(state, "textureid");
-    const size_t id = render->texture_functions.id(render->texture_functions.userdata);
-    lua_pushinteger(state, id);
-    return 1;
-}
-
-static int api_batch2d_texturesize(lua_State* state) {
-    const struct RenderBatch2D* render = require_self_userdata(state, "texturesize");
-    size_t size[2];
-    render->texture_functions.size(render->texture_functions.userdata, size);
-    lua_pushinteger(state, size[0]);
-    lua_pushinteger(state, size[1]);
-    return 2;
-}
-
-static int api_batch2d_texturecompare(lua_State* state) {
-    const struct RenderBatch2D* render = require_self_userdata(state, "texturecompare");
-    const size_t x = luaL_checkinteger(state, 2);
-    const size_t y = luaL_checkinteger(state, 3);
-    size_t data_len;
-    const void* data;
-    get_binary_data(state, 4, &data, &data_len);
-    const uint8_t match = render->texture_functions.compare(render->texture_functions.userdata, x, y, data_len, (const unsigned char*)data);
-    lua_pushboolean(state, match);
-    return 1;
-}
-
-static int api_batch2d_texturedata(lua_State* state) {
-    const struct RenderBatch2D* render = require_self_userdata(state, "texturedata");
-    const size_t x = luaL_checkinteger(state, 2);
-    const size_t y = luaL_checkinteger(state, 3);
-    const size_t len = luaL_checkinteger(state, 4);
-    const uint8_t* ret = render->texture_functions.data(render->texture_functions.userdata, x, y);
-    lua_pushlstring(state, (const char*)ret, len);
-    return 1;
-}
-
-static int api_minimap_angle(lua_State* state) {
-    const struct RenderMinimapEvent* render = require_self_userdata(state, "angle");
-    lua_pushnumber(state, render->angle);
-    return 1;
-}
-
-static int api_minimap_scale(lua_State* state) {
-    const struct RenderMinimapEvent* render = require_self_userdata(state, "scale");
-    lua_pushnumber(state, render->scale);
-    return 1;
-}
-
-static int api_minimap_position(lua_State* state) {
-    const struct RenderMinimapEvent* render = require_self_userdata(state, "position");
-    lua_pushnumber(state, render->x);
-    lua_pushnumber(state, render->y);
-    return 2;
-}
-
-static int api_point_transform(lua_State* state) {
-    const struct Point3D* point = require_self_userdata(state, "transform");
-    const struct Transform3D* transform = require_userdata(state, 2, "transform");
-    double x, y, z, h;
-    if (point->integer) {
-        x = (double)point->xyzh.ints[0];
-        y = (double)point->xyzh.ints[1];
-        z = (double)point->xyzh.ints[2];
-        h = 1.0;
-    } else {
-        x = point->xyzh.floats[0];
-        y = point->xyzh.floats[1];
-        z = point->xyzh.floats[2];
-        h = point->xyzh.floats[3];
-    }
-    struct Point3D* out = lua_newuserdata(state, sizeof(struct Point3D));
-    out->xyzh.floats[0] = (x * transform->matrix[0]) + (y * transform->matrix[4]) + (z * transform->matrix[8]) + (h * transform->matrix[12]);
-    out->xyzh.floats[1] = (x * transform->matrix[1]) + (y * transform->matrix[5]) + (z * transform->matrix[9]) + (h * transform->matrix[13]);
-    out->xyzh.floats[2] = (x * transform->matrix[2]) + (y * transform->matrix[6]) + (z * transform->matrix[10]) + (h * transform->matrix[14]);
-    out->xyzh.floats[3] = (x * transform->matrix[3]) + (y * transform->matrix[7]) + (z * transform->matrix[11]) + (h * transform->matrix[15]);
-    out->integer = false;
-    out->homogenous = true;
-    lua_getfield(state, LUA_REGISTRYINDEX, POINT_META_REGISTRYNAME);
-    lua_setmetatable(state, -2);
-    return 1;
-}
-
-static int api_point_get(lua_State* state) {
-    const struct Point3D* point = require_self_userdata(state, "get");
-    if (point->integer) {
-        lua_pushinteger(state, point->xyzh.ints[0]);
-        lua_pushinteger(state, point->xyzh.ints[1]);
-        lua_pushinteger(state, point->xyzh.ints[2]);
-    } else if (!point->homogenous) {
-        lua_pushnumber(state, point->xyzh.floats[0]);
-        lua_pushnumber(state, point->xyzh.floats[1]);
-        lua_pushnumber(state, point->xyzh.floats[2]);
-    } else {
-        lua_pushnumber(state, point->xyzh.floats[0] / point->xyzh.floats[3]);
-        lua_pushnumber(state, point->xyzh.floats[1] / point->xyzh.floats[3]);
-        lua_pushnumber(state, point->xyzh.floats[2] / point->xyzh.floats[3]);
-    }
-    return 3;
-}
-
-static int api_point_aspixels(lua_State* state) {
-    const struct Point3D* point = require_self_userdata(state, "aspixels");
-    double x, y;
-    if (point->integer) {
-        x = (double)point->xyzh.ints[0];
-        y = (double)point->xyzh.ints[1];
-    } else if (!point->homogenous) {
-        x = point->xyzh.floats[0];
-        y = point->xyzh.floats[1];
-    } else {
-        x = point->xyzh.floats[0] / point->xyzh.floats[3];
-        y = point->xyzh.floats[1] / point->xyzh.floats[3];
-    }
-    int game_view_x, game_view_y, game_view_w, game_view_h;
-    managed_functions.game_view_rect(&game_view_x, &game_view_y, &game_view_w, &game_view_h);
-    lua_pushnumber(state, ((x  + 1.0) * game_view_w / 2.0) + (double)game_view_x);
-    lua_pushnumber(state, ((-y + 1.0) * game_view_h / 2.0) + (double)game_view_y);
-    return 2;
-}
-
-#define LENGTH(N1, N2, N3) sqrt((N1 * N1) + (N2 * N2) + (N3 * N3))
-static int api_transform_decompose(lua_State* state) {
-    const struct Transform3D* transform = require_self_userdata(state, "decompose");
-    lua_pushnumber(state, transform->matrix[12]);
-    lua_pushnumber(state, transform->matrix[13]);
-    lua_pushnumber(state, transform->matrix[14]);
-    const double scale_x = LENGTH(transform->matrix[0], transform->matrix[1], transform->matrix[2]);
-    const double scale_y = LENGTH(transform->matrix[4], transform->matrix[5], transform->matrix[6]);
-    const double scale_z = LENGTH(transform->matrix[8], transform->matrix[9], transform->matrix[10]);
-    lua_pushnumber(state, scale_x);
-    lua_pushnumber(state, scale_y);
-    lua_pushnumber(state, scale_z);
-    if (scale_x == 0.0 || scale_y == 0.0 || scale_z == 0.0) {
-        // scale=0 means we can't calculate angles because there would be a division by zero,
-        // and angle is meaningless for a zero-scale model anyway, so just put 0 for all the angles
-        lua_pushnumber(state, 0.0);
-        lua_pushnumber(state, 0.0);
-        lua_pushnumber(state, 0.0);
-    } else {
-        // see https://stackoverflow.com/questions/39128589/decomposing-rotation-matrix-x-y-z-cartesian-angles
-        const double yaw = atan2(-(transform->matrix[8] / scale_z), sqrt((transform->matrix[0] * transform->matrix[0] / (scale_x * scale_x)) + (transform->matrix[4] * transform->matrix[4] / (scale_y * scale_y))));
-        const double pitch = atan2((transform->matrix[9] / scale_z) / cos(yaw), (transform->matrix[10] / scale_z) / cos(yaw));
-        const double roll = atan2((transform->matrix[4] / scale_y) / cos(yaw), (transform->matrix[0] / scale_x) / cos(yaw));
-        lua_pushnumber(state, yaw);
-        lua_pushnumber(state, pitch);
-        lua_pushnumber(state, roll);
-    }
-    return 9;
-}
-#undef LENGTH
-
-static int api_transform_get(lua_State* state) {
-    const struct Transform3D* transform = require_self_userdata(state, "get");
-    for (size_t i = 0; i < 16; i += 1) {
-        lua_pushnumber(state, transform->matrix[i]);
-    }
-    return 16;
-}
-
-static int api_surface_clear(lua_State* state) {
-    const struct SurfaceFunctions* functions = require_self_userdata(state, "clear");
-    const int argc = lua_gettop(state);
-    const double r = (argc >= 2) ? luaL_checknumber(state, 2) : 0.0;
-    const double g = (argc >= 3) ? luaL_checknumber(state, 3) : r;
-    const double b = (argc >= 4) ? luaL_checknumber(state, 4) : r;
-    const double a = (argc >= 5) ? luaL_checknumber(state, 5) : ((argc > 1) ? 1.0 : 0.0);
-    functions->clear(functions->userdata, r, g, b, a);
-    return 0;
-}
-
-static int api_surface_subimage(lua_State* state) {
-    const struct SurfaceFunctions* functions = require_self_userdata(state, "subimage");
-    const lua_Integer x = luaL_checkinteger(state, 2);
-    const lua_Integer y = luaL_checkinteger(state, 3);
-    const lua_Integer w = luaL_checkinteger(state, 4);
-    const lua_Integer h = luaL_checkinteger(state, 5);
-    const size_t req_length = w * h * 4;
-    size_t length;
-    const void* rgba;
-    get_binary_data(state, 6, &rgba, &length);
-    if (length >= req_length) {
-        functions->subimage(functions->userdata, x, y, w, h, rgba, 0);
-    } else {
-        uint8_t* ud = lua_newuserdata(state, req_length);
-        memcpy(ud, rgba, length);
-        memset(ud + length, 0, req_length - length);
-        functions->subimage(functions->userdata, x, y, w, h, (const void*)ud, 0);
-        lua_pop(state, 1);
-    }
-    lua_getfield(state, LUA_REGISTRYINDEX, SURFACE_META_REGISTRYNAME);
-    lua_setmetatable(state, -2);
-    return 1;
-}
-
-static int api_surface_drawtoscreen(lua_State* state) {
-    if (!overlay_inited) return 0;
-    const struct SurfaceFunctions* functions = require_self_userdata(state, "drawtoscreen");
-    const int sx = luaL_checkinteger(state, 2);
-    const int sy = luaL_checkinteger(state, 3);
-    const int sw = luaL_checkinteger(state, 4);
-    const int sh = luaL_checkinteger(state, 5);
-    const int dx = luaL_checkinteger(state, 6);
-    const int dy = luaL_checkinteger(state, 7);
-    const int dw = luaL_checkinteger(state, 8);
-    const int dh = luaL_checkinteger(state, 9);
-    functions->draw_to_surface(functions->userdata, overlay.userdata, sx, sy, sw, sh, dx, dy, dw, dh);
-    return 0;
-}
-
-static int api_surface_drawtosurface(lua_State* state) {
-    const struct SurfaceFunctions* functions = require_self_userdata(state, "drawtosurface");
-    const struct SurfaceFunctions* target = require_userdata(state, 2, "drawtosurface");
-    const int sx = luaL_checkinteger(state, 3);
-    const int sy = luaL_checkinteger(state, 4);
-    const int sw = luaL_checkinteger(state, 5);
-    const int sh = luaL_checkinteger(state, 6);
-    const int dx = luaL_checkinteger(state, 7);
-    const int dy = luaL_checkinteger(state, 8);
-    const int dw = luaL_checkinteger(state, 9);
-    const int dh = luaL_checkinteger(state, 10);
-    functions->draw_to_surface(functions->userdata, target->userdata, sx, sy, sw, sh, dx, dy, dw, dh);
-    return 0;
-}
-
-static int api_surface_drawtowindow(lua_State* state) {
-    const struct SurfaceFunctions* functions = require_self_userdata(state, "drawtowindow");
-    const struct EmbeddedWindow* target = require_userdata(state, 2, "drawtowindow");
-    const int sx = luaL_checkinteger(state, 3);
-    const int sy = luaL_checkinteger(state, 4);
-    const int sw = luaL_checkinteger(state, 5);
-    const int sh = luaL_checkinteger(state, 6);
-    const int dx = luaL_checkinteger(state, 7);
-    const int dy = luaL_checkinteger(state, 8);
-    const int dw = luaL_checkinteger(state, 9);
-    const int dh = luaL_checkinteger(state, 10);
-    functions->draw_to_surface(functions->userdata, target->surface_functions.userdata, sx, sy, sw, sh, dx, dy, dw, dh);
-    return 0;
-}
-
-static int api_window_close(lua_State* state) {
-    struct EmbeddedWindow* window = require_self_userdata(state, "state");
-    window->is_deleted = true;
-    return 0;
-}
-
-static int api_window_clear(lua_State* state) {
-    const struct EmbeddedWindow* window = require_self_userdata(state, "clear");
-    const int argc = lua_gettop(state);
-    const double r = (argc >= 2) ? luaL_checknumber(state, 2) : 0.0;
-    const double g = (argc >= 3) ? luaL_checknumber(state, 3) : r;
-    const double b = (argc >= 4) ? luaL_checknumber(state, 4) : r;
-    const double a = (argc >= 5) ? luaL_checknumber(state, 5) : ((argc > 1) ? 1.0 : 0.0);
-    window->surface_functions.clear(window->surface_functions.userdata, r, g, b, a);
-    return 0;
-}
-
-static int api_window_id(lua_State* state) {
-    const struct EmbeddedWindow* window = require_self_userdata(state, "id");
-    lua_pushinteger(state, window->id);
-    return 1;
-}
-
-static int api_window_size(lua_State* state) {
-    struct EmbeddedWindow* window = require_self_userdata(state, "size");
-    _bolt_rwlock_lock_read(&window->lock);
-    lua_pushinteger(state, window->metadata.width);
-    lua_pushinteger(state, window->metadata.height);
-    _bolt_rwlock_unlock_read(&window->lock);
-    return 2;
-}
-
-static int api_window_subimage(lua_State* state) {
-    const struct EmbeddedWindow* window = require_self_userdata(state, "subimage");
-    const lua_Integer x = luaL_checkinteger(state, 2);
-    const lua_Integer y = luaL_checkinteger(state, 3);
-    const lua_Integer w = luaL_checkinteger(state, 4);
-    const lua_Integer h = luaL_checkinteger(state, 5);
-    const size_t req_length = w * h * 4;
-    size_t length;
-    const void* rgba;
-    get_binary_data(state, 6, &rgba, &length);
-    if (length >= req_length) {
-        window->surface_functions.subimage(window->surface_functions.userdata, x, y, w, h, rgba, 0);
-    } else {
-        uint8_t* ud = lua_newuserdata(state, req_length);
-        memcpy(ud, rgba, length);
-        memset(ud + length, 0, req_length - length);
-        window->surface_functions.subimage(window->surface_functions.userdata, x, y, w, h, (const void*)ud, 0);
-        lua_pop(state, 1);
-    }
-    lua_getfield(state, LUA_REGISTRYINDEX, SURFACE_META_REGISTRYNAME);
-    lua_setmetatable(state, -2);
-    return 1;
-}
-
-static int api_window_startreposition(lua_State* state) {
-    struct EmbeddedWindow* window = require_self_userdata(state, "startreposition");
-    const lua_Integer xscale = luaL_checkinteger(state, 2);
-    const lua_Integer yscale = luaL_checkinteger(state, 3);
-    window->reposition_mode = true;
-    window->reposition_threshold = false;
-    window->reposition_w = (xscale == 0) ? 0 : ((xscale > 0) ? 1 : -1);
-    window->reposition_h = (yscale == 0) ? 0 : ((yscale > 0) ? 1 : -1);
-    return 0;
-}
-
-static int api_window_cancelreposition(lua_State* state) {
-    struct EmbeddedWindow* window = require_self_userdata(state, "cancelreposition");
-    window->reposition_mode = false;
-    return 0;
-}
-
-static int api_render3d_vertexcount(lua_State* state) {
-    const struct Render3D* render = require_self_userdata(state, "vertexcount");
-    lua_pushinteger(state, render->vertex_count);
-    return 1;
-}
-
-static int api_render3d_vertexxyz(lua_State* state) {
-    const struct Render3D* render = require_self_userdata(state, "vertexxyz");
-    const lua_Integer index = lua_tointeger(state, 2);
-    struct Point3D* point = lua_newuserdata(state, sizeof(struct Point3D));
-    render->vertex_functions.xyz(index - 1, render->vertex_functions.userdata, point);
-    lua_getfield(state, LUA_REGISTRYINDEX, POINT_META_REGISTRYNAME);
-    lua_setmetatable(state, -2);
-    return 1;
-}
-
-static int api_render3d_modelmatrix(lua_State* state) {
-    const struct Render3D* render = require_self_userdata(state, "modelmatrix");
-    struct Transform3D* transform = lua_newuserdata(state, sizeof(struct Transform3D));
-    render->matrix_functions.model_matrix(render->matrix_functions.userdata, transform);
-    lua_getfield(state, LUA_REGISTRYINDEX, TRANSFORM_META_REGISTRYNAME);
-    lua_setmetatable(state, -2);
-    return 1;
-}
-
-static int api_render3d_viewprojmatrix(lua_State* state) {
-    const struct Render3D* render = require_self_userdata(state, "viewprojmatrix");
-    struct Transform3D* transform = lua_newuserdata(state, sizeof(struct Transform3D));
-    render->matrix_functions.viewproj_matrix(render->matrix_functions.userdata, transform);
-    lua_getfield(state, LUA_REGISTRYINDEX, TRANSFORM_META_REGISTRYNAME);
-    lua_setmetatable(state, -2);
-    return 1;
-}
-
-static int api_render3d_vertexmeta(lua_State* state) {
-    const struct Render3D* render = require_self_userdata(state, "vertexmeta");
-    const lua_Integer index = luaL_checkinteger(state, 2);
-    size_t meta = render->vertex_functions.atlas_meta(index - 1, render->vertex_functions.userdata);
-    lua_pushinteger(state, meta);
-    return 1;
-}
-
-static int api_render3d_atlasxywh(lua_State* state) {
-    const struct Render3D* render = require_self_userdata(state, "atlasxywh");
-    const lua_Integer meta = luaL_checkinteger(state, 2);
-    int32_t xywh[4];
-    render->vertex_functions.atlas_xywh(meta, render->vertex_functions.userdata, xywh);
-    lua_pushinteger(state, xywh[0]);
-    lua_pushinteger(state, xywh[1]);
-    lua_pushinteger(state, xywh[2]);
-    lua_pushinteger(state, xywh[3]);
-    return 4;
-}
-
-static int api_render3d_vertexuv(lua_State* state) {
-    const struct Render3D* render = require_self_userdata(state, "vertexuv");
-    const lua_Integer index = luaL_checkinteger(state, 2);
-    double uv[4];
-    render->vertex_functions.uv(index - 1, render->vertex_functions.userdata, uv);
-    lua_pushnumber(state, uv[0]);
-    lua_pushnumber(state, uv[1]);
-    return 2;
-}
-
-static int api_render3d_vertexcolour(lua_State* state) {
-    const struct Render3D* render = require_self_userdata(state, "vertexcolour");
-    const lua_Integer index = luaL_checkinteger(state, 2);
-    double col[4];
-    render->vertex_functions.colour(index - 1, render->vertex_functions.userdata, col);
-    lua_pushnumber(state, col[0]);
-    lua_pushnumber(state, col[1]);
-    lua_pushnumber(state, col[2]);
-    lua_pushnumber(state, col[3]);
-    return 4;
-}
-
-static int api_render3d_textureid(lua_State* state) {
-    const struct Render3D* render = require_self_userdata(state, "textureid");
-    const size_t id = render->texture_functions.id(render->texture_functions.userdata);
-    lua_pushinteger(state, id);
-    return 1;
-}
-
-static int api_render3d_texturesize(lua_State* state) {
-    const struct Render3D* render = require_self_userdata(state, "texturesize");
-    size_t size[2];
-    render->texture_functions.size(render->texture_functions.userdata, size);
-    lua_pushinteger(state, size[0]);
-    lua_pushinteger(state, size[1]);
-    return 2;
-}
-
-static int api_render3d_texturecompare(lua_State* state) {
-    const struct Render3D* render = require_self_userdata(state, "texturecompare");
-    const size_t x = luaL_checkinteger(state, 2);
-    const size_t y = luaL_checkinteger(state, 3);
-    size_t data_len;
-    const void* data;
-    get_binary_data(state, 4, &data, &data_len);
-    const uint8_t match = render->texture_functions.compare(render->texture_functions.userdata, x, y, data_len, (const unsigned char*)data);
-    lua_pushboolean(state, match);
-    return 1;
-}
-
-static int api_render3d_texturedata(lua_State* state) {
-    const struct Render3D* render = require_self_userdata(state, "texturedata");
-    const size_t x = luaL_checkinteger(state, 2);
-    const size_t y = luaL_checkinteger(state, 3);
-    const size_t len = luaL_checkinteger(state, 4);
-    const uint8_t* ret = render->texture_functions.data(render->texture_functions.userdata, x, y);
-    lua_pushlstring(state, (const char*)ret, len);
-    return 1;
-}
-
-static int api_render3d_vertexbone(lua_State* state) {
-    const struct Render3D* render = require_self_userdata(state, "vertexbone");
-    const int index = luaL_checkinteger(state, 2);
-    uint8_t ret = render->vertex_functions.bone_id(index - 1, render->vertex_functions.userdata);
-    lua_pushinteger(state, ret);
-    return 1;
-}
-
-static int api_render3d_boneanimation(lua_State* state) {
-    const struct Render3D* render = require_self_userdata(state, "boneanimation");
-    const lua_Integer bone_id = luaL_checkinteger(state, 2);
-
-    if (!render->is_animated) {
-        lua_pushliteral(state, "boneanimation: cannot get bone transforms for non-animated model");
-        lua_error(state);
-    }
-
-    // not a mistake - game's shader supports values from 0 to 128, inclusive
-    if (bone_id < 0 || bone_id > 128) {
-        lua_pushliteral(state, "boneanimation: invalid bone ID");
-        lua_error(state);
-    }
-
-    struct Transform3D* transform = lua_newuserdata(state, sizeof(struct Transform3D));
-    render->vertex_functions.bone_transform(bone_id, render->vertex_functions.userdata, transform);
-    lua_getfield(state, LUA_REGISTRYINDEX, TRANSFORM_META_REGISTRYNAME);
-    lua_setmetatable(state, -2);
-    return 1;
-}
-
-static int api_render3d_animated(lua_State* state) {
-    const struct Render3D* render = require_self_userdata(state, "animated");
-    lua_pushboolean(state, render->is_animated);
-    return 1;
-}
-
-static int api_repositionevent_xywh(lua_State* state) {
-    const struct RepositionEvent* event = require_self_userdata(state, "xywh");
-    lua_pushinteger(state, event->x);
-    lua_pushinteger(state, event->y);
-    lua_pushinteger(state, event->width);
-    lua_pushinteger(state, event->height);
-    return 4;
-}
-
-static int api_repositionevent_didresize(lua_State* state) {
-    const struct RepositionEvent* event = require_self_userdata(state, "didresize");
-    lua_pushboolean(state, event->did_resize);
-    return 1;
-}
-
-static int api_mouseevent_xy(lua_State* state) {
-    const struct MouseEvent* event = require_self_userdata(state, "xy");
-    lua_pushinteger(state, event->x);
-    lua_pushinteger(state, event->y);
-    return 2;
-}
-
-static int api_mouseevent_ctrl(lua_State* state) {
-    const struct MouseEvent* event = require_self_userdata(state, "ctrl");
-    lua_pushboolean(state, event->ctrl);
-    return 1;
-}
-
-static int api_mouseevent_shift(lua_State* state) {
-    const struct MouseEvent* event = require_self_userdata(state, "shift");
-    lua_pushboolean(state, event->shift);
-    return 1;
-}
-
-static int api_mouseevent_meta(lua_State* state) {
-    const struct MouseEvent* event = require_self_userdata(state, "meta");
-    lua_pushboolean(state, event->meta);
-    return 1;
-}
-
-static int api_mouseevent_alt(lua_State* state) {
-    const struct MouseEvent* event = require_self_userdata(state, "meta");
-    lua_pushboolean(state, event->alt);
-    return 1;
-}
-
-static int api_mouseevent_capslock(lua_State* state) {
-    const struct MouseEvent* event = require_self_userdata(state, "capslock");
-    lua_pushboolean(state, event->capslock);
-    return 1;
-}
-
-static int api_mouseevent_numlock(lua_State* state) {
-    const struct MouseEvent* event = require_self_userdata(state, "numlock");
-    lua_pushboolean(state, event->numlock);
-    return 1;
-}
-
-static int api_mouseevent_mousebuttons(lua_State* state) {
-    const struct MouseEvent* event = require_self_userdata(state, "mousebuttons");
-    lua_pushboolean(state, event->mb_left);
-    lua_pushboolean(state, event->mb_right);
-    lua_pushboolean(state, event->mb_middle);
-    return 3;
-}
-
-static int api_mousebutton_button(lua_State* state) {
-    const struct MouseButtonEvent* event = require_self_userdata(state, "button");
-    lua_pushinteger(state, event->button);
-    return 1;
-}
-
-static int api_scroll_direction(lua_State* state) {
-    const struct MouseScrollEvent* event = require_self_userdata(state, "direction");
-    lua_pushinteger(state, event->direction);
-    return 1;
-}
-
-static int api_browser_close(lua_State* state) {
-    const struct ExternalBrowser* browser = require_self_userdata(state, "close");
-    if (browser->do_capture) browser->plugin->ext_browser_capture_count += 1;
-    hashmap_delete(browser->plugin->external_browsers, &browser);
-
-    const enum BoltIPCMessageTypeToHost msg_type = IPC_MSG_CLOSEBROWSER_EXTERNAL;
-    const struct BoltIPCCloseBrowserHeader header = { .plugin_id = browser->plugin_id, .window_id = browser->id };
-    _bolt_ipc_send(fd, &msg_type, sizeof(msg_type));
-    _bolt_ipc_send(fd, &header, sizeof(header));
-
-    return 0;
-}
-
-static int api_browser_sendmessage(lua_State* state) {
-    const struct ExternalBrowser* window = require_self_userdata(state, "sendmessage");
-    const void* str;
-    size_t len;
-    get_binary_data(state, 2, &str, &len);
-    lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME);
-    const struct Plugin* plugin = lua_touserdata(state, -1);
-    const uint64_t id = plugin->id;
-    lua_pop(state, 1);
-
-    const enum BoltIPCMessageTypeToHost msg_type = IPC_MSG_PLUGINMESSAGE;
-    const struct BoltIPCPluginMessageHeader header = { .plugin_id = id, .window_id = window->id, .message_size = len };
-    _bolt_ipc_send(fd, &msg_type, sizeof(msg_type));
-    _bolt_ipc_send(fd, &header, sizeof(header));
-    _bolt_ipc_send(fd, str, len);
-    return 0;
-}
-
-static int api_browser_enablecapture(lua_State* state) {
-    struct ExternalBrowser* window = require_self_userdata(state, "enablecapture");
-    if (!window->do_capture) {
-        window->plugin->ext_browser_capture_count += 1;
-        window->do_capture = true;
-        window->capture_ready = true;
-    }
-    return 0;
-}
-
-static int api_browser_disablecapture(lua_State* state) {
-    struct ExternalBrowser* window = require_self_userdata(state, "disablecapture");
-    if (window->do_capture) window->plugin->ext_browser_capture_count -= 1;
-    window->do_capture = false;
-    return 0;
-}
-
-static int api_browser_oncloserequest(lua_State* state) {
-    const uint64_t* window_id = require_self_userdata(state, "oncloserequest");
-    luaL_checkany(state, 2);
-    lua_getfield(state, LUA_REGISTRYINDEX, BROWSERS_REGISTRYNAME); /*stack: window table*/
-    lua_pushinteger(state, *window_id); /*stack: window table, window id*/
-    lua_gettable(state, -2); /*stack: window table, event table*/
-    lua_pushinteger(state, BROWSER_ONCLOSEREQUEST); /*stack: window table, event table, event id*/
-    if (lua_isfunction(state, 2)) {
-        lua_pushvalue(state, 2);
-    } else {
-        lua_pushnil(state);
-    } /*stack: window table, event table, event id, value*/
-    lua_settable(state, -3); /*stack: window table, event table*/
-    lua_pop(state, 2); /*stack: (empty)*/
-    return 0;
-}
-
-static int api_browser_onmessage(lua_State* state) {
-    const uint64_t* window_id = require_self_userdata(state, "onmessage");
-    luaL_checkany(state, 2);
-    lua_getfield(state, LUA_REGISTRYINDEX, BROWSERS_REGISTRYNAME); /*stack: window table*/
-    lua_pushinteger(state, *window_id); /*stack: window table, window id*/
-    lua_gettable(state, -2); /*stack: window table, event table*/
-    lua_pushinteger(state, BROWSER_ONMESSAGE); /*stack: window table, event table, event id*/
-    if (lua_isfunction(state, 2)) {
-        lua_pushvalue(state, 2);
-    } else {
-        lua_pushnil(state);
-    } /*stack: window table, event table, event id, value*/
-    lua_settable(state, -3); /*stack: window table, event table*/
-    lua_pop(state, 2); /*stack: (empty)*/
-    return 0;
-}
-
-static int api_embeddedbrowser_close(lua_State* state) {
-    struct EmbeddedWindow* window = require_self_userdata(state, "close");
-    window->is_deleted = true;
-
-    const enum BoltIPCMessageTypeToHost msg_type = IPC_MSG_CLOSEBROWSER_OSR;
-    const struct BoltIPCCloseBrowserHeader header = { .plugin_id = window->plugin_id, .window_id = window->id };
-    _bolt_ipc_send(fd, &msg_type, sizeof(msg_type));
-    _bolt_ipc_send(fd, &header, sizeof(header));
-
-    return 0;
-}
-
-static int api_embeddedbrowser_sendmessage(lua_State* state) {
-    const struct EmbeddedWindow* window = require_self_userdata(state, "sendmessage");
-    const void* str;
-    size_t len;
-    get_binary_data(state, 2, &str, &len);
-    lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME);
-    const struct Plugin* plugin = lua_touserdata(state, -1);
-    const uint64_t id = plugin->id;
-    lua_pop(state, 1);
-
-    const enum BoltIPCMessageTypeToHost msg_type = IPC_MSG_OSRPLUGINMESSAGE;
-    const struct BoltIPCPluginMessageHeader header = { .plugin_id = id, .window_id = window->id, .message_size = len };
-    _bolt_ipc_send(fd, &msg_type, sizeof(msg_type));
-    _bolt_ipc_send(fd, &header, sizeof(header));
-    _bolt_ipc_send(fd, str, len);
-    return 0;
-}
-
-static int api_embeddedbrowser_enablecapture(lua_State* state) {
-    struct EmbeddedWindow* window = require_self_userdata(state, "enablecapture");
-    if (!window->do_capture) {
-        next_window_id += 1;
-        window->do_capture = true;
-        window->capture_ready = true;
-    }
-    return 0;
-}
-
-static int api_embeddedbrowser_disablecapture(lua_State* state) {
-    struct EmbeddedWindow* window = require_self_userdata(state, "disablecapture");
-    if (window->do_capture) {
-        window->do_capture = false;
-    }
-    return 0;
-}
-
-static int api_buffer_writeinteger(lua_State* state) {
-    const struct FixedBuffer* buffer = require_self_userdata(state, "writeinteger");
-    const uint64_t value = (uint64_t)luaL_checklong(state, 2);
-    const long offset = luaL_checklong(state, 3);
-    const int width = luaL_checkint(state, 4);
-    for (size_t i = 0; i < width; i += 1) {
-        const uint8_t b = (uint8_t)((value >> (8 * i)) & 0xFF);
-        *((uint8_t*)buffer->data + offset + i) = b;
-    }
-    return 0;
-}
-
-static int api_buffer_writenumber(lua_State* state) {
-    const struct FixedBuffer* buffer = require_self_userdata(state, "writenumber");
-    const double value = (double)luaL_checknumber(state, 2);
-    const long offset = luaL_checklong(state, 3);
-    memcpy((uint8_t*)buffer->data + offset, &value, sizeof(value));
-    return 0;
-}
-
-static int api_buffer_writestring(lua_State* state) {
-    const struct FixedBuffer* buffer = require_self_userdata(state, "writestring");
-    size_t size;
-    const void* data = luaL_checklstring(state, 2, &size);
-    const long offset = luaL_checklong(state, 3);
-    memcpy((uint8_t*)buffer->data + offset, data, size);
-    return 0;
-}
-
-static int api_buffer_writebuffer(lua_State* state) {
-    const struct FixedBuffer* buffer = require_self_userdata(state, "writebuffer");
-    const struct FixedBuffer* source = require_userdata(state, 2, "writebuffer");
-    const long offset = luaL_checklong(state, 3);
-    memcpy((uint8_t*)buffer->data + offset, source->data, source->size);
-    return 0;
 }
