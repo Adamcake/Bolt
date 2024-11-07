@@ -13,6 +13,7 @@
 
 #if defined(_WIN32)
 #include <afunix.h>
+#define getpid _getpid
 #define close closesocket
 LARGE_INTEGER performance_frequency;
 #else

@@ -7,8 +7,13 @@
 
 #include <lauxlib.h>
 #include <math.h>
-#include <unistd.h>
 #include <string.h>
+
+#if defined(_WIN32)
+#define getpid _getpid
+#else
+#include <unistd.h>
+#endif
 
 #define API_VERSION_MAJOR 1
 #define API_VERSION_MINOR 0
