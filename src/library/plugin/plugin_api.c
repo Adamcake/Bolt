@@ -1445,9 +1445,10 @@ static struct ApiFuncTemplate buffer_functions[] = {
     BOLTFUNC(writebuffer, buffer),
 };
 
-static struct ApiFuncTemplate swapbuffers_functions[] = {
-
-};
+// zero-size type causes ICE in MSVC
+//static struct ApiFuncTemplate swapbuffers_functions[] = {
+//
+//};
 
 static struct ApiFuncTemplate surface_functions[] = {
     BOLTFUNC(clear, surface),
