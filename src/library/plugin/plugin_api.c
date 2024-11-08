@@ -1471,6 +1471,7 @@ static struct ApiFuncTemplate window_functions[] = {
     BOLTFUNC(onmousebutton, window),
     BOLTFUNC(onmousebuttonup, window),
     BOLTFUNC(onscroll, window),
+    BOLTFUNC(onmouseleave, window),
 };
 
 static struct ApiFuncTemplate browser_functions[] = {
