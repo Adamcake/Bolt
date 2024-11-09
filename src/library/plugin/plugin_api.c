@@ -1479,8 +1479,6 @@ static struct ApiFuncTemplate browser_functions[] = {
     BOLTFUNC(sendmessage, browser),
     BOLTFUNC(enablecapture, browser),
     BOLTFUNC(disablecapture, browser),
-    BOLTFUNC(startreposition, window),
-    BOLTFUNC(cancelreposition, window),
     BOLTFUNC(oncloserequest, browser),
     BOLTFUNC(onmessage, browser),
 };
@@ -1488,6 +1486,8 @@ static struct ApiFuncTemplate browser_functions[] = {
 static struct ApiFuncTemplate embeddedbrowser_functions[] = {
     BOLTFUNC(close, embeddedbrowser),
     BOLTFUNC(sendmessage, embeddedbrowser),
+    BOLTFUNC(startreposition, window),
+    BOLTFUNC(cancelreposition, window),
     BOLTFUNC(enablecapture, embeddedbrowser),
     BOLTFUNC(disablecapture, embeddedbrowser),
     BOLTFUNC(oncloserequest, browser),
