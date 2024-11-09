@@ -1,0 +1,2574 @@
+\input texinfo
+@documentlanguage en
+@settitle Bolt Plugin API Reference
+
+@copying
+This is the API reference manual for version 1.0 of Bolt Launcher's
+Lua-based plugin loader. Bolt Launcher is free and open-source software.
+The software itself, including by association all parts of its plugin
+loader, are licensed under AGPL-3.
+
+Copyright @copyright{} 2024 Adamcake
+
+@quotation
+Copying and distribution of this file, with or without modification,
+are permitted in any medium without royalty provided the copyright
+notice and this notice are preserved.
+@end quotation
+@end copying
+
+@titlepage
+@title Bolt Plugin API Reference
+@author Adamcake
+@page
+@vskip 0pt plus 1filll
+@ifplaintext
+@insertcopying
+@end ifplaintext
+@end titlepage
+
+@node Top
+@top Bolt Plugin API Reference
+
+This is the API reference manual for version 1.0 of Bolt Launcher's API
+for Lua plugins. All of the available functions and types are listed
+along with a simple usage example.
+
+@summarycontents
+
+@node Introduction
+@chapter Introduction
+
+Bolt Launcher comes with a built-in plugin loader. A plugin loader is
+not the same thing as plugins - the loader is what enables plugins to
+be able to work, but it doesn't have any plugins built into it in
+itself. Plugins can be made by anyone and must be obtained separately
+from Bolt. This document details how to make your own Bolt plugins.
+
+Plugins are written in Lua, but the plugin loader itself is a dynamic
+library written in C. The launcher launches the game and loads the
+library into the process using a manual map injector after the process
+loads but before allowing it to run. When the library starts up, it
+modifies the import table of the process to insert function hooks.
+
+The word "inject" sounds scary, but Bolt is totally harmless: the
+technique described above is the same one used by lots of software you
+might already be using, such as OBS, Alt1@sup{1}, steam overlay, Discord
+screencapture, or obs-vkcapture. Like those, Bolt only hooks external
+graphics-related functions and will never attempt to read or modify the
+game code, therefore it is entirely allowed under the terms of service
+and will not trip any known anti-cheating measures@sup{2}. It does,
+however, mean that it's less powerful than a tool like Runelite, since
+the only information it has access to is what's available in the OpenGL
+shaders; for example, it can see the vertex data and texture data of an
+item being rendered, but cannot know the item ID.
+
+(@sup{1} Yes, really.)
+
+(@sup{2} That is NOT to claim that Bolt is undetectable. It's not -
+nothing is.)
+
+@node Getting Started
+@chapter Getting Started
+
+The primary file in a plugin is called "bolt.json". It needs to have
+that exact name, in lower-case. Here's how your bolt.json might look:
+
+@example json
+@verbatim
+{
+  "name": "Goblin Helper",
+  "version": "1.0",
+  "description": "A plugin designed to help you kill goblins more effectively and display a graph of your GSE (goblin-slaughter efficiency)",
+  "main": "main.lua"
+}
+@end verbatim
+@end example
+
+The directory that contains bolt.json is called the "plugin directory".
+As a general rule, the plugin only has access to files inside the plugin
+directory, and any file paths will be considered relative to the plugin
+directory.
+
+There are no limitations on the text contents or length of the  name,
+version, or description, and the version and description are optional.
+That said, it's suggested to use a short name (2-3 words), a longer and
+helpful description, and a sensible system of version numbers.
+
+The "main" file, in this case "main.lua", is the file that will be
+loaded and run when a user starts your plugin. This file will be loaded
+from the root of the plugin directory, next to bolt.json. If your main
+file is in a subdirectory then you need to write the relative path using
+'/' as directory separators, e.g. "app/src/main.lua".
+
+Here's an example of a simple main.lua file. Lines beginning with
+@verb{|--|} are comments in Lua.
+
+@example lua
+@verbatim
+-- load the Bolt API
+local bolt = require("bolt")
+
+-- make sure this plugin is running on a Bolt version compatible with
+-- the one it was written for (1.0)
+bolt.checkversion(1, 0)
+
+-- some variables we'll refer to later
+local interval = 1000 * 1000
+local clickcount = 0
+local nextprinttime = bolt.time() + interval
+
+-- set a function that will run every time the user clicks the game
+-- window (excluding the title bar or any decorations) with the left,
+-- middle, or right mouse button
+bolt.onmousebutton(function (event)
+  -- check if this is a left click using the event's button() function,
+  -- and if it is, count it
+  if event:button() == 1 then
+    clickcount = clickcount + 1
+  end
+end)
+
+-- set a function that will run every time SwapBuffers is called - in
+-- other words, this runs at the end of every frame, so around 100 times
+-- per second depending on the user's FPS
+bolt.onswapbuffers(function (event)
+  -- check if the time interval (1 second) has passed yet
+  if bolt.time() >= nextprinttime then
+    -- print a message
+    print(string.format("clicks-per-second: %s", tostring(clickcount)))
+
+    -- reset the click count and update the interval timer
+    clickcount = 0
+    nextprinttime = nextprinttime + interval
+  end
+end)
+@end verbatim
+@end example
+
+As you can see, this is a simple plugin which keeps track of the user's
+left-clicks per second and prints that information using Lua's built-in
+"print" function. This prints to the terminal. If you don't have a
+terminal open, you won't see anything, but the plugin is still running.
+All of the functions used here are documented below.
+
+Before we move on, there's a tiny but important detail of this code to
+be aware of. Notice how functions like @code{bolt.checkversion} use a
+'.', but @code{event:button()} uses a ':'. This is because @code{bolt}
+is a simple list of functions, whereas @code{event} is a userdata object
+which needs to be passed as the first argument to its functions - that's
+true for all types of object in the Bolt API. In Lua, ':' is shorthand
+for doing exactly that.
+
+@node Functions
+@chapter List of Functions
+
+This is a list of all functions in @code{bolt}, the table returned by
+@code{require("bolt")}.
+
+@node functions-apiversion
+@section apiversion
+
+Returns the Bolt API major version and minor version, in that order.
+Plugins should call this function on startup and, if the major version
+is one it doesn't recognise, it should exit by calling `error()`. The
+minor version however does not need to be checked, as minor versions
+will never contain breaking changes; they may add features, though, and
+the minor version can be used to check for the existence of those
+features.
+
+For compatibility reasons, there will never be a breaking change to this
+function.
+
+@example lua
+@verbatim
+local major, minor = bolt.apiversion()
+@end verbatim
+@end example
+
+@node functions-checkversion
+@section checkversion
+
+A simple alternative to @ref{functions-apiversion} which calls error()
+if either of these conditions is true:
+
+@itemize @bullet
+@item the first parameter is not equal to Bolt's major version
+@item the second parameter is greater than Bolt's minor version
+@end itemize
+
+This function will never return on failure, since that's the
+implementation of Lua's error() function. Calling error() in a Bolt
+plugin will always be handled by stopping the plugin.
+
+For compatibility reasons, there will never be a breaking change to this
+function.
+
+@example lua
+@verbatim
+bolt.checkversion(1, 0)
+@end verbatim
+@end example
+
+@node functions-close
+@section close
+
+Stops this instance of this plugin. This is essentially the same as the
+plugin being stopped via the plugin menu in the launcher.
+
+@example lua
+@verbatim
+bolt.close()
+@end verbatim
+@end example
+
+@node functions-time
+@section time
+
+Returns a monotonic time as an integer, in microseconds.
+
+This function can be used for timing. The number it returns is arbitrary
+- that is, it's the number of microseconds that have elapsed since an
+arbitrary point in time - therefore it's not useful for anything other
+than to call this function multiple times and compare the results.
+
+Note that on a 32-bit CPU this number will overflow back to 0 every
+~4296 seconds, which is slightly more than an hour. On a 64-bit CPU, it
+will overflow every ~18 trillion seconds, or around 585 millennia.
+Playing on a 32-bit CPU is therefore not advisable, but if a plugin
+wishes to support 32-bit CPUs while using this function, it must handle
+the possibility of time() resetting to 0.
+
+@example lua
+@verbatim
+local t1 = bolt.time()
+-- something time-consuming...
+local t2 = bolt.time()
+print(string.format("execution took %s μs", tostring(t2 - t1)))
+@end verbatim
+@end example
+
+@node functions-datetime
+@section datetime
+
+Returns six integers: the current calendar year, month (1-12), day
+(1-31), hour (0-23), minute (0-59), and second (0-60@sup{1}), in
+game-time (i.e. UTC). The time is based on the user's system clock but
+the result will be converted to game-time. There is no way to get the
+user's timezone information via Bolt.
+
+Don't try to use this function for precision timing. Use time() instead.
+
+@example lua
+@verbatim
+local year, month, day, hour, minute, second = bolt.datetime()
+print(string.format(
+  "the time is %s:%s:%s on %s-%s-%s",
+  tostring(hour), tostring(minute), tostring(second),
+  tostring(year), tostring(month), tostring(day)
+))
+@end verbatim
+@end example
+
+(@sup{1} seconds value can be 60 in the case of a leap-second)
+
+@node functions-weekday
+@section weekday
+
+Returns an integer representing the current weekday in game-time (i.e.
+UTC). A value of 1 represents Sunday, 2 represents Monday, 3 represents
+Tuesday, and so on.
+
+This function is based on the user's system clock but the result will be
+converted to game-time. For example, if the user's system time is 22:00
+EST on a monday, this function will return 3 (tuesday), because the
+game-time is 03:00 on a tuesday. There is no way to get the user's
+timezone information via Bolt.
+
+@example lua
+@verbatim
+local function isweekend()
+  local day = bolt.weekday()
+  return day == 1 or day == 7
+end
+@end verbatim
+@end example
+
+@node functions-loadfile
+@section loadfile
+
+Loads the file into a Lua string and returns it. The file will be
+located relative to the plugin directory. Either '/' or '\' may be used
+as file separators, regardless of OS, and it makes no difference if the
+path does or doesn't start with a file separator. In the case of an
+error, this function will return nil. The most likely cause of failure
+is that the file doesn't exist.
+
+The plugin directory is read-only. For writeable files, use
+@ref{functions-saveconfig} and @ref{functions-loadconfig}.
+
+@example lua
+@verbatim
+local filecontents = bolt.loadfile("data.bin")
+@end verbatim
+@end example
+
+@node functions-loadconfig
+@section loadconfig
+
+Loads the file into a Lua string and returns it. The file will be
+located relative to the plugin's config directory, the exact location of
+which depends on the user's OS. Either '/' or '\' may be used as file
+separators, regardless of OS, and it makes no difference if the path
+does or doesn't start with a file separator. In the case of an error,
+this function will return nil. The most likely cause of failure is that
+the file doesn't exist.
+
+@example lua
+@verbatim
+local filecontents = bolt.loadconfig("position.cfg")
+@end verbatim
+@end example
+
+@node functions-saveconfig
+@section saveconfig
+
+Saves the Lua string in the second parameter into a file identified by
+the first parameter. The file will be located relative to the plugin's
+config directory, the exact location of which depends on the user's OS.
+Either '/' or '\' may be used as file separators, regardless of OS, and
+it makes no difference if the path does or doesn't start with a file
+separator.
+
+This function returns a boolean: if the file is saved successfully this
+function will return true. If not, it will return false. The most likely
+cause of failure is that the file already exists and is locked for
+writing, such as by the user having it open in a text editor.
+
+@example lua
+@verbatim
+bolt.saveconfig("info.bin", "Some example file contents")
+@end verbatim
+@end example
+
+@node functions-createsurface
+@section createsurface
+
+Creates and returns a new @ref{objects-surface,,Surface object} with
+the given width and height. The surface will initally be fully
+transparent.
+
+@example lua
+@verbatim
+local mysurface = bolt.createsurface(800, 608)
+@end verbatim
+@end example
+
+@node functions-createsurfacefromrgba
+@section createsurfacefromrgba
+
+Creates and returns a new @ref{objects-surface,,Surface object} with
+the given width, height, and RGBA data. The data can be a string or a
+@ref{objects-buffer,,Buffer object}.
+
+There are four bytes in an RGBA pixel, so the number of bytes in the
+data is expected to be @code{4 * width * height}. If fewer bytes than
+that are provided, the data will be padded with zeroes. If too many
+bytes are provided, the excess data will be unused. The data will be
+interpreted in row-major order with the first pixel being in the
+top-left.
+
+The following example creates a 2x2-pixel surface with a
+diagonally-opposite pattern of black and white pixels.
+
+@example lua
+@verbatim
+local blackpixel = "\x00\x00\x00\xFF"
+local whitepixel = "\xFF\xFF\xFF\xFF"
+local rgba = blackpixel .. whitepixel .. whitepixel .. blackpixel
+local mysurface = bolt.createsurfacefromrgba(2, 2, rgba)
+@end verbatim
+@end example
+
+@node functions-createsurfacefrompng
+@section createsurfacefrompng
+
+Creates and returns a new @ref{objects-surface,,Surface object} from
+the PNG file at the given path.
+
+The path will be interpreted similarly to require(), i.e. relative to
+the plugin directory, using '.' as file separators, and must not include
+the ".png" extension (this is appended automatically). This function
+will call `error()` if the file does not exist or is inaccessible for
+any reason.
+
+The surface will have the same width and height as the image. As with
+@ref{functions-createsurface,,createsurface}, the width and height of
+your PNG file should be integral powers of 2.
+
+The following example creates a surface from "images/icon.png" relative
+to the plugin directory.
+
+@example lua
+@verbatim
+local mysurface = bolt.createsurfacefrompng(800, 608, "images.icon")
+@end verbatim
+@end example
+
+@node functions-createwindow
+@section createwindow
+
+Creates and returns a new @ref{objects-window,,Window object} with the
+given initial values for x, y, width and height. The x and y relate to
+the top-left corner of the game. Embedded windows can capture mouse and
+keyboard events, and can be drawn onto like a @ref{objects-surface,,
+Surface}.
+
+The following example creates a window with its top-left corner 50px
+from the left and 60px from the top of the game, with a width of 800 and
+a height of 608. @ref{window-clear,,clear} is used to make the window
+entirely red and opaque, otherwise it would be transparent.
+
+@example lua
+@verbatim
+local mywindow = bolt.createwindow(50, 60, 800, 608)
+mywindow:clear(1, 0, 0)
+@end verbatim
+@end example
+
+@node functions-createbrowser
+@section createbrowser
+
+Creates and returns a new @ref{objects-browser,,Browser object} with
+the given initial values for width, height, and URL. If the URL begins
+with "file://", it will be interpreted as a file path relative to the
+plugin directory, and must use '/' as file separators (if any).
+Otherwise, it will be treated as a URL of an internet website. The same
+rules go for any navigations or fetch requests made by the browser
+during its lifetime.
+
+@example lua
+@verbatim
+local mybrowser = bolt.createwindow(800, 608, "https://bolt.adamcake.com")
+@end verbatim
+@end example
+
+@node functions-createembeddedbrowser
+@section createembeddedbrowser
+
+Creates and returns a new @ref{objects-embeddedbrowser,,Embedded
+Browser Object} with the given initial values for x, y, width, height
+and URL. If the URL begins with "file://", it will be interpreted as a
+file path relative to the plugin directory, and must use '/' as file
+separators (if any). Otherwise, it will be treated as a URL of an
+internet website. The same rules go for any navigations or fetch
+requests made by the browser during its lifetime.
+
+@example lua
+@verbatim
+local mybrowser = bolt.createembeddedbrowser(50, 60, 800, 608, "https://bolt.adamcake.com")
+@end verbatim
+@end example
+
+@node functions-point
+@section point
+
+Creates and returns a new @ref{objects-point,,Point Object} from x, y
+and z values. Point objects represent a point in 3D space, and have
+functions which are useful for 3D space calculations.
+
+@example lua
+@verbatim
+local mypoint = bolt.point(0, 0, 0)
+@end verbatim
+@end example
+
+@node functions-createbuffer
+@section createbuffer
+
+Creates and returns a new @ref{objects-buffer,,Buffer Object} with the
+given size. Buffer objects are fixed-size and useful for passing large
+amounts of binary data to functions.
+
+@example lua
+@verbatim
+local mybuffer = bolt.createbuffer(65536)
+@end verbatim
+@end example
+
+@node functions-onrender2d
+@section onrender2d
+
+Sets an event handler for 2D rendering events. The function will
+overwrite any previous event handler, or, if it's not a function, then
+any previous event handler will be deleted. See @ref{objects-batch2d,,
+Batch2D Event} for documentation on this event object.
+
+@example lua
+@verbatim
+bolt.onrender2d(function (event)
+  -- ...
+end)
+@end verbatim
+@end example
+
+It's @strong{not safe} to use an event object after the event handler
+has returned.
+
+@node functions-onrender3d
+@section onrender3d
+
+Sets an event handler for 3D rendering events. The function will
+overwrite any previous event handler, or, if it's not a function, then
+any previous event handler will be deleted. See @ref{objects-render3d,,
+Render3D Event} for documentation on this event object.
+
+@example lua
+@verbatim
+bolt.onrender3d(function (event)
+  -- ...
+end)
+@end verbatim
+@end example
+
+It's @strong{not safe} to use an event object after the event handler
+has returned.
+
+@node functions-onminimap
+@section onminimap
+
+Sets an event handler for minimap render events. The function will
+overwrite any previous event handler, or, if it's not a function, then
+any previous event handler will be deleted. See @ref{objects-minimap,,
+Minimap Event} for documentation on this event object.
+
+@example lua
+@verbatim
+bolt.onminimap(function (event)
+  -- ...
+end)
+@end verbatim
+@end example
+
+It's @strong{not safe} to use an event object after the event handler
+has returned.
+
+@node functions-onswapbuffers
+@section onswapbuffers
+
+Sets an event handler for swapbuffers events. The function will
+overwrite any previous event handler, or, if it's not a function, then
+any previous event handler will be deleted. See @ref{objects-swapbuffers
+,,Swapbuffers Event} for documentation on this event object.
+
+This event is commonly used as a "sync point", i.e. to ensure that some
+Lua code will run at regular intervals.
+
+@example lua
+@verbatim
+bolt.onswapbuffers(function (event)
+  -- ...
+end)
+@end verbatim
+@end example
+
+It's @strong{not safe} to use an event object after the event handler
+has returned.
+
+@node functions-onmousemotion
+@section onmousemotion
+
+Sets an event handler for mouse motion events. The function will
+overwrite any previous event handler, or, if it's not a function, then
+any previous event handler will be deleted. See @ref{objects-mousemotion
+,,Mouse Motion Event} for documentation on this event object.
+
+This will fire only for mouse motion events that are received by the
+game. Events received by @ref{objects-window,,Window objects} or
+@ref{objects-embeddedbrowser,,Embedded Browser objects} will not be
+received by the game, so will not fire this event.
+
+@example lua
+@verbatim
+bolt.onmousemotion(function (event)
+  -- ...
+end)
+@end verbatim
+@end example
+
+It's @strong{not safe} to use an event object after the event handler
+has returned.
+
+@node functions-onmousebutton
+@section onmousebutton
+
+Sets an event handler for mouse button events. The function will
+overwrite any previous event handler, or, if it's not a function, then
+any previous event handler will be deleted. See @ref{objects-mousebutton
+,,Mouse Button Event} for documentation on this event object.
+
+This handler runs immediately after a button is pressed down. When the
+button is released, @ref{functions-onmousebuttonup,,onmousebuttonup}
+will run.
+
+This will fire only for mouse button events that are received by the
+game. Events received by @ref{objects-window,,Window objects} or
+@ref{objects-embeddedbrowser,,Embedded Browser objects} will not be
+received by the game, so will not fire this event.
+
+@example lua
+@verbatim
+bolt.onmousebutton(function (event)
+  -- ...
+end)
+@end verbatim
+@end example
+
+It's @strong{not safe} to use an event object after the event handler
+has returned.
+
+@node functions-onmousebuttonup
+@section onmousebuttonup
+
+Sets an event handler for mouse button-up events. The function will
+overwrite any previous event handler, or, if it's not a function, then
+any previous event handler will be deleted. See @ref{objects-mousebutton
+,,Mouse Button Event} for documentation on this event object.
+
+This handler runs immediately after a button is released. It shares the
+same type of event object as @ref{functions-onmousebutton,,onmousebutton
+}.
+
+This will fire only for mouse button events that are received by the
+game. Events received by @ref{objects-window,,Window objects} or
+@ref{objects-embeddedbrowser,,Embedded Browser objects} will not be
+received by the game, so will not fire this event.
+
+@example lua
+@verbatim
+bolt.onmousebuttonup(function (event)
+  -- ...
+end)
+@end verbatim
+@end example
+
+It's @strong{not safe} to use an event object after the event handler
+has returned.
+
+@node functions-onscroll
+@section onscroll
+
+Sets an event handler for mouse scroll events. The function will
+overwrite any previous event handler, or, if it's not a function, then
+any previous event handler will be deleted. See @ref{objects-scroll,,
+Scroll Event} for documentation on this event object.
+
+This will fire only for mouse scroll events that are received by the
+game. Events received by @ref{objects-window,,Window objects} or
+@ref{objects-embeddedbrowser,,Embedded Browser objects} will not be
+received by the game, so will not fire this event.
+
+@example lua
+@verbatim
+bolt.onscroll(function (event)
+  -- ...
+end)
+@end verbatim
+@end example
+
+It's @strong{not safe} to use an event object after the event handler
+has returned.
+
+@node Objects
+@chapter List of Objects
+
+This is a list of all types of userdata object used by the Bolt API. The
+objects have various functions associated with them, all of which need
+the userdata object as the first parameter. Lua has a shorthand for
+this: for example, instead of @code{window.onresize(window, myhandler)},
+you can write @code{window:onresize(myhandler)}.
+
+@node objects-surface
+@section Surface
+
+A surface is a graphical canvas which can be drawn on with various
+rendering functions, and can then be drawn to the user's screen by
+calling @ref{surface-drawtoscreen,,drawtoscreen}. The contents will
+never be cleared, other than by explicitly calling @ref{surface-clear,,
+clear}.
+
+Surface widths and heights should always be integral powers of 2. GPUs
+often can't handle other values correctly which will result in
+unexpected behaviour.
+
+@node surface-clear
+@subsection clear
+
+Deletes any previous contents of the surface and sets it to contain a
+single colour and alpha.
+
+Takes up to four parameters in the range 0.0 - 1.0. All parameters to
+this function are optional (apart from the surface itself). If none are
+provided, the surface will be fully transparent. Otherwise, if alpha is
+not provided, it will be assumed to be 1.0.
+
+Note that if an alpha value less than 1 is provided, the
+partially-transparent colour will still fully replace the old contents,
+rather than blending with them.
+
+@example lua
+@verbatim
+mysurface:clear() -- transparent
+mysurface:clear(1, 0, 0) -- opaque red
+mysurface:clear(1, 0, 0, 0.5) -- partially transparent red
+@end verbatim
+@end example
+
+@node surface-subimage
+@subsection subimage
+
+Updates a rectangular section of this surface with the given RGBA pixel
+data. The parameters are X, Y, width and height, in pixels, followed by
+the RGBA data. The data can be either a string or a @ref{objects-buffer,
+,Buffer object}.
+
+There are four bytes in an RGBA pixel, so the number of bytes in the
+data is expected to be @code{4 * width * height}. If fewer bytes than
+that are provided, the data will be padded with zeroes. If too many
+bytes are provided, the excess data will be unused. The data will be
+interpreted in row-major order with the first pixel being in the
+top-left.
+
+Note that non-opqaue pixels will fully replace the old contents of the
+surface, rather than blending with them.
+
+The following example sets the top-left pixel of a surface to a fully
+opaque green colour:
+
+@example lua
+@verbatim
+mysurface:subimage(0, 0, 1, 1, "\x00\x00\xFF\xFF")
+@end verbatim
+@end example
+
+@node surface-drawtoscreen
+@subsection drawtoscreen
+
+Draws a section of the surface directly onto the screen. Parameters are
+source X,Y,W,H followed by destination X,Y,W,H, all in pixels. Any
+transparency will be blended additively and, if the size of the source
+and destination rectangles is different, the image will be scaled
+smoothly.
+
+@example lua
+@verbatim
+mysurface:drawtoscreen(0, 0, 800, 608, 0, 0, 800, 608)
+@end verbatim
+@end example
+
+@node surface-drawtosurface
+@subsection drawtosurface
+
+Draws a section of the surface onto a section of another surface.
+Parameters are target surface, then source X,Y,W,H, then destination
+X,Y,W,H, all in pixels. Any transparency will be blended additively and,
+if the size of the source and destination rectangles is different, the
+image will be scaled smoothly.
+
+@example lua
+@verbatim
+mysurface:drawtosurface(myothersurface, 0, 0, 100, 100, 0, 0, 1920, 1080)
+@end verbatim
+@end example
+
+@node surface-drawtowindow
+@subsection drawtowindow
+
+Draws a section of the surface onto a section of a @ref{objects-window,,
+Window Object}. Parameters are target window, then source X,Y,W,H, then
+destination X,Y,W,H, all in pixels. Any transparency will be blended
+additively and, if the size of the source and destination rectangles is
+different, the image will be scaled smoothly.
+
+@example lua
+@verbatim
+mysurface:drawtowindow(mywindow, 0, 0, 100, 100, 0, 0, 1920, 1080)
+@end verbatim
+@end example
+
+@node objects-buffer
+@section Buffer
+
+A buffer is a fixed-size, pre-allocated block of memory containing
+binary data. Functions in Bolt which need binary data as an input can
+take either a Lua string or a Buffer object. Functions that return
+binary data return strings, because it's more performant and sometimes
+more useful.
+
+@node buffer-writeinteger
+@subsection writeinteger
+
+Writes an integer into the buffer. The first parameter is the integer to
+write, the second is the offset into the buffer where the first byte
+should be written, and the third is the number of bytes the integer will
+be truncated to. The integer will be written in little-endian.
+
+The following example would result in the first byte of the buffer being
+0x39 and the second byte being 0x5.
+
+@example lua
+@verbatim
+mybuffer:writeinteger(1337, 0, 2)
+@end verbatim
+@end example
+
+@node buffer-writenumber
+@subsection writenumber
+
+Writes a number into the buffer. The first parameter is the number to
+write, and the second is the offset into the buffer where the first byte
+should be written. The number will be written as a native-endian,
+8-byte, double-precision floating point value.
+
+@example lua
+@verbatim
+mybuffer:writeinteger(1.5, 0)
+@end verbatim
+@end example
+
+@node buffer-writestring
+@subsection writestring
+
+Writes a string into the buffer. The first parameter is the string and
+the second is the offset into the buffer where the first byte should be
+written. The full length of the string will be copied.
+
+@example lua
+@verbatim
+mybuffer:writestring("my new buffer contents", 0)
+@end verbatim
+@end example
+
+@node buffer-writebuffer
+@subsection writebuffer
+
+Writes the contents of another buffer into this buffer. The first
+parameter is the buffer to be copied from, and the second is the offset
+into this buffer where the first byte should be written. The full length
+of the source buffer will be copied.
+
+@example lua
+@verbatim
+mybuffer:writebuffer(myotherbuffer, 0)
+@end verbatim
+@end example
+
+@node objects-window
+@section Window
+
+A window is a rectangle overlaid onto the game window. It has an
+internal @ref{objects-surface,,Surface object} which can be rendered to
+and will be automatically shown at the window's position. Windows also
+capture the user's mouse and keyboard inputs and have callbacks which
+can be set to handle those inputs.
+
+The window will initially be transparent, but will still capture mouse
+inputs, which will be visually confusing. Make sure to draw something to
+the window after creating it when testing this function.
+
+The window contents will be cleared when the window changes size, which
+may happen for several reasons. Make sure to redraw in response to a
+@ref{window-onreposition,,reposition} event, otherwise your window will
+turn invisible.
+
+@node window-close
+@subsection close
+
+Closes and destroys the window. This is the only way for a window to be
+destroyed, other than the plugin stopping, which will destroy the window
+automatically.
+
+Do not use the window again after calling this function on it. No more
+events will be received (although it is safe to call this from inside an
+event handler.)
+
+@example lua
+@verbatim
+mywindow:close()
+@end verbatim
+@end example
+
+@node window-id
+@subsection id
+
+Returns an integer which uniquely identifies this window. No other
+object will ever have this ID during this instance of the game process,
+even if this plugin is stopped and started again.
+
+@example lua
+@verbatim
+local id = mywindow:id()
+@end verbatim
+@end example
+
+@node window-size
+@subsection size
+
+Returns the width and height of the window.
+
+@example lua
+@verbatim
+local width, height = mywindow:size()
+@end verbatim
+@end example
+
+@node window-clear
+@subsection clear
+
+Deletes any previous contents of the window and sets it to contain a
+single colour and alpha. @xref{surface-clear,,surface:clear}.
+
+@node window-subimage
+@subsection subimage
+
+Updates a rectangular subsection of this window with the given RGBA
+pixel data. @xref{surface-subimage,,surface:subimage}.
+
+@node window-startreposition
+@subsection startreposition
+
+Starts repositioning for this window. This function changes how the
+user's "drag" action is processed, and would usually be called from the
+@ref{window-onmousebutton,,onmousebutton} callback for the left mouse
+button. Repositioning will occur until the user releases the left mouse
+button or until the repositioning is cancelled. In the first case, an
+onreposition event will be fired (even if the size and position din't
+actually change.) During repositioning, all mouse events will be handled
+internally by the window, without calling its event handlers. The window
+will not actually change size or position until repositioning ends by
+the user releasing the mouse button.
+
+This function takes two integer parameters. The first should be negative
+if the window's left edge is being dragged, positive if the right edge
+is being dragged, or zero if neither. The second should be negative if
+the window's top edge is being dragged, positive if the bottom edge is
+being dragged, or zero if neither. If both parameterss are zero then the
+window will be moved instead of resized.
+
+The following example would cause the window to be dragged by its
+top-right edge:
+
+@example lua
+@verbatim
+mywindow:startreposition(1, -1)
+@end verbatim
+@end example
+
+@node window-cancelreposition
+@subsection cancelreposition
+
+Cancels repositioning for this window. The window's position and size
+will not change and an onreposition event will not be sent.
+
+@example lua
+@verbatim
+mywindow:cancelreposition()
+@end verbatim
+@end example
+
+@node window-onreposition
+@subsection onreposition
+
+Sets an event handler for this window for reposition events. The
+function will overwrite any previous event handler, or, if it's not a
+function, then any previous event handler will be deleted. See
+@ref{objects-reposition,,Reposition Event} for documentation on this
+event object.
+
+@example lua
+@verbatim
+mywindow:onreposition(function (event)
+  -- ...
+end)
+@end verbatim
+@end example
+
+It's @strong{not safe} to use an event object after the event handler
+has returned.
+
+@node window-onmousemotion
+@subsection onmousemotion
+
+Sets an event handler for this window for mouse motion events. The
+function will overwrite any previous event handler, or, if it's not a
+function, then any previous event handler will be deleted. See
+@ref{objects-mousemotion,,Mouse Motion Event} for documentation on this
+event object.
+
+@example lua
+@verbatim
+mywindow:onmousemotion(function (event)
+  -- ...
+end)
+@end verbatim
+@end example
+
+It's @strong{not safe} to use an event object after the event handler
+has returned.
+
+@node window-onmousebutton
+@subsection onmousebutton
+
+Sets an event handler for this window for mouse button events. The
+function will overwrite any previous event handler, or, if it's not a
+function, then any previous event handler will be deleted. See
+@ref{objects-mousebutton,,Mouse Button Event} for documentation on this
+event object.
+
+This handler runs immediately after a button is pressed down. When the
+button is released, @ref{window-onmousebuttonup,,onmousebuttonup} will
+run.
+
+@example lua
+@verbatim
+mywindow:onmousebutton(function (event)
+  -- ...
+end)
+@end verbatim
+@end example
+
+It's @strong{not safe} to use an event object after the event handler
+has returned.
+
+@node window-onmousebuttonup
+@subsection onmousebuttonup
+
+Sets an event handler for this window for mouse button-up events. The
+function will overwrite any previous event handler, or, if it's not a
+function, then any previous event handler will be deleted. See
+@ref{objects-mousebutton,,Mouse Button Event} for documentation on this
+event object.
+
+This handler runs immediately after a button is released. It shares the
+same type of event object as @ref{window-onmousebutton,,onmousebutton}.
+If the user clicks the window and drags their mouse outside the window,
+the mouse motion events and button-up will still usually be captured by
+the window.
+
+@example lua
+@verbatim
+mywindow:onmousebuttonup(function (event)
+  -- ...
+end)
+@end verbatim
+@end example
+
+It's @strong{not safe} to use an event object after the event handler
+has returned.
+
+@node window-onscroll
+@subsection onscroll
+
+Sets an event handler for this window for mouse scroll events. The
+function will overwrite any previous event handler, or, if it's not a
+function, then any previous event handler will be deleted. See
+@ref{objects-scroll,,Scroll Event} for documentation on this event
+object.
+
+@example lua
+@verbatim
+mywindow:onscroll(function (event)
+  -- ...
+end)
+@end verbatim
+@end example
+
+It's @strong{not safe} to use an event object after the event handler
+has returned.
+
+@node window-onmouseleave
+@subsection onmouseleave
+
+Sets an event handler for this window for mouse leave events. The
+function will overwrite any previous event handler, or, if it's not a
+function, then any previous event handler will be deleted. See
+@ref{objects-mouseleave,,Mouse Leave Event} for documentation on this event
+object.
+
+@example lua
+@verbatim
+mywindow:onmouseleave(function (event)
+  -- ...
+end)
+@end verbatim
+@end example
+
+It's @strong{not safe} to use an event object after the event handler
+has returned.
+
+@node objects-browser
+@section Browser
+
+A browser object is a webview in an external OS-level window. It's a
+chromium-based browser backed by CEF. The browser takes up the whole
+window - there are no decorations like tabs or a URL bar or back button,
+etc. The browser can navigate or fetch normal internet URLs via
+@code{https://}, or files in the plugin directory with @code{file://}.
+It can also request certain URLs at @code{https://bolt-api/} to
+communicate with the Lua code running in the game process. Incoming
+messages will be sent via the JavaScript @code{window.postMessage}
+function.
+
+@node browser-close
+@subsection close
+
+Closes and destroys the browser. This is the only way for a browser to
+be destroyed, other than the plugin stopping, which will destroy the
+browser automatically.
+
+Do not use the browser again after calling this function on it. No more
+events will be received (although it is safe to call this from inside an
+event handler.)
+
+@example lua
+@verbatim
+mybrowser:close()
+@end verbatim
+@end example
+
+@node browser-sendmessage
+@subsection sendmessage
+
+Sends a message to the browser. The data can be either a string or a
+@ref{objects-buffer,,Buffer object}. It will be sent to the browser
+using the postMessage function, so to handle it in your browser
+application, just add an event listener for "message" to the window
+object. The event's data will be an object with "type": "pluginMessage",
+and "content" will be an ArrayBuffer containing the Lua string that was
+passed to this function. Note that the binary data will be transferred
+exactly as it appeared in Lua, byte-for-byte - it will not be decoded or
+re-encoded in any way.
+
+@example lua
+@verbatim
+mybrowser:sendmessage("some message contents")
+@end verbatim
+@end example
+
+@node browser-enablecapture
+@subsection enablecapture
+
+Enables screen capture for this browser. The screen contents will be
+sent to the browser using the postMessage function. The event's data
+will be an object with "type": "screenCapture", "width" and "height"
+will be integers indicating the size of the captured area, and "content"
+will be an ArrayBuffer of length @code{width * height * 3}. The contents
+will be three bytes per pixel, in RGB format, in row-major order,
+starting with the bottom-left pixel.
+
+The data will be sent using a shared memory mapping, so the overhead is
+much lower than it would be to send all the data using sendmessage.
+However, downloading screen contents from the GPU will still slow the
+game down (takes around 2 to 5 milliseconds depending on window size),
+so Bolt will limit itself to capturing 4 frames per second via this
+function.
+
+@example lua
+@verbatim
+mybrowser:enablecapture()
+@end verbatim
+@end example
+
+@node browser-disablecapture
+@subsection disablecapture
+
+Disables screen capture for this browser. @xref{browser-enablecapture,,
+enablecapture}.
+
+@example lua
+@verbatim
+mybrowser:disablecapture()
+@end verbatim
+@end example
+
+@node browser-oncloserequest
+@subsection oncloserequest
+
+Sets an event handler for this browser for close-request events. The
+function will overwrite any previous event handler, or, if it's not a
+function, then any previous event handler will be deleted. Unlike most
+event handlers, this one is called with no parameters.
+
+Bolt takes no default action other than calling this function, which
+means nothing will happen by default when the user tries to close the
+browser. To enable normal closing behaviour, add a closerequest handler
+which calls @code{mybrowser:close()}:
+
+@example lua
+@verbatim
+mybrowser:oncloserequest(function ()
+  mybrowser:close()
+end)
+@end verbatim
+@end example
+
+@node browser-onmessage
+@subsection onmessage
+
+Sets an event handler for this browser for message events. The function
+will overwrite any previous event handler, or, if it's not a function,
+then any previous event handler will be deleted. The function will be
+called with a string as the only parameter. The string will contain the
+binary data that was sent in the browser's POST message.
+
+@example lua
+@verbatim
+mybrowser:onmessage(function (message)
+  print(string.format("message received: %s", message))
+end)
+@end verbatim
+@end example
+
+Note that this example assumes that the message is safely formattable
+text. This may or may not be the case, depending on what your browser's
+web page is programmed to send.
+
+@node objects-embeddedbrowser
+@section Embedded Browser
+
+An embedded browser object is a webview embedded into the game window.
+It behaves similarly to a @ref{objects-window,,Window object}, but with
+more state, and most of the normal events of a Window object are handled
+internally by the browser.
+
+The browser is chromium-based, backed by CEF. The webview takes up the
+whole rectangle - there are no decorations like tabs or a URL bar or
+back button, etc. The browser can navigate or fetch normal internet URLs
+via @code{https://}, or files in the plugin directory with
+@code{file://}. It can also request certain URLs at
+@code{https://bolt-api/} to communicate with the Lua code running in the
+game process. Incoming messages will be sent via the JavaScript
+@code{window.postMessage} function.
+
+@node embeddedbrowser-close
+@subsection close
+
+Closes and destroys the browser. This is the only way for a browser to
+be destroyed, other than the plugin stopping, which will destroy the
+browser automatically.
+
+Do not use the browser again after calling this function on it. No more
+events will be received (although it is safe to call this from inside an
+event handler.)
+
+@example lua
+@verbatim
+mybrowser:close()
+@end verbatim
+@end example
+
+@node embeddedbrowser-sendmessage
+@subsection sendmessage
+
+Sends a message to the browser. @xref{browser-sendmessage,,
+browser:sendmessage}.
+
+@node embeddedbrowser-startreposition
+@subsection startreposition
+
+Starts repositioning for this browser. @xref{window-startreposition,,
+window:startreposition}.
+
+@node embeddedbrowser-cancelreposition
+@subsection cancelreposition
+
+Cancels repositioning for this browser. @xref{window-cancelreposition,,
+window:cancelreposition}.
+
+@node embeddedbrowser-enablecapture
+@subsection enablecapture
+
+Enables screen capture for this browser. @xref{browser-enablecapture,,
+enablecapture}.
+
+@node embeddedbrowser-disablecapture
+@subsection disablecapture
+
+Disables screen capture for this browser. @xref{browser-enablecapture,,
+enablecapture}.
+
+@node embeddedbrowser-oncloserequest
+@subsection oncloserequest
+
+Sets an event handler for this browser for close-request events. The
+function will overwrite any previous event handler, or, if it's not a
+function, then any previous event handler will be deleted. Unlike most
+event handlers, this one is called with no parameters.
+
+Bolt takes no default action other than calling this function, which
+means nothing will happen by default when the user tries to close the
+browser. To enable normal closing behaviour, add a closerequest handler
+which calls @code{myembeddedbrowser:close()}:
+
+@example lua
+@verbatim
+myembeddedbrowser:oncloserequest(function ()
+  myembeddedbrowser:close()
+end)
+@end verbatim
+@end example
+
+@node embeddedbrowser-onmessage
+@subsection onmessage
+
+Sets an event handler for this browser for message events. The function
+will overwrite any previous event handler, or, if it's not a function,
+then any previous event handler will be deleted. The function will be
+called with a string as the only parameter. The string will contain the
+binary data that was sent in the browser's POST message.
+
+@example lua
+@verbatim
+myembeddedbrowser:onmessage(function (message)
+  print(string.format("message received: %s", message))
+end)
+@end verbatim
+@end example
+
+Note that this example assumes that the message is safely formattable
+text. This may or may not be the case, depending on what your browser's
+web page is programmed to send.
+
+@node objects-point
+@section Point
+
+A Point object represents a point in 3D space. It's mainly useful for
+doing transformation calculations with @ref{objects-transform,,
+Transform Objects}, to find, for example, the pixel coordinates on the
+user's screen where a certain vertex is currently being rendered.
+
+@node point-transform
+@subsection transform
+
+Transforms this Point by a Transform object and returns a new Point. The
+original Point object is not modified.
+
+@node point-get
+@subsection get
+
+Returns the X, Y and Z values for this point.
+
+@node point-aspixels
+@subsection aspixels
+
+For a point that's been transformed into 3D screen space, this function
+returns its X and Y in pixels, with (0, 0) being the top-left of the
+game.
+
+This is only useful for a point in model coordinates that has been
+transformed by a @ref{render3d-modelmatrix,,model matrix}, then by a
+@ref{render3d-viewprojmatrix,,viewproj matrix}. In any other case the
+result will probably not be meaningful.
+
+@node objects-transform
+@section Transform
+
+A transform represents a 4x4 transformation matrix. There's no way to
+create a transform directly, they can only be obtained by querying
+@ref{objects-render3d,,Render3D Objects}. They're useful for
+transforming points from model coordinates into world coordinates or
+screen pixel coordinates.
+
+@node transform-decompose
+@subsection decompose
+
+Decomposes the transform into the following nine constituent values, in
+this order: X, Y, Z, in model coordinates; scale factor X, Y and Z;
+yaw, pitch, roll, in radians.
+
+Matrix decomposition is an experimental feature. It assumes the
+right-most column of the matrix to be (0, 0, 0, 1). That will always be
+the case in transforms returned by @ref{render3d-boneanimation,,
+boneanimation}, which is the primary intended use of this function.
+
+@example lua
+@verbatim
+local x, y, z, xscale, yscale, zscale, yaw, pitch, roll = mytransform:decompose()
+@end verbatim
+@end example
+
+@node transform-get
+@subsection get
+
+Returns the 16 floating-point values that make up this transformation
+matrix, in row-major order.
+
+@example lua
+@verbatim
+local m1,  m2,  m3,  m4,
+      m5,  m6,  m7,  m8,
+      m9,  m10, m11, m12,
+      m13, m14, m15, m16 = mytransform:get()
+@end verbatim
+@end example
+
+@node objects-batch2d
+@section Batch2D Event
+
+A Batch2D event comes from @ref{functions-onrender2d,,onrender2d}. It
+occurs when the game draws a batch of 2D icons to the screen. 2D icon
+renders are uploaded to the GPU in batches rather than one-at-a-time, so
+to look for an individual image, you'll need to iterate through each
+individual image in the batch, by iterating through the vertices. The
+number of vertices per image is usually 6 (i.e. two polygons) but it's
+recommended to call @ref{batch2d-verticesperimage,,verticesperimage} to
+get this number instead of hard-coding it into your plugin.
+
+A Batch2D will only ever have one texture associated with it - a large
+surface, usually 8192x8192, with a lot of rectangular images on it. This
+is commonly called a "texture atlas". Each vertex has associated data
+which points to a rectangular section of that texture. This can be
+queried to find the exact pixel contents of the image being drawn.
+
+When querying vertex data, keep in mind that Lua indices start at 1, so
+the valid range is 1 to vertexcount, inclusive:
+
+@example lua
+@verbatim
+for i in 1, event:vertexcount() do
+-- ...
+@end verbatim
+@end example
+
+It's @strong{not safe} to use an event object after the event handler
+has returned.
+
+@node batch2d-vertexcount
+@subsection vertexcount
+
+Returns the number of vertices in a 2D batch object. Divide by
+@ref{batch2d-verticesperimage,,verticesperimage} to get the number of
+icons being rendered.
+
+@node batch2d-verticesperimage
+@subsection verticesperimage
+
+Returns the number of vertices per individual image in this batch. At
+time of writing, this will always return 6 (i.e. enough to draw two
+separate triangles). To future-proof against possible engine updates,
+it's recommended to use this function instead of hard-coding the number
+6 into your plugin.
+
+@node batch2d-isminimap
+@subsection isminimap
+
+Returns true if this render targets the minimap surface instead of the
+user interface. There will usually be a maximum of one batch per frame
+targeting the minimap surface. Renders that target the minimap will
+overlay icons onto the static map image.
+
+@node batch2d-targetsize
+@subsection targetsize
+
+Returns the width and height of the target area of this render, in
+pixels.
+
+If @ref{batch2d-isminimap,,isminimap} is true, this will be the size of
+the minimap surface - usually 256x256. Otherwise, this will be
+proportional to the size of the inner area of the game window - that is,
+if the user has an interface scaling other than 100%, it will be bigger
+or smaller than that area, proportionally.
+
+@node batch2d-vertexxy
+@subsection vertexxy
+
+Given an index of a vertex in a batch, returns its X and Y position on
+the screen, in pixel coordinates.
+
+@node batch2d-vertexatlasxy
+@subsection vertexatlasxy
+
+Given an index of a vertex in a batch, returns the X and Y of its
+associated image in the batch's texture atlas, in pixel coordinates.
+
+@node batch2d-vertexatlaswh
+@subsection vertexatlaswh
+
+Given an index of a vertex in a batch, returns the width and height of
+its associated image in the batch's texture atlas, in pixel coordinates.
+
+@node batch2d-vertexuv
+@subsection vertexuv
+
+Given an index of a vertex in a batch, returns the vertex's associated
+"UV" coordinates.
+
+The values will be floating-point numbers in the range 0.0 - 1.0. They
+are relative to image in the texture atlas.
+
+@node batch2d-vertexcolour
+@subsection vertexcolour
+
+Given an index of a vertex in a batch, returns the red, green, blue and
+alpha values for that vertex, in that order. All four values will be
+floating-point numbers in the range 0.0 - 1.0.
+
+These values are multiplied with the texture, so values less than 1.0
+will darken the texture. A common use for this is to draw coloured text.
+
+@node batch2d-vertexcolor
+@subsection vertexcolor
+
+Alias for @ref{batch2d-vertexcolour,,vertexcolour}
+
+@node batch2d-textureid
+@subsection textureid
+
+Returns the unique ID of the texture associated with this render. There
+will always be one (and only one) texture atlas associated with a 2D
+render batch.
+
+The plugin API does not have a way to get a texture by its ID; this is
+intentional, as it wouldn't always be safe to do so. The purpose of this
+function is to be able to compare texture IDs together to check if the
+current texture is the same one that was used in a previous render.
+
+@node batch2d-texturesize
+@subsection texturesize
+
+Returns the size of the overall texture atlas associated with this
+batch, in pixels.
+
+@node batch2d-texturecompare
+@subsection texturecompare
+
+Compares a section of the texture atlas for this batch to some RGBA
+pixel data. The data can be a string or a @ref{objects-buffer,,
+Buffer object}. The function will return true only if the bytes are an
+exact match. It internally uses memcmp from the C library. This means
+comparing each set of contiguous data is very fast, but, since the data
+needs to be contiguous, it can only be done checked row at a time.
+
+Internally, Bolt compares against data taken from the CPU just before
+being uploaded to the GPU, so there will never be any imprecsision
+issues caused by different GPUs/drivers/etc.
+
+The example below checks if the pixels at x,y and (x+1),y are fully
+opaque and red.
+
+@example lua
+@verbatim
+mybatch:texturecompare(x, y, "\xFF\x00\x00\xFF\xFF\x00\x00\xFF")
+@end verbatim
+@end example
+
+Normally the X and Y coordinates should be calculated from
+@ref{batch2d-vertexatlasxy,,vertexatlasxy} and
+@ref{batch2d-vertexatlaswh,,vertexatlaswh}.
+
+@node batch2d-texturedata
+@subsection texturedata
+
+Gets the RGBA data starting at a given coordinate of the texture atlas,
+and returns it as a Lua string.
+
+The following example would return an 8-bytes-long string, containing
+the RGBA data for two pixels.
+
+@example lua
+@verbatim
+mybatch:texturedata(x, y, 8)
+@end verbatim
+@end example
+
+Using this function to search for specific textures isn't recommended as
+it would be noticeably slower than using @ref{batch2d-texturecompare,,
+texturecompare}.
+
+@node objects-render3d
+@section Render3D Event
+
+A Render3D event comes from @ref{functions-onrender3d,,onrender3d}. It
+occurs when a 3D model is rendered to the game view. All of the model's
+vertex coordinates and texture data can be queried, along with its
+animation data if the model is animated.
+
+Bolt has a complex set of functions for doing calculations with 3D space
+data. Render3D's @ref{render3d-vertexxyz,,vertexxyz} function returns
+static model data which will always be the same for two instances of the
+same model even if they're placed differently, scaled or rotated
+differently, doing different animations, etc. To get the model's
+position in world space, use @ref{render3d-modelmatrix,,modelmatrix}:
+
+@example lua
+@verbatim
+local modelpoint = myevent:vertexxyz(0)
+local worldpoint = modelpoint:transform(myevent:modelmatrix())
+@end verbatim
+@end example
+
+This gives an X, Y and Z in world coordinates, which can be used to find
+its position on the world map. From there, you can use its
+@ref{render3d-viewprojmatrix,,viewproj matrix} to find where it will
+appear on the user's screen, in pixel coordinates:
+
+@example lua
+@verbatim
+local pixelx, pixely = worldpoint:transform(myevent:viewprojmatrix()):aspixels()
+@end verbatim
+@end example
+
+This will give the pixel coordinates at which a static vertex would be
+rendered. If the model is animated, you might like to apply its
+animation data to the transform to get the vertex's true position.
+Animation transforms are per-bone, and each vertex has a bone ID
+associated with it which tells the shader which animation transform to
+use. An animation transform is from model-space to model-space, so it
+must be applied before any of the other transforms.
+
+@example lua
+@verbatim
+local bone = myevent:vertexbone(0)
+local modelpoint = myevent:vertexxyz(0)
+local animatedpoint = modelpoint:transform(myevent:boneanimation(bone))
+local worldpoint = animatedpoint:transform(myevent:modelmatrix())
+@end verbatim
+@end example
+
+Like Batch2D events, Render3D events always have exactly one texture
+atlas associated with them, but each vertex may be textured with a
+different section of that atlas. Unlike Batch2D however, there's an
+extra step involved in getting the pixel data associated with a vertex.
+The vertex's meta-id must be queried with @ref{render3d-vertexmeta,,
+vertexmeta}, then pass the meta-id to @ref{render3d-atlasxywh,,
+atlasxywh} to get the correct section of the texture atlas:
+
+@example lua
+@verbatim
+local mymeta = event:vertexmeta(0)
+local x, y, w, h = event:atlasxywh(mymeta)
+@end verbatim
+@end example
+
+When querying vertex data, keep in mind that Lua indices start at 1, so
+the valid range is 1 to vertexcount, inclusive:
+
+@example lua
+@verbatim
+for i in 1, event:vertexcount() do
+-- ...
+@end verbatim
+@end example
+
+It's @strong{not safe} to use an event object after the event handler
+has returned.
+
+@node render3d-vertexcount
+@subsection vertexcount
+
+Returns the number of vertices in a model.
+
+@example lua
+@verbatim
+local count = event:vertexcount()
+@end verbatim
+@end example
+
+@node render3d-vertexxyz
+@subsection vertexxyz
+
+Given a vertex number, returns a @ref{objects-point,,Point object}
+representing the vertex's model coordinates, according to the static
+model data.
+
+@example lua
+@verbatim
+local modelpoint = event:vertexxyz(0)
+@end verbatim
+@end example
+
+@node render3d-modelmatrix
+@subsection modelmatrix
+
+Returns the @ref{objects-transform,,Transform object} representing the
+model matrix of the model being rendered. This can be used to transform
+points from model coordinates into world coordinates.
+
+@example lua
+@verbatim
+local modelmatrix = event:modelmatrix()
+local modelpoint = event:vertexxyz(0)
+local worldpoint = modelpoint:transform(modelmatrix)
+@end verbatim
+@end example
+
+@node render3d-viewprojmatrix
+@subsection viewprojmatrix
+
+Returns the @ref{objects-transform,,Transform object} representing the
+combined view and projection matrices, commonly called the "viewproj
+matrix", of the model being rendered. This can be used to transform
+points from world coordinates into screen coordinates.
+
+@node render3d-vertexmeta
+@subsection vertexmeta
+
+Given a vertex number, returns a meta-ID (an integer) relating to its
+associated texture image. This can then be passed to
+@ref{render3d-atlasxywh,,atlasxywh}.
+
+@example lua
+@verbatim
+local meta = event:vertexmeta(0)
+local x, y, w, h = event:atlasxywh(meta)
+@end verbatim
+@end example
+
+@node render3d-atlasxywh
+@subsection atlasxywh
+
+Given a vertex number, returns the X, Y, width and height of its
+associated image in the texture atlas, in pixel coordinates.
+
+@example lua
+@verbatim
+local meta = event:vertexmeta(0)
+local x, y, w, h = event:atlasxywh(meta)
+@end verbatim
+@end example
+
+@node render3d-vertexuv
+@subsection vertexuv
+
+Given a vertex number, returns the vertex's associated "UV" coordinates.
+
+The values will be floating-point numbers in the range 0.0 - 1.0. They
+are relative to image in the texture atlas.
+
+@node render3d-vertexcolour
+@subsection vertexcolour
+
+Given a vertex number, returns the red, green, blue and alpha values for
+that vertex, in that order. All four values will be floating-point
+numbers in the range 0.0 - 1.0.
+
+These values are multiplied with the texture, so values less than 1.0
+will darken the texture (or make it more transparent in the case of the
+alpha channel). A common use for this is to draw differently "tinted"
+versions of the same model using the same texture.
+
+@node render3d-vertexcolor
+@subsection vertexcolor
+
+Alias for @ref{render3d-vertexcolour,,vertexcolour}
+
+@node render3d-textureid
+@subsection textureid
+
+Returns the unique ID of the texture associated with this render. There
+will always be one (and only one) texture atlas associated with a 3D
+render.
+
+The plugin API does not have a way to get a texture by its ID; this is
+intentional, as it wouldn't always be safe to do so. The purpose of this
+function is to be able to compare texture IDs together to check if the
+current texture is the same one that was used in a previous render.
+
+@node render3d-texturesize
+@subsection texturesize
+
+Returns the size of the overall texture atlas associated with this
+batch, in pixels.
+
+@node render3d-texturecompare
+@subsection texturecompare
+
+Compares a section of the texture atlas for this batch to some RGBA
+pixel data. The data can be a string or a @ref{objects-buffer,,
+Buffer object}. The function will return true only if the bytes are an
+exact match. It internally uses memcmp from the C library. This means
+comparing each set of contiguous data is very fast, but, since the data
+needs to be contiguous, it can only be done checked row at a time.
+
+Internally, Bolt compares against data taken from the CPU just before
+being uploaded to the GPU, so there will never be any imprecsision
+issues caused by different GPUs/drivers/etc.
+
+The example below checks if the pixels at x,y and (x+1),y are fully
+opaque and red.
+
+@example lua
+@verbatim
+event:texturecompare(x, y, "\xFF\x00\x00\xFF\xFF\x00\x00\xFF")
+@end verbatim
+@end example
+
+Normally the X and Y coordinates should be calculated from
+@ref{render3d-atlasxywh,,atlasxywh}.
+
+@node render3d-texturedata
+@subsection texturedata
+
+Gets the RGBA data starting at a given coordinate of the texture atlas,
+and returns it as a Lua string.
+
+The following example would return an 8-bytes-long string, containing
+the RGBA data for two pixels.
+
+@example lua
+@verbatim
+mybatch:texturedata(x, y, 8)
+@end verbatim
+@end example
+
+Using this function to search for specific textures isn't recommended as
+it would be noticeably slower than using @ref{render3d-texturecompare,,
+texturecompare}.
+
+@node render3d-vertexbone
+@subsection vertexbone
+
+Given a vertex number, returns its bone ID. Animated models have
+multiple bones which can move independently of each other, and this
+function can be used to find out which bone a vertex belongs to. The
+returned value may be any integer from 0 to 255, although the game
+engine actually seems to be unable to handle indices higher than 128.
+(128 itself is valid.)
+
+All vertices have bone IDs, even in non-animated models, so plugins may
+call this function regardless of whether the model is animated or not.
+For a non-animated model the bone ID seems to be meaningless and is
+usually 0. To check if the model is animated, see
+@ref{render3d-animated,,animated}.
+
+@example lua
+@verbatim
+local bone = event:vertexbone(0)
+@end verbatim
+@end example
+
+@node render3d-boneanimation
+@subsection boneanimation
+
+Given a bone ID, returns the Transform object that would be applied to
+its static model, in model coordinates, to transform it into its current
+animated position.
+
+It's a fatal error to call this function on a render event for a
+non-animated model, since non-animated models have no bone transforms
+that could be queried. To check if the model is animated, use
+@ref{render3d-animated,,animated}.
+
+@node render3d-animated
+@subsection animated
+
+Returns a boolean value indicating whether this model is animated.
+Animated models can have multiple bones which can move independently of
+each other. If this function returns false, then the model has no
+animation data, and calling @ref{render3d-boneanimation,,boneanimation}
+will result in an error.
+
+@example lua
+@verbatim
+if event:animated() then
+  -- it's safe to call event:boneanimation
+end
+@end verbatim
+@end example
+
+@node objects-minimap
+@section Minimap Event
+
+A Minimap event comes from @ref{functions-onminimap}. It occurs when the
+minimap gets drawn to the game view. This happens once per frame, unless
+the minimap isn't visible. The event can be queried for some useful
+information like the angle it's rotated to and the world position it's
+centered on.
+
+It's @strong{not safe} to use an event object after the event handler
+has returned.
+
+@node minimap-angle
+@subsection angle
+
+Returns the angle at which the minimap background image is being
+rendered, in radians. The angle is 0 when upright (facing directly
+north), and increases counter-clockwise (note that turning the camera
+clockwise rotates the minimap counter-clockwise and vice versa).
+
+@node minimap-scale
+@subsection scale
+
+Returns the scale at which the minimap background image is being
+rendered. This indicates how far in or out the minimap is zoomed. It
+appears to be capped between roughly 0.5 and 3.5.
+
+@node minimap-position
+@subsection position
+
+Returns an estimate of the X and Y position the minimap is centered on,
+in world coordinates. This is only a rough estimate and can move around
+a lot even while standing still. It usually doesn't vary by more than
+half a tile.
+
+@node objects-swapbuffers
+@section SwapBuffers event
+
+A SwapBuffers event comes from @ref{functions-onswapbuffers,,
+onswapbuffers}. It occurs at the end of a frame (and the beginning of a
+new frame), so anywhere from 5 to 200+ times per second depending on the
+user's FPS. It's commonly used as a "sync point", i.e. to ensure that
+some Lua code will run at regular intervals. The event object is a
+userdata but has no functions.
+
+Unlike other events in the Bolt API, which fire immediately after the
+event in question has happened, SwapBuffers events fire immediately
+before the buffers are actually swapped. This means any rendering done
+in a SwapBuffers event will be immediately visible on the current frame.
+
+It's @strong{not safe} to use an event object after the event handler
+has returned.
+
+@node objects-reposition
+@section Reposition Event
+
+A Reposition event comes from @ref{window-onreposition,,onreposition}.
+It indicates that the size or position of a @ref{objects-window,,Window
+object} has changed. This could happen for several reasons, such as the
+game window being resized, so don't assume that it won't happen.
+
+@ref{reposition-didresize,,didresize} can be used to check if the window
+size changed. If it did, the window contents have been cleared to
+transparent and must be redrawn.
+
+It's @strong{not safe} to use an event object after the event handler
+has returned.
+
+@node reposition-xywh
+@subsection xywh
+
+Returns the new x, y, width and height that the window was repositioned
+to.
+
+@example
+@verbatim
+local newx, newy, newwidth, newheight = event:xywh()
+@end verbatim
+@end example
+
+@node reposition-didresize
+@subsection didresize
+
+Returns a boolean value indicating whether the window changed size. If
+true, the contents of the window were cleared and need to be redrawn.
+
+@example
+@verbatim
+if event:didresize() then
+  -- re-draw something to the window
+end
+@end verbatim
+@end example
+
+@node objects-mousemotion
+@section Mouse Motion Event
+
+A Mouse Motion event comes from @ref{functions-onmousemotion,,
+bolt.onmousemotion} or @ref{window-onmousemotion,,window:onmousemotion}.
+It occurs when the mouse moves while inside the game window. Each window
+or embedded browser can only receive one mouse motion event per frame -
+the latest position will always be sent, but some position updates in
+between will be dropped. The same goes for @ref{functions-onmousemotion,
+,bolt.onmousemotion}.
+
+It's @strong{not safe} to use an event object after the event handler
+has returned.
+
+@node mousemotion-xy
+@subsection xy
+
+Returns the x and y for this mouse event in pixels, relative to the
+top-left of the window that it relates to.
+
+@example
+@verbatim
+local x, y = event:xy()
+@end verbatim
+@end example
+
+@node mousemotion-ctrl
+@subsection ctrl
+
+Returns a boolean value indicating whether @code{ctrl} was held when
+this event was fired.
+
+@example
+@verbatim
+local ctrl = event:ctrl()
+@end verbatim
+@end example
+
+@node mousemotion-shift
+@subsection shift
+
+Returns a boolean value indicating whether @code{shift} was held when
+this event was fired.
+
+@example
+@verbatim
+local shift = event:shift()
+@end verbatim
+@end example
+
+@node mousemotion-meta
+@subsection meta
+
+Returns a boolean value indicating whether the meta key (also known as
+super, command, or the "windows key") was held when this event was
+fired.
+
+@example
+@verbatim
+local meta = event:meta()
+@end verbatim
+@end example
+
+@node mousemotion-alt
+@subsection alt
+
+Returns a boolean value indicating whether @code{alt} was held when this
+event was fired.
+
+@example
+@verbatim
+local alt = event:alt()
+@end verbatim
+@end example
+
+@node mousemotion-capslock
+@subsection capslock
+
+Returns a boolean value indicating whether caps lock was on when this
+event was fired.
+
+@example
+@verbatim
+local capslock = event:capslock()
+@end verbatim
+@end example
+
+@node mousemotion-numlock
+@subsection numlock
+
+Returns a boolean value indicating whether numlock was on when this
+event was fired.
+
+@example
+@verbatim
+local numlock = event:numlock()
+@end verbatim
+@end example
+
+@node mousemotion-mousebuttons
+@subsection mousebuttons
+
+Returns three boolean values indicating whether each primary mouse
+button was held when this event fired, in the order: left, right,
+middle.
+
+@example
+@verbatim
+local lmb, rmb, mmb = event:buttons()
+@end verbatim
+@end example
+
+@node objects-mousebutton
+@section Mouse Button Event
+
+A Mouse Button event comes from @ref{functions-onmousebutton,,
+bolt.onmousebutton}, @ref{functions-onmousebuttonup,,
+bolt.onmousebuttonup}, @ref{window-onmousebutton,,
+window:onmousebutton}, or @ref{window-onmousebuttonup,,
+window:onmousebuttonup}. It occurs when one of the three primary mouse
+buttons is pressed or released. The action of pressing a mouse button
+will be captured by the window or embedded browser under the mouse at
+the time. In the case of the left mouse button, the button-up event will
+usually be captured by the window that was clicked on, as well as any
+mouse motion events that happen between the press and release.
+
+It's @strong{not safe} to use an event object after the event handler
+has returned.
+
+@node mousebutton-xy
+@subsection xy
+
+Returns the x and y for this mouse event in pixels, relative to the
+top-left of the window that it relates to.
+
+@example
+@verbatim
+local x, y = event:xy()
+@end verbatim
+@end example
+
+@node mousebutton-ctrl
+@subsection ctrl
+
+Returns a boolean value indicating whether @code{ctrl} was held when
+this event was fired.
+
+@example
+@verbatim
+local ctrl = event:ctrl()
+@end verbatim
+@end example
+
+@node mousebutton-shift
+@subsection shift
+
+Returns a boolean value indicating whether @code{shift} was held when
+this event was fired.
+
+@example
+@verbatim
+local shift = event:shift()
+@end verbatim
+@end example
+
+@node mousebutton-meta
+@subsection meta
+
+Returns a boolean value indicating whether the meta key (also known as
+super, command, or the "windows key") was held when this event was
+fired.
+
+@example
+@verbatim
+local meta = event:meta()
+@end verbatim
+@end example
+
+@node mousebutton-alt
+@subsection alt
+
+Returns a boolean value indicating whether @code{alt} was held when this
+event was fired.
+
+@example
+@verbatim
+local alt = event:alt()
+@end verbatim
+@end example
+
+@node mousebutton-capslock
+@subsection capslock
+
+Returns a boolean value indicating whether caps lock was on when this
+event was fired.
+
+@example
+@verbatim
+local capslock = event:capslock()
+@end verbatim
+@end example
+
+@node mousebutton-numlock
+@subsection numlock
+
+Returns a boolean value indicating whether numlock was on when this
+event was fired.
+
+@example
+@verbatim
+local numlock = event:numlock()
+@end verbatim
+@end example
+
+@node mousebutton-mousebuttons
+@subsection mousebuttons
+
+Returns three boolean values indicating whether each primary mouse
+button was held when this event fired, in the order: left, right,
+middle.
+
+@example
+@verbatim
+local lmb, rmb, mmb = event:buttons()
+@end verbatim
+@end example
+
+@node mousebutton-button
+@subsection button
+
+Returns an integer representing the mouse button that was pressed or
+released. Possible values are 1 for the left mouse button, 2 for the
+right mouse button, and 3 for the middle mouse button (clicking the
+mouse wheel).
+
+@node objects-scroll
+@section Scroll Event
+
+A Scroll event comes from @ref{functions-onscroll,,bolt.onscroll} or
+@ref{window-onscroll,,window:onscroll}. It occurs when the user scrolls
+their mouse wheel while the mouse is inside the game window.
+
+It's @strong{not safe} to use an event object after the event handler
+has returned.
+
+@node scroll-xy
+@subsection xy
+
+Returns the x and y for this mouse event in pixels, relative to the
+top-left of the window that it relates to.
+
+@example
+@verbatim
+local x, y = event:xy()
+@end verbatim
+@end example
+
+@node scroll-ctrl
+@subsection ctrl
+
+Returns a boolean value indicating whether @code{ctrl} was held when
+this event was fired.
+
+@example
+@verbatim
+local ctrl = event:ctrl()
+@end verbatim
+@end example
+
+@node scroll-shift
+@subsection shift
+
+Returns a boolean value indicating whether @code{shift} was held when
+this event was fired.
+
+@example
+@verbatim
+local shift = event:shift()
+@end verbatim
+@end example
+
+@node scroll-meta
+@subsection meta
+
+Returns a boolean value indicating whether the meta key (also known as
+super, command, or the "windows key") was held when this event was
+fired.
+
+@example
+@verbatim
+local meta = event:meta()
+@end verbatim
+@end example
+
+@node scroll-alt
+@subsection alt
+
+Returns a boolean value indicating whether @code{alt} was held when this
+event was fired.
+
+@example
+@verbatim
+local alt = event:alt()
+@end verbatim
+@end example
+
+@node scroll-capslock
+@subsection capslock
+
+Returns a boolean value indicating whether caps lock was on when this
+event was fired.
+
+@example
+@verbatim
+local capslock = event:capslock()
+@end verbatim
+@end example
+
+@node scroll-numlock
+@subsection numlock
+
+Returns a boolean value indicating whether numlock was on when this
+event was fired.
+
+@example
+@verbatim
+local numlock = event:numlock()
+@end verbatim
+@end example
+
+@node scroll-mousebuttons
+@subsection mousebuttons
+
+Returns three boolean values indicating whether each primary mouse
+button was held when this event fired, in the order: left, right,
+middle.
+
+@example
+@verbatim
+local lmb, rmb, mmb = event:buttons()
+@end verbatim
+@end example
+
+@node scroll-direction
+@subsection direction
+
+Returns a boolean value representing the scroll direction. False means
+scrolling down, toward the user, and true means scrolling up, away from
+the user.
+
+@example
+@verbatim
+local direction = event:direction()
+@end verbatim
+@end example
+
+@node objects-mouseleave
+@section Mouse Leave Event
+
+A Mouse Leave event comes from @ref{window-onmouseleave,,
+window:onmouseleave}. It occurs when the user moves their mouse such
+that it's no longer inside the window or embedded browser.
+
+It's @strong{not safe} to use an event object after the event handler
+has returned.
+
+@node mouseleave-xy
+@subsection xy
+
+Returns the x and y for this mouse event in pixels, relative to the
+top-left of the window that it relates to.
+
+@example
+@verbatim
+local x, y = event:xy()
+@end verbatim
+@end example
+
+@node mouseleave-ctrl
+@subsection ctrl
+
+Returns a boolean value indicating whether @code{ctrl} was held when
+this event was fired.
+
+@example
+@verbatim
+local ctrl = event:ctrl()
+@end verbatim
+@end example
+
+@node mouseleave-shift
+@subsection shift
+
+Returns a boolean value indicating whether @code{shift} was held when
+this event was fired.
+
+@example
+@verbatim
+local shift = event:shift()
+@end verbatim
+@end example
+
+@node mouseleave-meta
+@subsection meta
+
+Returns a boolean value indicating whether the meta key (also known as
+super, command, or the "windows key") was held when this event was
+fired.
+
+@example
+@verbatim
+local meta = event:meta()
+@end verbatim
+@end example
+
+@node mouseleave-alt
+@subsection alt
+
+Returns a boolean value indicating whether @code{alt} was held when this
+event was fired.
+
+@example
+@verbatim
+local alt = event:alt()
+@end verbatim
+@end example
+
+@node mouseleave-capslock
+@subsection capslock
+
+Returns a boolean value indicating whether caps lock was on when this
+event was fired.
+
+@example
+@verbatim
+local capslock = event:capslock()
+@end verbatim
+@end example
+
+@node mouseleave-numlock
+@subsection numlock
+
+Returns a boolean value indicating whether numlock was on when this
+event was fired.
+
+@example
+@verbatim
+local numlock = event:numlock()
+@end verbatim
+@end example
+
+@node mouseleave-mousebuttons
+@subsection mousebuttons
+
+Returns three boolean values indicating whether each primary mouse
+button was held when this event fired, in the order: left, right,
+middle.
+
+@example
+@verbatim
+local lmb, rmb, mmb = event:buttons()
+@end verbatim
+@end example
+
+@node browser-apis
+@chapter Browser APIs
+
+Browser objects and embedded browser objects have access to a few APIs
+which are primarily used for communicating with the Lua code running in
+the game process. Incoming messages will be via the JavaScript
+@code{window.postMessage} function, so can be handled like so:
+
+@example js
+@verbatim
+window.addEventListener('message', async (event) => {
+  if (typeof(event.data) !== "object") return;
+  // check event.data.type...
+});
+@end verbatim
+@end example
+
+APIs invoked by the web page itself are accessed by making a web request
+to @code{https://bolt-api/}, as shown in the examples for the relevant
+API endpoints.
+
+Browsers and embedded browsers have no @code{window.close()} function,
+as one would usually find in JavaScript in a web page. This function
+doesn't work correctly in CEF so it has been disabled. Pages that want
+to self-close must use the @ref{browserapis-close-request,,
+/close-request API} instead.
+
+@node browserapis-pluginmessage
+@section pluginMessage
+
+A message has been received from the Lua sendmessage function being
+called on this Browser or Embedded Browser object.
+@code{event.data.content} is an ArrayBuffer containing the binary data
+that was passed to the function.
+
+@example js
+@verbatim
+window.addEventListener('message', async (event) => {
+  if (typeof(event.data) !== "object") return;
+  if (event.data.type === "pluginMessage") {
+    const message = (new TextDecoder()).decode(event.data.content);
+    console.log(message);
+  }
+});
+@end verbatim
+@end example
+
+Note that this example assumes that the message is safely formattable
+text. This may or may not be the case, depending on what your plugin is
+programmed to send.
+
+@node browserapis-screencapture
+@section screenCapture
+
+Screen capture is currently enabled for this browser, and a new screen
+capture has been received. @code{event.data.width} and
+@code{event.data.height} are the width and height of the image in
+pixels, and @code{event.data.content} is an ArrayBuffer of length
+@code{width * height * 3}, containing the RGB pixel data.
+
+@example js
+@verbatim
+window.addEventListener('message', async (event) => {
+  if (typeof(event.data) !== "object") return;
+  if (event.data.type === "screenCapture") {
+    console.log(`got screen capture ${event.data.width}x${event.data.height}`);
+  }
+});
+@end verbatim
+@end example
+
+@node browserapis-send-message
+@section /send-message
+
+A POST to this URL will result in an onmessage event being fired for the
+relevant browser object or embedded browser object in Lua. The POST body
+will be sent as-is, byte-for-byte, without being decoded or re-encoded
+in any way.
+
+@example js
+@verbatim
+fetch("https://bolt-api/send-message", {method: 'POST', body: 'some message contents'});
+@end verbatim
+@end example
+
+@node browserapis-close-request
+@section /close-request
+
+A request to this URL will result in an oncloserequest event being fired
+for the browser object in Lua, as if the user had clicked the 'X' button
+on the window. This doesn't actually close the window; if the Lua object
+has no event handler for close requests then nothing will happen.
+
+@example js
+@verbatim
+fetch("https://bolt-api/close-request");
+@end verbatim
+@end example
+
+@node browserapis-start-reposition
+@section /start-reposition
+
+@xref{embeddedbrowser-startreposition}. The query should contain two
+params, "h" and "v", for the horizontal and vertical components,
+respectively. This should usually be done in response to a JavaScript
+onmousedown event for the left mouse button. This has no effect on
+Browser objects, which are not embedded into the game window.
+
+The following example would cause the window to be dragged by its
+top-right edge:
+
+@example js
+@verbatim
+fetch("https://bolt-api/start-reposition?h=1&v=-1");
+@end verbatim
+@end example
+
+@node browserapis-cancel-reposition
+@section /cancel-reposition
+
+@xref{embeddedbrowser-cancelreposition}. This has no effect on Browser
+objects, which are not embedded into the game window.
+
+@example js
+@verbatim
+fetch("https://bolt-api/cancel-reposition");
+@end verbatim
+@end example
+
+@node appendix-world-coordinates
+@appendix Note on world coordinates
+
+Some of the Render3D and Minimap functions refer to "world coordinates".
+These refer to an actual position in the world, at a scale of 512 units
+per tile, increasing towards the east and north, and decreasing towards
+the west and south.
+
+@bye
