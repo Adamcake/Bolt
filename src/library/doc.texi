@@ -2503,6 +2503,7 @@ window.addEventListener('message', async (event) => {
   if (typeof(event.data) !== "object") return;
   if (event.data.type === "screenCapture") {
     console.log(`got screen capture ${event.data.width}x${event.data.height}`);
+    // do something with event.data.content...
   }
 });
 @end verbatim
