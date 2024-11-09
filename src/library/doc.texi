@@ -2572,7 +2572,19 @@ fetch("https://bolt-api/cancel-reposition");
 
 Some of the Render3D and Minimap functions refer to "world coordinates".
 These refer to an actual position in the world, at a scale of 512 units
-per tile, increasing towards the east and north, and decreasing towards
-the west and south.
+per tile.
+
+@itemize @bullet
+@item The X coordinate is west-to-east, increasing when travelling east
+and decreasing when travelling west.
+@item The Y coordinate is height, increasing upwards and decreasing
+downwards.
+@item The Z coordinate is south-to-north, increasing when travelling
+north and decreasing when travelling south.
+@end itemize
+
+Coordinate (X=0, Z=0) is the southwest corner of a tile. A model that's
+at the center of a tile, such as an idle player or NPC, will have X and
+Z coordinates ending in @code{.5}.
 
 @bye
