@@ -25,6 +25,11 @@ bool Browser::ResourceHandler::Open(CefRefPtr<CefRequest>, bool& handle_request,
 void Browser::ResourceHandler::GetResponseHeaders(CefRefPtr<CefResponse> response, int64_t& response_length, CefString& redirectUrl) {
 	response->SetStatus(this->status);
 	response->SetMimeType(this->mime);
+#if defined(BOLT_PLUGINS)
+	// note: this response header is set for internally-handled requests only,
+	// normal web requests aren't affected.
+	response->SetHeaderByName("Access-Control-Allow-Origin", "*", true);
+#endif
 	if (this->has_location) {
 		response->SetHeaderByName("Location", this->location, false);
 	}
