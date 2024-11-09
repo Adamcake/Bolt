@@ -49,7 +49,10 @@ Plugins are written in Lua, but the plugin loader itself is a dynamic
 library written in C. The launcher launches the game and loads the
 library into the process using a manual map injector after the process
 loads but before allowing it to run. When the library starts up, it
-modifies the import table of the process to insert function hooks.
+modifies the import table of the process to insert function hooks. If
+that's all too technical for you, don't worry: you don't need to
+understand any of that to be able to write plugins, but just know that
+your Lua code runs directly inside the game process.
 
 The word "inject" sounds scary, but Bolt is totally harmless: the
 technique described above is the same one used by lots of software you
