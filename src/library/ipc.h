@@ -35,6 +35,8 @@ enum BoltIPCMessageTypeToHost {
     IPC_MSG_OSRPLUGINMESSAGE,
     IPC_MSG_CAPTURENOTIFY_EXTERNAL,
     IPC_MSG_CAPTURENOTIFY_OSR,
+    IPC_MSG_SHOWDEVTOOLS_EXTERNAL,
+    IPC_MSG_SHOWDEVTOOLS_OSR,
 };
 
 enum BoltIPCMessageTypeToClient {
@@ -108,6 +110,12 @@ struct BoltIPCCaptureNotifyHeader {
     uint32_t width;
     uint32_t height;
     uint8_t needs_remap;
+};
+
+/// Header for BoltMessageTypeToHost::IPC_MSG_SHOWDEVTOOLS_*
+struct BoltIPCShowDevtoolsHeader {
+    uint64_t plugin_id;
+    uint64_t window_id;
 };
 
 /// Header for BoltIPCMessageTypeToClient::IPC_MSG_STARTPLUGIN

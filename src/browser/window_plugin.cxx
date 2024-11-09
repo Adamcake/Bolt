@@ -71,6 +71,10 @@ void Browser::PluginWindow::SendCaptureDone() const {
 	this->send_lock->unlock();
 }
 
+void Browser::PluginWindow::HandleShowDevtools() {
+	this->ShowDevTools();
+}
+
 bool Browser::PluginWindow::OnBeforePopup(
 	CefRefPtr<CefBrowser> browser,
 	CefRefPtr<CefFrame> frame,

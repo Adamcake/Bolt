@@ -1194,6 +1194,14 @@ mybrowser:disablecapture()
 @end verbatim
 @end example
 
+@node browser-showdevtools
+@subsection showdevtools
+
+Opens a chromium devtools window for this browser. If one is already
+open, it will be focused instead of opening a new one. The devtools
+window can't be closed through code, it can only be closed by a user
+action (e.g. clicking the 'X') or by the browser itself closing.
+
 @node browser-oncloserequest
 @subsection oncloserequest
 
@@ -1299,6 +1307,14 @@ enablecapture}.
 
 Disables screen capture for this browser. @xref{browser-enablecapture,,
 enablecapture}.
+
+@node embeddedbrowser-showdevtools
+@subsection showdevtools
+
+Opens a chromium devtools window for this browser. If one is already
+open, it will be focused instead of opening a new one. The devtools
+window can't be closed through code, it can only be closed by a user
+action (e.g. clicking the 'X') or by the browser itself closing.
 
 @node embeddedbrowser-oncloserequest
 @subsection oncloserequest
@@ -2566,6 +2582,14 @@ objects, which are not embedded into the game window.
 fetch("https://bolt-api/cancel-reposition");
 @end verbatim
 @end example
+
+@node browserapis-showdevtools
+@section /show-devtools
+
+Opens a chromium devtools window for this browser. If one is already
+open, it will be focused instead of opening a new one. The devtools
+window can't be closed through code, it can only be closed by a user
+action (e.g. clicking the 'X') or by the browser itself closing.
 
 @node appendix-world-coordinates
 @appendix Note on world coordinates

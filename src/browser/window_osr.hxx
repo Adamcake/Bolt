@@ -42,6 +42,7 @@ namespace Browser {
 		CefRefPtr<CefBrowser> Browser() const override;
 		void HandlePluginCloseRequest() override;
 		void SendCaptureDone() const override;
+		void HandleShowDevtools() override;
 
 		CefRefPtr<CefRequestHandler> GetRequestHandler() override;
 		CefRefPtr<CefRenderHandler> GetRenderHandler() override;
@@ -73,6 +74,7 @@ namespace Browser {
 		private:
 			bool deleted;
 			bool pending_delete;
+			bool pending_devtools;
 			BoltSocketType client_fd;
 			std::mutex size_lock;
 			int width, height;

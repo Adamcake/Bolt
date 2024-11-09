@@ -18,6 +18,7 @@ namespace Browser {
 		CefRefPtr<CefBrowser> Browser() const override;
 		void HandlePluginCloseRequest() override;
 		void SendCaptureDone() const override;
+		void HandleShowDevtools() override;
 
 		bool OnBeforePopup(
 			CefRefPtr<CefBrowser>,

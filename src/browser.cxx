@@ -17,6 +17,15 @@ struct CloseTask: public CefTask {
 		DISALLOW_COPY_AND_ASSIGN(CloseTask);
 };
 
+struct DevtoolsTask: public CefTask {
+	DevtoolsTask(CefRefPtr<Browser::Window> window): window(window) {}
+	void Execute() override { window->ShowDevTools(); }
+	private:
+		CefRefPtr<Browser::Window> window;
+		IMPLEMENT_REFCOUNTING(DevtoolsTask);
+		DISALLOW_COPY_AND_ASSIGN(DevtoolsTask);
+};
+
 Browser::Window::Window(CefRefPtr<Browser::Client> client, Browser::Details details, CefString url, bool show_devtools):
 	browser_count(0), client(client.get()), show_devtools(show_devtools), details(details), window(nullptr), browser_view(nullptr), browser(nullptr), pending_child(nullptr), pending_delete(false)
 {
@@ -179,10 +188,15 @@ void Browser::Window::CloseChildrenExceptDevtools() {
 }
 
 void Browser::Window::ShowDevTools() {
-	CefRefPtr<CefBrowserHost> browser_host = browser->GetHost();
-	CefWindowInfo window_info; // ignored, because this is a BrowserView
-	CefBrowserSettings browser_settings;
-	browser_host->ShowDevTools(window_info, this, browser_settings, CefPoint());
+	if (CefCurrentlyOn(TID_UI)) {
+		if (this->browser) {
+			this->browser->GetHost()->ShowDevTools(CefWindowInfo(), this, CefBrowserSettings(), CefPoint());
+		} else {
+			this->show_devtools = true;
+		}
+	} else {
+		CefPostTask(TID_UI, new DevtoolsTask(this));
+	}
 }
 
 void Browser::Window::NotifyClosed() { }

@@ -486,6 +486,20 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 			delete[] content;
 			break;
 		}
+		case IPC_MSG_SHOWDEVTOOLS_EXTERNAL: {
+			BoltIPCShowDevtoolsHeader header;
+			_bolt_ipc_receive(fd, &header, sizeof(header));
+			CefRefPtr<Browser::PluginWindow> window = this->GetExternalWindowFromFDAndIDs(client, header.plugin_id, header.window_id);
+			if (window && !window->IsDeleted()) window->HandleShowDevtools();
+			break;
+		}
+		case IPC_MSG_SHOWDEVTOOLS_OSR: {
+			BoltIPCShowDevtoolsHeader header;
+			_bolt_ipc_receive(fd, &header, sizeof(header));
+			CefRefPtr<Browser::WindowOSR> window = this->GetOsrWindowFromFDAndIDs(client, header.plugin_id, header.window_id);
+			if (window && !window->IsDeleted()) window->HandleShowDevtools();
+			break;
+		}
 		default:
 			fmt::print("[I] got unknown message type {}\n", static_cast<int>(msg_type));
 			break;

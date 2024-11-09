@@ -1234,6 +1234,16 @@ static int api_browser_disablecapture(lua_State* state) {
     return 0;
 }
 
+static int api_browser_showdevtools(lua_State* state) {
+    struct ExternalBrowser* window = require_self_userdata(state, "showdevtools");
+    const enum BoltIPCMessageTypeToHost msg_type = IPC_MSG_SHOWDEVTOOLS_EXTERNAL;
+    const struct BoltIPCShowDevtoolsHeader header = { .plugin_id = window->plugin_id, .window_id = window->id };
+    const BoltSocketType fd = _bolt_plugin_fd();
+    _bolt_ipc_send(fd, &msg_type, sizeof(msg_type));
+    _bolt_ipc_send(fd, &header, sizeof(header));
+    return 0;
+}
+
 static int api_embeddedbrowser_close(lua_State* state) {
     struct EmbeddedWindow* window = require_self_userdata(state, "close");
     window->is_deleted = true;
@@ -1280,6 +1290,16 @@ static int api_embeddedbrowser_disablecapture(lua_State* state) {
     if (window->do_capture) {
         window->do_capture = false;
     }
+    return 0;
+}
+
+static int api_embeddedbrowser_showdevtools(lua_State* state) {
+    struct EmbeddedWindow* window = require_self_userdata(state, "showdevtools");
+    const enum BoltIPCMessageTypeToHost msg_type = IPC_MSG_SHOWDEVTOOLS_OSR;
+    const struct BoltIPCShowDevtoolsHeader header = { .plugin_id = window->plugin_id, .window_id = window->id };
+    const BoltSocketType fd = _bolt_plugin_fd();
+    _bolt_ipc_send(fd, &msg_type, sizeof(msg_type));
+    _bolt_ipc_send(fd, &header, sizeof(header));
     return 0;
 }
 
@@ -1479,6 +1499,7 @@ static struct ApiFuncTemplate browser_functions[] = {
     BOLTFUNC(sendmessage, browser),
     BOLTFUNC(enablecapture, browser),
     BOLTFUNC(disablecapture, browser),
+    BOLTFUNC(showdevtools, browser),
     BOLTFUNC(oncloserequest, browser),
     BOLTFUNC(onmessage, browser),
 };
@@ -1490,6 +1511,7 @@ static struct ApiFuncTemplate embeddedbrowser_functions[] = {
     BOLTFUNC(cancelreposition, window),
     BOLTFUNC(enablecapture, embeddedbrowser),
     BOLTFUNC(disablecapture, embeddedbrowser),
+    BOLTFUNC(showdevtools, embeddedbrowser),
     BOLTFUNC(oncloserequest, browser),
     BOLTFUNC(onmessage, browser),
 };

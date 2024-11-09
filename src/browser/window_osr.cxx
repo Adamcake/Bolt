@@ -16,6 +16,15 @@
 #include "resource_handler.hxx"
 #include "../library/event.h"
 
+struct DevtoolsTaskOsr: public CefTask {
+	DevtoolsTaskOsr(CefRefPtr<Browser::WindowOSR> window): window(window) {}
+	void Execute() override { this->window->HandleShowDevtools(); }
+	private:
+		CefRefPtr<Browser::WindowOSR> window;
+		IMPLEMENT_REFCOUNTING(DevtoolsTaskOsr);
+		DISALLOW_COPY_AND_ASSIGN(DevtoolsTaskOsr);
+};
+
 static void SendUpdateMsg(BoltSocketType fd, std::mutex* send_lock, uint64_t id, int width, int height, void* needs_remap, const CefRect* rects, uint32_t rect_count) {
 	const BoltIPCMessageTypeToClient msg_type = IPC_MSG_OSRUPDATE;
 	const BoltIPCOsrUpdateHeader header = { .rect_count = rect_count, .window_id = id, .needs_remap = needs_remap, .width = width, .height = height };
@@ -31,7 +40,7 @@ static void SendUpdateMsg(BoltSocketType fd, std::mutex* send_lock, uint64_t id,
 
 Browser::WindowOSR::WindowOSR(CefString url, int width, int height, BoltSocketType client_fd, Browser::Client* main_client, std::mutex* send_lock, int pid, uint64_t window_id, uint64_t plugin_id, CefRefPtr<FileManager::Directory> file_manager):
 	PluginRequestHandler(IPC_MSG_OSRBROWSERMESSAGE, send_lock),
-	deleted(false), pending_delete(false), client_fd(client_fd), width(width), height(height), browser(nullptr), window_id(window_id),
+	deleted(false), pending_delete(false), pending_devtools(false), client_fd(client_fd), width(width), height(height), browser(nullptr), window_id(window_id),
 	plugin_id(plugin_id), main_client(main_client), stored(nullptr), remote_has_remapped(false), remote_is_idle(true), file_manager(file_manager)
 {
 	this->mapping_size = (size_t)width * (size_t)height * 4;
@@ -69,6 +78,7 @@ bool Browser::WindowOSR::IsDeleted() {
 
 void Browser::WindowOSR::Close() {
 	if (this->browser) {
+		this->browser->GetHost()->CloseDevTools();
 		this->browser->GetHost()->CloseBrowser(false);
 	} else {
 		this->pending_delete = true;
@@ -111,6 +121,20 @@ void Browser::WindowOSR::SendCaptureDone() const {
 	_bolt_ipc_send(this->client_fd, &msg_type, sizeof(msg_type));
 	_bolt_ipc_send(this->client_fd, &header, sizeof(header));
 	this->send_lock->unlock();
+}
+
+void Browser::WindowOSR::HandleShowDevtools() {
+	if (CefCurrentlyOn(TID_UI)) {
+		CefRefPtr<CefBrowser> browser = this->Browser();
+		if (browser) {
+			CefRefPtr<CefBrowserHost> host = browser->GetHost();
+			host->ShowDevTools(CefWindowInfo(), host->GetClient(), CefBrowserSettings(), CefPoint());
+		} else {
+			this->pending_devtools = true;
+		}
+	} else {
+		CefPostTask(TID_UI, new DevtoolsTaskOsr(this));
+	}
 }
 
 void Browser::WindowOSR::HandleAck() {
@@ -225,6 +249,7 @@ bool Browser::WindowOSR::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser,
 	if (!(this->browser && this->browser->IsSame(browser))) return false;
 	const CefString name = message->GetName();
 	if (name == "__bolt_pluginbrowser_close") {
+		this->browser->GetHost()->CloseDevTools();
 		this->browser->GetHost()->TryCloseBrowser();
 		return true;
 	}
@@ -363,6 +388,7 @@ bool Browser::WindowOSR::OnBeforePopup(
 }
 
 void Browser::WindowOSR::OnAfterCreated(CefRefPtr<CefBrowser> browser) {
+	if (this->browser) return;
 	this->browser = browser;
 	if (this->pending_delete) {
 		// calling CloseBrowser here would lead to a segmentation fault in CEF because we're still
@@ -370,6 +396,10 @@ void Browser::WindowOSR::OnAfterCreated(CefRefPtr<CefBrowser> browser) {
 		browser->GetMainFrame()->SendProcessMessage(PID_RENDERER, CefProcessMessage::Create("__bolt_pluginbrowser_close"));
 	} else {
 		this->NotifyBrowserCreated(browser);
+		if (this->pending_devtools) {
+			CefRefPtr<CefBrowserHost> host = browser->GetHost();
+			host->ShowDevTools(CefWindowInfo(), host->GetClient(), CefBrowserSettings(), CefPoint());
+		}
 	}
 }
 

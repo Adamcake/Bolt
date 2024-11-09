@@ -169,6 +169,11 @@ CefRefPtr<CefResourceRequestHandler> Browser::PluginRequestHandler::GetResourceR
 			QSENDOK();
 		}
 
+		if (api_name == "show-devtools") {
+			this->HandleShowDevtools();
+			QSENDOK();
+		}
+
 		// no API endpoint matched, so respond 404
 		QSENDNOTFOUND();
 	}
