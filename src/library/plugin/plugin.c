@@ -754,19 +754,20 @@ static void handle_plugin_message(lua_State* state, struct BoltIPCBrowserMessage
     lua_pushinteger(state, BROWSER_ONMESSAGE); /*stack: window table, event table, event id*/
     lua_gettable(state, -2); /*stack: window table, event table, function or nil*/
     if (lua_isfunction(state, -1)) {
-        void* data = lua_newuserdata(state, header->message_size); /* message userdata */
+        void* data = lua_newuserdata(state, header->message_size); /* window table, event table, function, message userdata*/
         _bolt_ipc_receive(fd, data, header->message_size);
-        lua_pushlstring(state, data, header->message_size); /*stack: message userdata, window table, event table, function, message*/
-        if (lua_pcall(state, 1, 0, 0)) { /*stack: message userdata, window table, event table, ?error*/
+        lua_pushvalue(state, -2); /* window table, event table, function, message userdata, function*/
+        lua_pushlstring(state, data, header->message_size); /*stack: window table, event table, function, message userdata, function, message*/
+        if (lua_pcall(state, 1, 0, 0)) { /*stack: window table, event table, function, message userdata, ?error*/
             const char* e = lua_tolstring(state, -1, 0);
             printf("plugin browser onmessage error: %s\n", e);
-            lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME); /*stack: message userdata, window table, event table, error, plugin*/
+            lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME); /*stack: window table, event table, function, message userdata, error, plugin*/
             const struct Plugin* plugin = lua_touserdata(state, -1);
-            lua_pop(state, 5); /*stack: (empty)*/
+            lua_pop(state, 6); /*stack: (empty)*/
             _bolt_plugin_stop(plugin->id);
             _bolt_plugin_notify_stopped(plugin->id);
         } else {
-            lua_pop(state, 3); /*stack: (empty)*/
+            lua_pop(state, 4); /*stack: (empty)*/
         }
     } else {
         _bolt_receive_discard(header->message_size);
