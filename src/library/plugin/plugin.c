@@ -808,7 +808,7 @@ static void handle_close_request(lua_State* state, uint64_t window_id) {
     struct BoltIPC##STRUCT##Header header; \
     _bolt_ipc_receive(fd, &header, sizeof(header)); \
     struct EmbeddedWindow* window = get_embeddedwindow(&header.window_id); \
-    if (window) handle_ipc_##NAME(&header, window); \
+    if (window && !window->is_deleted) handle_ipc_##NAME(&header, window); \
     break; \
 }
 
@@ -816,7 +816,7 @@ static void handle_close_request(lua_State* state, uint64_t window_id) {
     struct BoltIPC##STRUCT##Header header; \
     _bolt_ipc_receive(fd, &header, sizeof(header)); \
     struct EmbeddedWindow* window = get_embeddedwindow(&header.window_id); \
-    if (window) handle_ipc_##NAME(&header, window); \
+    if (window && !window->is_deleted) handle_ipc_##NAME(&header, window); \
     else _bolt_receive_discard(get_tail_ipc_##STRUCT(&header)); \
     break; \
 }
@@ -825,7 +825,7 @@ static void handle_close_request(lua_State* state, uint64_t window_id) {
     struct BoltIPC##STRUCT##Header header; \
     _bolt_ipc_receive(fd, &header, sizeof(header)); \
     struct ExternalBrowser* window = get_externalbrowser(header.plugin_id, &header.window_id); \
-    if (window) handle_ipc_##NAME(&header, window); \
+    if (window && !window->plugin->is_deleted) handle_ipc_##NAME(&header, window); \
     break; \
 }
 
@@ -833,7 +833,7 @@ static void handle_close_request(lua_State* state, uint64_t window_id) {
     struct BoltIPC##STRUCT##Header header; \
     _bolt_ipc_receive(fd, &header, sizeof(header)); \
     struct ExternalBrowser* window = get_externalbrowser(header.plugin_id, &header.window_id); \
-    if (window) handle_ipc_##NAME(&header, window); \
+    if (window && !window->plugin->is_deleted) handle_ipc_##NAME(&header, window); \
     else _bolt_receive_discard(get_tail_ipc_##STRUCT(&header)); \
     break; \
 }
