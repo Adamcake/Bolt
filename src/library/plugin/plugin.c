@@ -1192,7 +1192,7 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
 lua_pushliteral(plugin->state, #NAME "meta"); \
 _bolt_api_push_metatable_##NAME(plugin->state); \
 lua_settable(plugin->state, LUA_REGISTRYINDEX);
-    SETMETA(batch2d)
+    SETMETA(render2d)
     SETMETA(render3d)
     SETMETA(minimap)
     SETMETA(point)

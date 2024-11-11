@@ -1405,7 +1405,7 @@ static struct ApiFuncTemplate bolt_functions[] = {
 #define BOLTFUNC(NAME, OBJECT) {.func=api_##OBJECT##_##NAME, .name=#NAME, .size=sizeof(#NAME)-sizeof(*#NAME)}
 #define BOLTALIAS(REALNAME, ALIAS, OBJECT) {.func=api_##OBJECT##_##REALNAME, .name=#ALIAS, .size=sizeof(#ALIAS)-sizeof(*#ALIAS)}
 
-static struct ApiFuncTemplate batch2d_functions[] = {
+static struct ApiFuncTemplate render2d_functions[] = {
     BOLTFUNC(vertexcount, batch2d),
     BOLTFUNC(verticesperimage, batch2d),
     BOLTFUNC(isminimap, batch2d),
@@ -1585,7 +1585,7 @@ void _bolt_api_push_metatable_##NAME(lua_State* state) { \
     push_metatable_with_gc(state, NAME##_functions, sizeof NAME##_functions / sizeof *NAME##_functions, NAME##_gc); \
 }
 
-DEFPUSHMETA(batch2d)
+DEFPUSHMETA(render2d)
 DEFPUSHMETA(render3d)
 DEFPUSHMETA(minimap)
 DEFPUSHMETA(point)
