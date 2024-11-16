@@ -964,7 +964,7 @@ available by that method because strings are considered read-only.
 local mybuffer = bolt.createbuffer(4)
 mybuffer:setuint32(0, 123)
 local num1 = mybuffer:getuint32(0) --returns 123
-local num2 = bolt.buffergetfloat64(mybuffer, 0) --same function as above
+local num2 = bolt.buffergetuint32(mybuffer, 0) --same function as above (except mybuffer could also have been a string)
 @end verbatim
 @end example
 
