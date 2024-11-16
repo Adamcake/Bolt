@@ -25,11 +25,6 @@ enum {
     BROWSER_EVENT_ENUM_SIZE, // last member of enum
 };
 
-struct FixedBuffer {
-    void* data;
-    size_t size;
-};
-
 struct ExternalBrowser {
     uint64_t id;
     uint64_t plugin_id;

@@ -19,6 +19,11 @@
 #define API_VERSION_MAJOR 1
 #define API_VERSION_MINOR 0
 
+struct FixedBuffer {
+    void* data;
+    size_t size;
+};
+
 static void set_handler(lua_State* state, const char* regname, uint64_t window_id, int ev) {
     lua_getfield(state, LUA_REGISTRYINDEX, regname); /*stack: window table*/ \
     lua_pushinteger(state, window_id); /*stack: window table, window id*/ \
@@ -99,6 +104,70 @@ static int buffer_gc(lua_State* state) {
     free(buffer->data);
     return 0;
 }
+
+/* macros that generate handlers for Buffer objects */
+
+#define DEFBUFFERINTERNAL(TYPE, FNAME, LUATYPE) \
+static TYPE internal_buffer_get##FNAME(lua_State* state, const void* data, size_t data_size, long offset) { \
+    TYPE ret; \
+    if (offset < 0 || (offset + sizeof(TYPE)) > data_size) { \
+        lua_pushfstring(state, "buffer get" #FNAME ": out-of-bounds read (buffer length %lu, reading at %li)", data_size, offset); \
+        lua_error(state); \
+    } \
+    memcpy(&ret, (uint8_t*)data + offset, sizeof ret); \
+    return ret; \
+} \
+static void internal_buffer_set##FNAME(lua_State* state, void* data, size_t data_size, long offset, TYPE value) { \
+    if (offset < 0 || (offset + sizeof(TYPE)) > data_size) { \
+        lua_pushfstring(state, "buffer set" #FNAME ": out-of-bounds write (buffer length %lu, writing at %li)", data_size, offset); \
+        lua_error(state); \
+    } \
+    memcpy((uint8_t*)data + offset, &value, sizeof value); \
+} \
+
+#define DEFBUFFERINTERNAL_1BYTE(TYPE, FNAME, LUATYPE) \
+static TYPE internal_buffer_get##FNAME(lua_State* state, const void* data, size_t data_size, long offset) { \
+    if (offset < 0 || offset >= data_size) { \
+        lua_pushfstring(state, "buffer get" #FNAME ": out-of-bounds read (buffer length %lu, reading at %li)", data_size, offset); \
+        lua_error(state); \
+    } \
+    return ((TYPE*)data)[offset]; \
+} \
+static void internal_buffer_set##FNAME(lua_State* state, void* data, size_t data_size, long offset, TYPE value) { \
+    if (offset < 0 || offset >= data_size) { \
+        lua_pushfstring(state, "buffer set" #FNAME ": out-of-bounds write (buffer length %lu, writing at %li)", data_size, offset); \
+        lua_error(state); \
+    } \
+    ((TYPE*)data)[offset] = value; \
+}
+
+#define DEFBUFFERAPI(TYPE, FNAME, LUATYPE) \
+static int api_bufferget##FNAME(lua_State* state) { \
+    size_t data_length; \
+    const void* data; \
+    get_binary_data(state, 1, &data, &data_length); \
+    const long offset = luaL_checklong(state, 2); \
+    const TYPE ret = internal_buffer_get##FNAME(state, data, data_length, offset); \
+    lua_push##LUATYPE(state, ret); \
+    return 1; \
+} \
+static int api_buffer_get##FNAME(lua_State* state) { \
+    const struct FixedBuffer* buffer = require_self_userdata(state, "get" #FNAME); \
+    const long offset = luaL_checklong(state, 2); \
+    const TYPE ret = internal_buffer_get##FNAME(state, buffer->data, buffer->size, offset); \
+    lua_push##LUATYPE(state, ret); \
+    return 1; \
+} \
+static int api_buffer_set##FNAME(lua_State* state) { \
+    const struct FixedBuffer* buffer = require_self_userdata(state, "set" #FNAME); \
+    const long offset = luaL_checklong(state, 2); \
+    const TYPE value = (TYPE)luaL_check##LUATYPE(state, 3); \
+    internal_buffer_set##FNAME(state, buffer->data, buffer->size, offset, value); \
+    return 0; \
+}
+
+#define DEFBUFFER(TYPE, FNAME, LUATYPE) DEFBUFFERINTERNAL(TYPE, FNAME, LUATYPE) DEFBUFFERAPI(TYPE, FNAME, LUATYPE)
+#define DEFBUFFER_1BYTE(TYPE, FNAME, LUATYPE) DEFBUFFERINTERNAL_1BYTE(TYPE, FNAME, LUATYPE) DEFBUFFERAPI(TYPE, FNAME, LUATYPE)
 
 /* API definitions start here */
 
@@ -554,7 +623,7 @@ static int api_point(lua_State* state) {
 static int api_createbuffer(lua_State* state) {
     const long size = luaL_checklong(state, 1);
     struct FixedBuffer* buffer = lua_newuserdata(state, sizeof(struct FixedBuffer));
-    buffer->data = malloc(size);
+    buffer->data = calloc(size, 1);
     if (!buffer->data) {
         lua_pushfstring(state, "createbuffer: heap error, failed to allocate %i bytes", size);
         lua_error(state);
@@ -1303,40 +1372,39 @@ static int api_embeddedbrowser_showdevtools(lua_State* state) {
     return 0;
 }
 
-static int api_buffer_writeinteger(lua_State* state) {
-    const struct FixedBuffer* buffer = require_self_userdata(state, "writeinteger");
-    const uint64_t value = (uint64_t)luaL_checklong(state, 2);
-    const long offset = luaL_checklong(state, 3);
-    const int width = luaL_checkint(state, 4);
-    for (size_t i = 0; i < width; i += 1) {
-        const uint8_t b = (uint8_t)((value >> (8 * i)) & 0xFF);
-        *((uint8_t*)buffer->data + offset + i) = b;
-    }
-    return 0;
-}
+DEFBUFFER(float, float32, number)
+DEFBUFFER(double, float64, number)
+DEFBUFFER_1BYTE(int8_t, int8, integer)
+DEFBUFFER(int16_t, int16, integer)
+DEFBUFFER(int32_t, int32, integer)
+DEFBUFFER(int64_t, int64, integer)
+DEFBUFFER_1BYTE(uint8_t, uint8, integer)
+DEFBUFFER(uint16_t, uint16, integer)
+DEFBUFFER(uint32_t, uint32, integer)
+DEFBUFFER(uint64_t, uint64, integer)
 
-static int api_buffer_writenumber(lua_State* state) {
-    const struct FixedBuffer* buffer = require_self_userdata(state, "writenumber");
-    const double value = (double)luaL_checknumber(state, 2);
-    const long offset = luaL_checklong(state, 3);
-    memcpy((uint8_t*)buffer->data + offset, &value, sizeof(value));
-    return 0;
-}
-
-static int api_buffer_writestring(lua_State* state) {
-    const struct FixedBuffer* buffer = require_self_userdata(state, "writestring");
+static int api_buffer_setstring(lua_State* state) {
+    struct FixedBuffer* buffer = require_self_userdata(state, "setstring");
+    const long offset = luaL_checklong(state, 2);
     size_t size;
-    const void* data = luaL_checklstring(state, 2, &size);
-    const long offset = luaL_checklong(state, 3);
-    memcpy((uint8_t*)buffer->data + offset, data, size);
+    const void* data = luaL_checklstring(state, 3, &size);
+    if (offset < 0 || (offset + size) > buffer->size) {
+        lua_pushfstring(state, "buffer setstring: out-of-bounds write (buffer length %lu, writing %lu bytes at %li)", buffer->size, size, offset);
+        lua_error(state);
+    }
+    memcpy(buffer->data + offset, data, size);
     return 0;
 }
 
-static int api_buffer_writebuffer(lua_State* state) {
-    const struct FixedBuffer* buffer = require_self_userdata(state, "writebuffer");
-    const struct FixedBuffer* source = require_userdata(state, 2, "writebuffer");
-    const long offset = luaL_checklong(state, 3);
-    memcpy((uint8_t*)buffer->data + offset, source->data, source->size);
+static int api_buffer_setbuffer(lua_State* state) {
+    struct FixedBuffer* buffer = require_self_userdata(state, "setbuffer");
+    const long offset = luaL_checklong(state, 2);
+    const struct FixedBuffer* srcbuffer = require_userdata(state, 3, "setbuffer");
+    if (offset < 0 || (offset + srcbuffer->size) > buffer->size) {
+        lua_pushfstring(state, "buffer setbuffer: out-of-bounds write (buffer length %lu, writing %lu bytes at %li)", buffer->size, srcbuffer->size, offset);
+        lua_error(state);
+    }
+    memcpy(buffer->data + offset, srcbuffer->data, srcbuffer->size);
     return 0;
 }
 
@@ -1383,6 +1451,7 @@ static struct ApiFuncTemplate bolt_functions[] = {
     BOLTFUNC(loadfile),
     BOLTFUNC(loadconfig),
     BOLTFUNC(saveconfig),
+
     BOLTFUNC(onrender2d),
     BOLTFUNC(onrender3d),
     BOLTFUNC(onminimap),
@@ -1391,6 +1460,7 @@ static struct ApiFuncTemplate bolt_functions[] = {
     BOLTFUNC(onmousebutton),
     BOLTFUNC(onmousebuttonup),
     BOLTFUNC(onscroll),
+
     BOLTFUNC(createsurface),
     BOLTFUNC(createsurfacefromrgba),
     BOLTFUNC(createsurfacefrompng),
@@ -1399,6 +1469,17 @@ static struct ApiFuncTemplate bolt_functions[] = {
     BOLTFUNC(createembeddedbrowser),
     BOLTFUNC(point),
     BOLTFUNC(createbuffer),
+    
+    BOLTFUNC(buffergetint8),
+    BOLTFUNC(buffergetint16),
+    BOLTFUNC(buffergetint32),
+    BOLTFUNC(buffergetint64),
+    BOLTFUNC(buffergetuint8),
+    BOLTFUNC(buffergetuint16),
+    BOLTFUNC(buffergetuint32),
+    BOLTFUNC(buffergetuint64),
+    BOLTFUNC(buffergetfloat32),
+    BOLTFUNC(buffergetfloat64),
 };
 #undef BOLTFUNC
 
@@ -1459,10 +1540,28 @@ static struct ApiFuncTemplate transform_functions[] = {
 };
 
 static struct ApiFuncTemplate buffer_functions[] = {
-    BOLTFUNC(writeinteger, buffer),
-    BOLTFUNC(writenumber, buffer),
-    BOLTFUNC(writestring, buffer),
-    BOLTFUNC(writebuffer, buffer),
+    BOLTFUNC(getint8, buffer),
+    BOLTFUNC(getint16, buffer),
+    BOLTFUNC(getint32, buffer),
+    BOLTFUNC(getint64, buffer),
+    BOLTFUNC(getuint8, buffer),
+    BOLTFUNC(getuint16, buffer),
+    BOLTFUNC(getuint32, buffer),
+    BOLTFUNC(getuint64, buffer),
+    BOLTFUNC(getfloat32, buffer),
+    BOLTFUNC(getfloat64, buffer),
+    BOLTFUNC(setint8, buffer),
+    BOLTFUNC(setint16, buffer),
+    BOLTFUNC(setint32, buffer),
+    BOLTFUNC(setint64, buffer),
+    BOLTFUNC(setuint8, buffer),
+    BOLTFUNC(setuint16, buffer),
+    BOLTFUNC(setuint32, buffer),
+    BOLTFUNC(setuint64, buffer),
+    BOLTFUNC(setfloat32, buffer),
+    BOLTFUNC(setfloat64, buffer),
+    BOLTFUNC(setstring, buffer),
+    BOLTFUNC(setbuffer, buffer),
 };
 
 // zero-size type causes ICE in MSVC

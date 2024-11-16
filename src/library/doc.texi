@@ -491,7 +491,8 @@ local mypoint = bolt.point(0, 0, 0)
 
 Creates and returns a new @ref{objects-buffer,,Buffer Object} with the
 given size. Buffer objects are fixed-size and useful for passing large
-amounts of binary data to functions.
+amounts of binary data to functions. They're mostly analogous to
+JavaScript's @code{DataView}. The initial contents will be 0.
 
 @example lua
 @verbatim
@@ -682,6 +683,136 @@ end)
 It's @strong{not safe} to use an event object after the event handler
 has returned.
 
+@node functions-buffergetint8
+@section buffergetint8
+
+Reads a single byte from a buffer object or string, at the given offset,
+and returns it as a signed integer.
+@xref{objects-buffer,,Buffer objects} for more on the buffer API.
+
+@example lua
+@verbatim
+local num = bolt.buffergetint8(mybuffer, myoffset)
+@end verbatim
+@end example
+
+@node functions-buffergetint16
+@section buffergetint16
+
+Reads a two-byte value from the buffer object or string, at the given
+offset, and returns it as a signed integer.
+@xref{objects-buffer,,Buffer objects} for more on the buffer API.
+
+@example lua
+@verbatim
+local num = bolt.buffergetint16(mybuffer, myoffset)
+@end verbatim
+@end example
+
+@node functions-buffergetint32
+@section buffergetint32
+
+Reads a four-byte value from the buffer object or string, at the given
+offset, and returns it as a signed integer.
+@xref{objects-buffer,,Buffer objects} for more on the buffer API.
+
+@example lua
+@verbatim
+local num = bolt.buffergetint32(mybuffer, myoffset)
+@end verbatim
+@end example
+
+@node functions-buffergetint64
+@section buffergetint64
+
+Reads an eight-byte value from the buffer object or string, at the given
+offset, and returns it as a signed integer.
+@xref{objects-buffer,,Buffer objects} for more on the buffer API.
+
+@example lua
+@verbatim
+local num = bolt.buffergetint64(mybuffer, myoffset)
+@end verbatim
+@end example
+
+@node functions-buffergetuint8
+@section buffergetuint8
+
+Reads a single byte from the buffer object or string, at the given
+offset and returns it, as an unsigned integer.
+@xref{objects-buffer,,Buffer objects} for more on the buffer API.
+
+@example lua
+@verbatim
+local num = bolt.buffergetuint8(mybuffer, myoffset)
+@end verbatim
+@end example
+
+@node functions-buffergetuint16
+@section buffergetuint16
+
+Reads a two-byte value from the buffer object or string, at the given
+offset, and returns it as an unsigned integer.
+@xref{objects-buffer,,Buffer objects} for more on the buffer API.
+
+@example lua
+@verbatim
+local num = bolt.buffergetuint16(mybuffer, myoffset)
+@end verbatim
+@end example
+
+@node functions-buffergetuint32
+@section buffergetuint32
+
+Reads a four-byte value from the buffer object or string, at the given
+offset, and returns it as an unsigned integer.
+@xref{objects-buffer,,Buffer objects} for more on the buffer API.
+
+@example lua
+@verbatim
+local num = bolt.buffergetuint32(mybuffer, myoffset)
+@end verbatim
+@end example
+
+@node functions-buffergetuint64
+@section buffergetuint64
+
+Reads an eight-byte value from the buffer object or string, at the given
+offset, and returns it as an unsigned integer.
+@xref{objects-buffer,,Buffer objects} for more on the buffer API.
+
+@example lua
+@verbatim
+local num = bolt.buffergetuint64(mybuffer, myoffset)
+@end verbatim
+@end example
+
+@node functions-buffergetfloat32
+@section buffergetfloat32
+
+Reads a four-byte IEEE floating point value from the buffer object or
+string, at the given offset, and returns it as a number.
+@xref{objects-buffer,,Buffer objects} for more on the buffer API.
+
+@example lua
+@verbatim
+local num = bolt.buffergetfloat32(mybuffer, myoffset)
+@end verbatim
+@end example
+
+@node functions-buffergetfloat64
+@section buffergetfloat64
+
+Reads an eight-byte IEEE floating point value from the buffer object or
+string, at the given offset, and returns it as a number.
+@xref{objects-buffer,,Buffer objects} for more on the buffer API.
+
+@example lua
+@verbatim
+local num = bolt.buffergetfloat64(mybuffer, myoffset)
+@end verbatim
+@end example
+
 @node Objects
 @chapter List of Objects
 
@@ -805,64 +936,328 @@ mysurface:drawtowindow(mywindow, 0, 0, 100, 100, 0, 0, 1920, 1080)
 A buffer is a fixed-size, pre-allocated block of memory containing
 binary data. Functions in Bolt which need binary data as an input can
 take either a Lua string or a Buffer object. Functions that return
-binary data return strings, because it's more performant and sometimes
-more useful.
-
-@node buffer-writeinteger
-@subsection writeinteger
-
-Writes an integer into the buffer. The first parameter is the integer to
-write, the second is the offset into the buffer where the first byte
-should be written, and the third is the number of bytes the integer will
-be truncated to. The integer will be written in little-endian.
-
-The following example would result in the first byte of the buffer being
-0x39 and the second byte being 0x5.
+binary data return strings. The buffer API is designed to be mostly the
+same as the @code{DataView} API in JavaScript, and exists to make it
+easier to read and receive large amounts of raw binary data, such as
+file contents, RGBA pixel data, or messages to and from browsers.
 
 @example lua
 @verbatim
-mybuffer:writeinteger(1337, 0, 2)
+local mybuffer = bolt.createbuffer(12)
+mybuffer:setuint32(0, 12345)
+mybuffer:setfloat64(4, -3.14159)
+local num1 = mybuffer:getuint32(0) --returns 12345
+local num2 = mybuffer:getfloat64(4) --returns -3.14159
 @end verbatim
 @end example
 
-@node buffer-writenumber
-@subsection writenumber
-
-Writes a number into the buffer. The first parameter is the number to
-write, and the second is the offset into the buffer where the first byte
-should be written. The number will be written as a native-endian,
-8-byte, double-precision floating point value.
+The "get" functions of buffers can be found on the base object returned
+from @code{require("bolt")} and can be used on either strings or
+buffers. For example, @ref{buffer-getuint32,,buffer:getuint32} is the
+same as @ref{functions-buffergetuint32,,bolt.buffergetuint32}, except
+that in the latter case, the buffer or string needs to be passed
+explicitly as the first param. The buffer's "set" functions aren't
+available by that method because strings are considered read-only.
 
 @example lua
 @verbatim
-mybuffer:writeinteger(1.5, 0)
+local mybuffer = bolt.createbuffer(4)
+mybuffer:setuint32(0, 123)
+local num1 = mybuffer:getuint32(0) --returns 123
+local num2 = bolt.buffergetfloat64(mybuffer, 0) --same function as above
 @end verbatim
 @end example
 
-@node buffer-writestring
-@subsection writestring
-
-Writes a string into the buffer. The first parameter is the string and
-the second is the offset into the buffer where the first byte should be
-written. The full length of the string will be copied.
+All functions in the buffer API are bounds-checked and will call
+@code{error()} if the buffer size is exceeded, or if the given offset is
+negative. However there are no limitations on memory alignment.
 
 @example lua
 @verbatim
-mybuffer:writestring("my new buffer contents", 0)
+local mybuffer = bolt.createbuffer(16)
+mybuffer:setuin64(3, 123) --fine
+mybuffer:setuin64(17, 0) --error (writing out of bounds)
 @end verbatim
 @end example
 
-@node buffer-writebuffer
-@subsection writebuffer
+Endianness is always native. Values will be truncated as necessary using
+C's type casts.
 
-Writes the contents of another buffer into this buffer. The first
-parameter is the buffer to be copied from, and the second is the offset
-into this buffer where the first byte should be written. The full length
-of the source buffer will be copied.
+@node buffer-getint8
+@subsection getint8
+
+Reads a single byte from the buffer at the given offset and returns it
+as a signed integer. @xref{objects-buffer,,Buffer objects} for more on
+the buffer API.
 
 @example lua
 @verbatim
-mybuffer:writebuffer(myotherbuffer, 0)
+local num = mybuffer:getint8(myoffset)
+@end verbatim
+@end example
+
+@node buffer-getint16
+@subsection getint16
+
+Reads a two-byte value from the buffer at the given offset and returns
+it as a signed integer. @xref{objects-buffer,,Buffer objects} for more
+on the buffer API.
+
+@example lua
+@verbatim
+local num = mybuffer:getint16(myoffset)
+@end verbatim
+@end example
+
+@node buffer-getint32
+@subsection getint32
+
+Reads a four-byte value from the buffer at the given offset and returns
+it as a signed integer. @xref{objects-buffer,,Buffer objects} for more
+on the buffer API.
+
+@example lua
+@verbatim
+local num = mybuffer:getint32(myoffset)
+@end verbatim
+@end example
+
+@node buffer-getint64
+@subsection getint64
+
+Reads an eight-byte value from the buffer at the given offset and
+returns it as a signed integer. @xref{objects-buffer,,Buffer objects}
+for more on the buffer API.
+
+@example lua
+@verbatim
+local num = mybuffer:getint64(myoffset)
+@end verbatim
+@end example
+
+@node buffer-getuint8
+@subsection getuint8
+
+Reads a single byte from the buffer at the given offset and returns it
+as an unsigned integer. @xref{objects-buffer,,Buffer objects} for more
+on the buffer API.
+
+@example lua
+@verbatim
+local num = mybuffer:getuint8(myoffset)
+@end verbatim
+@end example
+
+@node buffer-getuint16
+@subsection getuint16
+
+Reads a two-byte value from the buffer at the given offset and returns
+it as an unsigned integer. @xref{objects-buffer,,Buffer objects} for
+more on the buffer API.
+
+@example lua
+@verbatim
+local num = mybuffer:getuint16(myoffset)
+@end verbatim
+@end example
+
+@node buffer-getuint32
+@subsection getuint32
+
+Reads a four-byte value from the buffer at the given offset and returns
+it as an unsigned integer. @xref{objects-buffer,,Buffer objects} for
+more on the buffer API.
+
+@example lua
+@verbatim
+local num = mybuffer:getuint32(myoffset)
+@end verbatim
+@end example
+
+@node buffer-getuint64
+@subsection getuint64
+
+Reads an eight-byte value from the buffer at the given offset and
+returns it as an unsigned integer. @xref{objects-buffer,,Buffer objects}
+for more on the buffer API.
+
+@example lua
+@verbatim
+local num = mybuffer:getuint64(myoffset)
+@end verbatim
+@end example
+
+@node buffer-getfloat32
+@subsection getfloat32
+
+Reads a four-byte IEEE floating point value from the given offset and
+returns it as a number. @xref{objects-buffer,,Buffer objects} for more
+on the buffer API.
+
+@example lua
+@verbatim
+local num = mybuffer:getfloat32(myoffset)
+@end verbatim
+@end example
+
+@node buffer-getfloat64
+@subsection getfloat64
+
+Reads an eight-byte IEEE floating point value from the given offset and
+returns it as a number. @xref{objects-buffer,,Buffer objects} for more
+on the buffer API.
+
+@example lua
+@verbatim
+local num = mybuffer:getfloat64(myoffset)
+@end verbatim
+@end example
+
+@node buffer-setint8
+@subsection setint8
+
+Writes a single byte into the buffer at the given offset.
+@xref{objects-buffer,,Buffer objects} for more on the buffer API.
+
+@example lua
+@verbatim
+mybuffer:setint8(myoffset, myvalue)
+@end verbatim
+@end example
+
+@node buffer-setint16
+@subsection setint16
+
+Writes a two-byte value into the buffer at the given offset.
+@xref{objects-buffer,,Buffer objects} for more on the buffer API.
+
+@example lua
+@verbatim
+mybuffer:setint16(myoffset, myvalue)
+@end verbatim
+@end example
+
+@node buffer-setint32
+@subsection setint32
+
+Writes a four-byte value into the buffer at the given offset.
+@xref{objects-buffer,,Buffer objects} for more on the buffer API.
+
+@example lua
+@verbatim
+mybuffer:setint32(myoffset, myvalue)
+@end verbatim
+@end example
+
+@node buffer-setint64
+@subsection setint64
+
+Writes an eight-byte value into the buffer at the given offset.
+@xref{objects-buffer,,Buffer objects} for more on the buffer API.
+
+@example lua
+@verbatim
+mybuffer:setint64(myoffset, myvalue)
+@end verbatim
+@end example
+
+@node buffer-setuint8
+@subsection setuint8
+
+Writes a single unsigned byte into the buffer at the given offset.
+@xref{objects-buffer,,Buffer objects} for more on the buffer API.
+
+@example lua
+@verbatim
+mybuffer:setuint8(myoffset, myvalue)
+@end verbatim
+@end example
+
+@node buffer-setuint16
+@subsection setuint16
+
+Writes a two-byte unsigned value into the buffer at the given offset.
+@xref{objects-buffer,,Buffer objects} for more on the buffer API.
+
+@example lua
+@verbatim
+mybuffer:setuint16(myoffset, myvalue)
+@end verbatim
+@end example
+
+@node buffer-setuint32
+@subsection setuint32
+
+Writes a four-byte unsigned value into the buffer at the given offset.
+@xref{objects-buffer,,Buffer objects} for more on the buffer API.
+
+@example lua
+@verbatim
+mybuffer:setuint32(myoffset, myvalue)
+@end verbatim
+@end example
+
+@node buffer-setuint64
+@subsection setuint64
+
+Writes an eight-byte unsigned value into the buffer at the given offset.
+@xref{objects-buffer,,Buffer objects} for more on the buffer API.
+
+@example lua
+@verbatim
+mybuffer:setuint64(myoffset, myvalue)
+@end verbatim
+@end example
+
+@node buffer-setfloat32
+@subsection setfloat32
+
+Writes a number into the buffer at the given offset, as a four-byte IEEE
+floatint point value. @xref{objects-buffer,,Buffer objects} for more on
+the buffer API.
+
+@example lua
+@verbatim
+mybuffer:setfloat32(myoffset, myvalue)
+@end verbatim
+@end example
+
+@node buffer-setfloat64
+@subsection setfloat64
+
+Writes a number into the buffer at the given offset, as an eight-byte
+IEEE floatint point value. @xref{objects-buffer,,Buffer objects} for
+more on the buffer API.
+
+@example lua
+@verbatim
+mybuffer:setfloat64(myoffset, myvalue)
+@end verbatim
+@end example
+
+@node buffer-setstring
+@subsection setstring
+
+Writes a string into the buffer at the given offset. The entire string
+will be copied. @xref{objects-buffer,,Buffer objects} for more on the
+buffer API.
+
+@example lua
+@verbatim
+mybuffer:setstring(myoffset, mystring)
+@end verbatim
+@end example
+
+@node buffer-setbuffer
+@subsection setbuffer
+
+Writes the contents of another buffer into this buffer at the given
+offset. The entire contents of the source buffer will be copied.
+@xref{objects-buffer,,Buffer objects} for more on the buffer API.
+
+@example lua
+@verbatim
+mybuffer:setstring(myoffset, mystring)
 @end verbatim
 @end example
 
