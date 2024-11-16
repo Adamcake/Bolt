@@ -1213,7 +1213,7 @@ mybuffer:setuint64(myoffset, myvalue)
 @subsection setfloat32
 
 Writes a number into the buffer at the given offset, as a four-byte IEEE
-floatint point value. @xref{objects-buffer,,Buffer objects} for more on
+floating-point value. @xref{objects-buffer,,Buffer objects} for more on
 the buffer API.
 
 @example lua
@@ -1226,7 +1226,7 @@ mybuffer:setfloat32(myoffset, myvalue)
 @subsection setfloat64
 
 Writes a number into the buffer at the given offset, as an eight-byte
-IEEE floatint point value. @xref{objects-buffer,,Buffer objects} for
+IEEE floating-point value. @xref{objects-buffer,,Buffer objects} for
 more on the buffer API.
 
 @example lua
