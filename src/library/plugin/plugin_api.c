@@ -1392,7 +1392,7 @@ static int api_buffer_setstring(lua_State* state) {
         lua_pushfstring(state, "buffer setstring: out-of-bounds write (buffer length %lu, writing %lu bytes at %li)", buffer->size, size, offset);
         lua_error(state);
     }
-    memcpy(buffer->data + offset, data, size);
+    memcpy((uint8_t*)buffer->data + offset, data, size);
     return 0;
 }
 
@@ -1404,7 +1404,7 @@ static int api_buffer_setbuffer(lua_State* state) {
         lua_pushfstring(state, "buffer setbuffer: out-of-bounds write (buffer length %lu, writing %lu bytes at %li)", buffer->size, srcbuffer->size, offset);
         lua_error(state);
     }
-    memcpy(buffer->data + offset, srcbuffer->data, srcbuffer->size);
+    memcpy((uint8_t*)buffer->data + offset, srcbuffer->data, srcbuffer->size);
     return 0;
 }
 
