@@ -1716,11 +1716,10 @@ static void _bolt_gl_plugin_drawelements_vertex3d_colour(size_t index, void* use
     struct GLPluginDrawElementsVertex3DUserData* data = userdata;
     float colour[4];
     _bolt_get_attr_binding(data->c, data->colour, data->indices[index], 4, colour);
-    // these are ABGR for some reason
-    out[0] = (double)colour[3];
-    out[1] = (double)colour[2];
-    out[2] = (double)colour[1];
-    out[3] = (double)colour[0];
+    out[0] = (double)colour[0];
+    out[1] = (double)colour[1];
+    out[2] = (double)colour[2];
+    out[3] = (double)colour[3];
 }
 
 static uint8_t _bolt_gl_plugin_drawelements_vertex3d_boneid(size_t index, void* userdata) {
