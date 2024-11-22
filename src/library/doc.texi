@@ -1849,7 +1849,7 @@ the valid range is 1 to vertexcount, inclusive:
 
 @example lua
 @verbatim
-for i in 1, event:vertexcount() do
+for i = 1, event:vertexcount() do
 -- ...
 @end verbatim
 @end example
@@ -2016,7 +2016,7 @@ position in world space, use @ref{render3d-modelmatrix,,modelmatrix}:
 
 @example lua
 @verbatim
-local modelpoint = myevent:vertexxyz(0)
+local modelpoint = myevent:vertexxyz(1)
 local worldpoint = modelpoint:transform(myevent:modelmatrix())
 @end verbatim
 @end example
@@ -2057,7 +2057,7 @@ atlasxywh} to get the correct section of the texture atlas:
 
 @example lua
 @verbatim
-local mymeta = event:vertexmeta(0)
+local mymeta = event:vertexmeta(1)
 local x, y, w, h = event:atlasxywh(mymeta)
 @end verbatim
 @end example
@@ -2067,7 +2067,7 @@ the valid range is 1 to vertexcount, inclusive:
 
 @example lua
 @verbatim
-for i in 1, event:vertexcount() do
+for i = 1, event:vertexcount() do
 -- ...
 @end verbatim
 @end example
@@ -2095,7 +2095,7 @@ model data.
 
 @example lua
 @verbatim
-local modelpoint = event:vertexxyz(0)
+local modelpoint = event:vertexxyz(1)
 @end verbatim
 @end example
 
@@ -2109,7 +2109,7 @@ points from model coordinates into world coordinates.
 @example lua
 @verbatim
 local modelmatrix = event:modelmatrix()
-local modelpoint = event:vertexxyz(0)
+local modelpoint = event:vertexxyz(1)
 local worldpoint = modelpoint:transform(modelmatrix)
 @end verbatim
 @end example
@@ -2131,7 +2131,7 @@ associated texture image. This can then be passed to
 
 @example lua
 @verbatim
-local meta = event:vertexmeta(0)
+local meta = event:vertexmeta(1)
 local x, y, w, h = event:atlasxywh(meta)
 @end verbatim
 @end example
@@ -2144,7 +2144,7 @@ associated image in the texture atlas, in pixel coordinates.
 
 @example lua
 @verbatim
-local meta = event:vertexmeta(0)
+local meta = event:vertexmeta(1)
 local x, y, w, h = event:atlasxywh(meta)
 @end verbatim
 @end example
