@@ -1802,8 +1802,8 @@ yaw, pitch, roll, in radians.
 
 Matrix decomposition is an experimental feature. It assumes the
 right-most column of the matrix to be (0, 0, 0, 1). That will always be
-the case in transforms returned by @ref{render3d-boneanimation,,
-boneanimation}, which is the primary intended use of this function.
+the case in transforms returned by @ref{render3d-vertexanimation,,
+vertexanimation}, which is the primary intended use of this function.
 
 @example lua
 @verbatim
@@ -2034,17 +2034,15 @@ local pixelx, pixely = worldpoint:transform(myevent:viewprojmatrix()):aspixels()
 
 This will give the pixel coordinates at which a static vertex would be
 rendered. If the model is animated, you might like to apply its
-animation data to the transform to get the vertex's true position.
-Animation transforms are per-bone, and each vertex has a bone ID
-associated with it which tells the shader which animation transform to
-use. An animation transform is from model-space to model-space, so it
+animation data to the transform to get the vertex's true position. Each
+vertex in an animated model has an animation transform associated with
+it. An animation transform is from model-space to model-space, so it
 must be applied before any of the other transforms.
 
 @example lua
 @verbatim
-local bone = myevent:vertexbone(0)
-local modelpoint = myevent:vertexxyz(0)
-local animatedpoint = modelpoint:transform(myevent:boneanimation(bone))
+local modelpoint = myevent:vertexxyz(1)
+local animatedpoint = modelpoint:transform(myevent:vertexanimation(1))
 local worldpoint = animatedpoint:transform(myevent:modelmatrix())
 @end verbatim
 @end example
@@ -2239,34 +2237,12 @@ Using this function to search for specific textures isn't recommended as
 it would be noticeably slower than using @ref{render3d-texturecompare,,
 texturecompare}.
 
-@node render3d-vertexbone
-@subsection vertexbone
+@node render3d-vertexanimation
+@subsection vertexanimation
 
-Given a vertex number, returns its bone ID. Animated models have
-multiple bones which can move independently of each other, and this
-function can be used to find out which bone a vertex belongs to. The
-returned value may be any integer from 0 to 255, although the game
-engine actually seems to be unable to handle indices higher than 128.
-(128 itself is valid.)
-
-All vertices have bone IDs, even in non-animated models, so plugins may
-call this function regardless of whether the model is animated or not.
-For a non-animated model the bone ID seems to be meaningless and is
-usually 0. To check if the model is animated, see
-@ref{render3d-animated,,animated}.
-
-@example lua
-@verbatim
-local bone = event:vertexbone(0)
-@end verbatim
-@end example
-
-@node render3d-boneanimation
-@subsection boneanimation
-
-Given a bone ID, returns the Transform object that would be applied to
-its static model, in model coordinates, to transform it into its current
-animated position.
+Given a vertex number, returns the Transform object that would be
+applied to its static model, in model coordinates, to transform it into
+its current animated position.
 
 It's a fatal error to call this function on a render event for a
 non-animated model, since non-animated models have no bone transforms
@@ -2279,13 +2255,13 @@ that could be queried. To check if the model is animated, use
 Returns a boolean value indicating whether this model is animated.
 Animated models can have multiple bones which can move independently of
 each other. If this function returns false, then the model has no
-animation data, and calling @ref{render3d-boneanimation,,boneanimation}
-will result in an error.
+animation data, and calling @ref{render3d-vertexanimation,,
+vertexanimation} will result in an error.
 
 @example lua
 @verbatim
 if event:animated() then
-  -- it's safe to call event:boneanimation
+  -- it's safe to call event:vertexanimation
 end
 @end verbatim
 @end example

@@ -93,11 +93,8 @@ struct Vertex3DFunctions {
     /// Returns the RGBA colour of this vertex, each one normalised from 0.0 to 1.0.
     void (*colour)(size_t index, void* userdata, double* out);
 
-    /// Returns the ID of the bone this vertex belongs to.
-    uint8_t (*bone_id)(size_t index, void* userdata);
-
-    /// Returns the transform matrix for the given bone.
-    void (*bone_transform)(uint8_t bone_id, void* userdata, struct Transform3D* out);
+    /// Returns the animation transform matrix for the given vertex. Assumes the model is animated.
+    void (*bone_transform)(size_t vertex, void* userdata, struct Transform3D* out);
 };
 
 /// Struct containing "vtable" callback information for textures.

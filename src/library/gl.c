@@ -112,7 +112,7 @@ static void _bolt_gl_plugin_drawelements_vertex3d_meta_xywh(size_t meta, void* u
 static void _bolt_gl_plugin_drawelements_vertex3d_uv(size_t index, void* userdata, double* out);
 static void _bolt_gl_plugin_drawelements_vertex3d_colour(size_t index, void* userdata, double* out);
 static uint8_t _bolt_gl_plugin_drawelements_vertex3d_boneid(size_t index, void* userdata);
-static void _bolt_gl_plugin_bone_transform(uint8_t bone_id, void* userdata, struct Transform3D* out);
+static void _bolt_gl_plugin_drawelements_vertex3d_transform(size_t vertex, void* userdata, struct Transform3D* out);
 static void _bolt_gl_plugin_matrix3d_model(void* userdata, struct Transform3D* out);
 static void _bolt_gl_plugin_matrix3d_viewproj(void* userdata, struct Transform3D* out);
 static size_t _bolt_gl_plugin_texture_id(void* userdata);
@@ -450,6 +450,43 @@ static struct GLVertexArray* _bolt_context_get_vao(struct GLContext* c, GLuint i
     return ret;
 }
 
+static void bone_index_transform(const struct GLContext* c, uint8_t bone_id, struct Transform3D* out) {
+    const GLint uniform_loc = c->bound_program->loc_uBoneTransforms + (bone_id * 3);
+    GLfloat f[4];
+    gl.GetUniformfv(c->bound_program->id, uniform_loc, f);
+    out->matrix[0] = (double)f[0];
+    out->matrix[1] = (double)f[1];
+    out->matrix[2] = (double)f[2];
+    out->matrix[3] = 0.0;
+    out->matrix[4] = (double)f[3];
+    gl.GetUniformfv(c->bound_program->id, uniform_loc + 1, f);
+    out->matrix[5] = (double)f[0];
+    out->matrix[6] = (double)f[1];
+    out->matrix[7] = 0.0;
+    out->matrix[8] = (double)f[2];
+    out->matrix[9] = (double)f[3];
+    gl.GetUniformfv(c->bound_program->id, uniform_loc + 2, f);
+    out->matrix[10] = (double)f[0];
+    out->matrix[11] = 0.0;
+    out->matrix[12] = (double)f[1];
+    out->matrix[13] = (double)f[2];
+    out->matrix[14] = (double)f[3];
+    out->matrix[15] = 1.0;
+}
+
+// multiplies the rows of `left` with the columns of `right`
+static void multiply_transforms(const struct Transform3D* left, const struct Transform3D* right, struct Transform3D* out) {
+    for (size_t row = 0; row < 4; row += 1) {
+        for (size_t col = 0; col < 4; col += 1) {
+            out->matrix[4 * row + col] =
+                (left->matrix[row * 4    ] * right->matrix[col     ]) +
+                (left->matrix[row * 4 + 1] * right->matrix[col + 4 ]) +
+                (left->matrix[row * 4 + 2] * right->matrix[col + 8 ]) +
+                (left->matrix[row * 4 + 3] * right->matrix[col + 12]);
+        }
+    }
+}
+
 static void _bolt_unpack_rgb565(uint16_t packed, uint8_t out[3]) {
     out[0] = (packed >> 11) & 0b00011111;
     out[0] = (out[0] << 3) | (out[0] >> 2);
@@ -652,6 +689,8 @@ static GLuint _bolt_glCreateProgram() {
     program->loc_aTextureUVAtlasExtents = -1;
     program->loc_aMaterialSettingsSlotXY_TilePositionXZ = -1;
     program->loc_aVertexPosition_BoneLabel = -1;
+    program->loc_aVertexSkinBones = -1;
+    program->loc_aVertexSkinWeights = -1;
     program->loc_uProjectionMatrix = -1;
     program->loc_uDiffuseMap = -1;
     program->loc_uTextureAtlas = -1;
@@ -661,6 +700,7 @@ static GLuint _bolt_glCreateProgram() {
     program->loc_uBoneTransforms = -1;
     program->loc_uGridSize = -1;
     program->loc_uVertexScale = -1;
+    program->loc_uSmoothSkinning = -1;
     program->loc_sSceneHDRTex = -1;
     program->block_index_ViewTransforms = -1;
     program->offset_uCameraPosition = -1;
@@ -700,6 +740,8 @@ static void _bolt_glBindAttribLocation(GLuint program, GLuint index, const GLcha
     ATTRIB_MAP(aTextureUVAtlasExtents)
     ATTRIB_MAP(aMaterialSettingsSlotXY_TilePositionXZ)
     ATTRIB_MAP(aVertexPosition_BoneLabel)
+    ATTRIB_MAP(aVertexSkinBones)
+    ATTRIB_MAP(aVertexSkinWeights)
 #undef ATTRIB_MAP
     LOG("glBindAttribLocation end\n");
 }
@@ -721,6 +763,7 @@ static void _bolt_glLinkProgram(GLuint program) {
     p->loc_sSourceTex = gl.GetUniformLocation(program, "sSourceTex");
     p->loc_sBlurFarTex = gl.GetUniformLocation(program, "sBlurFarTex");
     p->loc_uBoneTransforms = gl.GetUniformLocation(program, "uBoneTransforms");
+    p->loc_uSmoothSkinning = gl.GetUniformLocation(program, "uSmoothSkinning");
 
     const GLchar* view_var_names[] = {"uCameraPosition", "uViewProjMatrix"};
     const GLuint block_index_ViewTransforms = gl.GetUniformBlockIndex(program, "ViewTransforms");
@@ -1442,6 +1485,8 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
             vertex_userdata.xyz_bone = &attributes[c->bound_program->loc_aVertexPosition_BoneLabel];
             vertex_userdata.tex_uv = &attributes[c->bound_program->loc_aTextureUV];
             vertex_userdata.colour = &attributes[c->bound_program->loc_aVertexColour];
+            vertex_userdata.skin_bones = &attributes[c->bound_program->loc_aVertexSkinBones];
+            vertex_userdata.skin_weights = &attributes[c->bound_program->loc_aVertexSkinWeights];
 
             struct GLPluginTextureUserData tex_userdata;
             tex_userdata.tex = tex;
@@ -1459,8 +1504,7 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
             render.vertex_functions.atlas_xywh = _bolt_gl_plugin_drawelements_vertex3d_meta_xywh;
             render.vertex_functions.uv = _bolt_gl_plugin_drawelements_vertex3d_uv;
             render.vertex_functions.colour = _bolt_gl_plugin_drawelements_vertex3d_colour;
-            render.vertex_functions.bone_id = _bolt_gl_plugin_drawelements_vertex3d_boneid;
-            render.vertex_functions.bone_transform = _bolt_gl_plugin_bone_transform;
+            render.vertex_functions.bone_transform = _bolt_gl_plugin_drawelements_vertex3d_transform;
             render.texture_functions.userdata = &tex_userdata;
             render.texture_functions.id = _bolt_gl_plugin_texture_id;
             render.texture_functions.size = _bolt_gl_plugin_texture_size;
@@ -1733,29 +1777,55 @@ static uint8_t _bolt_gl_plugin_drawelements_vertex3d_boneid(size_t index, void* 
     return (uint8_t)(ret[3]);
 }
 
-static void _bolt_gl_plugin_bone_transform(uint8_t bone_id, void* userdata, struct Transform3D* out) {
-    struct GLContext* c = _bolt_context();
-    const GLint uniform_loc = c->bound_program->loc_uBoneTransforms + (bone_id * 3);
-    GLfloat f[4];
-    gl.GetUniformfv(c->bound_program->id, uniform_loc, f);
-    out->matrix[0] = (double)f[0];
-    out->matrix[1] = (double)f[1];
-    out->matrix[2] = (double)f[2];
-    out->matrix[3] = 0.0;
-    out->matrix[4] = (double)f[3];
-    gl.GetUniformfv(c->bound_program->id, uniform_loc + 1, f);
-    out->matrix[5] = (double)f[0];
-    out->matrix[6] = (double)f[1];
-    out->matrix[7] = 0.0;
-    out->matrix[8] = (double)f[2];
-    out->matrix[9] = (double)f[3];
-    gl.GetUniformfv(c->bound_program->id, uniform_loc + 2, f);
-    out->matrix[10] = (double)f[0];
-    out->matrix[11] = 0.0;
-    out->matrix[12] = (double)f[1];
-    out->matrix[13] = (double)f[2];
-    out->matrix[14] = (double)f[3];
-    out->matrix[15] = 1.0;
+static void _bolt_gl_plugin_drawelements_vertex3d_transform(size_t vertex, void* userdata, struct Transform3D* out) {
+    struct GLPluginDrawElementsVertex3DUserData* data = userdata;
+    uint8_t bone_id;
+    int32_t xyzbone[4];
+    if (_bolt_get_attr_binding_int(data->c, data->xyz_bone, data->indices[vertex], 4, xyzbone)) {
+        bone_id = (uint8_t)xyzbone[3];
+    } else {
+        float xyzbone_floats[4];
+        _bolt_get_attr_binding(data->c, data->xyz_bone, data->indices[vertex], 4, xyzbone_floats);
+        bone_id = (uint8_t)(uint32_t)(int32_t)roundf(xyzbone_floats[3]);
+    }
+    bone_index_transform(data->c, bone_id, out);
+    
+    if (data->c->bound_program->loc_uSmoothSkinning == -1) return;
+    GLfloat smooth_skinning;
+    gl.GetUniformfv(data->c->bound_program->id, data->c->bound_program->loc_uSmoothSkinning, &smooth_skinning);
+    if (smooth_skinning < 0.0) return;
+
+    int32_t skin_bones[4];
+    if (!_bolt_get_attr_binding_int(data->c, data->skin_bones, data->indices[vertex], 4, skin_bones)) {
+        float skin_bone_floats[4];
+        _bolt_get_attr_binding(data->c, data->skin_bones, data->indices[vertex], 4, skin_bone_floats);
+        for (size_t i = 0; i < 4; i += 1) {
+            skin_bones[i] = (int32_t)roundf(skin_bone_floats[i]);
+        }
+    }
+
+    struct Transform3D modifier;
+    if (smooth_skinning > 0.0) {
+        float skin_weights[4];
+        _bolt_get_attr_binding(data->c, data->skin_weights, data->indices[vertex], 4, skin_weights);
+        struct Transform3D weighted_modifiers[4];
+        for (size_t i = 0; i < 4; i += 1) {
+            bone_index_transform(data->c, skin_bones[i], &weighted_modifiers[i]);
+        }
+        for (size_t i = 0; i < 16; i += 1) {
+            modifier.matrix[i] =
+                weighted_modifiers[0].matrix[i] * skin_weights[0] +
+                weighted_modifiers[1].matrix[i] * skin_weights[1] +
+                weighted_modifiers[2].matrix[i] * skin_weights[2] +
+                weighted_modifiers[3].matrix[i] * skin_weights[3];
+        }
+    } else {
+        bone_index_transform(data->c, skin_bones[0], &modifier);
+    }
+
+    struct Transform3D ret;
+    multiply_transforms(out, &modifier, &ret);
+    *out = ret;
 }
 
 static void _bolt_gl_plugin_matrix3d_model(void* userdata, struct Transform3D* out) {

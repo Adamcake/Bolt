@@ -1139,31 +1139,17 @@ static int api_render3d_texturedata(lua_State* state) {
     return 1;
 }
 
-static int api_render3d_vertexbone(lua_State* state) {
-    const struct Render3D* render = require_self_userdata(state, "vertexbone");
-    const int index = luaL_checkinteger(state, 2);
-    uint8_t ret = render->vertex_functions.bone_id(index - 1, render->vertex_functions.userdata);
-    lua_pushinteger(state, ret);
-    return 1;
-}
-
-static int api_render3d_boneanimation(lua_State* state) {
-    const struct Render3D* render = require_self_userdata(state, "boneanimation");
-    const lua_Integer bone_id = luaL_checkinteger(state, 2);
+static int api_render3d_vertexanimation(lua_State* state) {
+    const struct Render3D* render = require_self_userdata(state, "vertexanimation");
+    const lua_Integer vertex = luaL_checkinteger(state, 2);
 
     if (!render->is_animated) {
         lua_pushliteral(state, "boneanimation: cannot get bone transforms for non-animated model");
         lua_error(state);
     }
 
-    // not a mistake - game's shader supports values from 0 to 128, inclusive
-    if (bone_id < 0 || bone_id > 128) {
-        lua_pushliteral(state, "boneanimation: invalid bone ID");
-        lua_error(state);
-    }
-
     struct Transform3D* transform = lua_newuserdata(state, sizeof(struct Transform3D));
-    render->vertex_functions.bone_transform(bone_id, render->vertex_functions.userdata, transform);
+    render->vertex_functions.bone_transform(vertex - 1, render->vertex_functions.userdata, transform);
     lua_getfield(state, LUA_REGISTRYINDEX, "transformmeta");
     lua_setmetatable(state, -2);
     return 1;
@@ -1516,8 +1502,7 @@ static struct ApiFuncTemplate render3d_functions[] = {
     BOLTFUNC(texturesize, render3d),
     BOLTFUNC(texturecompare, render3d),
     BOLTFUNC(texturedata, render3d),
-    BOLTFUNC(vertexbone, render3d),
-    BOLTFUNC(boneanimation, render3d),
+    BOLTFUNC(vertexanimation, render3d),
     BOLTFUNC(animated, render3d),
     BOLTALIAS(vertexcolour, vertexcolor, render3d),
 };

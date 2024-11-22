@@ -190,6 +190,8 @@ struct GLProgram {
     GLint loc_aTextureUVAtlasExtents;
     GLint loc_aMaterialSettingsSlotXY_TilePositionXZ;
     GLint loc_aVertexPosition_BoneLabel;
+    GLint loc_aVertexSkinBones;
+    GLint loc_aVertexSkinWeights;
     GLint loc_uProjectionMatrix;
     GLint loc_uDiffuseMap;
     GLint loc_uTextureAtlas;
@@ -199,6 +201,7 @@ struct GLProgram {
     GLint loc_uBoneTransforms;
     GLint loc_uGridSize;
     GLint loc_uVertexScale;
+    GLint loc_uSmoothSkinning;
     GLint loc_sSceneHDRTex;
     GLint loc_sSourceTex;
     GLint loc_sBlurFarTex;
@@ -343,6 +346,8 @@ struct GLPluginDrawElementsVertex3DUserData {
     struct GLAttrBinding* xyz_bone;
     struct GLAttrBinding* tex_uv;
     struct GLAttrBinding* colour;
+    struct GLAttrBinding* skin_bones;
+    struct GLAttrBinding* skin_weights;
 };
 
 struct GLPlugin3DMatrixUserData {
