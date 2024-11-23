@@ -47,6 +47,9 @@ typedef uint8_t xcb_button_t;
 typedef uint16_t xcb_input_device_id_t;
 typedef int32_t xcb_input_fp1616_t;
 
+typedef unsigned long XWindow;
+typedef unsigned long XCursor;
+
 typedef struct {
     uint8_t  response_type;
     uint8_t  pad0;

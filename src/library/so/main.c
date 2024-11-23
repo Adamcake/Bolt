@@ -40,11 +40,13 @@ static const char* libc_name = "libc.so.6";
 static const char* libegl_name = "libEGL.so.1";
 static const char* libgl_name = "libGL.so.1";
 static const char* libxcb_name = "libxcb.so.1";
+static const char* libx11_name = "libX11.so.6";
 
 static void* libc_addr = 0;
 static void* libegl_addr = 0;
 static void* libgl_addr = 0;
 static void* libxcb_addr = 0;
+static void* libx11_addr = 0;
 
 static void* (*real_dlopen)(const char*, int) = NULL;
 static void* (*real_dlsym)(void*, const char*) = NULL;
@@ -64,7 +66,14 @@ static xcb_generic_event_t* (*real_xcb_poll_for_queued_event)(xcb_connection_t*)
 static xcb_generic_event_t* (*real_xcb_wait_for_event)(xcb_connection_t*) = NULL;
 static xcb_get_geometry_reply_t* (*real_xcb_get_geometry_reply)(xcb_connection_t*, xcb_get_geometry_cookie_t, xcb_generic_error_t**) = NULL;
 
+static int (*real_XDefineCursor)(void*, XWindow, XCursor) = NULL;
+static int (*real_XUndefineCursor)(void*, XWindow) = NULL;
+
 static struct GLLibFunctions libgl = {0};
+
+static void* xcursor_display = NULL;
+static XCursor xcursor_cursor;
+static uint8_t xcursor_defined = false;
 
 static ElfW(Word) _bolt_hash_elf(const char* name) {
 	ElfW(Word) tmp, hash = 0;
@@ -219,12 +228,21 @@ static void _bolt_init_libxcb(unsigned long addr, const Elf32_Word* gnu_hash_tab
     if (sym) real_xcb_get_geometry_reply = sym->st_value + libxcb_addr;
 }
 
+static void _bolt_init_libx11(unsigned long addr, const Elf32_Word* gnu_hash_table, const ElfW(Word)* hash_table, const char* string_table, const ElfW(Sym)* symbol_table) {
+    libx11_addr = (void*)addr;
+    const ElfW(Sym)* sym = _bolt_lookup_symbol("XDefineCursor", gnu_hash_table, hash_table, string_table, symbol_table);
+    if (sym) real_XDefineCursor = sym->st_value + libx11_addr;
+    sym = _bolt_lookup_symbol("XUndefineCursor", gnu_hash_table, hash_table, string_table, symbol_table);
+    if (sym) real_XUndefineCursor = sym->st_value + libx11_addr;
+}
+
 static int _bolt_dl_iterate_callback(struct dl_phdr_info* info, size_t size, void* args) {
     const size_t name_len = strlen(info->dlpi_name);
     const size_t libc_name_len = strlen(libc_name);
     const size_t libegl_name_len = strlen(libegl_name);
     const size_t libgl_name_len = strlen(libgl_name);
     const size_t libxcb_name_len = strlen(libxcb_name);
+    const size_t libx11_name_len = strlen(libx11_name);
 
     const Elf32_Word* gnu_hash_table = NULL;
     const ElfW(Word)* hash_table = NULL;
@@ -266,6 +284,7 @@ static int _bolt_dl_iterate_callback(struct dl_phdr_info* info, size_t size, voi
     FILENAME_EQ_INIT(libegl);
     FILENAME_EQ_INIT(libxcb);
     FILENAME_EQ_INIT(libgl);
+    FILENAME_EQ_INIT(libx11);
 #undef FILENAME_EQ_INIT
 
 	return 0;
@@ -425,7 +444,16 @@ static uint8_t point_in_rect(int x, int y, int rx, int ry, int rw, int rh) {
 static uint8_t handle_mouse_event(int16_t x, int16_t y, uint32_t detail, ptrdiff_t bool_offset, ptrdiff_t event_offset, uint8_t grab_type) {
     struct MouseEvent event;
     _bolt_mouseevent_from_xcb(x, y, detail, &event);
-    return _bolt_plugin_handle_mouse_event(&event, bool_offset, event_offset, grab_type, &mousein_fake, &mousein_real);
+    const uint8_t mousein_fake_old = mousein_fake;
+    uint8_t ret = _bolt_plugin_handle_mouse_event(&event, bool_offset, event_offset, grab_type, &mousein_fake, &mousein_real);
+    if (mousein_fake_old != mousein_fake && xcursor_display) {
+        if (ret) {
+            if (xcursor_defined) real_XDefineCursor(xcursor_display, main_window_xcb, xcursor_cursor);
+        } else {
+            real_XUndefineCursor(xcursor_display, main_window_xcb);
+        }
+    }
+    return ret;
 }
 
 // returns true if the event should be passed on to the window, false if not
@@ -522,8 +550,6 @@ static uint8_t _bolt_handle_xcb_event(xcb_connection_t* c, xcb_generic_event_t* 
 
             // treat an enter event like a motion event, but also update mouse-in state
             const uint8_t ret = handle_mouse_event(event->event_x, event->event_y, event->state, offsetof(struct WindowPendingInput, mouse_motion), offsetof(struct WindowPendingInput, mouse_motion_event), GRAB_TYPE_NONE);
-            mousein_real = 1;
-            mousein_fake = ret;
             return ret;
         }
         case XCB_LEAVE_NOTIFY: {
@@ -622,6 +648,25 @@ xcb_get_geometry_reply_t* xcb_get_geometry_reply(xcb_connection_t* c, xcb_get_ge
     return ret;
 }
 
+int XDefineCursor(void* display, XWindow w, XCursor cursor) {
+    int ret = real_XDefineCursor(display, w, cursor);
+    if (!ret) return ret;
+    if (w != main_window_xcb) return ret;
+    if (!xcursor_display) xcursor_display = display;
+    xcursor_cursor = cursor;
+    xcursor_defined = true;
+    return ret;
+}
+
+int XUndefineCursor(void* display, XWindow w) {
+    int ret = real_XUndefineCursor(display, w);
+    if (!ret) return ret;
+    if (w != main_window_xcb) return ret;
+    if (!xcursor_display) xcursor_display = display;
+    xcursor_defined = false;
+    return ret;
+}
+
 void* dlopen(const char*, int);
 void* dlsym(void*, const char*);
 void* dlvsym(void*, const char*, const char*);
@@ -655,6 +700,9 @@ static void* _bolt_dl_lookup(void* handle, const char* symbol) {
         if (strcmp(symbol, "xcb_poll_for_queued_event") == 0) return xcb_poll_for_queued_event;
         if (strcmp(symbol, "xcb_wait_for_event") == 0) return xcb_wait_for_event;
         if (strcmp(symbol, "xcb_get_geometry_reply") == 0) return xcb_get_geometry_reply;
+    } else if (handle == libx11_addr) {
+        if (strcmp(symbol, "XDefineCursor") == 0) return XDefineCursor;
+        if (strcmp(symbol, "XUndefineCursor") == 0) return XUndefineCursor;
     }
     return NULL;
 }
@@ -690,5 +738,6 @@ int dlclose(void* handle) {
     if (handle == libegl_addr) libegl_addr = NULL;
     if (handle == libgl_addr) libgl_addr = NULL;
     if (handle == libxcb_addr) libxcb_addr = NULL;
+    if (handle == libx11_addr) libx11_addr = NULL;
     return real_dlclose(handle);
 }

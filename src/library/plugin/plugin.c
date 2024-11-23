@@ -996,6 +996,7 @@ static uint8_t point_in_rect(int x, int y, int rx, int ry, int rw, int rh) {
 }
 
 uint8_t _bolt_plugin_handle_mouse_event(struct MouseEvent* event, ptrdiff_t bool_offset, ptrdiff_t event_offset, uint8_t grab_type, uint8_t* mousein_fake, uint8_t* mousein_real) {
+    if (mousein_real) *mousein_real = true;
     uint8_t ret = true;
     _bolt_rwlock_lock_read(&windows.lock);
 
@@ -1090,7 +1091,6 @@ uint8_t _bolt_plugin_handle_mouse_event(struct MouseEvent* event, ptrdiff_t bool
     if (!ret) return false;
     last_mouseevent_window_id = 0;
     if (mousein_fake) *mousein_fake = true;
-    if (mousein_real) *mousein_real = true;
     _bolt_rwlock_lock_write(&windows.input_lock);
     *(uint8_t*)(((uint8_t*)&windows.input) + bool_offset) = 1;
     *(struct MouseEvent*)(((uint8_t*)&windows.input) + event_offset) = *event;
