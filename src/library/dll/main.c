@@ -64,6 +64,8 @@ static WNDPROC game_wnd_proc = 0;
 static int game_width = 0;
 static int game_height = 0;
 
+static HCURSOR cursor_default;
+
 //#define VERBOSE
 
 #if defined(VERBOSE)
@@ -159,6 +161,7 @@ DWORD __stdcall BOLT_STUB_ENTRYNAME(struct PluginInjectParams* data) {
     // init stuff
     InitializeCriticalSection(&wgl_lock);
     _bolt_plugin_on_startup();
+    cursor_default = LoadImageW(NULL, (LPCWSTR)IDC_ARROW, IMAGE_CURSOR, 0, 0, LR_SHARED | LR_DEFAULTSIZE);
 
     return 0;
 }
@@ -180,7 +183,9 @@ static void winapi_to_mouseevent(int x, int y, WPARAM param, struct MouseEvent* 
 static BOOL handle_mouse_event(WPARAM wParam, POINTS point, ptrdiff_t bool_offset, ptrdiff_t event_offset, uint8_t grab_type) {
     struct MouseEvent event;
     winapi_to_mouseevent(point.x, point.y, wParam, &event);
-    return _bolt_plugin_handle_mouse_event(&event, bool_offset, event_offset, grab_type, NULL, NULL);
+    const uint8_t ret = _bolt_plugin_handle_mouse_event(&event, bool_offset, event_offset, grab_type, NULL, NULL);
+    if (!ret) SetCursor(cursor_default);
+    return ret;
 }
 
 // middle-man function for WNDPROC. when the game window gets an event, we intercept it here, act on
