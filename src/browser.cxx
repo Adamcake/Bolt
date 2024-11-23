@@ -93,11 +93,11 @@ bool Browser::Window::CanResize(CefRefPtr<CefWindow>) {
 }
 
 bool Browser::Window::CanMaximize(CefRefPtr<CefWindow>) {
-	return false;
+	return true;
 }
 
 bool Browser::Window::CanMinimize(CefRefPtr<CefWindow>) {
-	return false;
+	return true;
 }
 
 bool Browser::Window::CanClose(CefRefPtr<CefWindow> win) {
