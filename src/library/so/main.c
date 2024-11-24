@@ -68,12 +68,16 @@ static xcb_get_geometry_reply_t* (*real_xcb_get_geometry_reply)(xcb_connection_t
 
 static int (*real_XDefineCursor)(void*, XWindow, XCursor) = NULL;
 static int (*real_XUndefineCursor)(void*, XWindow) = NULL;
+static int (*real_XFreeCursor)(void*, XCursor) = NULL;
+static int (*real_XFlush)(void*) = NULL;
 
 static struct GLLibFunctions libgl = {0};
 
 static void* xcursor_display = NULL;
 static XCursor xcursor_cursor;
 static uint8_t xcursor_defined = false;
+static uint8_t xcursor_change_pending = 0;
+static uint8_t xcursor_is_in_xflush = false;
 
 static ElfW(Word) _bolt_hash_elf(const char* name) {
 	ElfW(Word) tmp, hash = 0;
@@ -234,6 +238,10 @@ static void _bolt_init_libx11(unsigned long addr, const Elf32_Word* gnu_hash_tab
     if (sym) real_XDefineCursor = sym->st_value + libx11_addr;
     sym = _bolt_lookup_symbol("XUndefineCursor", gnu_hash_table, hash_table, string_table, symbol_table);
     if (sym) real_XUndefineCursor = sym->st_value + libx11_addr;
+    sym = _bolt_lookup_symbol("XFreeCursor", gnu_hash_table, hash_table, string_table, symbol_table);
+    if (sym) real_XFreeCursor = sym->st_value + libx11_addr;
+    sym = _bolt_lookup_symbol("XFlush", gnu_hash_table, hash_table, string_table, symbol_table);
+    if (sym) real_XFlush = sym->st_value + libx11_addr;
 }
 
 static int _bolt_dl_iterate_callback(struct dl_phdr_info* info, size_t size, void* args) {
@@ -445,9 +453,11 @@ static uint8_t handle_mouse_event(int16_t x, int16_t y, uint32_t detail, ptrdiff
     struct MouseEvent event;
     _bolt_mouseevent_from_xcb(x, y, detail, &event);
     const uint8_t mousein_fake_old = mousein_fake;
-    uint8_t ret = _bolt_plugin_handle_mouse_event(&event, bool_offset, event_offset, grab_type, &mousein_fake, &mousein_real);
+    const uint8_t ret = _bolt_plugin_handle_mouse_event(&event, bool_offset, event_offset, grab_type, &mousein_fake, &mousein_real);
     if (mousein_fake_old != mousein_fake && xcursor_display) {
-        if (ret) {
+        if (xcursor_is_in_xflush) {
+            xcursor_change_pending = ret ? 1 : 2;
+        } else if (ret) {
             if (xcursor_defined) real_XDefineCursor(xcursor_display, main_window_xcb, xcursor_cursor);
         } else {
             real_XUndefineCursor(xcursor_display, main_window_xcb);
@@ -648,14 +658,35 @@ xcb_get_geometry_reply_t* xcb_get_geometry_reply(xcb_connection_t* c, xcb_get_ge
     return ret;
 }
 
+int XFlush(void* display) {
+    xcursor_is_in_xflush = true;
+    const int ret = real_XFlush(display);
+    xcursor_is_in_xflush = false;
+    switch (xcursor_change_pending) {
+        case 1:
+            if (xcursor_defined) {
+                real_XDefineCursor(xcursor_display, main_window_xcb, xcursor_cursor);
+                xcursor_change_pending = 0;
+            }
+            break;
+        case 2:
+            real_XUndefineCursor(xcursor_display, main_window_xcb);
+            xcursor_change_pending = 0;
+            break;
+    }
+    return ret;
+}
+
 int XDefineCursor(void* display, XWindow w, XCursor cursor) {
-    int ret = real_XDefineCursor(display, w, cursor);
-    if (!ret) return ret;
-    if (w != main_window_xcb) return ret;
+    if (w != main_window_xcb) return real_XDefineCursor(display, w, cursor);
+    if (mousein_fake) {
+        const int ret = real_XDefineCursor(display, w, cursor);
+        if (!ret) return ret;
+    }
     if (!xcursor_display) xcursor_display = display;
     xcursor_cursor = cursor;
     xcursor_defined = true;
-    return ret;
+    return 1;
 }
 
 int XUndefineCursor(void* display, XWindow w) {
@@ -664,6 +695,15 @@ int XUndefineCursor(void* display, XWindow w) {
     if (w != main_window_xcb) return ret;
     if (!xcursor_display) xcursor_display = display;
     xcursor_defined = false;
+    return ret;
+}
+
+int XFreeCursor(void* display, XCursor cursor) {
+    int ret = real_XFreeCursor(display, cursor);
+    if (!ret) return ret;
+    if (cursor == xcursor_cursor) {
+        xcursor_defined = false;
+    }
     return ret;
 }
 
@@ -703,6 +743,8 @@ static void* _bolt_dl_lookup(void* handle, const char* symbol) {
     } else if (handle == libx11_addr) {
         if (strcmp(symbol, "XDefineCursor") == 0) return XDefineCursor;
         if (strcmp(symbol, "XUndefineCursor") == 0) return XUndefineCursor;
+        if (strcmp(symbol, "XFreeCursor") == 0) return XFreeCursor;
+        if (strcmp(symbol, "XFlush") == 0) return XFlush;
     }
     return NULL;
 }
