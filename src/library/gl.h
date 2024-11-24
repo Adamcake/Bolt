@@ -207,6 +207,8 @@ struct GLProgram {
     GLint loc_sBlurFarTex;
     GLuint block_index_ViewTransforms;
     GLint offset_uCameraPosition;
+    GLint offset_uViewMatrix;
+    GLint offset_uProjectionMatrix;
     GLint offset_uViewProjMatrix;
     uint8_t is_minimap;
     uint8_t is_2d;
@@ -352,7 +354,10 @@ struct GLPluginDrawElementsVertex3DUserData {
 
 struct GLPlugin3DMatrixUserData {
     float model_matrix[16];
-    float viewproj_matrix[16];
+    const struct GLProgram* program;
+    const float* view_matrix;
+    const float* proj_matrix;
+    const float* viewproj_matrix;
 };
 
 struct GLPluginTextureUserData {

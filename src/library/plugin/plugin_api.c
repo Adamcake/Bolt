@@ -1050,6 +1050,24 @@ static int api_render3d_modelmatrix(lua_State* state) {
     return 1;
 }
 
+static int api_render3d_viewmatrix(lua_State* state) {
+    const struct Render3D* render = require_self_userdata(state, "viewmatrix");
+    struct Transform3D* transform = lua_newuserdata(state, sizeof(struct Transform3D));
+    render->matrix_functions.view_matrix(render->matrix_functions.userdata, transform);
+    lua_getfield(state, LUA_REGISTRYINDEX, "transformmeta");
+    lua_setmetatable(state, -2);
+    return 1;
+}
+
+static int api_render3d_projectionmatrix(lua_State* state) {
+    const struct Render3D* render = require_self_userdata(state, "projectionmatrix");
+    struct Transform3D* transform = lua_newuserdata(state, sizeof(struct Transform3D));
+    render->matrix_functions.proj_matrix(render->matrix_functions.userdata, transform);
+    lua_getfield(state, LUA_REGISTRYINDEX, "transformmeta");
+    lua_setmetatable(state, -2);
+    return 1;
+}
+
 static int api_render3d_viewprojmatrix(lua_State* state) {
     const struct Render3D* render = require_self_userdata(state, "viewprojmatrix");
     struct Transform3D* transform = lua_newuserdata(state, sizeof(struct Transform3D));
@@ -1493,6 +1511,8 @@ static struct ApiFuncTemplate render3d_functions[] = {
     BOLTFUNC(vertexcount, render3d),
     BOLTFUNC(vertexxyz, render3d),
     BOLTFUNC(modelmatrix, render3d),
+    BOLTFUNC(viewmatrix, render3d),
+    BOLTFUNC(projectionmatrix, render3d),
     BOLTFUNC(viewprojmatrix, render3d),
     BOLTFUNC(vertexmeta, render3d),
     BOLTFUNC(atlasxywh, render3d),

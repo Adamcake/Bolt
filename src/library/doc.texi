@@ -2114,6 +2114,26 @@ local worldpoint = modelpoint:transform(modelmatrix)
 @end verbatim
 @end example
 
+@node render3d-viewmatrix
+@subsection viewmatrix
+
+Returns the @ref{objects-transform,,Transform object} representing the
+view matrix of the model being rendered. Unless you understand the
+difference between a view matrix and a projection matrix, this probably
+isn't useful to you; @ref{render3d-viewprojmatrix,,viewprojmatrix} can
+be used to more efficiently get a transform from world coordinates to
+pixel coordinates.
+
+@node render3d-projectionmatrix
+@subsection projectionmatrix
+
+Returns the @ref{objects-transform,,Transform object} representing the
+projection matrix of the model being rendered. Unless you understand the
+difference between a view matrix and a projection matrix, this probably
+isn't useful to you; @ref{render3d-viewprojmatrix,,viewprojmatrix} can
+be used to more efficiently get a transform from world coordinates to
+pixel coordinates.
+
 @node render3d-viewprojmatrix
 @subsection viewprojmatrix
 

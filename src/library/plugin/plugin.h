@@ -129,6 +129,12 @@ struct Render3DMatrixFunctions {
     /// Gets the model matrix for this render.
     void (*model_matrix)(void* userdata, struct Transform3D* out);
 
+    /// Gets the view matrix for this render.
+    void (*view_matrix)(void* userdata, struct Transform3D* out);
+
+    /// Gets the projection matrix for this render.
+    void (*proj_matrix)(void* userdata, struct Transform3D* out);
+
     /// Gets the combined view-projection matrix for this render.
     void (*viewproj_matrix)(void* userdata, struct Transform3D* out);
 };

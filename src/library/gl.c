@@ -114,6 +114,8 @@ static void _bolt_gl_plugin_drawelements_vertex3d_colour(size_t index, void* use
 static uint8_t _bolt_gl_plugin_drawelements_vertex3d_boneid(size_t index, void* userdata);
 static void _bolt_gl_plugin_drawelements_vertex3d_transform(size_t vertex, void* userdata, struct Transform3D* out);
 static void _bolt_gl_plugin_matrix3d_model(void* userdata, struct Transform3D* out);
+static void _bolt_gl_plugin_matrix3d_view(void* userdata, struct Transform3D* out);
+static void _bolt_gl_plugin_matrix3d_proj(void* userdata, struct Transform3D* out);
 static void _bolt_gl_plugin_matrix3d_viewproj(void* userdata, struct Transform3D* out);
 static size_t _bolt_gl_plugin_texture_id(void* userdata);
 static void _bolt_gl_plugin_texture_size(void* userdata, size_t* out);
@@ -704,6 +706,8 @@ static GLuint _bolt_glCreateProgram() {
     program->loc_sSceneHDRTex = -1;
     program->block_index_ViewTransforms = -1;
     program->offset_uCameraPosition = -1;
+    program->offset_uViewMatrix = -1;
+    program->offset_uProjectionMatrix = -1;
     program->offset_uViewProjMatrix = -1;
     program->is_2d = 0;
     program->is_3d = 0;
@@ -765,14 +769,14 @@ static void _bolt_glLinkProgram(GLuint program) {
     p->loc_uBoneTransforms = gl.GetUniformLocation(program, "uBoneTransforms");
     p->loc_uSmoothSkinning = gl.GetUniformLocation(program, "uSmoothSkinning");
 
-    const GLchar* view_var_names[] = {"uCameraPosition", "uViewProjMatrix"};
+    const GLchar* view_var_names[] = {"uCameraPosition", "uViewMatrix", "uProjectionMatrix", "uViewProjMatrix"};
     const GLuint block_index_ViewTransforms = gl.GetUniformBlockIndex(program, "ViewTransforms");
-    GLuint ubo_indices[2];
-    GLint view_offsets[2];
+    GLuint ubo_indices[4];
+    GLint view_offsets[4];
     GLint viewport_offset;
     if ((GLint)block_index_ViewTransforms != -1) {
-        gl.GetUniformIndices(program, 2, view_var_names, ubo_indices);
-        gl.GetActiveUniformsiv(program, 2, ubo_indices, GL_UNIFORM_OFFSET, view_offsets);
+        gl.GetUniformIndices(program, 4, view_var_names, ubo_indices);
+        gl.GetActiveUniformsiv(program, 4, ubo_indices, GL_UNIFORM_OFFSET, view_offsets);
     }
 
     if (loc_uModelMatrix != -1 && loc_uGridSize != -1 && block_index_ViewTransforms != -1) {
@@ -780,7 +784,9 @@ static void _bolt_glLinkProgram(GLuint program) {
         p->loc_uGridSize = loc_uGridSize;
         p->block_index_ViewTransforms = block_index_ViewTransforms;
         p->offset_uCameraPosition = view_offsets[0];
-        p->offset_uViewProjMatrix = view_offsets[1];
+        p->offset_uViewMatrix = view_offsets[1];
+        p->offset_uProjectionMatrix = view_offsets[2];
+        p->offset_uViewProjMatrix = view_offsets[3];
         p->is_minimap = 1;
     }
     if (p && p->loc_aVertexPosition2D != -1 && p->loc_aVertexColour != -1 && p->loc_aTextureUV != -1 && p->loc_aTextureUVAtlasMin != -1 && p->loc_aTextureUVAtlasExtents != -1 && uDiffuseMap != -1 && uProjectionMatrix != -1) {
@@ -796,7 +802,9 @@ static void _bolt_glLinkProgram(GLuint program) {
         p->loc_uVertexScale = loc_uVertexScale;
         p->block_index_ViewTransforms = block_index_ViewTransforms;
         p->offset_uCameraPosition = view_offsets[0];
-        p->offset_uViewProjMatrix = view_offsets[1];
+        p->offset_uViewMatrix = view_offsets[1];
+        p->offset_uProjectionMatrix = view_offsets[2];
+        p->offset_uViewProjMatrix = view_offsets[3];
         p->is_3d = 1;
     }
     LOG("glLinkProgram end\n");
@@ -1473,7 +1481,6 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
             struct GLTexture2D* tex_settings = c->texture_units[settings_atlas];
             gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ViewTransforms, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
             gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_view_index);
-            const float* view_proj_matrix = (float*)((uint8_t*)(_bolt_context_get_buffer(c, ubo_view_index)->data) + c->bound_program->offset_uViewProjMatrix);
 
             struct GLPluginDrawElementsVertex3DUserData vertex_userdata;
             vertex_userdata.c = c;
@@ -1492,8 +1499,11 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
             tex_userdata.tex = tex;
 
             struct GLPlugin3DMatrixUserData matrix_userdata;
-            gl.GetUniformfv(c->bound_program->id, c->bound_program->loc_uModelMatrix, matrix_userdata.model_matrix);
-            memcpy(matrix_userdata.viewproj_matrix, view_proj_matrix, 16 * sizeof(float));
+            matrix_userdata.program = c->bound_program;
+            const uint8_t* ubo_view_buf = (uint8_t*)_bolt_context_get_buffer(c, ubo_view_index)->data;
+            matrix_userdata.view_matrix = (float*)(ubo_view_buf + c->bound_program->offset_uViewMatrix);
+            matrix_userdata.proj_matrix = (float*)(ubo_view_buf + c->bound_program->offset_uProjectionMatrix);
+            matrix_userdata.viewproj_matrix = (float*)(ubo_view_buf + c->bound_program->offset_uViewProjMatrix);
 
             struct Render3D render;
             render.vertex_count = count;
@@ -1512,6 +1522,8 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
             render.texture_functions.data = _bolt_gl_plugin_texture_data;
             render.matrix_functions.userdata = &matrix_userdata;
             render.matrix_functions.model_matrix = _bolt_gl_plugin_matrix3d_model;
+            render.matrix_functions.view_matrix = _bolt_gl_plugin_matrix3d_view;
+            render.matrix_functions.proj_matrix = _bolt_gl_plugin_matrix3d_proj;
             render.matrix_functions.viewproj_matrix = _bolt_gl_plugin_matrix3d_viewproj;
 
             _bolt_plugin_handle_render3d(&render);
@@ -1829,9 +1841,27 @@ static void _bolt_gl_plugin_drawelements_vertex3d_transform(size_t vertex, void*
 }
 
 static void _bolt_gl_plugin_matrix3d_model(void* userdata, struct Transform3D* out) {
-    const struct GLPlugin3DMatrixUserData* data = userdata;
+    struct GLPlugin3DMatrixUserData* data = userdata;
+    if (data->program) {
+        gl.GetUniformfv(data->program->id, data->program->loc_uModelMatrix, data->model_matrix);
+        data->program = NULL;
+    }
     for (size_t i = 0; i < 16; i += 1) {
         out->matrix[i] = (double)data->model_matrix[i];
+    }
+}
+
+static void _bolt_gl_plugin_matrix3d_view(void* userdata, struct Transform3D* out) {
+    const struct GLPlugin3DMatrixUserData* data = userdata;
+    for (size_t i = 0; i < 16; i += 1) {
+        out->matrix[i] = (double)data->view_matrix[i];
+    }
+}
+
+static void _bolt_gl_plugin_matrix3d_proj(void* userdata, struct Transform3D* out) {
+    const struct GLPlugin3DMatrixUserData* data = userdata;
+    for (size_t i = 0; i < 16; i += 1) {
+        out->matrix[i] = (double)data->proj_matrix[i];
     }
 }
 
