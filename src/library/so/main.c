@@ -70,6 +70,9 @@ static int (*real_XDefineCursor)(void*, XWindow, XCursor) = NULL;
 static int (*real_XUndefineCursor)(void*, XWindow) = NULL;
 static int (*real_XFreeCursor)(void*, XCursor) = NULL;
 static int (*real_XFlush)(void*) = NULL;
+static int (*real_XSync)(void*, int) = NULL;
+static int (*real_XEventsQueued)(void*, int) = NULL;
+static int (*real_XPending)(void*);
 
 static struct GLLibFunctions libgl = {0};
 
@@ -242,6 +245,12 @@ static void _bolt_init_libx11(unsigned long addr, const Elf32_Word* gnu_hash_tab
     if (sym) real_XFreeCursor = sym->st_value + libx11_addr;
     sym = _bolt_lookup_symbol("XFlush", gnu_hash_table, hash_table, string_table, symbol_table);
     if (sym) real_XFlush = sym->st_value + libx11_addr;
+    sym = _bolt_lookup_symbol("XSync", gnu_hash_table, hash_table, string_table, symbol_table);
+    if (sym) real_XSync = sym->st_value + libx11_addr;
+    sym = _bolt_lookup_symbol("XEventsQueued", gnu_hash_table, hash_table, string_table, symbol_table);
+    if (sym) real_XEventsQueued = sym->st_value + libx11_addr;
+    sym = _bolt_lookup_symbol("XPending", gnu_hash_table, hash_table, string_table, symbol_table);
+    if (sym) real_XPending = sym->st_value + libx11_addr;
 }
 
 static int _bolt_dl_iterate_callback(struct dl_phdr_info* info, size_t size, void* args) {
@@ -454,13 +463,15 @@ static uint8_t handle_mouse_event(int16_t x, int16_t y, uint32_t detail, ptrdiff
     _bolt_mouseevent_from_xcb(x, y, detail, &event);
     const uint8_t mousein_fake_old = mousein_fake;
     const uint8_t ret = _bolt_plugin_handle_mouse_event(&event, bool_offset, event_offset, grab_type, &mousein_fake, &mousein_real);
-    if (mousein_fake_old != mousein_fake && xcursor_display) {
+    if (mousein_fake_old != mousein_fake) {
         if (xcursor_is_in_xflush) {
             xcursor_change_pending = ret ? 1 : 2;
-        } else if (ret) {
-            if (xcursor_defined) real_XDefineCursor(xcursor_display, main_window_xcb, xcursor_cursor);
-        } else {
-            real_XUndefineCursor(xcursor_display, main_window_xcb);
+        } else if (xcursor_display) {
+            if (ret) {
+                if (xcursor_defined) real_XDefineCursor(xcursor_display, main_window_xcb, xcursor_cursor);
+            } else {
+                real_XUndefineCursor(xcursor_display, main_window_xcb);
+            }
         }
     }
     return ret;
@@ -658,22 +669,50 @@ xcb_get_geometry_reply_t* xcb_get_geometry_reply(xcb_connection_t* c, xcb_get_ge
     return ret;
 }
 
-int XFlush(void* display) {
-    xcursor_is_in_xflush = true;
-    const int ret = real_XFlush(display);
-    xcursor_is_in_xflush = false;
+static void handle_xcursor_pending(void* display) {
     switch (xcursor_change_pending) {
         case 1:
             if (xcursor_defined) {
-                real_XDefineCursor(xcursor_display, main_window_xcb, xcursor_cursor);
+                real_XDefineCursor(display, main_window_xcb, xcursor_cursor);
                 xcursor_change_pending = 0;
             }
             break;
         case 2:
-            real_XUndefineCursor(xcursor_display, main_window_xcb);
+            real_XUndefineCursor(display, main_window_xcb);
             xcursor_change_pending = 0;
             break;
     }
+}
+
+int XFlush(void* display) {
+    xcursor_is_in_xflush = true;
+    const int ret = real_XFlush(display);
+    xcursor_is_in_xflush = false;
+    handle_xcursor_pending(display);
+    return ret;
+}
+
+int XSync(void* display, int discard) {
+    xcursor_is_in_xflush = true;
+    const int ret = real_XSync(display, discard);
+    xcursor_is_in_xflush = false;
+    handle_xcursor_pending(display);
+    return ret;
+}
+
+int XEventsQueued(void* display, int mode) {
+    xcursor_is_in_xflush = true;
+    const int ret = real_XEventsQueued(display, mode);
+    xcursor_is_in_xflush = false;
+    handle_xcursor_pending(display);
+    return ret;
+}
+
+int XPending(void* display) {
+    xcursor_is_in_xflush = true;
+    const int ret = real_XPending(display);
+    xcursor_is_in_xflush = false;
+    handle_xcursor_pending(display);
     return ret;
 }
 
@@ -745,6 +784,9 @@ static void* _bolt_dl_lookup(void* handle, const char* symbol) {
         if (strcmp(symbol, "XUndefineCursor") == 0) return XUndefineCursor;
         if (strcmp(symbol, "XFreeCursor") == 0) return XFreeCursor;
         if (strcmp(symbol, "XFlush") == 0) return XFlush;
+        if (strcmp(symbol, "XSync") == 0) return XSync;
+        if (strcmp(symbol, "XEventsQueued") == 0) return XEventsQueued;
+        if (strcmp(symbol, "XPending") == 0) return XPending;
     }
     return NULL;
 }
