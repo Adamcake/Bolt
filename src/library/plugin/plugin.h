@@ -391,4 +391,8 @@ BoltSocketType _bolt_plugin_fd();
 /// if the overlay is initialised. If not, it does nothing.
 void _bolt_plugin_draw_to_overlay(const struct SurfaceFunctions*, int, int, int, int, int, int, int, int);
 
+/// Gets the width and height of the internal overlay, which will also be the last known size of
+/// the client area of the game window.
+void _bolt_plugin_overlay_size(int* w, int* h);
+
 #endif

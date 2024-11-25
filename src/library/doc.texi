@@ -297,6 +297,34 @@ end
 @end verbatim
 @end example
 
+@node functions-gamewindowsize
+@section gamewindowsize
+
+Returns the last known width and height of the game window, in pixels.
+Specifically this refers to the inner "graphical" area of the window,
+excluding any OS-level decorations like borders or title bars.
+
+@example lua
+@verbatim
+local width, height = bolt.gamewindowsize()
+@end verbatim
+@end example
+
+@node functions-gameviewxywh
+@section gameviewxywh
+
+Returns the last known x, y, width and height of the game view inside
+the game window, in pixels. The game view is the area where 3D rendering
+of the game world takes place, which by default takes up the entire
+window, but its position can be configured by the user in the game's
+layout settings.
+
+@example lua
+@verbatim
+local x, y, width, height = bolt.gameviewxywh()
+@end verbatim
+@end example
+
 @node functions-loadfile
 @section loadfile
 

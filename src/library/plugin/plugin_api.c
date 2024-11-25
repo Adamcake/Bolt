@@ -247,6 +247,25 @@ static int api_weekday(lua_State* state) {
     return 1;
 }
 
+static int api_gamewindowsize(lua_State* state) {
+    int w, h;
+    _bolt_plugin_overlay_size(&w, &h);
+    lua_pushinteger(state, w);
+    lua_pushinteger(state, h);
+    return 2;
+}
+
+static int api_gameviewxywh(lua_State* state) {
+    int x, y, w, h;
+    const struct PluginManagedFunctions* managed_functions = _bolt_plugin_managed_functions();
+    managed_functions->game_view_rect(&x, &y, &w, &h);
+    lua_pushinteger(state, x);
+    lua_pushinteger(state, y);
+    lua_pushinteger(state, w);
+    lua_pushinteger(state, h);
+    return 4;
+}
+
 static int api_loadfile(lua_State* state) {
     lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME);
     const struct Plugin* plugin = lua_touserdata(state, -1);
@@ -1452,6 +1471,8 @@ static struct ApiFuncTemplate bolt_functions[] = {
     BOLTFUNC(time),
     BOLTFUNC(datetime),
     BOLTFUNC(weekday),
+    BOLTFUNC(gamewindowsize),
+    BOLTFUNC(gameviewxywh),
     BOLTFUNC(loadfile),
     BOLTFUNC(loadconfig),
     BOLTFUNC(saveconfig),

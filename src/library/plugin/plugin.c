@@ -113,6 +113,7 @@ static struct hashmap* plugins;
 
 #define DEFINE_CALLBACK(APINAME, STRUCTNAME) \
 void _bolt_plugin_handle_##APINAME(struct STRUCTNAME* e) { \
+    if (!overlay_inited) return; \
     size_t iter = 0; \
     void* item; \
     while (hashmap_iter(plugins, &iter, &item)) { \
@@ -634,10 +635,16 @@ static void _bolt_process_captures(uint32_t window_width, uint32_t window_height
 }
 
 void _bolt_plugin_end_frame(uint32_t window_width, uint32_t window_height) {
+    const uint8_t wh_valid = window_width > 1 && window_height > 1;
     if (window_width != overlay_width || window_height != overlay_height) {
         if (overlay_inited) {
-            managed_functions.surface_resize_and_clear(overlay.userdata, window_width, window_height);
-        } else {
+            if (wh_valid) {
+                managed_functions.surface_resize_and_clear(overlay.userdata, window_width, window_height);
+            } else {
+                managed_functions.surface_destroy(overlay.userdata);
+                overlay_inited = false;
+            }
+        } else if (wh_valid) {
             managed_functions.surface_init(&overlay, window_width, window_height, NULL);
             overlay_inited = true;
         }
@@ -645,9 +652,11 @@ void _bolt_plugin_end_frame(uint32_t window_width, uint32_t window_height) {
         overlay_height = window_height;
     }
 
+    _bolt_plugin_handle_messages();
+    if (!overlay_inited) return;
+
     uint8_t need_capture = false;
     uint8_t capture_ready = true;
-    _bolt_plugin_handle_messages();
     _bolt_process_embedded_windows(window_width, window_height, &need_capture, &capture_ready);
     _bolt_process_plugins(&need_capture, &capture_ready);
 
@@ -1284,4 +1293,9 @@ void _bolt_plugin_draw_to_overlay(const struct SurfaceFunctions* from, int sx, i
     if (overlay_inited) {
         from->draw_to_surface(from->userdata, overlay.userdata, sx, sy, sw, sh, dx, dy, dw, dh);
     }
+}
+
+void _bolt_plugin_overlay_size(int* w, int* h) {
+    *w = overlay_width;
+    *h = overlay_height;
 }
