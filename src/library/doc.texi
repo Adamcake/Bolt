@@ -1961,11 +1961,11 @@ pixel data. The data can be a string or a @ref{objects-buffer,,
 Buffer object}. The function will return true only if the bytes are an
 exact match. It internally uses memcmp from the C library. This means
 comparing each set of contiguous data is very fast, but, since the data
-needs to be contiguous, it can only be done checked row at a time.
+needs to be contiguous, it can only be checked one row at a time.
 
 Internally, Bolt compares against data taken from the CPU just before
-being uploaded to the GPU, so there will never be any imprecsision
-issues caused by different GPUs/drivers/etc.
+being uploaded to the GPU, so there will never be any imprecision issues
+caused by different GPUs/drivers/etc.
 
 The example below checks if the pixels at x,y and (x+1),y are fully
 opaque and red.
@@ -2220,11 +2220,11 @@ pixel data. The data can be a string or a @ref{objects-buffer,,
 Buffer object}. The function will return true only if the bytes are an
 exact match. It internally uses memcmp from the C library. This means
 comparing each set of contiguous data is very fast, but, since the data
-needs to be contiguous, it can only be done checked row at a time.
+needs to be contiguous, it can only be checked one row at a time.
 
 Internally, Bolt compares against data taken from the CPU just before
-being uploaded to the GPU, so there will never be any imprecsision
-issues caused by different GPUs/drivers/etc.
+being uploaded to the GPU, so there will never be any imprecision issues
+caused by different GPUs/drivers/etc.
 
 The example below checks if the pixels at x,y and (x+1),y are fully
 opaque and red.
