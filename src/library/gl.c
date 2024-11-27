@@ -1445,13 +1445,14 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
             vertex_userdata.atlas_size = &attributes[c->bound_program->loc_aTextureUVAtlasExtents];
             vertex_userdata.tex_uv = &attributes[c->bound_program->loc_aTextureUV];
             vertex_userdata.colour = &attributes[c->bound_program->loc_aVertexColour];
+            vertex_userdata.screen_height = roundf(2.0 / projection_matrix[5]);
 
             struct GLPluginTextureUserData tex_userdata;
             tex_userdata.tex = tex;
 
             struct RenderBatch2D batch;
             batch.screen_width = roundf(2.0 / projection_matrix[0]);
-            batch.screen_height = roundf(2.0 / projection_matrix[5]);
+            batch.screen_height = vertex_userdata.screen_height;
             batch.index_count = count;
             batch.vertices_per_icon = 6;
             batch.is_minimap = tex_target && tex_target->is_minimap_tex_small;
@@ -1687,11 +1688,13 @@ void _bolt_gl_onViewport(GLint x, GLint y, GLsizei width, GLsizei height) {
 
 static void _bolt_gl_plugin_drawelements_vertex2d_xy(size_t index, void* userdata, int32_t* out) {
     struct GLPluginDrawElementsVertex2DUserData* data = userdata;
-    if (!_bolt_get_attr_binding_int(data->c, data->position, data->indices[index], 2, out)) {
+    if (_bolt_get_attr_binding_int(data->c, data->position, data->indices[index], 2, out)) {
+        out[1] = (int32_t)data->screen_height - (out[1] + 1);
+    } else {
         float pos[2];
         _bolt_get_attr_binding(data->c, data->position, data->indices[index], 2, pos);
         out[0] = (int32_t)roundf(pos[0]);
-        out[1] = (int32_t)roundf(pos[1]);
+        out[1] = (int32_t)data->screen_height - ((int32_t)roundf(pos[1]) + 1);
     }
 }
 

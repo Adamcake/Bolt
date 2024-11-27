@@ -336,6 +336,7 @@ struct GLPluginDrawElementsVertex2DUserData {
     struct GLAttrBinding* atlas_size;
     struct GLAttrBinding* tex_uv;
     struct GLAttrBinding* colour;
+    uint32_t screen_height;
 };
 
 struct GLPluginDrawElementsVertex3DUserData {
