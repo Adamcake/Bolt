@@ -1220,7 +1220,7 @@ static void _bolt_glBlitFramebuffer(GLint srcX0, GLint srcY0, GLint srcX1, GLint
         c->game_view_x = dstX0;
         c->game_view_y = dstY0;
         printf("new game_view_part_framebuffer %u...\n", c->current_read_framebuffer);
-    } else if (srcX0 == 0 && dstX0 == 0 && srcY0 == 0 && dstY0 == 0 && srcX1 == dstX1 && srcY1 == dstY1) {
+    } else if (srcX0 == 0 && dstX0 == 0 && srcY0 == 0 && dstY0 == 0 && srcX1 == dstX1 && srcY1 == dstY1 && c->current_draw_framebuffer != 0) {
         GLint tex_id;
         gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &tex_id);
         struct GLTexture2D* target_tex = _bolt_context_get_texture(c, tex_id);
@@ -1363,8 +1363,10 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
         gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uDiffuseMap, &diffuse_map);
         GLfloat projection_matrix[16];
         gl.GetUniformfv(c->bound_program->id, c->bound_program->loc_uProjectionMatrix, projection_matrix);
-        GLint draw_tex;
-        gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
+        GLint draw_tex = 0;
+        if (c->current_draw_framebuffer) {
+            gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
+        }
         struct GLTexture2D* tex = c->texture_units[diffuse_map];
         struct GLTexture2D* tex_target = _bolt_context_get_texture(c, draw_tex);
 
@@ -1464,13 +1466,14 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
             batch.texture_functions.size = _bolt_gl_plugin_texture_size;
             batch.texture_functions.compare = _bolt_gl_plugin_texture_compare;
             batch.texture_functions.data = _bolt_gl_plugin_texture_data;
-
             _bolt_plugin_handle_render2d(&batch);
         }
     }
     if (type == GL_UNSIGNED_SHORT && mode == GL_TRIANGLES && c->bound_program->is_3d) {
-        GLint draw_tex;
-        gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
+        GLint draw_tex = 0;
+        if (c->current_draw_framebuffer) {
+            gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
+        }
         if (draw_tex == c->target_3d_tex) {
             GLint atlas, settings_atlas, ubo_binding, ubo_view_index, ubo_viewport_index;
             GLfloat atlas_meta[4];
@@ -1565,63 +1568,65 @@ hunt strategy is as follows:
 */
 void _bolt_gl_onDrawArrays(GLenum mode, GLint first, GLsizei count) {
     struct GLContext* c = _bolt_context();
-    GLint target_tex_id;
-    gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &target_tex_id);
-    struct GLTexture2D* target_tex = _bolt_context_get_texture(c, target_tex_id);
+    if (c->current_draw_framebuffer) {
+        GLint target_tex_id;
+        gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &target_tex_id);
+        struct GLTexture2D* target_tex = _bolt_context_get_texture(c, target_tex_id);
 
-    if (c->bound_program->is_minimap && target_tex->width == GAME_MINIMAP_BIG_SIZE && target_tex->height == GAME_MINIMAP_BIG_SIZE) {
-        GLint ubo_binding, ubo_view_index;
-        gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ViewTransforms, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
-        gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, (GLuint)ubo_binding, &ubo_view_index);
-        const float* camera_position = (float*)((uint8_t*)(_bolt_context_get_buffer(c, ubo_view_index)->data) + c->bound_program->offset_uCameraPosition);
-        target_tex->is_minimap_tex_big = 1;
-        target_tex->minimap_center_x = camera_position[0];
-        target_tex->minimap_center_y = camera_position[2];
-    } else if (mode == GL_TRIANGLE_STRIP && count == 4) {
-        if (c->bound_program->loc_sSceneHDRTex != -1) {
-            GLint source_tex_unit;
-            gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_sSceneHDRTex, &source_tex_unit);
-            struct GLTexture2D* source_tex = c->texture_units[source_tex_unit];
-            if (c->current_draw_framebuffer == 0 && c->game_view_sSceneHDRTex != source_tex->id) {
-                c->game_view_sSceneHDRTex = source_tex->id;
-                c->target_3d_tex = c->game_view_sSceneHDRTex;
-                c->game_view_x = 0;
-                c->game_view_y = 0;
-                c->game_view_w = source_tex->width;
-                c->game_view_h = source_tex->height;
-                c->recalculate_sSceneHDRTex = false;
-                c->does_blit_3d_target = false;
-                c->depth_of_field_enabled = false;
-                printf("new direct sSceneHDRTex %i\n", c->target_3d_tex);
-            } else if (c->recalculate_sSceneHDRTex && !c->depth_of_field_enabled && (c->game_view_part_framebuffer == c->current_draw_framebuffer || c->game_view_sSourceTex == target_tex_id)) {
-                c->game_view_sSceneHDRTex = source_tex->id;
-                c->target_3d_tex = c->game_view_sSceneHDRTex;
-                c->game_view_w = source_tex->width;
-                c->game_view_h = source_tex->height;
-                c->recalculate_sSceneHDRTex = false;
-                printf("new sSceneHDRTex %i\n", c->target_3d_tex);
-            }
-        } else if (c->bound_program->loc_sSourceTex != -1) {
-            GLint source_tex_unit;
-            gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_sSourceTex, &source_tex_unit);
-            struct GLTexture2D* source_tex = c->texture_units[source_tex_unit];
-            if (c->bound_program->loc_sBlurFarTex != -1) {
-                if (c->depth_of_field_enabled || c->game_view_sSceneHDRTex != target_tex->id) return;
-                c->depth_of_field_sSourceTex = source_tex->id;
-                c->depth_of_field_enabled = true;
-                printf("new depth-of-field sSourceTex %i...\n", c->depth_of_field_sSourceTex);
-            } else if (c->current_draw_framebuffer == 0 && c->game_view_sSourceTex != source_tex->id) {
-                c->game_view_sSceneHDRTex = -1;
-                c->game_view_sSourceTex = source_tex->id;
-                c->does_blit_3d_target = false;
-                c->depth_of_field_enabled = false;
-                c->game_view_x = 0;
-                c->game_view_y = 0;
-                c->recalculate_sSceneHDRTex = true;
-                printf("new direct sSourceTex %i...\n", c->game_view_sSourceTex);
-            } else if (c->recalculate_sSceneHDRTex && c->game_view_part_framebuffer == c->current_draw_framebuffer) {
-                c->game_view_sSourceTex = source_tex->id;
-                printf("new sSourceTex %i...\n", c->game_view_sSourceTex);
+        if (c->bound_program->is_minimap && target_tex->width == GAME_MINIMAP_BIG_SIZE && target_tex->height == GAME_MINIMAP_BIG_SIZE) {
+            GLint ubo_binding, ubo_view_index;
+            gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ViewTransforms, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
+            gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, (GLuint)ubo_binding, &ubo_view_index);
+            const float* camera_position = (float*)((uint8_t*)(_bolt_context_get_buffer(c, ubo_view_index)->data) + c->bound_program->offset_uCameraPosition);
+            target_tex->is_minimap_tex_big = 1;
+            target_tex->minimap_center_x = camera_position[0];
+            target_tex->minimap_center_y = camera_position[2];
+        } else if (mode == GL_TRIANGLE_STRIP && count == 4) {
+            if (c->bound_program->loc_sSceneHDRTex != -1) {
+                GLint source_tex_unit;
+                gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_sSceneHDRTex, &source_tex_unit);
+                struct GLTexture2D* source_tex = c->texture_units[source_tex_unit];
+                if (c->current_draw_framebuffer == 0 && c->game_view_sSceneHDRTex != source_tex->id) {
+                    c->game_view_sSceneHDRTex = source_tex->id;
+                    c->target_3d_tex = c->game_view_sSceneHDRTex;
+                    c->game_view_x = 0;
+                    c->game_view_y = 0;
+                    c->game_view_w = source_tex->width;
+                    c->game_view_h = source_tex->height;
+                    c->recalculate_sSceneHDRTex = false;
+                    c->does_blit_3d_target = false;
+                    c->depth_of_field_enabled = false;
+                    printf("new direct sSceneHDRTex %i\n", c->target_3d_tex);
+                } else if (c->recalculate_sSceneHDRTex && !c->depth_of_field_enabled && (c->game_view_part_framebuffer == c->current_draw_framebuffer || c->game_view_sSourceTex == target_tex_id)) {
+                    c->game_view_sSceneHDRTex = source_tex->id;
+                    c->target_3d_tex = c->game_view_sSceneHDRTex;
+                    c->game_view_w = source_tex->width;
+                    c->game_view_h = source_tex->height;
+                    c->recalculate_sSceneHDRTex = false;
+                    printf("new sSceneHDRTex %i\n", c->target_3d_tex);
+                }
+            } else if (c->bound_program->loc_sSourceTex != -1) {
+                GLint source_tex_unit;
+                gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_sSourceTex, &source_tex_unit);
+                struct GLTexture2D* source_tex = c->texture_units[source_tex_unit];
+                if (c->bound_program->loc_sBlurFarTex != -1) {
+                    if (c->depth_of_field_enabled || c->game_view_sSceneHDRTex != target_tex->id) return;
+                    c->depth_of_field_sSourceTex = source_tex->id;
+                    c->depth_of_field_enabled = true;
+                    printf("new depth-of-field sSourceTex %i...\n", c->depth_of_field_sSourceTex);
+                } else if (c->current_draw_framebuffer == 0 && c->game_view_sSourceTex != source_tex->id) {
+                    c->game_view_sSceneHDRTex = -1;
+                    c->game_view_sSourceTex = source_tex->id;
+                    c->does_blit_3d_target = false;
+                    c->depth_of_field_enabled = false;
+                    c->game_view_x = 0;
+                    c->game_view_y = 0;
+                    c->recalculate_sSceneHDRTex = true;
+                    printf("new direct sSourceTex %i...\n", c->game_view_sSourceTex);
+                } else if (c->recalculate_sSceneHDRTex && c->game_view_part_framebuffer == c->current_draw_framebuffer) {
+                    c->game_view_sSourceTex = source_tex->id;
+                    printf("new sSourceTex %i...\n", c->game_view_sSourceTex);
+                }
             }
         }
     }
@@ -1662,7 +1667,7 @@ void _bolt_gl_onDeleteTextures(GLsizei n, const GLuint* textures) {
 
 void _bolt_gl_onClear(GLbitfield mask) {
     struct GLContext* c = _bolt_context();
-    if (mask & GL_COLOR_BUFFER_BIT) {
+    if ((mask & GL_COLOR_BUFFER_BIT) && c->current_draw_framebuffer != 0) {
         GLint draw_tex;
         gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
         struct GLTexture2D* tex = _bolt_context_get_texture(c, draw_tex);
