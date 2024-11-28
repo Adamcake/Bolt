@@ -1689,12 +1689,15 @@ void _bolt_gl_onViewport(GLint x, GLint y, GLsizei width, GLsizei height) {
 static void _bolt_gl_plugin_drawelements_vertex2d_xy(size_t index, void* userdata, int32_t* out) {
     struct GLPluginDrawElementsVertex2DUserData* data = userdata;
     if (_bolt_get_attr_binding_int(data->c, data->position, data->indices[index], 2, out)) {
-        out[1] = (int32_t)data->screen_height - (out[1] + 1);
+        // this line would seem like it introduces an off-by-one error, but the same error actually exists in the game engine
+        // causing the UI to be drawn one pixel higher than the top of the screen, so we're just accounting for that here.
+        out[1] = (int32_t)data->screen_height - out[1];
     } else {
         float pos[2];
         _bolt_get_attr_binding(data->c, data->position, data->indices[index], 2, pos);
         out[0] = (int32_t)roundf(pos[0]);
-        out[1] = (int32_t)data->screen_height - ((int32_t)roundf(pos[1]) + 1);
+        // as above
+        out[1] = (int32_t)data->screen_height - (int32_t)roundf(pos[1]);
     }
 }
 
@@ -1710,9 +1713,8 @@ static void _bolt_gl_plugin_drawelements_vertex2d_atlas_wh(size_t index, void* u
     struct GLPluginDrawElementsVertex2DUserData* data = userdata;
     float wh[2];
     _bolt_get_attr_binding(data->c, data->atlas_size, data->indices[index], 2, wh);
-    // these are negative for some reason
-    out[0] = -(int32_t)roundf(wh[0] * data->atlas->width);
-    out[1] = -(int32_t)roundf(wh[1] * data->atlas->height);
+    out[0] = (int32_t)roundf(wh[0] * data->atlas->width);
+    out[1] = (int32_t)roundf(wh[1] * data->atlas->height);
 }
 
 static void _bolt_gl_plugin_drawelements_vertex2d_uv(size_t index, void* userdata, double* out) {
