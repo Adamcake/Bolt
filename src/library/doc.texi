@@ -1939,18 +1939,10 @@ associated image in the batch's texture atlas, in pixel coordinates.
 
 Given an index of a vertex in a batch, returns the width and height of
 its associated image in the batch's texture atlas, in pixel coordinates.
-The game engine has a strangely complex system for these values, which
-is described in the next paragraph. This is the type of thing which the
-Bolt API would normally make simple using abstraction, but this can't
-easily be abstracted, so the values are left exactly as-is. Plugins will
-need to account for everything in the following paragraph if they intend
-to work with UV coordinates.
-
-If the U value is less than -60000, then the texture info for this
-vertex should be ignored and RGBA values of 1.0 should be used.
-Otherwise, if a UV value is negative, it should be negated (i.e. made
-positive) and then clamped to the edges of the sub-image. If a UV value
-is positive, it should wrap within the sub-image.
+The game engine has a strangely complex system for these values: if a
+width or height value is negative, it should be negated (i.e. made
+positive) and the U or V value should be clamped to the edges of the
+sub-image. Otherwise, the U or V should wrap within the sub-image.
 
 @node batch2d-vertexuv
 @subsection vertexuv
@@ -1961,9 +1953,12 @@ Given an index of a vertex in a batch, returns the vertex's associated
 
 Unlike with 3D render events, these UVs are relative to the entire
 texture atlas, not to the sub-image. There are a few other things to be
-aware of when working with Render2D UVs. @ref{batch2d-vertexatlaswh,,
-vertexatlaswh}. Plugins will need to negotiate all of this correctly if
-they intend to work with UVs.
+aware of when working with Render2D UVs: firstly, if a vertex's U value
+is less than -60000, the texture info for that vertex should be ignored
+and RGBA values of 1.0 should be used. Also see
+@xref{batch2d-vertexatlaswh,,vertexatlaswh} to see how to handle UVs
+which fall outside of the sub-image rectangle. Plugins will need to
+negotiate all of this correctly if they intend to work with UVs.
 
 @node batch2d-vertexcolour
 @subsection vertexcolour
