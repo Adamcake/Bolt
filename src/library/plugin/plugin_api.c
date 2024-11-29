@@ -688,33 +688,34 @@ static int api_batch2d_vertexxy(lua_State* state) {
     return 2;
 }
 
-static int api_batch2d_vertexatlasxy(lua_State* state) {
+static int api_batch2d_vertexatlasdetails(lua_State* state) {
     const struct RenderBatch2D* batch = require_self_userdata(state, "vertexatlasxy");
     const lua_Integer index = luaL_checkinteger(state, 2);
-    int32_t xy[2];
-    batch->vertex_functions.atlas_xy(index - 1, batch->vertex_functions.userdata, xy);
-    lua_pushinteger(state, xy[0]);
-    lua_pushinteger(state, xy[1]);
-    return 2;
-}
-
-static int api_batch2d_vertexatlaswh(lua_State* state) {
-    const struct RenderBatch2D* batch = require_self_userdata(state, "vertexatlaswh");
-    const lua_Integer index = luaL_checkinteger(state, 2);
-    int32_t wh[2];
-    batch->vertex_functions.atlas_wh(index - 1, batch->vertex_functions.userdata, wh);
-    lua_pushinteger(state, wh[0]);
-    lua_pushinteger(state, wh[1]);
-    return 2;
+    int32_t xywh[4];
+    uint8_t wrapx, wrapy;
+    batch->vertex_functions.atlas_details(index - 1, batch->vertex_functions.userdata, xywh, &wrapx, &wrapy);
+    lua_pushnumber(state, xywh[0]);
+    lua_pushnumber(state, xywh[1]);
+    lua_pushnumber(state, xywh[2]);
+    lua_pushnumber(state, xywh[3]);
+    lua_pushboolean(state, wrapx);
+    lua_pushboolean(state, wrapy);
+    return 6;
 }
 
 static int api_batch2d_vertexuv(lua_State* state) {
     const struct RenderBatch2D* batch = require_self_userdata(state, "vertexuv");
     const lua_Integer index = lua_tointeger(state, 2);
     double uv[2];
-    batch->vertex_functions.uv(index - 1, batch->vertex_functions.userdata, uv);
-    lua_pushnumber(state, uv[0]);
-    lua_pushnumber(state, uv[1]);
+    uint8_t discard;
+    batch->vertex_functions.uv(index - 1, batch->vertex_functions.userdata, uv, &discard);
+    if (discard) {
+        lua_pushnil(state);
+        lua_pushnil(state);
+    } else {
+        lua_pushnumber(state, uv[0]);
+        lua_pushnumber(state, uv[1]);
+    }
     return 2;
 }
 
@@ -1517,8 +1518,7 @@ static struct ApiFuncTemplate render2d_functions[] = {
     BOLTFUNC(isminimap, batch2d),
     BOLTFUNC(targetsize, batch2d),
     BOLTFUNC(vertexxy, batch2d),
-    BOLTFUNC(vertexatlasxy, batch2d),
-    BOLTFUNC(vertexatlaswh, batch2d),
+    BOLTFUNC(vertexatlasdetails, batch2d),
     BOLTFUNC(vertexuv, batch2d),
     BOLTFUNC(vertexcolour, batch2d),
     BOLTFUNC(textureid, batch2d),

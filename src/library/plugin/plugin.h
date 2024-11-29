@@ -54,15 +54,13 @@ struct Vertex2DFunctions {
     /// Returns the vertex X and Y, in screen coordinates.
     void (*xy)(size_t index, void* userdata, int32_t* out);
     
-    /// Returns the X and Y of the texture image associated with this vertex, in pixel coordinates.
-    void (*atlas_xy)(size_t index, void* userdata, int32_t* out);
-
-    /// Returns the W and H of the texture image associated with this vertex, in pixel coordinates.
-    void (*atlas_wh)(size_t index, void* userdata, int32_t* out);
+    /// Returns the X,Y,W,H of the texture image associated with this vertex, in pixel coordinates,
+    /// as well as booleans iondicating whether the values should be clamped or wrapped.
+    void (*atlas_details)(size_t index, void* userdata, int32_t* out, uint8_t* wrapx, uint8_t* wrapy);
 
     /// Returns the U and V of this vertex in pixel coordinates, normalised from 0.0 to 1.0 within
     /// the sub-image specified by atlas xy and wh.
-    void (*uv)(size_t index, void* userdata, double* out);
+    void (*uv)(size_t index, void* userdata, double* out, uint8_t* discard);
 
     /// Returns the RGBA colour of this vertex, each one normalised from 0.0 to 1.0.
     void (*colour)(size_t index, void* userdata, double* out);

@@ -102,9 +102,8 @@ static void _bolt_glcontext_init(struct GLContext*, void*, void*);
 static void _bolt_glcontext_free(struct GLContext*);
 
 static void _bolt_gl_plugin_drawelements_vertex2d_xy(size_t index, void* userdata, int32_t* out);
-static void _bolt_gl_plugin_drawelements_vertex2d_atlas_xy(size_t index, void* userdata, int32_t* out);
-static void _bolt_gl_plugin_drawelements_vertex2d_atlas_wh(size_t index, void* userdata, int32_t* out);
-static void _bolt_gl_plugin_drawelements_vertex2d_uv(size_t index, void* userdata, double* out);
+static void _bolt_gl_plugin_drawelements_vertex2d_atlas_details(size_t index, void* userdata, int32_t* out, uint8_t* wrapx, uint8_t* wrapy);
+static void _bolt_gl_plugin_drawelements_vertex2d_uv(size_t index, void* userdata, double* out, uint8_t* discard);
 static void _bolt_gl_plugin_drawelements_vertex2d_colour(size_t index, void* userdata, double* out);
 static void _bolt_gl_plugin_drawelements_vertex3d_xyz(size_t index, void* userdata, struct Point3D* out);
 static size_t _bolt_gl_plugin_drawelements_vertex3d_atlas_meta(size_t index, void* userdata);
@@ -1458,8 +1457,7 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
             batch.is_minimap = tex_target && tex_target->is_minimap_tex_small;
             batch.vertex_functions.userdata = &vertex_userdata;
             batch.vertex_functions.xy = _bolt_gl_plugin_drawelements_vertex2d_xy;
-            batch.vertex_functions.atlas_xy = _bolt_gl_plugin_drawelements_vertex2d_atlas_xy;
-            batch.vertex_functions.atlas_wh = _bolt_gl_plugin_drawelements_vertex2d_atlas_wh;
+            batch.vertex_functions.atlas_details = _bolt_gl_plugin_drawelements_vertex2d_atlas_details;
             batch.vertex_functions.uv = _bolt_gl_plugin_drawelements_vertex2d_uv;
             batch.vertex_functions.colour = _bolt_gl_plugin_drawelements_vertex2d_colour;
             batch.texture_functions.userdata = &tex_userdata;
@@ -1701,28 +1699,27 @@ static void _bolt_gl_plugin_drawelements_vertex2d_xy(size_t index, void* userdat
     }
 }
 
-static void _bolt_gl_plugin_drawelements_vertex2d_atlas_xy(size_t index, void* userdata, int32_t* out) {
+static void _bolt_gl_plugin_drawelements_vertex2d_atlas_details(size_t index, void* userdata, int32_t* out, uint8_t* wrapx, uint8_t* wrapy) {
     struct GLPluginDrawElementsVertex2DUserData* data = userdata;
     float xy[2];
+    float wh[2];
     _bolt_get_attr_binding(data->c, data->atlas_min, data->indices[index], 2, xy);
+    _bolt_get_attr_binding(data->c, data->atlas_size, data->indices[index], 2, wh);
     out[0] = (int32_t)roundf(xy[0] * data->atlas->width);
     out[1] = (int32_t)roundf(xy[1] * data->atlas->height);
+    out[2] = (int32_t)roundf(fabs(wh[0]) * data->atlas->width);
+    out[3] = (int32_t)roundf(fabs(wh[1]) * data->atlas->height);
+    *wrapx = wh[0] > 0.0;
+    *wrapy = wh[1] > 0.0;
 }
 
-static void _bolt_gl_plugin_drawelements_vertex2d_atlas_wh(size_t index, void* userdata, int32_t* out) {
-    struct GLPluginDrawElementsVertex2DUserData* data = userdata;
-    float wh[2];
-    _bolt_get_attr_binding(data->c, data->atlas_size, data->indices[index], 2, wh);
-    out[0] = (int32_t)roundf(wh[0] * data->atlas->width);
-    out[1] = (int32_t)roundf(wh[1] * data->atlas->height);
-}
-
-static void _bolt_gl_plugin_drawelements_vertex2d_uv(size_t index, void* userdata, double* out) {
+static void _bolt_gl_plugin_drawelements_vertex2d_uv(size_t index, void* userdata, double* out, uint8_t* discard) {
     struct GLPluginDrawElementsVertex2DUserData* data = userdata;
     float uv[2];
     _bolt_get_attr_binding(data->c, data->tex_uv, data->indices[index], 2, uv);
     out[0] = (double)uv[0];
     out[1] = (double)uv[1];
+    *discard = uv[0] < -60000.0; // hard-coded shader value
 }
 
 static void _bolt_gl_plugin_drawelements_vertex2d_colour(size_t index, void* userdata, double* out) {
