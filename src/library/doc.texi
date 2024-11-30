@@ -27,6 +27,29 @@ notice and this notice are preserved.
 @end ifplaintext
 @end titlepage
 
+@macro eventhandler {eventtype, reference}
+Sets an event handler for \eventtype\. The function will overwrite any
+previous event handler, or, if it's not a function, then any previous
+event handler will be deleted. See \reference\ for documentation on
+this event object.
+@end macro
+
+@macro windoweventhandler {wtype, eventtype, reference}
+Sets an event handler for this \wtype\ for \eventtype\. The function
+will overwrite any previous event handler, or, if it's not a function,
+then any previous event handler will be deleted. See \reference\ for
+documentation on this event object.
+@end macro
+
+@macro eventobjectwarning {}
+It's @strong{not safe} to use an event object after the event handler
+has returned.
+@end macro
+
+@macro bufferapifooter {}
+@xref{objects-buffer} for more on the buffer API.
+@end macro
+
 @node Top
 @top Bolt Plugin API Reference
 
@@ -385,9 +408,8 @@ bolt.saveconfig("info.bin", "Some example file contents")
 @node functions-createsurface
 @section createsurface
 
-Creates and returns a new @ref{objects-surface,,Surface object} with
-the given width and height. The surface will initally be fully
-transparent.
+Creates and returns a new @ref{objects-surface} with the given width and
+height. The surface will initally be fully transparent.
 
 @example lua
 @verbatim
@@ -398,9 +420,9 @@ local mysurface = bolt.createsurface(800, 608)
 @node functions-createsurfacefromrgba
 @section createsurfacefromrgba
 
-Creates and returns a new @ref{objects-surface,,Surface object} with
-the given width, height, and RGBA data. The data can be a string or a
-@ref{objects-buffer,,Buffer object}.
+Creates and returns a new @ref{objects-surface} with the given width,
+height, and RGBA data. The data can be a string or a
+@ref{objects-buffer}.
 
 There are four bytes in an RGBA pixel, so the number of bytes in the
 data is expected to be @code{4 * width * height}. If fewer bytes than
@@ -424,7 +446,7 @@ local mysurface = bolt.createsurfacefromrgba(2, 2, rgba)
 @node functions-createsurfacefrompng
 @section createsurfacefrompng
 
-Creates and returns a new @ref{objects-surface,,Surface object} from
+Creates and returns a new @ref{objects-surface} from
 the PNG file at the given path.
 
 The path will be interpreted similarly to require(), i.e. relative to
@@ -434,8 +456,8 @@ will call `error()` if the file does not exist or is inaccessible for
 any reason.
 
 The surface will have the same width and height as the image. As with
-@ref{functions-createsurface,,createsurface}, the width and height of
-your PNG file should be integral powers of 2.
+@ref{functions-createsurface}, the width and height of your PNG file
+should be integral powers of 2.
 
 The following example creates a surface from "images/icon.png" relative
 to the plugin directory.
@@ -449,16 +471,15 @@ local mysurface = bolt.createsurfacefrompng(800, 608, "images.icon")
 @node functions-createwindow
 @section createwindow
 
-Creates and returns a new @ref{objects-window,,Window object} with the
-given initial values for x, y, width and height. The x and y relate to
-the top-left corner of the game. Embedded windows can capture mouse and
-keyboard events, and can be drawn onto like a @ref{objects-surface,,
-Surface}.
+Creates and returns a new @ref{objects-window} with the given initial
+values for x, y, width and height. The x and y relate to the top-left
+corner of the game. Embedded windows can capture mouse and keyboard
+events, and can be drawn onto like a @ref{objects-surface}.
 
 The following example creates a window with its top-left corner 50px
 from the left and 60px from the top of the game, with a width of 800 and
-a height of 608. @ref{window-clear,,clear} is used to make the window
-entirely red and opaque, otherwise it would be transparent.
+a height of 608. @ref{window-clear} is used to make the window entirely
+red and opaque, otherwise it would be transparent.
 
 @example lua
 @verbatim
@@ -470,13 +491,12 @@ mywindow:clear(1, 0, 0)
 @node functions-createbrowser
 @section createbrowser
 
-Creates and returns a new @ref{objects-browser,,Browser object} with
-the given initial values for width, height, and URL. If the URL begins
-with "file://", it will be interpreted as a file path relative to the
-plugin directory, and must use '/' as file separators (if any).
-Otherwise, it will be treated as a URL of an internet website. The same
-rules go for any navigations or fetch requests made by the browser
-during its lifetime.
+Creates and returns a new @ref{objects-browser} with the given initial
+values for width, height, and URL. If the URL begins with "file://", it
+will be interpreted as a file path relative to the plugin directory, and
+must use '/' as file separators (if any). Otherwise, it will be treated
+as a URL of an internet website. The same rules go for any navigations
+or fetch requests made by the browser during its lifetime.
 
 @example lua
 @verbatim
@@ -487,13 +507,13 @@ local mybrowser = bolt.createwindow(800, 608, "https://bolt.adamcake.com")
 @node functions-createembeddedbrowser
 @section createembeddedbrowser
 
-Creates and returns a new @ref{objects-embeddedbrowser,,Embedded
-Browser Object} with the given initial values for x, y, width, height
-and URL. If the URL begins with "file://", it will be interpreted as a
-file path relative to the plugin directory, and must use '/' as file
-separators (if any). Otherwise, it will be treated as a URL of an
-internet website. The same rules go for any navigations or fetch
-requests made by the browser during its lifetime.
+Creates and returns a new @ref{objects-embeddedbrowser} with the given
+initial values for x, y, width, height and URL. If the URL begins with
+"file://", it will be interpreted as a file path relative to the plugin
+directory, and must use '/' as file separators (if any). Otherwise, it
+will be treated as a URL of an internet website. The same rules go for
+any navigations or fetch requests made by the browser during its
+lifetime.
 
 @example lua
 @verbatim
@@ -504,9 +524,9 @@ local mybrowser = bolt.createembeddedbrowser(50, 60, 800, 608, "https://bolt.ada
 @node functions-point
 @section point
 
-Creates and returns a new @ref{objects-point,,Point Object} from x, y
-and z values. Point objects represent a point in 3D space, and have
-functions which are useful for 3D space calculations.
+Creates and returns a new @ref{objects-point} from x, y and z values.
+Point objects represent a point in 3D space, and have functions which
+are useful for 3D space calculations.
 
 @example lua
 @verbatim
@@ -517,10 +537,10 @@ local mypoint = bolt.point(0, 0, 0)
 @node functions-createbuffer
 @section createbuffer
 
-Creates and returns a new @ref{objects-buffer,,Buffer Object} with the
-given size. Buffer objects are fixed-size and useful for passing large
-amounts of binary data to functions. They're mostly analogous to
-JavaScript's @code{DataView}. The initial contents will be 0.
+Creates and returns a new @ref{objects-buffer} with the given size.
+Buffer objects are fixed-size and useful for passing large amounts of
+binary data to functions. They're mostly analogous to JavaScript's
+@code{DataView}. The initial contents will be 0.
 
 @example lua
 @verbatim
@@ -531,10 +551,7 @@ local mybuffer = bolt.createbuffer(65536)
 @node functions-onrender2d
 @section onrender2d
 
-Sets an event handler for 2D rendering events. The function will
-overwrite any previous event handler, or, if it's not a function, then
-any previous event handler will be deleted. See @ref{objects-batch2d,,
-Batch2D Event} for documentation on this event object.
+@eventhandler{2D rendering events, @ref{objects-batch2d}}
 
 @example lua
 @verbatim
@@ -544,16 +561,12 @@ end)
 @end verbatim
 @end example
 
-It's @strong{not safe} to use an event object after the event handler
-has returned.
+@eventobjectwarning{}
 
 @node functions-onrender3d
 @section onrender3d
 
-Sets an event handler for 3D rendering events. The function will
-overwrite any previous event handler, or, if it's not a function, then
-any previous event handler will be deleted. See @ref{objects-render3d,,
-Render3D Event} for documentation on this event object.
+@eventhandler{3D rendering events, @ref{objects-render3d}}
 
 @example lua
 @verbatim
@@ -563,17 +576,12 @@ end)
 @end verbatim
 @end example
 
-It's @strong{not safe} to use an event object after the event handler
-has returned.
+@eventobjectwarning{}
 
 @node functions-onrendericon
 @section onrendericon
 
-Sets an event handler for item icon render events. The function will
-overwrite any previous event handler, or, if it's not a function, then
-any previous event handler will be deleted. See
-@ref{objects-renderitemicon,, Render Item Icon Event} for documentation
-on this event object.
+@eventhandler{item icon rendering events, @ref{objects-renderitemicon}}
 
 @example lua
 @verbatim
@@ -583,16 +591,12 @@ end)
 @end verbatim
 @end example
 
-It's @strong{not safe} to use an event object after the event handler
-has returned.
+@eventobjectwarning{}
 
 @node functions-onminimap
 @section onminimap
 
-Sets an event handler for minimap render events. The function will
-overwrite any previous event handler, or, if it's not a function, then
-any previous event handler will be deleted. See @ref{objects-minimap,,
-Minimap Event} for documentation on this event object.
+@eventhandler{minimap rendering events, @ref{objects-minimap}}
 
 @example lua
 @verbatim
@@ -602,16 +606,12 @@ end)
 @end verbatim
 @end example
 
-It's @strong{not safe} to use an event object after the event handler
-has returned.
+@eventobjectwarning{}
 
 @node functions-onswapbuffers
 @section onswapbuffers
 
-Sets an event handler for swapbuffers events. The function will
-overwrite any previous event handler, or, if it's not a function, then
-any previous event handler will be deleted. See @ref{objects-swapbuffers
-,,Swapbuffers Event} for documentation on this event object.
+@eventhandler{swapbuffers events, @ref{objects-swapbuffers}}
 
 This event is commonly used as a "sync point", i.e. to ensure that some
 Lua code will run at regular intervals.
@@ -624,21 +624,17 @@ end)
 @end verbatim
 @end example
 
-It's @strong{not safe} to use an event object after the event handler
-has returned.
+@eventobjectwarning{}
 
 @node functions-onmousemotion
 @section onmousemotion
 
-Sets an event handler for mouse motion events. The function will
-overwrite any previous event handler, or, if it's not a function, then
-any previous event handler will be deleted. See @ref{objects-mousemotion
-,,Mouse Motion Event} for documentation on this event object.
+@eventhandler{mouse motion events, @ref{objects-mousemotion}}
 
 This will fire only for mouse motion events that are received by the
-game. Events received by @ref{objects-window,,Window objects} or
-@ref{objects-embeddedbrowser,,Embedded Browser objects} will not be
-received by the game, so will not fire this event.
+game. Events received by a @ref{objects-window} or
+@ref{objects-embeddedbrowser} will not be received by the game, so will
+not fire this event.
 
 @example lua
 @verbatim
@@ -648,25 +644,20 @@ end)
 @end verbatim
 @end example
 
-It's @strong{not safe} to use an event object after the event handler
-has returned.
+@eventobjectwarning{}
 
 @node functions-onmousebutton
 @section onmousebutton
 
-Sets an event handler for mouse button events. The function will
-overwrite any previous event handler, or, if it's not a function, then
-any previous event handler will be deleted. See @ref{objects-mousebutton
-,,Mouse Button Event} for documentation on this event object.
+@eventhandler{mouse button events, @ref{objects-mousebutton}}
 
 This handler runs immediately after a button is pressed down. When the
-button is released, @ref{functions-onmousebuttonup,,onmousebuttonup}
-will run.
+button is released, @ref{functions-onmousebuttonup} will run.
 
 This will fire only for mouse button events that are received by the
-game. Events received by @ref{objects-window,,Window objects} or
-@ref{objects-embeddedbrowser,,Embedded Browser objects} will not be
-received by the game, so will not fire this event.
+game. Events received by a @ref{objects-window} or
+@ref{objects-embeddedbrowser} will not be received by the game, so will
+not fire this event.
 
 @example lua
 @verbatim
@@ -676,25 +667,20 @@ end)
 @end verbatim
 @end example
 
-It's @strong{not safe} to use an event object after the event handler
-has returned.
+@eventobjectwarning{}
 
 @node functions-onmousebuttonup
 @section onmousebuttonup
 
-Sets an event handler for mouse button-up events. The function will
-overwrite any previous event handler, or, if it's not a function, then
-any previous event handler will be deleted. See @ref{objects-mousebutton
-,,Mouse Button Event} for documentation on this event object.
+@eventhandler{mouse button-up events, @ref{objects-mousebutton}}
 
 This handler runs immediately after a button is released. It shares the
-same type of event object as @ref{functions-onmousebutton,,onmousebutton
-}.
+same type of event object as @ref{functions-onmousebutton}.
 
 This will fire only for mouse button events that are received by the
-game. Events received by @ref{objects-window,,Window objects} or
-@ref{objects-embeddedbrowser,,Embedded Browser objects} will not be
-received by the game, so will not fire this event.
+game. Events received by a @ref{objects-window} or
+@ref{objects-embeddedbrowser} will not be received by the game, so will
+not fire this event.
 
 @example lua
 @verbatim
@@ -704,21 +690,17 @@ end)
 @end verbatim
 @end example
 
-It's @strong{not safe} to use an event object after the event handler
-has returned.
+@eventobjectwarning{}
 
 @node functions-onscroll
 @section onscroll
 
-Sets an event handler for mouse scroll events. The function will
-overwrite any previous event handler, or, if it's not a function, then
-any previous event handler will be deleted. See @ref{objects-scroll,,
-Scroll Event} for documentation on this event object.
+@eventhandler{mouse scroll events, @ref{objects-scroll}}
 
 This will fire only for mouse scroll events that are received by the
-game. Events received by @ref{objects-window,,Window objects} or
-@ref{objects-embeddedbrowser,,Embedded Browser objects} will not be
-received by the game, so will not fire this event.
+game. Events received by @ref{objects-window} or
+@ref{objects-embeddedbrowser} will not be received by the game, so will
+not fire this event.
 
 @example lua
 @verbatim
@@ -728,15 +710,14 @@ end)
 @end verbatim
 @end example
 
-It's @strong{not safe} to use an event object after the event handler
-has returned.
+@eventobjectwarning{}
 
 @node functions-buffergetint8
 @section buffergetint8
 
 Reads a single byte from a buffer object or string, at the given offset,
 and returns it as a signed integer.
-@xref{objects-buffer,,Buffer objects} for more on the buffer API.
+@bufferapifooter{}
 
 @example lua
 @verbatim
@@ -749,7 +730,7 @@ local num = bolt.buffergetint8(mybuffer, myoffset)
 
 Reads a two-byte value from the buffer object or string, at the given
 offset, and returns it as a signed integer.
-@xref{objects-buffer,,Buffer objects} for more on the buffer API.
+@bufferapifooter{}
 
 @example lua
 @verbatim
@@ -762,7 +743,7 @@ local num = bolt.buffergetint16(mybuffer, myoffset)
 
 Reads a four-byte value from the buffer object or string, at the given
 offset, and returns it as a signed integer.
-@xref{objects-buffer,,Buffer objects} for more on the buffer API.
+@bufferapifooter{}
 
 @example lua
 @verbatim
@@ -775,7 +756,7 @@ local num = bolt.buffergetint32(mybuffer, myoffset)
 
 Reads an eight-byte value from the buffer object or string, at the given
 offset, and returns it as a signed integer.
-@xref{objects-buffer,,Buffer objects} for more on the buffer API.
+@bufferapifooter{}
 
 @example lua
 @verbatim
@@ -788,7 +769,7 @@ local num = bolt.buffergetint64(mybuffer, myoffset)
 
 Reads a single byte from the buffer object or string, at the given
 offset and returns it, as an unsigned integer.
-@xref{objects-buffer,,Buffer objects} for more on the buffer API.
+@bufferapifooter{}
 
 @example lua
 @verbatim
@@ -801,7 +782,7 @@ local num = bolt.buffergetuint8(mybuffer, myoffset)
 
 Reads a two-byte value from the buffer object or string, at the given
 offset, and returns it as an unsigned integer.
-@xref{objects-buffer,,Buffer objects} for more on the buffer API.
+@bufferapifooter{}
 
 @example lua
 @verbatim
@@ -814,7 +795,7 @@ local num = bolt.buffergetuint16(mybuffer, myoffset)
 
 Reads a four-byte value from the buffer object or string, at the given
 offset, and returns it as an unsigned integer.
-@xref{objects-buffer,,Buffer objects} for more on the buffer API.
+@bufferapifooter{}
 
 @example lua
 @verbatim
@@ -827,7 +808,7 @@ local num = bolt.buffergetuint32(mybuffer, myoffset)
 
 Reads an eight-byte value from the buffer object or string, at the given
 offset, and returns it as an unsigned integer.
-@xref{objects-buffer,,Buffer objects} for more on the buffer API.
+@bufferapifooter{}
 
 @example lua
 @verbatim
@@ -840,7 +821,7 @@ local num = bolt.buffergetuint64(mybuffer, myoffset)
 
 Reads a four-byte IEEE floating point value from the buffer object or
 string, at the given offset, and returns it as a number.
-@xref{objects-buffer,,Buffer objects} for more on the buffer API.
+@bufferapifooter{}
 
 @example lua
 @verbatim
@@ -853,7 +834,7 @@ local num = bolt.buffergetfloat32(mybuffer, myoffset)
 
 Reads an eight-byte IEEE floating point value from the buffer object or
 string, at the given offset, and returns it as a number.
-@xref{objects-buffer,,Buffer objects} for more on the buffer API.
+@bufferapifooter{}
 
 @example lua
 @verbatim
@@ -875,9 +856,8 @@ you can write @code{window:onresize(myhandler)}.
 
 A surface is a graphical canvas which can be drawn on with various
 rendering functions, and can then be drawn to the user's screen by
-calling @ref{surface-drawtoscreen,,drawtoscreen}. The contents will
-never be cleared, other than by explicitly calling @ref{surface-clear,,
-clear}.
+calling @ref{surface-drawtoscreen}. The contents will
+never be cleared, other than by explicitly calling @ref{surface-clear}.
 
 Surface widths and heights should always be integral powers of 2. GPUs
 often can't handle other values correctly which will result in
@@ -966,11 +946,11 @@ mysurface:drawtosurface(myothersurface, 0, 0, 100, 100, 0, 0, 1920, 1080)
 @node surface-drawtowindow
 @subsection drawtowindow
 
-Draws a section of the surface onto a section of a @ref{objects-window,,
-Window Object}. Parameters are target window, then source X,Y,W,H, then
-destination X,Y,W,H, all in pixels. Any transparency will be blended
-additively and, if the size of the source and destination rectangles is
-different, the image will be scaled smoothly.
+Draws a section of the surface onto a section of a @ref{objects-window}.
+Parameters are target window, then source X,Y,W,H, then destination
+X,Y,W,H, all in pixels. Any transparency will be blended additively and,
+if the size of the source and destination rectangles is different, the
+image will be scaled smoothly.
 
 @example lua
 @verbatim
@@ -1035,8 +1015,7 @@ C's type casts.
 @subsection getint8
 
 Reads a single byte from the buffer at the given offset and returns it
-as a signed integer. @xref{objects-buffer,,Buffer objects} for more on
-the buffer API.
+as a signed integer. @bufferapifooter{}
 
 @example lua
 @verbatim
@@ -1048,8 +1027,7 @@ local num = mybuffer:getint8(myoffset)
 @subsection getint16
 
 Reads a two-byte value from the buffer at the given offset and returns
-it as a signed integer. @xref{objects-buffer,,Buffer objects} for more
-on the buffer API.
+it as a signed integer. @bufferapifooter{}
 
 @example lua
 @verbatim
@@ -1061,8 +1039,7 @@ local num = mybuffer:getint16(myoffset)
 @subsection getint32
 
 Reads a four-byte value from the buffer at the given offset and returns
-it as a signed integer. @xref{objects-buffer,,Buffer objects} for more
-on the buffer API.
+it as a signed integer. @bufferapifooter{}
 
 @example lua
 @verbatim
@@ -1074,8 +1051,7 @@ local num = mybuffer:getint32(myoffset)
 @subsection getint64
 
 Reads an eight-byte value from the buffer at the given offset and
-returns it as a signed integer. @xref{objects-buffer,,Buffer objects}
-for more on the buffer API.
+returns it as a signed integer. @bufferapifooter{}
 
 @example lua
 @verbatim
@@ -1087,8 +1063,7 @@ local num = mybuffer:getint64(myoffset)
 @subsection getuint8
 
 Reads a single byte from the buffer at the given offset and returns it
-as an unsigned integer. @xref{objects-buffer,,Buffer objects} for more
-on the buffer API.
+as an unsigned integer. @bufferapifooter{}
 
 @example lua
 @verbatim
@@ -1100,8 +1075,7 @@ local num = mybuffer:getuint8(myoffset)
 @subsection getuint16
 
 Reads a two-byte value from the buffer at the given offset and returns
-it as an unsigned integer. @xref{objects-buffer,,Buffer objects} for
-more on the buffer API.
+it as an unsigned integer. @bufferapifooter{}
 
 @example lua
 @verbatim
@@ -1113,8 +1087,7 @@ local num = mybuffer:getuint16(myoffset)
 @subsection getuint32
 
 Reads a four-byte value from the buffer at the given offset and returns
-it as an unsigned integer. @xref{objects-buffer,,Buffer objects} for
-more on the buffer API.
+it as an unsigned integer. @bufferapifooter{}
 
 @example lua
 @verbatim
@@ -1126,8 +1099,7 @@ local num = mybuffer:getuint32(myoffset)
 @subsection getuint64
 
 Reads an eight-byte value from the buffer at the given offset and
-returns it as an unsigned integer. @xref{objects-buffer,,Buffer objects}
-for more on the buffer API.
+returns it as an unsigned integer. @bufferapifooter{}
 
 @example lua
 @verbatim
@@ -1139,8 +1111,7 @@ local num = mybuffer:getuint64(myoffset)
 @subsection getfloat32
 
 Reads a four-byte IEEE floating point value from the given offset and
-returns it as a number. @xref{objects-buffer,,Buffer objects} for more
-on the buffer API.
+returns it as a number. @bufferapifooter{}
 
 @example lua
 @verbatim
@@ -1152,8 +1123,7 @@ local num = mybuffer:getfloat32(myoffset)
 @subsection getfloat64
 
 Reads an eight-byte IEEE floating point value from the given offset and
-returns it as a number. @xref{objects-buffer,,Buffer objects} for more
-on the buffer API.
+returns it as a number. @bufferapifooter{}
 
 @example lua
 @verbatim
@@ -1165,7 +1135,7 @@ local num = mybuffer:getfloat64(myoffset)
 @subsection setint8
 
 Writes a single byte into the buffer at the given offset.
-@xref{objects-buffer,,Buffer objects} for more on the buffer API.
+@bufferapifooter{}
 
 @example lua
 @verbatim
@@ -1177,7 +1147,7 @@ mybuffer:setint8(myoffset, myvalue)
 @subsection setint16
 
 Writes a two-byte value into the buffer at the given offset.
-@xref{objects-buffer,,Buffer objects} for more on the buffer API.
+@bufferapifooter{}
 
 @example lua
 @verbatim
@@ -1189,7 +1159,7 @@ mybuffer:setint16(myoffset, myvalue)
 @subsection setint32
 
 Writes a four-byte value into the buffer at the given offset.
-@xref{objects-buffer,,Buffer objects} for more on the buffer API.
+@bufferapifooter{}
 
 @example lua
 @verbatim
@@ -1201,7 +1171,7 @@ mybuffer:setint32(myoffset, myvalue)
 @subsection setint64
 
 Writes an eight-byte value into the buffer at the given offset.
-@xref{objects-buffer,,Buffer objects} for more on the buffer API.
+@bufferapifooter{}
 
 @example lua
 @verbatim
@@ -1213,7 +1183,7 @@ mybuffer:setint64(myoffset, myvalue)
 @subsection setuint8
 
 Writes a single unsigned byte into the buffer at the given offset.
-@xref{objects-buffer,,Buffer objects} for more on the buffer API.
+@bufferapifooter{}
 
 @example lua
 @verbatim
@@ -1225,7 +1195,7 @@ mybuffer:setuint8(myoffset, myvalue)
 @subsection setuint16
 
 Writes a two-byte unsigned value into the buffer at the given offset.
-@xref{objects-buffer,,Buffer objects} for more on the buffer API.
+@bufferapifooter{}
 
 @example lua
 @verbatim
@@ -1237,7 +1207,7 @@ mybuffer:setuint16(myoffset, myvalue)
 @subsection setuint32
 
 Writes a four-byte unsigned value into the buffer at the given offset.
-@xref{objects-buffer,,Buffer objects} for more on the buffer API.
+@bufferapifooter{}
 
 @example lua
 @verbatim
@@ -1249,7 +1219,7 @@ mybuffer:setuint32(myoffset, myvalue)
 @subsection setuint64
 
 Writes an eight-byte unsigned value into the buffer at the given offset.
-@xref{objects-buffer,,Buffer objects} for more on the buffer API.
+@bufferapifooter{}
 
 @example lua
 @verbatim
@@ -1261,8 +1231,7 @@ mybuffer:setuint64(myoffset, myvalue)
 @subsection setfloat32
 
 Writes a number into the buffer at the given offset, as a four-byte IEEE
-floating-point value. @xref{objects-buffer,,Buffer objects} for more on
-the buffer API.
+floating-point value. @bufferapifooter{}
 
 @example lua
 @verbatim
@@ -1274,8 +1243,7 @@ mybuffer:setfloat32(myoffset, myvalue)
 @subsection setfloat64
 
 Writes a number into the buffer at the given offset, as an eight-byte
-IEEE floating-point value. @xref{objects-buffer,,Buffer objects} for
-more on the buffer API.
+IEEE floating-point value. @bufferapifooter{}
 
 @example lua
 @verbatim
@@ -1287,8 +1255,7 @@ mybuffer:setfloat64(myoffset, myvalue)
 @subsection setstring
 
 Writes a string into the buffer at the given offset. The entire string
-will be copied. @xref{objects-buffer,,Buffer objects} for more on the
-buffer API.
+will be copied. @bufferapifooter{}
 
 @example lua
 @verbatim
@@ -1301,7 +1268,7 @@ mybuffer:setstring(myoffset, mystring)
 
 Writes the contents of another buffer into this buffer at the given
 offset. The entire contents of the source buffer will be copied.
-@xref{objects-buffer,,Buffer objects} for more on the buffer API.
+@bufferapifooter{}
 
 @example lua
 @verbatim
@@ -1313,10 +1280,10 @@ mybuffer:setstring(myoffset, mystring)
 @section Window
 
 A window is a rectangle overlaid onto the game window. It has an
-internal @ref{objects-surface,,Surface object} which can be rendered to
-and will be automatically shown at the window's position. Windows also
-capture the user's mouse and keyboard inputs and have callbacks which
-can be set to handle those inputs.
+internal @ref{objects-surface} which can be rendered to and will be
+automatically shown at the window's position. Windows also capture the
+user's mouse and keyboard inputs and have callbacks which can be set to
+handle those inputs.
 
 The window will initially be transparent, but will still capture mouse
 inputs, which will be visually confusing. Make sure to draw something to
@@ -1324,8 +1291,8 @@ the window after creating it when testing this function.
 
 The window contents will be cleared when the window changes size, which
 may happen for several reasons. Make sure to redraw in response to a
-@ref{window-onreposition,,reposition} event, otherwise your window will
-turn invisible.
+@ref{window-onreposition} if didresize is true, otherwise your window
+will turn invisible.
 
 @node window-close
 @subsection close
@@ -1385,9 +1352,9 @@ pixel data. @xref{surface-subimage,,surface:subimage}.
 
 Starts repositioning for this window. This function changes how the
 user's "drag" action is processed, and would usually be called from the
-@ref{window-onmousebutton,,onmousebutton} callback for the left mouse
-button. Repositioning will occur until the user releases the left mouse
-button or until the repositioning is cancelled. In the first case, an
+@ref{window-onmousebutton} callback for the left mouse button.
+Repositioning will occur until the user releases the left mouse button
+or until the repositioning is cancelled. In the first case, an
 onreposition event will be fired (even if the size and position din't
 actually change.) During repositioning, all mouse events will be handled
 internally by the window, without calling its event handlers. The window
@@ -1425,11 +1392,7 @@ mywindow:cancelreposition()
 @node window-onreposition
 @subsection onreposition
 
-Sets an event handler for this window for reposition events. The
-function will overwrite any previous event handler, or, if it's not a
-function, then any previous event handler will be deleted. See
-@ref{objects-reposition,,Reposition Event} for documentation on this
-event object.
+@windoweventhandler{window, reposition events, @ref{objects-reposition}}
 
 @example lua
 @verbatim
@@ -1439,17 +1402,12 @@ end)
 @end verbatim
 @end example
 
-It's @strong{not safe} to use an event object after the event handler
-has returned.
+@eventobjectwarning{}
 
 @node window-onmousemotion
 @subsection onmousemotion
 
-Sets an event handler for this window for mouse motion events. The
-function will overwrite any previous event handler, or, if it's not a
-function, then any previous event handler will be deleted. See
-@ref{objects-mousemotion,,Mouse Motion Event} for documentation on this
-event object.
+@windoweventhandler{window, mouse motion events, @ref{objects-mousemotion}}
 
 @example lua
 @verbatim
@@ -1459,21 +1417,15 @@ end)
 @end verbatim
 @end example
 
-It's @strong{not safe} to use an event object after the event handler
-has returned.
+@eventobjectwarning{}
 
 @node window-onmousebutton
 @subsection onmousebutton
 
-Sets an event handler for this window for mouse button events. The
-function will overwrite any previous event handler, or, if it's not a
-function, then any previous event handler will be deleted. See
-@ref{objects-mousebutton,,Mouse Button Event} for documentation on this
-event object.
+@windoweventhandler{window, mouse button events, @ref{objects-mousebutton}}
 
 This handler runs immediately after a button is pressed down. When the
-button is released, @ref{window-onmousebuttonup,,onmousebuttonup} will
-run.
+button is released, @ref{window-onmousebuttonup} will run.
 
 @example lua
 @verbatim
@@ -1483,23 +1435,18 @@ end)
 @end verbatim
 @end example
 
-It's @strong{not safe} to use an event object after the event handler
-has returned.
+@eventobjectwarning{}
 
 @node window-onmousebuttonup
 @subsection onmousebuttonup
 
-Sets an event handler for this window for mouse button-up events. The
-function will overwrite any previous event handler, or, if it's not a
-function, then any previous event handler will be deleted. See
-@ref{objects-mousebutton,,Mouse Button Event} for documentation on this
-event object.
+@windoweventhandler{window, mouse button-up events, @ref{objects-mousebutton}}
 
 This handler runs immediately after a button is released. It shares the
-same type of event object as @ref{window-onmousebutton,,onmousebutton}.
-If the user clicks the window and drags their mouse outside the window,
-the mouse motion events and button-up will still usually be captured by
-the window.
+same type of event object as @ref{window-onmousebutton}. If the user
+clicks the window and drags their mouse outside the window, the mouse
+motion events and button-up will still usually be captured by the
+window.
 
 @example lua
 @verbatim
@@ -1509,17 +1456,12 @@ end)
 @end verbatim
 @end example
 
-It's @strong{not safe} to use an event object after the event handler
-has returned.
+@eventobjectwarning{}
 
 @node window-onscroll
 @subsection onscroll
 
-Sets an event handler for this window for mouse scroll events. The
-function will overwrite any previous event handler, or, if it's not a
-function, then any previous event handler will be deleted. See
-@ref{objects-scroll,,Scroll Event} for documentation on this event
-object.
+@windoweventhandler{window, mouse scroll events, @ref{objects-scroll}}
 
 @example lua
 @verbatim
@@ -1529,17 +1471,12 @@ end)
 @end verbatim
 @end example
 
-It's @strong{not safe} to use an event object after the event handler
-has returned.
+@eventobjectwarning{}
 
 @node window-onmouseleave
 @subsection onmouseleave
 
-Sets an event handler for this window for mouse leave events. The
-function will overwrite any previous event handler, or, if it's not a
-function, then any previous event handler will be deleted. See
-@ref{objects-mouseleave,,Mouse Leave Event} for documentation on this event
-object.
+@windoweventhandler{window, mouse leave events, @ref{objects-mouseleave}}
 
 @example lua
 @verbatim
@@ -1549,8 +1486,7 @@ end)
 @end verbatim
 @end example
 
-It's @strong{not safe} to use an event object after the event handler
-has returned.
+@eventobjectwarning{}
 
 @node objects-browser
 @section Browser
@@ -1586,14 +1522,14 @@ mybrowser:close()
 @subsection sendmessage
 
 Sends a message to the browser. The data can be either a string or a
-@ref{objects-buffer,,Buffer object}. It will be sent to the browser
-using the postMessage function, so to handle it in your browser
-application, just add an event listener for "message" to the window
-object. The event's data will be an object with "type": "pluginMessage",
-and "content" will be an ArrayBuffer containing the Lua string that was
-passed to this function. Note that the binary data will be transferred
-exactly as it appeared in Lua, byte-for-byte - it will not be decoded or
-re-encoded in any way.
+@ref{objects-buffer}. It will be sent to the browser using the
+postMessage function, so to handle it in your browser application, just
+add an event listener for "message" to the window object. The event's
+data will be an object with "type": "pluginMessage", and "content" will
+be an ArrayBuffer containing the Lua string that was passed to this
+function. Note that the binary data will be transferred exactly as it
+appeared in Lua, byte-for-byte - it will not be decoded or re-encoded in
+any way.
 
 @example lua
 @verbatim
@@ -1628,8 +1564,7 @@ mybrowser:enablecapture()
 @node browser-disablecapture
 @subsection disablecapture
 
-Disables screen capture for this browser. @xref{browser-enablecapture,,
-enablecapture}.
+Disables screen capture for this browser. @xref{browser-enablecapture}.
 
 @example lua
 @verbatim
@@ -1691,9 +1626,9 @@ web page is programmed to send.
 @section Embedded Browser
 
 An embedded browser object is a webview embedded into the game window.
-It behaves similarly to a @ref{objects-window,,Window object}, but with
-more state, and most of the normal events of a Window object are handled
-internally by the browser.
+It behaves similarly to a @ref{objects-window}, but with more state, and
+most of the normal events of a Window object are handled internally by
+the browser.
 
 The browser is chromium-based, backed by CEF. The webview takes up the
 whole rectangle - there are no decorations like tabs or a URL bar or
@@ -1743,13 +1678,13 @@ window:cancelreposition}.
 @subsection enablecapture
 
 Enables screen capture for this browser. @xref{browser-enablecapture,,
-enablecapture}.
+browser:enablecapture}.
 
 @node embeddedbrowser-disablecapture
 @subsection disablecapture
 
 Disables screen capture for this browser. @xref{browser-enablecapture,,
-enablecapture}.
+browser:enablecapture}.
 
 @node embeddedbrowser-showdevtools
 @subsection showdevtools
@@ -1805,9 +1740,9 @@ web page is programmed to send.
 @section Point
 
 A Point object represents a point in 3D space. It's mainly useful for
-doing transformation calculations with @ref{objects-transform,,
-Transform Objects}, to find, for example, the pixel coordinates on the
-user's screen where a certain vertex is currently being rendered.
+doing transformation calculations with @ref{objects-transform}s, to
+find, for example, the pixel coordinates on the user's screen where a
+certain vertex is currently being rendered.
 
 @node point-transform
 @subsection transform
@@ -1828,18 +1763,17 @@ returns its X and Y in pixels, with (0, 0) being the top-left of the
 game.
 
 This is only useful for a point in model coordinates that has been
-transformed by a @ref{render3d-modelmatrix,,model matrix}, then by a
-@ref{render3d-viewprojmatrix,,viewproj matrix}. In any other case the
-result will probably not be meaningful.
+transformed by a @ref{render3d-modelmatrix}, then by a
+@ref{render3d-viewprojmatrix}. In any other case the result will
+probably not be meaningful.
 
 @node objects-transform
 @section Transform
 
 A transform represents a 4x4 transformation matrix. There's no way to
 create a transform directly, they can only be obtained by querying
-@ref{objects-render3d,,Render3D Objects}. They're useful for
-transforming points from model coordinates into world coordinates or
-screen pixel coordinates.
+@ref{objects-render3d}s. They're useful for transforming points from
+model coordinates into world coordinates or screen pixel coordinates.
 
 @node transform-decompose
 @subsection decompose
@@ -1850,8 +1784,8 @@ yaw, pitch, roll, in radians.
 
 Matrix decomposition is an experimental feature. It assumes the
 right-most column of the matrix to be (0, 0, 0, 1). That will always be
-the case in transforms returned by @ref{render3d-vertexanimation,,
-vertexanimation}, which is the primary intended use of this function.
+the case in transforms returned by @ref{render3d-vertexanimation}, which
+is the primary intended use of this function.
 
 @example lua
 @verbatim
@@ -1877,14 +1811,14 @@ local m1,  m2,  m3,  m4,
 @node objects-batch2d
 @section Batch2D Event
 
-A Batch2D event comes from @ref{functions-onrender2d,,onrender2d}. It
-occurs when the game draws a batch of 2D icons to the screen. 2D icon
-renders are uploaded to the GPU in batches rather than one-at-a-time, so
-to look for an individual image, you'll need to iterate through each
-individual image in the batch, by iterating through the vertices. The
-number of vertices per image is usually 6 (i.e. two polygons) but it's
-recommended to call @ref{batch2d-verticesperimage,,verticesperimage} to
-get this number instead of hard-coding it into your plugin.
+A Batch2D event comes from @ref{functions-onrender2d}. It occurs when
+the game draws a batch of 2D icons to the screen. 2D icon renders are
+uploaded to the GPU in batches rather than one-at-a-time, so to look for
+an individual image, you'll need to iterate through each individual
+image in the batch, by iterating through the vertices. The number of
+vertices per image is usually 6 (i.e. two polygons) but it's recommended
+to call @ref{batch2d-verticesperimage} to get this number instead of
+hard-coding it into your plugin.
 
 A Batch2D will only ever have one texture associated with it - a large
 surface, usually 8192x8192, with a lot of rectangular images on it. This
@@ -1902,15 +1836,14 @@ for i = 1, event:vertexcount() do
 @end verbatim
 @end example
 
-It's @strong{not safe} to use an event object after the event handler
-has returned.
+@eventobjectwarning{}
 
 @node batch2d-vertexcount
 @subsection vertexcount
 
 Returns the number of vertices in a 2D batch object. Divide by
-@ref{batch2d-verticesperimage,,verticesperimage} to get the number of
-icons being rendered.
+@ref{batch2d-verticesperimage} to get the number of icons being
+rendered.
 
 @node batch2d-verticesperimage
 @subsection verticesperimage
@@ -1935,11 +1868,11 @@ overlay icons onto the static map image.
 Returns the width and height of the target area of this render, in
 pixels.
 
-If @ref{batch2d-isminimap,,isminimap} is true, this will be the size of
-the minimap surface - usually 256x256. Otherwise, this will be
-proportional to the size of the inner area of the game window - that is,
-if the user has an interface scaling other than 100%, it will be bigger
-or smaller than that area, proportionally.
+If @ref{batch2d-isminimap} is true, this will be the size of the minimap
+surface - usually 256x256. Otherwise, this will be proportional to the
+size of the inner area of the game window - that is, if the user has an
+interface scaling other than 100%, it will be bigger or smaller than
+that area, proportionally.
 
 @node batch2d-vertexxy
 @subsection vertexxy
@@ -1969,8 +1902,8 @@ the range 0.0 - 1.0, or nil.
 If either of the returned values is nil, then the texture data for this
 vertex should be ignored and RGBA values of 1.0 should be used instead.
 Otherwise, the UVs are relative to the entire texture atlas, but may be
-outside of the sub-image rectangle. See @xref{batch2d-vertexatlasdetails
-,,vertexatlasdetails} to see how to handle those cases.
+outside of the sub-image rectangle. See
+@xref{batch2d-vertexatlasdetails} to see how to handle those cases.
 
 @node batch2d-vertexcolour
 @subsection vertexcolour
@@ -1985,7 +1918,7 @@ will darken the texture. A common use for this is to draw coloured text.
 @node batch2d-vertexcolor
 @subsection vertexcolor
 
-Alias for @ref{batch2d-vertexcolour,,vertexcolour}
+Alias for @ref{batch2d-vertexcolour}
 
 @node batch2d-textureid
 @subsection textureid
@@ -2009,11 +1942,11 @@ batch, in pixels.
 @subsection texturecompare
 
 Compares a section of the texture atlas for this batch to some RGBA
-pixel data. The data can be a string or a @ref{objects-buffer,,
-Buffer object}. The function will return true only if the bytes are an
-exact match. It internally uses memcmp from the C library. This means
-comparing each set of contiguous data is very fast, but, since the data
-needs to be contiguous, it can only be checked one row at a time.
+pixel data. The data can be a string or a @ref{objects-buffer}. The
+function will return true only if the bytes are an exact match. It
+internally uses memcmp from the C library. This means comparing each set
+of contiguous data is very fast, but, since the data needs to be
+contiguous, it can only be checked one row at a time.
 
 Internally, Bolt compares against data taken from the CPU just before
 being uploaded to the GPU, so there will never be any imprecision issues
@@ -2029,7 +1962,7 @@ mybatch:texturecompare(x, y, "\xFF\x00\x00\xFF\xFF\x00\x00\xFF")
 @end example
 
 Normally the X and Y coordinates should be calculated from
-@ref{batch2d-vertexatlasdetails,,vertexatlasdetails}.
+@ref{batch2d-vertexatlasdetails}.
 
 @node batch2d-texturedata
 @subsection texturedata
@@ -2047,24 +1980,22 @@ mybatch:texturedata(x, y, 8)
 @end example
 
 Using this function to search for specific textures isn't recommended as
-it would be noticeably slower than using @ref{batch2d-texturecompare,,
-texturecompare}.
+it would be noticeably slower than using @ref{batch2d-texturecompare}.
 
 @node objects-render3d
 @section Render3D Event
 
-A Render3D event comes from @ref{functions-onrender3d,,onrender3d}. It
+A Render3D event comes from @ref{functions-onrender3d}. It
 occurs when a 3D model is rendered to the game view. All of the model's
 vertex coordinates and texture data can be queried, along with its
 animation data if the model is animated.
 
 Bolt has a complex set of functions for doing calculations with 3D space
-data. Render3D's @ref{render3d-vertexpoint,,vertexpoint} function
-returns static model data which will always be the same for two
-instances of the same model even if they're placed differently, scaled
-or rotated differently, doing different animations, etc. To get the
-model's position in world space, use @ref{render3d-modelmatrix,,
-modelmatrix}:
+data. Render3D's @ref{render3d-vertexpoint} function returns static
+model data which will always be the same for two instances of the same
+model even if they're placed differently, scaled or rotated differently,
+doing different animations, etc. To get the model's position in world
+space, use @ref{render3d-modelmatrix}:
 
 @example lua
 @verbatim
@@ -2075,8 +2006,8 @@ local worldpoint = modelpoint:transform(myevent:modelmatrix())
 
 This gives an X, Y and Z in world coordinates, which can be used to find
 its position on the world map. From there, you can use its
-@ref{render3d-viewprojmatrix,,viewproj matrix} to find where it will
-appear on the user's screen, in pixel coordinates:
+@ref{render3d-viewprojmatrix} to find where it will appear on the user's
+screen, in pixel coordinates:
 
 @example lua
 @verbatim
@@ -2103,9 +2034,9 @@ Like Batch2D events, Render3D events always have exactly one texture
 atlas associated with them, but each vertex may be textured with a
 different section of that atlas. Unlike Batch2D however, there's an
 extra step involved in getting the pixel data associated with a vertex.
-The vertex's meta-id must be queried with @ref{render3d-vertexmeta,,
-vertexmeta}, then pass the meta-id to @ref{render3d-atlasxywh,,
-atlasxywh} to get the correct section of the texture atlas:
+The vertex's meta-id must be queried with @ref{render3d-vertexmeta},
+then pass the meta-id to @ref{render3d-atlasxywh} to get the correct
+section of the texture atlas:
 
 @example lua
 @verbatim
@@ -2124,8 +2055,7 @@ for i = 1, event:vertexcount() do
 @end verbatim
 @end example
 
-It's @strong{not safe} to use an event object after the event handler
-has returned.
+@eventobjectwarning{}
 
 @node render3d-vertexcount
 @subsection vertexcount
@@ -2141,9 +2071,8 @@ local count = event:vertexcount()
 @node render3d-vertexpoint
 @subsection vertexpoint
 
-Given a vertex number, returns a @ref{objects-point,,Point object}
-representing the vertex's model coordinates, according to the static
-model data.
+Given a vertex number, returns a @ref{objects-point} representing the
+vertex's model coordinates, according to the static model data.
 
 @example lua
 @verbatim
@@ -2154,9 +2083,9 @@ local modelpoint = event:vertexpoint(1)
 @node render3d-modelmatrix
 @subsection modelmatrix
 
-Returns the @ref{objects-transform,,Transform object} representing the
-model matrix of the model being rendered. This can be used to transform
-points from model coordinates into world coordinates.
+Returns the @ref{objects-transform} representing the model matrix of the
+model being rendered. This can be used to transform points from model
+coordinates into world coordinates.
 
 @example lua
 @verbatim
@@ -2169,37 +2098,35 @@ local worldpoint = modelpoint:transform(modelmatrix)
 @node render3d-viewmatrix
 @subsection viewmatrix
 
-Returns the @ref{objects-transform,,Transform object} representing the
-view matrix of the model being rendered. Unless you understand the
-difference between a view matrix and a projection matrix, this probably
-isn't useful to you; @ref{render3d-viewprojmatrix,,viewprojmatrix} can
-be used to more efficiently get a transform from world coordinates to
-pixel coordinates.
+Returns the @ref{objects-transform} representing the view matrix of the
+model being rendered. Unless you understand the difference between a
+view matrix and a projection matrix, this probably isn't useful to you;
+@ref{render3d-viewprojmatrix} can be used to more efficiently get a
+transform from world coordinates to pixel coordinates.
 
 @node render3d-projectionmatrix
 @subsection projectionmatrix
 
-Returns the @ref{objects-transform,,Transform object} representing the
-projection matrix of the model being rendered. Unless you understand the
-difference between a view matrix and a projection matrix, this probably
-isn't useful to you; @ref{render3d-viewprojmatrix,,viewprojmatrix} can
-be used to more efficiently get a transform from world coordinates to
-pixel coordinates.
+Returns the @ref{objects-transform} representing the projection matrix
+of the model being rendered. Unless you understand the difference
+between a view matrix and a projection matrix, this probably isn't
+useful to you; @ref{render3d-viewprojmatrix} can be used to more
+efficiently get a transform from world coordinates to pixel coordinates.
 
 @node render3d-viewprojmatrix
 @subsection viewprojmatrix
 
-Returns the @ref{objects-transform,,Transform object} representing the
-combined view and projection matrices, commonly called the "viewproj
-matrix", of the model being rendered. This can be used to transform
-points from world coordinates into screen coordinates.
+Returns the @ref{objects-transform} representing the combined view and
+projection matrices, commonly called the "viewproj matrix", of the model
+being rendered. This can be used to transform points from world
+coordinates into screen coordinates.
 
 @node render3d-vertexmeta
 @subsection vertexmeta
 
 Given a vertex number, returns a meta-ID (an integer) relating to its
 associated texture image. This can then be passed to
-@ref{render3d-atlasxywh,,atlasxywh}.
+@ref{render3d-atlasxywh}.
 
 @example lua
 @verbatim
@@ -2246,7 +2173,7 @@ versions of the same model using the same texture.
 @node render3d-vertexcolor
 @subsection vertexcolor
 
-Alias for @ref{render3d-vertexcolour,,vertexcolour}
+Alias for @ref{render3d-vertexcolour}
 
 @node render3d-textureid
 @subsection textureid
@@ -2270,11 +2197,11 @@ batch, in pixels.
 @subsection texturecompare
 
 Compares a section of the texture atlas for this batch to some RGBA
-pixel data. The data can be a string or a @ref{objects-buffer,,
-Buffer object}. The function will return true only if the bytes are an
-exact match. It internally uses memcmp from the C library. This means
-comparing each set of contiguous data is very fast, but, since the data
-needs to be contiguous, it can only be checked one row at a time.
+pixel data. The data can be a string or a @ref{objects-buffer}. The
+function will return true only if the bytes are an exact match. It
+internally uses memcmp from the C library. This means comparing each set
+of contiguous data is very fast, but, since the data needs to be
+contiguous, it can only be checked one row at a time.
 
 Internally, Bolt compares against data taken from the CPU just before
 being uploaded to the GPU, so there will never be any imprecision issues
@@ -2290,7 +2217,7 @@ event:texturecompare(x, y, "\xFF\x00\x00\xFF\xFF\x00\x00\xFF")
 @end example
 
 Normally the X and Y coordinates should be calculated from
-@ref{render3d-atlasxywh,,atlasxywh}.
+@ref{render3d-atlasxywh}.
 
 @node render3d-texturedata
 @subsection texturedata
@@ -2308,8 +2235,7 @@ mybatch:texturedata(x, y, 8)
 @end example
 
 Using this function to search for specific textures isn't recommended as
-it would be noticeably slower than using @ref{render3d-texturecompare,,
-texturecompare}.
+it would be noticeably slower than using @ref{render3d-texturecompare}.
 
 @node render3d-vertexanimation
 @subsection vertexanimation
@@ -2321,7 +2247,7 @@ its current animated position.
 It's a fatal error to call this function on a render event for a
 non-animated model, since non-animated models have no bone transforms
 that could be queried. To check if the model is animated, use
-@ref{render3d-animated,,animated}.
+@ref{render3d-animated}.
 
 @node render3d-animated
 @subsection animated
@@ -2329,8 +2255,8 @@ that could be queried. To check if the model is animated, use
 Returns a boolean value indicating whether this model is animated.
 Animated models can have multiple bones which can move independently of
 each other. If this function returns false, then the model has no
-animation data, and calling @ref{render3d-vertexanimation,,
-vertexanimation} will result in an error.
+animation data, and calling @ref{render3d-vertexanimation} will result
+in an error.
 
 @example lua
 @verbatim
@@ -2378,8 +2304,7 @@ item model viewed from a different camera angle, which means the only
 way to differentiate between them is to @ref{transform-decompose} the
 view matrix.
 
-It's @strong{not safe} to use an event object after the event handler
-has returned.
+@eventobjectwarning{}
 
 @node renderitemicon-xywh
 @subsection xywh
@@ -2505,8 +2430,7 @@ the minimap isn't visible. The event can be queried for some useful
 information like the angle it's rotated to and the world position it's
 centered on.
 
-It's @strong{not safe} to use an event object after the event handler
-has returned.
+@eventobjectwarning{}
 
 @node minimap-angle
 @subsection angle
@@ -2534,35 +2458,33 @@ half a tile.
 @node objects-swapbuffers
 @section SwapBuffers event
 
-A SwapBuffers event comes from @ref{functions-onswapbuffers,,
-onswapbuffers}. It occurs at the end of a frame (and the beginning of a
-new frame), so anywhere from 5 to 200+ times per second depending on the
-user's FPS. It's commonly used as a "sync point", i.e. to ensure that
-some Lua code will run at regular intervals. The event object is a
-userdata but has no functions.
+A SwapBuffers event comes from @ref{functions-onswapbuffers}. It occurs
+at the end of a frame (and the beginning of a new frame), so anywhere
+from 5 to 200+ times per second depending on the user's FPS. It's
+commonly used as a "sync point", i.e. to ensure that some Lua code will
+run at regular intervals. The event object is a userdata but has no
+functions.
 
 Unlike other events in the Bolt API, which fire immediately after the
 event in question has happened, SwapBuffers events fire immediately
 before the buffers are actually swapped. This means any rendering done
 in a SwapBuffers event will be immediately visible on the current frame.
 
-It's @strong{not safe} to use an event object after the event handler
-has returned.
+@eventobjectwarning{}
 
 @node objects-reposition
 @section Reposition Event
 
-A Reposition event comes from @ref{window-onreposition,,onreposition}.
-It indicates that the size or position of a @ref{objects-window,,Window
-object} has changed. This could happen for several reasons, such as the
-game window being resized, so don't assume that it won't happen.
+A Reposition event comes from @ref{window-onreposition}. It indicates
+that the size or position of a @ref{objects-window} has changed. This
+could happen for several reasons, such as the game window being resized,
+so never assume that it won't happen.
 
-@ref{reposition-didresize,,didresize} can be used to check if the window
-size changed. If it did, the window contents have been cleared to
-transparent and must be redrawn.
+@ref{reposition-didresize} can be used to check if the window size
+changed. If it did, the window contents have been cleared to transparent
+and must be redrawn.
 
-It's @strong{not safe} to use an event object after the event handler
-has returned.
+@eventobjectwarning{}
 
 @node reposition-xywh
 @subsection xywh
@@ -2601,8 +2523,7 @@ the latest position will always be sent, but some position updates in
 between will be dropped. The same goes for @ref{functions-onmousemotion,
 ,bolt.onmousemotion}.
 
-It's @strong{not safe} to use an event object after the event handler
-has returned.
+@eventobjectwarning{}
 
 @node mousemotion-xy
 @subsection xy
@@ -2716,8 +2637,7 @@ the time. In the case of the left mouse button, the button-up event will
 usually be captured by the window that was clicked on, as well as any
 mouse motion events that happen between the press and release.
 
-It's @strong{not safe} to use an event object after the event handler
-has returned.
+@eventobjectwarning{}
 
 @node mousebutton-xy
 @subsection xy
@@ -2832,8 +2752,7 @@ A Scroll event comes from @ref{functions-onscroll,,bolt.onscroll} or
 @ref{window-onscroll,,window:onscroll}. It occurs when the user scrolls
 their mouse wheel while the mouse is inside the game window.
 
-It's @strong{not safe} to use an event object after the event handler
-has returned.
+@eventobjectwarning{}
 
 @node scroll-xy
 @subsection xy
@@ -2953,8 +2872,7 @@ A Mouse Leave event comes from @ref{window-onmouseleave,,
 window:onmouseleave}. It occurs when the user moves their mouse such
 that it's no longer inside the window or embedded browser.
 
-It's @strong{not safe} to use an event object after the event handler
-has returned.
+@eventobjectwarning{}
 
 @node mouseleave-xy
 @subsection xy
@@ -3078,8 +2996,7 @@ API endpoints.
 Browsers and embedded browsers have no @code{window.close()} function,
 as one would usually find in JavaScript in a web page. This function
 doesn't work correctly in CEF so it has been disabled. Pages that want
-to self-close must use the @ref{browserapis-close-request,,
-/close-request API} instead.
+to self-close must use the @ref{browserapis-close-request} API instead.
 
 @node browserapis-pluginmessage
 @section pluginMessage
