@@ -55,18 +55,18 @@ uint64_t _bolt_plugin_get_last_mouseevent_windowid() { return last_mouseevent_wi
 static void _bolt_plugin_ipc_init(BoltSocketType*);
 static void _bolt_plugin_ipc_close(BoltSocketType);
 
-static void _bolt_plugin_window_onreposition(struct EmbeddedWindow*, struct RepositionEvent*);
-static void _bolt_plugin_window_onmousemotion(struct EmbeddedWindow*, struct MouseMotionEvent*);
-static void _bolt_plugin_window_onmousebutton(struct EmbeddedWindow*, struct MouseButtonEvent*);
-static void _bolt_plugin_window_onmousebuttonup(struct EmbeddedWindow*, struct MouseButtonEvent*);
-static void _bolt_plugin_window_onscroll(struct EmbeddedWindow*, struct MouseScrollEvent*);
-static void _bolt_plugin_window_onmouseleave(struct EmbeddedWindow*, struct MouseMotionEvent*);
-static void _bolt_plugin_handle_mousemotion(struct MouseMotionEvent*);
-static void _bolt_plugin_handle_mousebutton(struct MouseButtonEvent*);
-static void _bolt_plugin_handle_mousebuttonup(struct MouseButtonEvent*);
-static void _bolt_plugin_handle_scroll(struct MouseScrollEvent*);
+static void _bolt_plugin_window_onreposition(struct EmbeddedWindow*, const struct RepositionEvent*);
+static void _bolt_plugin_window_onmousemotion(struct EmbeddedWindow*, const struct MouseMotionEvent*);
+static void _bolt_plugin_window_onmousebutton(struct EmbeddedWindow*, const struct MouseButtonEvent*);
+static void _bolt_plugin_window_onmousebuttonup(struct EmbeddedWindow*, const struct MouseButtonEvent*);
+static void _bolt_plugin_window_onscroll(struct EmbeddedWindow*, const struct MouseScrollEvent*);
+static void _bolt_plugin_window_onmouseleave(struct EmbeddedWindow*, const struct MouseMotionEvent*);
+static void _bolt_plugin_handle_mousemotion(const struct MouseMotionEvent*);
+static void _bolt_plugin_handle_mousebutton(const struct MouseButtonEvent*);
+static void _bolt_plugin_handle_mousebuttonup(const struct MouseButtonEvent*);
+static void _bolt_plugin_handle_scroll(const struct MouseScrollEvent*);
 
-static void _bolt_plugin_handle_swapbuffers(struct SwapBuffersEvent*);
+static void _bolt_plugin_handle_swapbuffers(const struct SwapBuffersEvent*);
 
 const struct PluginManagedFunctions* _bolt_plugin_managed_functions() {
     return &managed_functions;
@@ -126,7 +126,7 @@ uint64_t _bolt_plugin_itemicon_hash(const void* item, uint64_t seed0, uint64_t s
 static struct hashmap* plugins;
 
 #define DEFINE_CALLBACK(APINAME, STRUCTNAME) \
-void _bolt_plugin_handle_##APINAME(struct STRUCTNAME* e) { \
+void _bolt_plugin_handle_##APINAME(const struct STRUCTNAME* e) { \
     if (!overlay_inited) return; \
     size_t iter = 0; \
     void* item; \
@@ -161,7 +161,7 @@ void _bolt_plugin_handle_##APINAME(struct STRUCTNAME* e) { \
 #define DEFINE_CALLBACK_STATIC(APINAME, STRUCTNAME) static DEFINE_CALLBACK(APINAME, STRUCTNAME)
 
 #define DEFINE_WINDOWEVENT(APINAME, REGNAME, EVNAME) \
-void _bolt_plugin_window_on##APINAME(struct EmbeddedWindow* window, struct EVNAME* event) { \
+void _bolt_plugin_window_on##APINAME(struct EmbeddedWindow* window, const struct EVNAME* event) { \
     if (window->is_deleted) return; \
     lua_State* state = window->plugin; \
     if (window->is_browser) { \
@@ -1125,7 +1125,9 @@ DEFINE_CALLBACK_STATIC(swapbuffers, SwapBuffersEvent)
 DEFINE_CALLBACK(render2d, RenderBatch2D)
 DEFINE_CALLBACK(render3d, Render3D)
 DEFINE_CALLBACK(rendericon, RenderItemIconEvent)
-DEFINE_CALLBACK(minimap, RenderMinimapEvent)
+DEFINE_CALLBACK(minimapterrain, MinimapTerrainEvent)
+DEFINE_CALLBACK(minimaprender2d, RenderBatch2D)
+DEFINE_CALLBACK(renderminimap, RenderMinimapEvent)
 DEFINE_CALLBACK(mousemotion, MouseMotionEvent)
 DEFINE_CALLBACK(mousebutton, MouseButtonEvent)
 DEFINE_CALLBACK(mousebuttonup, MouseButtonEvent)
@@ -1219,7 +1221,8 @@ lua_settable(plugin->state, LUA_REGISTRYINDEX);
     SETMETA(render2d)
     SETMETA(render3d)
     SETMETA(rendericon)
-    SETMETA(minimap)
+    SETMETA(minimapterrain)
+    SETMETA(renderminimap)
     SETMETA(point)
     SETMETA(transform)
     SETMETA(buffer)

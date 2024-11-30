@@ -1390,7 +1390,20 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
         struct GLTexture2D* tex = c->texture_units[diffuse_map];
         struct GLTexture2D* tex_target = _bolt_context_get_texture(c, draw_tex);
 
-        if (tex->is_minimap_tex_big) {
+        if (tex->is_minimap_tex_small && count == 6) {
+            const struct GLAttrBinding* binding = &attributes[c->bound_program->loc_aVertexPosition2D];
+            int32_t xy0[2];
+            int32_t xy2[2];
+            if (!_bolt_get_attr_binding_int(c, binding, 0, 2, xy0)) return;
+            if (!_bolt_get_attr_binding_int(c, binding, 2, 2, xy2)) return;
+            const struct RenderMinimapEvent event = {
+                .target_x = (int16_t)xy0[0],
+                .target_y = (int16_t)(roundf(2.0 / projection_matrix[5]) - xy0[1]),
+                .target_w = (uint16_t)(xy2[0] - xy0[0]),
+                .target_h = (uint16_t)(xy0[1] - xy2[1]),
+            };
+            _bolt_plugin_handle_renderminimap(&event);
+        } else if (tex->is_minimap_tex_big) {
             tex_target->is_minimap_tex_small = 1;
             if (count == 6) {
                 // get XY and UV of first two vertices
@@ -1447,12 +1460,12 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
                     const double cx = (scaled_xoffset + (small_tex_cx * angle_cos) - (small_tex_cy * angle_sin)) / dist_ratio;
                     const double cy = (scaled_yoffset + (small_tex_cx * angle_sin) + (small_tex_cy * angle_cos)) / dist_ratio;
 
-                    struct RenderMinimapEvent render;
+                    struct MinimapTerrainEvent render;
                     render.angle = map_angle_rads;
                     render.scale = dist_ratio;
                     render.x = tex->minimap_center_x + (64.0 * (cx - (double)(tex->width >> 1)));
                     render.y = tex->minimap_center_y + (64.0 * (cy - (double)(tex->height >> 1)));
-                    _bolt_plugin_handle_minimap(&render);
+                    _bolt_plugin_handle_minimapterrain(&render);
                 }
             }
         } else if (c->current_draw_framebuffer == 0) {
@@ -1475,7 +1488,6 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
             batch.screen_height = vertex_userdata.screen_height;
             batch.index_count = count;
             batch.vertices_per_icon = 6;
-            batch.is_minimap = tex_target && tex_target->is_minimap_tex_small;
             batch.vertex_functions.userdata = &vertex_userdata;
             batch.vertex_functions.xy = _bolt_gl_plugin_drawelements_vertex2d_xy;
             batch.vertex_functions.atlas_details = _bolt_gl_plugin_drawelements_vertex2d_atlas_details;
@@ -1486,6 +1498,8 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
             batch.texture_functions.size = _bolt_gl_plugin_texture_size;
             batch.texture_functions.compare = _bolt_gl_plugin_texture_compare;
             batch.texture_functions.data = _bolt_gl_plugin_texture_data;
+
+            void (*handler)(const struct RenderBatch2D*) = tex_target && tex_target->is_minimap_tex_small ? _bolt_plugin_handle_minimaprender2d : _bolt_plugin_handle_render2d;
 
             if (tex->icons) {
                 size_t batch_start = 0;
@@ -1505,7 +1519,7 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
                         batch.index_count = i - batch_start;
                         if (batch.index_count) {
                             vertex_userdata.indices = indices + batch_start;
-                            _bolt_plugin_handle_render2d(&batch);
+                            handler(&batch);
                         }
                         int32_t xy0[2];
                         int32_t xy2[2];
@@ -1524,10 +1538,10 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
                 if (batch_start < count) {
                     batch.index_count = count - batch_start;
                     vertex_userdata.indices = indices + batch_start;
-                    _bolt_plugin_handle_render2d(&batch);
+                    handler(&batch);
                 }
             } else {
-                _bolt_plugin_handle_render2d(&batch);
+                handler(&batch);
             }
         }
     }

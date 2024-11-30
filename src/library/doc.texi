@@ -593,14 +593,29 @@ end)
 
 @eventobjectwarning{}
 
-@node functions-onminimap
-@section onminimap
+@node functions-onminimapterrain
+@section onminimapterrain
 
-@eventhandler{minimap rendering events, @ref{objects-minimap}}
+@eventhandler{minimap terrain events, @ref{objects-minimapterrain}}
 
 @example lua
 @verbatim
-bolt.onminimap(function (event)
+bolt.onminimapterrain(function (event)
+  -- ...
+end)
+@end verbatim
+@end example
+
+@eventobjectwarning{}
+
+@node functions-onminimaprender2d
+@section onminimaprender2d
+
+@eventhandler{minimap render2d events, @ref{objects-batch2d}}
+
+@example lua
+@verbatim
+bolt.onminimaprender2d(function (event)
   -- ...
 end)
 @end verbatim
@@ -1811,8 +1826,9 @@ local m1,  m2,  m3,  m4,
 @node objects-batch2d
 @section Batch2D Event
 
-A Batch2D event comes from @ref{functions-onrender2d}. It occurs when
-the game draws a batch of 2D icons to the screen. 2D icon renders are
+A Batch2D event comes from @ref{functions-onrender2d}. or
+@ref{functions-onminimaprender2d}. It occurs when the game draws a batch
+of 2D icons to the screen, or to the minimap image. 2D icon renders are
 uploaded to the GPU in batches rather than one-at-a-time, so to look for
 an individual image, you'll need to iterate through each individual
 image in the batch, by iterating through the vertices. The number of
@@ -1854,25 +1870,18 @@ separate triangles). To future-proof against possible engine updates,
 it's recommended to use this function instead of hard-coding the number
 6 into your plugin.
 
-@node batch2d-isminimap
-@subsection isminimap
-
-Returns true if this render targets the minimap surface instead of the
-user interface. There will usually be a maximum of one batch per frame
-targeting the minimap surface. Renders that target the minimap will
-overlay icons onto the static map image.
-
 @node batch2d-targetsize
 @subsection targetsize
 
 Returns the width and height of the target area of this render, in
 pixels.
 
-If @ref{batch2d-isminimap} is true, this will be the size of the minimap
-surface - usually 256x256. Otherwise, this will be proportional to the
-size of the inner area of the game window - that is, if the user has an
-interface scaling other than 100%, it will be bigger or smaller than
-that area, proportionally.
+For a miminap render event, this will be the size of the minimap image,
+usually 256x256. For a normal render2d event, this will be proportional
+to the size of the inner area of the game window, given by
+@ref{functions-gamewindowsize} - that is, if the user has an interface
+scaling other than 100%, it will be bigger or smaller than that area,
+proportionally.
 
 @node batch2d-vertexxy
 @subsection vertexxy
@@ -2421,18 +2430,19 @@ local viewprojmatrix = event:modelviewprojmatrix(model)
 @end verbatim
 @end example
 
-@node objects-minimap
-@section Minimap Event
+@node objects-minimapterrain
+@section Minimap Terrain Event
 
-A Minimap event comes from @ref{functions-onminimap}. It occurs when the
-minimap gets drawn to the game view. This happens once per frame, unless
-the minimap isn't visible. The event can be queried for some useful
-information like the angle it's rotated to and the world position it's
-centered on.
+A Minimap Terrain event comes from @ref{functions-onminimapterrain}. It
+occurs when the background terrain gets drawn to the minimap image,
+which usually happens once per frame, unless the minimap isn't visible.
+The terrain can't be inspected directly, but this event can be queried
+for some useful information, like the angle the minimap is rotated to
+and the world position it's centered on.
 
 @eventobjectwarning{}
 
-@node minimap-angle
+@node minimapterrain-angle
 @subsection angle
 
 Returns the angle at which the minimap background image is being
@@ -2440,20 +2450,45 @@ rendered, in radians. The angle is 0 when upright (facing directly
 north), and increases counter-clockwise (note that turning the camera
 clockwise rotates the minimap counter-clockwise and vice versa).
 
-@node minimap-scale
+@node minimapterrain-scale
 @subsection scale
 
 Returns the scale at which the minimap background image is being
 rendered. This indicates how far in or out the minimap is zoomed. It
 appears to be capped between roughly 0.5 and 3.5.
 
-@node minimap-position
+@node minimapterrain-position
 @subsection position
 
 Returns an estimate of the X and Y position the minimap is centered on,
 in world coordinates. This is only a rough estimate and can move around
 a lot even while standing still. It usually doesn't vary by more than
 half a tile.
+
+@node objects-renderminimap
+@section Render Minimap Event
+
+A render minimap event comes from @ref{functions-onrenderminimap}. It
+occurs when the minimap image gets drawn to the game window, which
+usually happens once per frame, unless the minimap isn't visible. This
+event can be used to find out the location of the minimap on the user's
+screen. To get the minimap contents, see @ref{objects-minimapterrain}
+and @ref{objects-minimaprender2d}.
+
+@eventobjectwarning{}
+
+@node renderminimap-xywh
+@subsection xywh
+
+Returns the x, y, width and height of where the minimap is being drawn
+on the screen, in pixel coordinates. The X and Y are relative to the
+top-left pixel of the inner area of the window.
+
+@example lua
+@verbatim
+local x, y, width, height = event:xywh()
+@end verbatim
+@end example
 
 @node objects-swapbuffers
 @section SwapBuffers event

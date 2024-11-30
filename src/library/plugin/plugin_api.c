@@ -175,7 +175,9 @@ DEFINE_CALLBACK(swapbuffers)
 DEFINE_CALLBACK(render2d)
 DEFINE_CALLBACK(render3d)
 DEFINE_CALLBACK(rendericon)
-DEFINE_CALLBACK(minimap)
+DEFINE_CALLBACK(minimapterrain)
+DEFINE_CALLBACK(minimaprender2d)
+DEFINE_CALLBACK(renderminimap)
 DEFINE_CALLBACK(mousemotion)
 DEFINE_CALLBACK(mousebutton)
 DEFINE_CALLBACK(mousebuttonup)
@@ -666,12 +668,6 @@ static int api_batch2d_verticesperimage(lua_State* state) {
     return 1;
 }
 
-static int api_batch2d_isminimap(lua_State* state) {
-    const struct RenderBatch2D* batch = require_self_userdata(state, "isminimap");
-    lua_pushboolean(state, batch->is_minimap);
-    return 1;
-}
-
 static int api_batch2d_targetsize(lua_State* state) {
     const struct RenderBatch2D* batch = require_self_userdata(state, "targetsize");
     lua_pushinteger(state, batch->screen_width);
@@ -770,23 +766,32 @@ static int api_batch2d_texturedata(lua_State* state) {
     return 1;
 }
 
-static int api_minimap_angle(lua_State* state) {
-    const struct RenderMinimapEvent* render = require_self_userdata(state, "angle");
+static int api_minimapterrain_angle(lua_State* state) {
+    const struct MinimapTerrainEvent* render = require_self_userdata(state, "angle");
     lua_pushnumber(state, render->angle);
     return 1;
 }
 
-static int api_minimap_scale(lua_State* state) {
-    const struct RenderMinimapEvent* render = require_self_userdata(state, "scale");
+static int api_minimapterrain_scale(lua_State* state) {
+    const struct MinimapTerrainEvent* render = require_self_userdata(state, "scale");
     lua_pushnumber(state, render->scale);
     return 1;
 }
 
-static int api_minimap_position(lua_State* state) {
-    const struct RenderMinimapEvent* render = require_self_userdata(state, "position");
+static int api_minimapterrain_position(lua_State* state) {
+    const struct MinimapTerrainEvent* render = require_self_userdata(state, "position");
     lua_pushnumber(state, render->x);
     lua_pushnumber(state, render->y);
     return 2;
+}
+
+static int api_renderminimap_xywh(lua_State* state) {
+    const struct RenderMinimapEvent* render = require_self_userdata(state, "xywh");
+    lua_pushinteger(state, render->target_x);
+    lua_pushinteger(state, render->target_y);
+    lua_pushinteger(state, render->target_w);
+    lua_pushinteger(state, render->target_h);
+    return 4;
 }
 
 static int api_point_transform(lua_State* state) {
@@ -1555,7 +1560,9 @@ static struct ApiFuncTemplate bolt_functions[] = {
     BOLTFUNC(onrender2d),
     BOLTFUNC(onrender3d),
     BOLTFUNC(onrendericon),
-    BOLTFUNC(onminimap),
+    BOLTFUNC(onminimapterrain),
+    BOLTFUNC(onminimaprender2d),
+    BOLTFUNC(onrenderminimap),
     BOLTFUNC(onswapbuffers),
     BOLTFUNC(onmousemotion),
     BOLTFUNC(onmousebutton),
@@ -1590,7 +1597,6 @@ static struct ApiFuncTemplate bolt_functions[] = {
 static struct ApiFuncTemplate render2d_functions[] = {
     BOLTFUNC(vertexcount, batch2d),
     BOLTFUNC(verticesperimage, batch2d),
-    BOLTFUNC(isminimap, batch2d),
     BOLTFUNC(targetsize, batch2d),
     BOLTFUNC(vertexxy, batch2d),
     BOLTFUNC(vertexatlasdetails, batch2d),
@@ -1635,10 +1641,14 @@ static struct ApiFuncTemplate rendericon_functions[] = {
     BOLTALIAS(modelvertexcolour, modelvertexcolor, rendericon),
 };
 
-static struct ApiFuncTemplate minimap_functions[] = {
-    BOLTFUNC(angle, minimap),
-    BOLTFUNC(scale, minimap),
-    BOLTFUNC(position, minimap),
+static struct ApiFuncTemplate minimapterrain_functions[] = {
+    BOLTFUNC(angle, minimapterrain),
+    BOLTFUNC(scale, minimapterrain),
+    BOLTFUNC(position, minimapterrain),
+};
+
+static struct ApiFuncTemplate renderminimap_functions[] = {
+    BOLTFUNC(xywh, renderminimap),
 };
 
 static struct ApiFuncTemplate point_functions[] = {
@@ -1800,7 +1810,8 @@ void _bolt_api_push_metatable_##NAME(lua_State* state) { \
 DEFPUSHMETA(render2d)
 DEFPUSHMETA(render3d)
 DEFPUSHMETA(rendericon)
-DEFPUSHMETA(minimap)
+DEFPUSHMETA(minimapterrain)
+DEFPUSHMETA(renderminimap)
 DEFPUSHMETA(point)
 DEFPUSHMETA(transform)
 DEFPUSHMETAGC(buffer)

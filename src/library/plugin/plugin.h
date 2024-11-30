@@ -259,7 +259,6 @@ struct RenderBatch2D {
     uint32_t screen_height;
     uint32_t index_count;
     uint32_t vertices_per_icon;
-    uint8_t is_minimap;
     struct Vertex2DFunctions vertex_functions;
     struct TextureFunctions texture_functions;
 };
@@ -305,11 +304,18 @@ struct RenderItemIconEvent {
     uint16_t target_h;
 };
 
-struct RenderMinimapEvent {
+struct MinimapTerrainEvent {
     double angle;
     double scale;
     double x;
     double y;
+};
+
+struct RenderMinimapEvent {
+    int16_t target_x;
+    int16_t target_y;
+    uint16_t target_w;
+    uint16_t target_h;
 };
 
 struct SwapBuffersEvent {
@@ -391,16 +397,22 @@ void _bolt_plugin_shm_resize(struct BoltSHM* shm, size_t length, uint64_t new_id
 void _bolt_plugin_shm_remap(struct BoltSHM* shm, size_t length, void* handle);
 
 /// Sends a RenderBatch2D to all plugins.
-void _bolt_plugin_handle_render2d(struct RenderBatch2D*);
+void _bolt_plugin_handle_render2d(const struct RenderBatch2D*);
 
 /// Sends a Render3D to all plugins.
-void _bolt_plugin_handle_render3d(struct Render3D*);
+void _bolt_plugin_handle_render3d(const struct Render3D*);
 
 /// Sends a RenderItemIconEvent to all plugins.
-void _bolt_plugin_handle_rendericon(struct RenderItemIconEvent*);
+void _bolt_plugin_handle_rendericon(const struct RenderItemIconEvent*);
 
-/// Sends a RenderMinimap to all plugins.
-void _bolt_plugin_handle_minimap(struct RenderMinimapEvent*);
+/// Sends a MinimapTerrainEvent to all plugins.
+void _bolt_plugin_handle_minimapterrain(const struct MinimapTerrainEvent*);
+
+/// Sends a RenderBatch2D for the minimap image to all plugins.
+void _bolt_plugin_handle_minimaprender2d(const struct RenderBatch2D*);
+
+/// Sends a RenderMinimapEvent to all plugins.
+void _bolt_plugin_handle_renderminimap(const struct RenderMinimapEvent*);
 
 /// Gets the value from the monotonic microsecond counter, returning true on success or false on failure.
 /// Can only fail on Windows, and even then there are no known cases where it would fail.
