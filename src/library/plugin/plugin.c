@@ -1218,6 +1218,11 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin) {
 lua_pushliteral(plugin->state, #NAME "meta"); \
 _bolt_api_push_metatable_##NAME(plugin->state); \
 lua_settable(plugin->state, LUA_REGISTRYINDEX);
+#define DUPEMETA(NAME, NEWNAME) \
+lua_pushliteral(plugin->state, #NEWNAME "meta"); \
+lua_pushliteral(plugin->state, #NAME "meta"); \
+lua_gettable(plugin->state, LUA_REGISTRYINDEX); \
+lua_settable(plugin->state, LUA_REGISTRYINDEX);
     SETMETA(render2d)
     SETMETA(render3d)
     SETMETA(rendericon)
@@ -1236,11 +1241,10 @@ lua_settable(plugin->state, LUA_REGISTRYINDEX);
     SETMETA(mousebutton)
     SETMETA(scroll)
     SETMETA(mouseleave)
-    lua_pushliteral(plugin->state, "mousebuttonupmeta");
-    lua_pushliteral(plugin->state, "mousebuttonmeta");
-    lua_gettable(plugin->state, LUA_REGISTRYINDEX);
-    lua_settable(plugin->state, LUA_REGISTRYINDEX);
-#undef PUSHMETA
+    DUPEMETA(mousebutton, mousebuttonup)
+    DUPEMETA(render2d, minimaprender2d)
+#undef SETMETA
+#undef DUPEMETA
 
     // attempt to run the function
     if (lua_pcall(plugin->state, 0, 0, 0)) {
