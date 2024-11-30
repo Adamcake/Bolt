@@ -1389,6 +1389,7 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
         }
         struct GLTexture2D* tex = c->texture_units[diffuse_map];
         struct GLTexture2D* tex_target = _bolt_context_get_texture(c, draw_tex);
+        const uint8_t is_minimap2d_target = tex_target && tex_target->is_minimap_tex_small;
 
         if (tex->is_minimap_tex_small && count == 6) {
             const struct GLAttrBinding* binding = &attributes[c->bound_program->loc_aVertexPosition2D];
@@ -1468,7 +1469,7 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
                     _bolt_plugin_handle_minimapterrain(&render);
                 }
             }
-        } else if (c->current_draw_framebuffer == 0) {
+        } else if (c->current_draw_framebuffer == 0 || is_minimap2d_target) {
             struct GLPluginDrawElementsVertex2DUserData vertex_userdata;
             vertex_userdata.c = c;
             vertex_userdata.indices = indices;
@@ -1499,7 +1500,7 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
             batch.texture_functions.compare = _bolt_gl_plugin_texture_compare;
             batch.texture_functions.data = _bolt_gl_plugin_texture_data;
 
-            void (*handler)(const struct RenderBatch2D*) = tex_target && tex_target->is_minimap_tex_small ? _bolt_plugin_handle_minimaprender2d : _bolt_plugin_handle_render2d;
+            void (*handler)(const struct RenderBatch2D*) = is_minimap2d_target ? _bolt_plugin_handle_minimaprender2d : _bolt_plugin_handle_render2d;
 
             if (tex->icons) {
                 size_t batch_start = 0;
