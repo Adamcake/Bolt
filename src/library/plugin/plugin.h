@@ -16,6 +16,8 @@ struct lua_State;
 #define GRAB_TYPE_START 1
 #define GRAB_TYPE_STOP 2
 
+#define MAX_MODELS_PER_ICON 8
+
 // a currently-running plugin.
 // note "path" is not null-terminated, and must always be converted to use '/' as path-separators
 // and must always end with a trailing separator by the time it's received by this process.
@@ -270,6 +272,39 @@ struct Render3D {
     struct Render3DMatrixFunctions matrix_functions;
 };
 
+struct ItemIconVertex {
+    struct Point3D point;
+    uint16_t bone_id;
+    float rgba[4];
+};
+
+struct ItemIconModel {
+    uint32_t vertex_count;
+    struct ItemIconVertex* vertices;
+    struct Transform3D view_matrix;
+    struct Transform3D projection_matrix;
+    struct Transform3D viewproj_matrix;
+};
+
+struct ItemIcon {
+    uint16_t x;
+    uint16_t y;
+    uint16_t w;
+    uint16_t h;
+    uint8_t model_count;
+    struct ItemIconModel models[MAX_MODELS_PER_ICON];
+};
+int _bolt_plugin_itemicon_compare(const void* a, const void* b, void* udata);
+uint64_t _bolt_plugin_itemicon_hash(const void* item, uint64_t seed0, uint64_t seed1);
+
+struct RenderItemIconEvent {
+    const struct ItemIcon* icon;
+    uint16_t target_x;
+    uint16_t target_y;
+    uint16_t target_w;
+    uint16_t target_h;
+};
+
 struct RenderMinimapEvent {
     double angle;
     double scale;
@@ -360,6 +395,9 @@ void _bolt_plugin_handle_render2d(struct RenderBatch2D*);
 
 /// Sends a Render3D to all plugins.
 void _bolt_plugin_handle_render3d(struct Render3D*);
+
+/// Sends a RenderItemIconEvent to all plugins.
+void _bolt_plugin_handle_rendericon(struct RenderItemIconEvent*);
 
 /// Sends a RenderMinimap to all plugins.
 void _bolt_plugin_handle_minimap(struct RenderMinimapEvent*);

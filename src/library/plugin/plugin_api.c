@@ -174,6 +174,7 @@ static int api_buffer_set##FNAME(lua_State* state) { \
 DEFINE_CALLBACK(swapbuffers)
 DEFINE_CALLBACK(render2d)
 DEFINE_CALLBACK(render3d)
+DEFINE_CALLBACK(rendericon)
 DEFINE_CALLBACK(minimap)
 DEFINE_CALLBACK(mousemotion)
 DEFINE_CALLBACK(mousebutton)
@@ -1051,8 +1052,8 @@ static int api_render3d_vertexcount(lua_State* state) {
     return 1;
 }
 
-static int api_render3d_vertexxyz(lua_State* state) {
-    const struct Render3D* render = require_self_userdata(state, "vertexxyz");
+static int api_render3d_vertexpoint(lua_State* state) {
+    const struct Render3D* render = require_self_userdata(state, "vertexpoint");
     const lua_Integer index = lua_tointeger(state, 2);
     struct Point3D* point = lua_newuserdata(state, sizeof(struct Point3D));
     render->vertex_functions.xyz(index - 1, render->vertex_functions.userdata, point);
@@ -1196,6 +1197,79 @@ static int api_render3d_vertexanimation(lua_State* state) {
 static int api_render3d_animated(lua_State* state) {
     const struct Render3D* render = require_self_userdata(state, "animated");
     lua_pushboolean(state, render->is_animated);
+    return 1;
+}
+
+static int api_rendericon_xywh(lua_State* state) {
+    const struct RenderItemIconEvent* event = require_self_userdata(state, "xywh");
+    lua_pushinteger(state, event->target_x);
+    lua_pushinteger(state, event->target_y);
+    lua_pushinteger(state, event->target_w);
+    lua_pushinteger(state, event->target_h);
+    return 4;
+}
+
+static int api_rendericon_modelcount(lua_State* state) {
+    const struct RenderItemIconEvent* event = require_self_userdata(state, "modelcount");
+    lua_pushinteger(state, event->icon->model_count);
+    return 1;
+}
+
+static int api_rendericon_modelvertexcount(lua_State* state) {
+    const struct RenderItemIconEvent* event = require_self_userdata(state, "modelvertexcount");
+    const size_t model = luaL_checkinteger(state, 2);
+    lua_pushinteger(state, event->icon->models[model - 1].vertex_count);
+    return 1;
+}
+
+static int api_rendericon_modelvertexpoint(lua_State* state) {
+    const struct RenderItemIconEvent* event = require_self_userdata(state, "modelvertexpoint");
+    const size_t model = luaL_checkinteger(state, 2);
+    const size_t vertex = luaL_checkinteger(state, 3);
+    struct Point3D* point = lua_newuserdata(state, sizeof(struct Point3D));
+    *point = event->icon->models[model - 1].vertices[vertex - 1].point;
+    lua_getfield(state, LUA_REGISTRYINDEX, "pointmeta");
+    lua_setmetatable(state, -2);
+    return 1;
+}
+
+static int api_rendericon_modelvertexcolour(lua_State* state) {
+    const struct RenderItemIconEvent* event = require_self_userdata(state, "modelvertexpoint");
+    const size_t model = luaL_checkinteger(state, 2);
+    const size_t vertex = luaL_checkinteger(state, 3);
+    for (size_t i = 0; i < 4; i += 1) {
+        lua_pushnumber(state, event->icon->models[model - 1].vertices[vertex - 1].rgba[i]);
+    }
+    return 4;
+}
+
+static int api_rendericon_modelviewmatrix(lua_State* state) {
+    const struct RenderItemIconEvent* event = require_self_userdata(state, "modelviewmatrix");
+    const size_t model = luaL_checkinteger(state, 2);
+    struct Transform3D* transform = lua_newuserdata(state, sizeof(struct Transform3D));
+    *transform = event->icon->models[model - 1].view_matrix;
+    lua_getfield(state, LUA_REGISTRYINDEX, "transformmeta");
+    lua_setmetatable(state, -2);
+    return 1;
+}
+
+static int api_rendericon_modelprojectionmatrix(lua_State* state) {
+    const struct RenderItemIconEvent* event = require_self_userdata(state, "modelprojectionmatrix");
+    const size_t model = luaL_checkinteger(state, 2);
+    struct Transform3D* transform = lua_newuserdata(state, sizeof(struct Transform3D));
+    *transform = event->icon->models[model - 1].projection_matrix;
+    lua_getfield(state, LUA_REGISTRYINDEX, "transformmeta");
+    lua_setmetatable(state, -2);
+    return 1;
+}
+
+static int api_rendericon_modelviewprojmatrix(lua_State* state) {
+    const struct RenderItemIconEvent* event = require_self_userdata(state, "modelviewprojmatrix");
+    const size_t model = luaL_checkinteger(state, 2);
+    struct Transform3D* transform = lua_newuserdata(state, sizeof(struct Transform3D));
+    *transform = event->icon->models[model - 1].viewproj_matrix;
+    lua_getfield(state, LUA_REGISTRYINDEX, "transformmeta");
+    lua_setmetatable(state, -2);
     return 1;
 }
 
@@ -1480,6 +1554,7 @@ static struct ApiFuncTemplate bolt_functions[] = {
 
     BOLTFUNC(onrender2d),
     BOLTFUNC(onrender3d),
+    BOLTFUNC(onrendericon),
     BOLTFUNC(onminimap),
     BOLTFUNC(onswapbuffers),
     BOLTFUNC(onmousemotion),
@@ -1530,7 +1605,7 @@ static struct ApiFuncTemplate render2d_functions[] = {
 
 static struct ApiFuncTemplate render3d_functions[] = {
     BOLTFUNC(vertexcount, render3d),
-    BOLTFUNC(vertexxyz, render3d),
+    BOLTFUNC(vertexpoint, render3d),
     BOLTFUNC(modelmatrix, render3d),
     BOLTFUNC(viewmatrix, render3d),
     BOLTFUNC(projectionmatrix, render3d),
@@ -1546,6 +1621,18 @@ static struct ApiFuncTemplate render3d_functions[] = {
     BOLTFUNC(vertexanimation, render3d),
     BOLTFUNC(animated, render3d),
     BOLTALIAS(vertexcolour, vertexcolor, render3d),
+};
+
+static struct ApiFuncTemplate rendericon_functions[] = {
+    BOLTFUNC(xywh, rendericon),
+    BOLTFUNC(modelcount, rendericon),
+    BOLTFUNC(modelvertexcount, rendericon),
+    BOLTFUNC(modelvertexpoint, rendericon),
+    BOLTFUNC(modelvertexcolour, rendericon),
+    BOLTFUNC(modelviewmatrix, rendericon),
+    BOLTFUNC(modelprojectionmatrix, rendericon),
+    BOLTFUNC(modelviewprojmatrix, rendericon),
+    BOLTALIAS(modelvertexcolour, modelvertexcolor, rendericon),
 };
 
 static struct ApiFuncTemplate minimap_functions[] = {
@@ -1712,6 +1799,7 @@ void _bolt_api_push_metatable_##NAME(lua_State* state) { \
 
 DEFPUSHMETA(render2d)
 DEFPUSHMETA(render3d)
+DEFPUSHMETA(rendericon)
 DEFPUSHMETA(minimap)
 DEFPUSHMETA(point)
 DEFPUSHMETA(transform)

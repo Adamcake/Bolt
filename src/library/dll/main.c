@@ -51,6 +51,7 @@ static void hook_glTexSubImage2D(GLenum, GLint, GLint, GLint, GLsizei, GLsizei, 
 static void hook_glDeleteTextures(GLsizei, const GLuint*);
 static void hook_glClear(GLbitfield);
 static void hook_glViewport(GLint, GLint, GLsizei, GLsizei);
+static void hook_glTexParameteri(GLenum, GLenum, GLint);
 
 static HGLRC __stdcall hook_wglCreateContextAttribsARB(HDC, HGLRC, const int*);
 
@@ -105,7 +106,7 @@ DWORD __stdcall BOLT_STUB_ENTRYNAME(struct PluginInjectParams* data) {
     libgl.GenTextures = (void(*)(GLsizei, GLuint*))data->pGetProcAddress(libgl_module, "glGenTextures");
     libgl.GetError = (GLenum(*)(void))data->pGetProcAddress(libgl_module, "glGetError");
     libgl.ReadPixels = (void(*)(GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, void*))data->pGetProcAddress(libgl_module, "glReadPixels");
-    libgl.TexParameteri = (void(*)(GLenum, GLenum, GLfloat))data->pGetProcAddress(libgl_module, "glTexParameteri");
+    libgl.TexParameteri = (void(*)(GLenum, GLenum, GLint))data->pGetProcAddress(libgl_module, "glTexParameteri");
     libgl.TexSubImage2D = (void(*)(GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, const void*))data->pGetProcAddress(libgl_module, "glTexSubImage2D");
     libgl.Viewport = (void(*)(GLint, GLint, GLsizei, GLsizei))data->pGetProcAddress(libgl_module, "glViewport");
 
@@ -135,6 +136,7 @@ DWORD __stdcall BOLT_STUB_ENTRYNAME(struct PluginInjectParams* data) {
                     FNHOOK(glDrawArrays)
                     FNHOOK(glTexSubImage2D)
                     FNHOOK(glDeleteTextures)
+                    FNHOOK(glTexParameteri)
                     FNHOOK(glClear)
                     FNHOOK(glViewport)
                 }
@@ -386,6 +388,13 @@ static void hook_glDeleteTextures(GLsizei n, const GLuint* textures) {
     libgl.DeleteTextures(n, textures);
     _bolt_gl_onDeleteTextures(n, textures);
     LOG("glDeleteTextures end\n");
+}
+
+static void hook_glTexParameteri(GLenum target, GLenum pname, GLint param) {
+    LOG("glTexParameteri\n");
+    libgl.TexParameteri(target, pname, param);
+    _bolt_gl_onTexParameteri(target, pname, param);
+    LOG("glTexParameteri end\n");
 }
 
 static void hook_glClear(GLbitfield mask) {

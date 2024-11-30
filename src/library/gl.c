@@ -138,6 +138,7 @@ static void _bolt_gl_plugin_game_view_rect(int* x, int* y, int* w, int* h);
 #define VAO_LIST_CAPACITY 256 * 256
 #define CONTEXTS_CAPACITY 64 // not growable so we just have to hard-code a number and hope it's enough forever
 #define GAME_MINIMAP_BIG_SIZE 2048
+#define GAME_ITEM_ICON_SIZE 64
 static struct GLContext contexts[CONTEXTS_CAPACITY];
 
 // since GL contexts are bound only to the thread that binds them, we use thread-local storage (TLS)
@@ -824,9 +825,11 @@ static void _bolt_glTexStorage2D(GLenum target, GLsizei levels, GLenum internalf
     if (target == GL_TEXTURE_2D) {
         struct GLTexture2D* tex = c->texture_units[c->active_texture];
         free(tex->data);
-        tex->data = malloc(width * height * 4);
+        tex->data = calloc(width * height * 4, sizeof(*tex->data));
+        tex->internalformat = internalformat;
         tex->width = width;
         tex->height = height;
+        tex->icon.model_count = 0;
     }
     LOG("glTexStorage2D end\n");
 }
@@ -1042,14 +1045,29 @@ static void _bolt_glCopyImageSubData(
     gl.CopyImageSubData(srcName, srcTarget, srcLevel, srcX, srcY, srcZ, dstName, dstTarget, dstLevel, dstX, dstY, dstZ, srcWidth, srcHeight, srcDepth);
     struct GLContext* c = _bolt_context();
     if (srcTarget == GL_TEXTURE_2D && dstTarget == GL_TEXTURE_2D && srcLevel == 0 && dstLevel == 0) {
-        const struct GLTexture2D* src = _bolt_context_get_texture(c, srcName);
-        const struct GLTexture2D* dst = _bolt_context_get_texture(c, dstName);
+        struct GLTexture2D* src = _bolt_context_get_texture(c, srcName);
+        struct GLTexture2D* dst = _bolt_context_get_texture(c, dstName);
         if (!c->does_blit_3d_target && c->depth_of_field_enabled && dst->id == c->depth_of_field_sSourceTex) {
             if (srcX == 0 && srcY == 0 && dstX == 0 && dstY == 0 && src->width == dst->width && src->height == dst->height && src->width == srcWidth && src->height == srcHeight) {
                 printf("copy to depth-of-field tex from tex %i\n", src->id);
                 c->does_blit_3d_target = true;
                 c->target_3d_tex = src->id;
             }
+        } else if (src->icon.model_count && dst->width > GAME_ITEM_ICON_SIZE && dst->height > GAME_ITEM_ICON_SIZE) {
+            if (!dst->icons) {
+                dst->icons = hashmap_new(sizeof(struct ItemIcon), 256, 0, 0, _bolt_plugin_itemicon_hash, _bolt_plugin_itemicon_compare, NULL, NULL);
+            }
+            src->icon.x = dstX;
+            src->icon.y = dstY;
+            src->icon.w = srcWidth;
+            src->icon.h = srcHeight;
+            const struct ItemIcon* old_icon = hashmap_set(dst->icons, &src->icon);
+            if (old_icon) {
+                for (size_t i = 0; i < old_icon->model_count; i += 1) {
+                    free(old_icon->models[i].vertices);
+                }
+            }
+            src->icon.model_count = 0;
         } else if (src->id != c->target_3d_tex) {
             for (GLsizei i = 0; i < srcHeight; i += 1) {
                 memcpy(dst->data + (dstY * dst->width * 4) + (dstX * 4), src->data + (srcY * src->width * 4) + (srcX * 4), srcWidth * 4);
@@ -1343,6 +1361,9 @@ void _bolt_gl_onGenTextures(GLsizei n, GLuint* textures) {
     for (GLsizei i = 0; i < n; i += 1) {
         struct GLTexture2D* tex = calloc(1, sizeof(struct GLTexture2D));
         tex->id = textures[i];
+        tex->internalformat = -1;
+        tex->compare_mode = -1;
+        tex->icons = NULL;
         tex->is_minimap_tex_big = 0;
         tex->is_minimap_tex_small = 0;
         hashmap_set(c->textures->map, &tex);
@@ -1434,11 +1455,11 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
                     _bolt_plugin_handle_minimap(&render);
                 }
             }
-        } else {
+        } else if (c->current_draw_framebuffer == 0) {
             struct GLPluginDrawElementsVertex2DUserData vertex_userdata;
             vertex_userdata.c = c;
-            vertex_userdata.indices = (unsigned short*)((uint8_t*)element_buffer->data + (uintptr_t)indices_offset);
-            vertex_userdata.atlas = c->texture_units[diffuse_map];
+            vertex_userdata.indices = indices;
+            vertex_userdata.atlas = tex;
             vertex_userdata.position = &attributes[c->bound_program->loc_aVertexPosition2D];
             vertex_userdata.atlas_min = &attributes[c->bound_program->loc_aTextureUVAtlasMin];
             vertex_userdata.atlas_size = &attributes[c->bound_program->loc_aTextureUVAtlasExtents];
@@ -1465,7 +1486,49 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
             batch.texture_functions.size = _bolt_gl_plugin_texture_size;
             batch.texture_functions.compare = _bolt_gl_plugin_texture_compare;
             batch.texture_functions.data = _bolt_gl_plugin_texture_data;
-            _bolt_plugin_handle_render2d(&batch);
+
+            if (tex->icons) {
+                size_t batch_start = 0;
+                for (size_t i = 0; i < count; i += batch.vertices_per_icon) {
+                    float xy[2];
+                    float wh[2];
+                    _bolt_get_attr_binding(c, vertex_userdata.atlas_min, indices[i], 2, xy);
+                    _bolt_get_attr_binding(c, vertex_userdata.atlas_size, indices[i], 2, wh);
+                    const struct ItemIcon dummy_icon = {
+                        .x = (uint16_t)roundf(xy[0] * tex->width),
+                        .y = (uint16_t)roundf(xy[1] * tex->height),
+                        .w = (uint16_t)roundf(fabs(wh[0]) * tex->width),
+                        .h = (uint16_t)roundf(fabs(wh[1]) * tex->height),
+                    };
+                    const struct ItemIcon* icon = hashmap_get(tex->icons, &dummy_icon);
+                    if (icon) {
+                        batch.index_count = i - batch_start;
+                        if (batch.index_count) {
+                            vertex_userdata.indices = indices + batch_start;
+                            _bolt_plugin_handle_render2d(&batch);
+                        }
+                        int32_t xy0[2];
+                        int32_t xy2[2];
+                        _bolt_get_attr_binding_int(c, vertex_userdata.position, i, 2, xy0);
+                        _bolt_get_attr_binding_int(c, vertex_userdata.position, i + 2, 2, xy2);
+                        struct RenderItemIconEvent event;
+                        event.icon = icon;
+                        event.target_x = (int16_t)xy0[0];
+                        event.target_y = (int16_t)(batch.screen_height - xy0[1]);
+                        event.target_w = xy2[0] - xy0[0];
+                        event.target_h = xy0[1] - xy2[1];
+                        _bolt_plugin_handle_rendericon(&event);
+                        batch_start = i + batch.vertices_per_icon;
+                    }
+                }
+                if (batch_start < count) {
+                    batch.index_count = count - batch_start;
+                    vertex_userdata.indices = indices + batch_start;
+                    _bolt_plugin_handle_render2d(&batch);
+                }
+            } else {
+                _bolt_plugin_handle_render2d(&batch);
+            }
         }
     }
     if (type == GL_UNSIGNED_SHORT && mode == GL_TRIANGLES && c->bound_program->is_3d) {
@@ -1486,7 +1549,7 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
 
             struct GLPluginDrawElementsVertex3DUserData vertex_userdata;
             vertex_userdata.c = c;
-            vertex_userdata.indices = (unsigned short*)((uint8_t*)element_buffer->data + (uintptr_t)indices_offset);
+            vertex_userdata.indices = indices;
             vertex_userdata.atlas_scale = roundf(atlas_meta[1]);
             vertex_userdata.atlas = tex;
             vertex_userdata.settings_atlas = tex_settings;
@@ -1529,6 +1592,30 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
             render.matrix_functions.viewproj_matrix = _bolt_gl_plugin_matrix3d_viewproj;
 
             _bolt_plugin_handle_render3d(&render);
+        } else {
+            struct GLTexture2D* tex = _bolt_context_get_texture(c, draw_tex);
+            if (tex && tex->compare_mode == GL_NONE && tex->internalformat == GL_RGBA8 && tex->width == GAME_ITEM_ICON_SIZE && tex->height == GAME_ITEM_ICON_SIZE && tex->icon.model_count < MAX_MODELS_PER_ICON) {
+                struct ItemIconModel* model = &tex->icon.models[tex->icon.model_count];
+                tex->icon.model_count += 1;
+                GLfloat model_matrix[16];
+                GLint ubo_binding, ubo_view_index;
+                gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ViewTransforms, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
+                gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_view_index);
+                const uint8_t* ubo_view_buf = (uint8_t*)_bolt_context_get_buffer(c, ubo_view_index)->data;
+                gl.GetUniformfv(c->bound_program->id, c->bound_program->loc_uModelMatrix, model_matrix);
+                for (size_t i = 0; i < 16; i += 1) {
+                    model->view_matrix.matrix[i] = (double)*(float*)(ubo_view_buf + c->bound_program->offset_uViewMatrix);
+                    model->projection_matrix.matrix[i] = (double)*(float*)(ubo_view_buf + c->bound_program->offset_uProjectionMatrix);
+                    model->viewproj_matrix.matrix[i] = (double)*(float*)(ubo_view_buf + c->bound_program->offset_uViewProjMatrix);
+                }
+                model->vertex_count = count;
+                model->vertices = malloc(sizeof(*model->vertices) * count);
+                for (size_t i = 0; i < count; i += 1) {
+                    _bolt_get_attr_binding_int(c, &attributes[c->bound_program->loc_aVertexPosition_BoneLabel], indices[i], 4, model->vertices[i].point.xyzh.ints);
+                    _bolt_get_attr_binding(c, &attributes[c->bound_program->loc_aVertexColour], indices[i], 4, model->vertices[i].rgba);
+                    model->vertices[i].point.integer = true;
+                }
+            }
         }
     }
 }
@@ -1659,6 +1746,20 @@ void _bolt_gl_onDeleteTextures(GLsizei n, const GLuint* textures) {
         const GLuint* ptr = &textures[i];
         struct GLTexture2D* const* texture = hashmap_delete(c->textures->map, &ptr);
         free((*texture)->data);
+        if ((*texture)->icons) {
+            size_t iter = 0;
+            void* item;
+            while (hashmap_iter((*texture)->icons, &iter, &item)) {
+                const struct ItemIcon* icon = (struct ItemIcon*)item;
+                for (size_t i = 0; i < icon->model_count; i += 1) {
+                    free(icon->models[i].vertices);
+                }
+            }
+            hashmap_free((*texture)->icons);
+        }
+        for (size_t i = 0; i < (*texture)->icon.model_count; i += 1) {
+            free((*texture)->icon.models[i].vertices);
+        }
         free(*texture);
     }
     _bolt_rwlock_unlock_write(&c->textures->rwlock);
@@ -1672,6 +1773,10 @@ void _bolt_gl_onClear(GLbitfield mask) {
         struct GLTexture2D* tex = _bolt_context_get_texture(c, draw_tex);
         if (tex) {
             tex->is_minimap_tex_big = 0;
+            for (size_t i = 0; i < tex->icon.model_count; i += 1) {
+                free(tex->icon.models[i].vertices);
+            }
+            tex->icon.model_count = 0;
         }
     }
 }
@@ -1682,6 +1787,14 @@ void _bolt_gl_onViewport(GLint x, GLint y, GLsizei width, GLsizei height) {
     c->viewport_y = y;
     c->viewport_w = width;
     c->viewport_h = height;
+}
+
+void _bolt_gl_onTexParameteri(GLenum target, GLenum pname, GLint param) {
+    if (target == GL_TEXTURE_2D && pname == GL_TEXTURE_COMPARE_MODE) {
+        struct GLContext* c = _bolt_context();
+        struct GLTexture2D* tex = c->texture_units[c->active_texture];
+        tex->compare_mode = param;
+    }
 }
 
 static void _bolt_gl_plugin_drawelements_vertex2d_xy(size_t index, void* userdata, int32_t* out) {
@@ -1739,10 +1852,10 @@ static void _bolt_gl_plugin_drawelements_vertex3d_xyz(size_t index, void* userda
     if (!_bolt_get_attr_binding_int(data->c, data->xyz_bone, data->indices[index], 3, out->xyzh.ints)) {
         float pos[3];
         _bolt_get_attr_binding(data->c, data->xyz_bone, data->indices[index], 3, pos);
-        out->xyzh.ints[0] = (double)pos[0];
-        out->xyzh.ints[1] = (double)pos[1];
-        out->xyzh.ints[2] = (double)pos[2];
-        out->xyzh.ints[3] = 1.0;
+        out->xyzh.floats[0] = (double)pos[0];
+        out->xyzh.floats[1] = (double)pos[1];
+        out->xyzh.floats[2] = (double)pos[2];
+        out->xyzh.floats[3] = 1.0;
         out->integer = false;
     }
 }

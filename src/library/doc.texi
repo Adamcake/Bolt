@@ -566,6 +566,26 @@ end)
 It's @strong{not safe} to use an event object after the event handler
 has returned.
 
+@node functions-onrendericon
+@section onrendericon
+
+Sets an event handler for item icon render events. The function will
+overwrite any previous event handler, or, if it's not a function, then
+any previous event handler will be deleted. See
+@ref{objects-renderitemicon,, Render Item Icon Event} for documentation
+on this event object.
+
+@example lua
+@verbatim
+bolt.onrendericon(function (event)
+  -- ...
+end)
+@end verbatim
+@end example
+
+It's @strong{not safe} to use an event object after the event handler
+has returned.
+
 @node functions-onminimap
 @section onminimap
 
@@ -2039,15 +2059,16 @@ vertex coordinates and texture data can be queried, along with its
 animation data if the model is animated.
 
 Bolt has a complex set of functions for doing calculations with 3D space
-data. Render3D's @ref{render3d-vertexxyz,,vertexxyz} function returns
-static model data which will always be the same for two instances of the
-same model even if they're placed differently, scaled or rotated
-differently, doing different animations, etc. To get the model's
-position in world space, use @ref{render3d-modelmatrix,,modelmatrix}:
+data. Render3D's @ref{render3d-vertexpoint,,vertexpoint} function
+returns static model data which will always be the same for two
+instances of the same model even if they're placed differently, scaled
+or rotated differently, doing different animations, etc. To get the
+model's position in world space, use @ref{render3d-modelmatrix,,
+modelmatrix}:
 
 @example lua
 @verbatim
-local modelpoint = myevent:vertexxyz(1)
+local modelpoint = myevent:vertexpoint(1)
 local worldpoint = modelpoint:transform(myevent:modelmatrix())
 @end verbatim
 @end example
@@ -2072,7 +2093,7 @@ must be applied before any of the other transforms.
 
 @example lua
 @verbatim
-local modelpoint = myevent:vertexxyz(1)
+local modelpoint = myevent:vertexpoint(1)
 local animatedpoint = modelpoint:transform(myevent:vertexanimation(1))
 local worldpoint = animatedpoint:transform(myevent:modelmatrix())
 @end verbatim
@@ -2117,8 +2138,8 @@ local count = event:vertexcount()
 @end verbatim
 @end example
 
-@node render3d-vertexxyz
-@subsection vertexxyz
+@node render3d-vertexpoint
+@subsection vertexpoint
 
 Given a vertex number, returns a @ref{objects-point,,Point object}
 representing the vertex's model coordinates, according to the static
@@ -2126,7 +2147,7 @@ model data.
 
 @example lua
 @verbatim
-local modelpoint = event:vertexxyz(1)
+local modelpoint = event:vertexpoint(1)
 @end verbatim
 @end example
 
@@ -2140,7 +2161,7 @@ points from model coordinates into world coordinates.
 @example lua
 @verbatim
 local modelmatrix = event:modelmatrix()
-local modelpoint = event:vertexxyz(1)
+local modelpoint = event:vertexpoint(1)
 local worldpoint = modelpoint:transform(modelmatrix)
 @end verbatim
 @end example
@@ -2319,6 +2340,162 @@ end
 @end verbatim
 @end example
 
+@node objects-renderitemicon
+@section Render Item Icon Event
+
+A render-item-icon event comes from @ref{functions-onrendericon}. It
+occurs when an item icon is rendered to the game view. Item icons refer
+to items appearing in the UI, such as the player's inventory, equipment
+screen, or action bar slots. These appear to be 2D images but in reality
+they're "snapshots" of the item's 3D models, which can make them very
+difficult to work with compared to a normal 2D image. Bolt attempts to
+simplify this by storing some of the details of the models rendered at
+the time when the icon is created, and allows plugins to query this
+stored data. However this means that some data is missing compared to
+a Render3D event; most notably, the texture data is currently not saved.
+
+An icon may contain any number of models, and each vertex in each model
+may be queried using the functions of this event.
+
+@example lua
+@verbatim
+bolt.onrendericon(function (event)
+  for model = 1, event:modelcount() do
+    for vertex = 1, event:modelvertexcount(model) do
+      let point = event:modelvertexpoint(model, vertex)
+      -- ...
+    end
+  end
+end)
+@end verbatim
+@end example
+
+The view and projection matrix used when pre-rendering the item can also
+be queried for each model. There's no model matrix for this process, so
+the model coordinates are treated as if they were the world coordinates.
+Some items, especially most weapons' off-hand variants, use the same
+item model viewed from a different camera angle, which means the only
+way to differentiate between them is to @ref{transform-decompose} the
+view matrix.
+
+It's @strong{not safe} to use an event object after the event handler
+has returned.
+
+@node renderitemicon-xywh
+@subsection xywh
+
+Returns the x, y, width and height of where this icon is being drawn on
+the screen, in pixel coordinates. The X and Y are relative to the
+top-left pixel of the inner area of the window.
+
+@example lua
+@verbatim
+local x, y, width, height = event:xywh()
+@end verbatim
+@end example
+
+@node renderitemicon-modelcount
+@subsection modelcount
+
+Returns the number of 3D models that were rendered to this icon.
+
+@example lua
+@verbatim
+for model = 1, event:modelcount() do
+  -- ...
+end
+@end verbatim
+@end example
+
+@node renderitemicon-modelvertexcount
+@subsection modelvertexcount
+
+Given a model index, returns the number of vertices in that model.
+
+@example lua
+@verbatim
+for model = 1, event:modelcount() do
+  for vertex = 1, event:modelvertexcount(model) do
+    -- ...
+  end
+end
+@end verbatim
+@end example
+
+@node renderitemicon-modelvertexpoint
+@subsection modelvertexpoint
+
+Given a model number and vertex number, returns a @ref{objects-point}
+representing the vertex's model coordinates.
+
+@example lua
+@verbatim
+local point = event:modelvertexpoint(model, vertex)
+@end verbatim
+@end example
+
+@node renderitemicon-modelvertexcolour
+@subsection modelvertexcolour
+
+Given a model number and a vertex number, returns the red, green, blue
+and alpha values for that vertex, in that order. All four values will be
+floating-point numbers in the range 0.0 - 1.0.
+
+These values are multiplied with the texture, so values less than 1.0
+will darken the texture (or make it more transparent in the case of the
+alpha channel). A common use for this is to draw differently "tinted"
+versions of the same model using the same texture.
+
+@example lua
+@verbatim
+local red, green, blue, alpha = event:modelvertexcolour(model, vertex)
+@end verbatim
+@end example
+
+@node renderitemicon-modelvertexcolor
+@subsection modelvertexcolor
+
+Alias for @ref{renderitemicon-modelvertexcolour}
+
+@node renderitemicon-modelviewmatrix
+@subsection modelviewmatrix
+
+Given a model number, returns a @ref{objects-transform} representing the
+view matrix that was used to render it.
+
+@example lua
+@verbatim
+local viewmatrix = event:modelviewmatrix(model)
+@end verbatim
+@end example
+
+@node renderitemicon-modelprojectionmatrix
+@subsection modelprojectionmatrix
+
+Given a model number, returns a @ref{objects-transform} representing the
+projection matrix that was used to render it.
+
+@example lua
+@verbatim
+local projmatrix = event:modelprojectionmatrix(model)
+@end verbatim
+@end example
+
+@node renderitemicon-modelviewprojmatrix
+@subsection modelviewprojmatrix
+
+Given a model number, returns a @ref{objects-transform} representing the
+combined view and projection matrices, commonly called the "viewproj
+matrix", that was used to render that model. These are pre-multiplied
+in the shader, so using the viewproj matrix is more efficient than using
+the view and projection matrices separately.
+
+@example lua
+@verbatim
+local viewprojmatrix = event:modelviewprojmatrix(model)
+@end verbatim
+@end example
+
 @node objects-minimap
 @section Minimap Event
 
@@ -2393,7 +2570,7 @@ has returned.
 Returns the new x, y, width and height that the window was repositioned
 to.
 
-@example
+@example lua
 @verbatim
 local newx, newy, newwidth, newheight = event:xywh()
 @end verbatim
@@ -2405,7 +2582,7 @@ local newx, newy, newwidth, newheight = event:xywh()
 Returns a boolean value indicating whether the window changed size. If
 true, the contents of the window were cleared and need to be redrawn.
 
-@example
+@example lua
 @verbatim
 if event:didresize() then
   -- re-draw something to the window
@@ -2433,7 +2610,7 @@ has returned.
 Returns the x and y for this mouse event in pixels, relative to the
 top-left of the window that it relates to.
 
-@example
+@example lua
 @verbatim
 local x, y = event:xy()
 @end verbatim
@@ -2445,7 +2622,7 @@ local x, y = event:xy()
 Returns a boolean value indicating whether @code{ctrl} was held when
 this event was fired.
 
-@example
+@example lua
 @verbatim
 local ctrl = event:ctrl()
 @end verbatim
@@ -2457,7 +2634,7 @@ local ctrl = event:ctrl()
 Returns a boolean value indicating whether @code{shift} was held when
 this event was fired.
 
-@example
+@example lua
 @verbatim
 local shift = event:shift()
 @end verbatim
@@ -2470,7 +2647,7 @@ Returns a boolean value indicating whether the meta key (also known as
 super, command, or the "windows key") was held when this event was
 fired.
 
-@example
+@example lua
 @verbatim
 local meta = event:meta()
 @end verbatim
@@ -2482,7 +2659,7 @@ local meta = event:meta()
 Returns a boolean value indicating whether @code{alt} was held when this
 event was fired.
 
-@example
+@example lua
 @verbatim
 local alt = event:alt()
 @end verbatim
@@ -2494,7 +2671,7 @@ local alt = event:alt()
 Returns a boolean value indicating whether caps lock was on when this
 event was fired.
 
-@example
+@example lua
 @verbatim
 local capslock = event:capslock()
 @end verbatim
@@ -2506,7 +2683,7 @@ local capslock = event:capslock()
 Returns a boolean value indicating whether numlock was on when this
 event was fired.
 
-@example
+@example lua
 @verbatim
 local numlock = event:numlock()
 @end verbatim
@@ -2519,7 +2696,7 @@ Returns three boolean values indicating whether each primary mouse
 button was held when this event fired, in the order: left, right,
 middle.
 
-@example
+@example lua
 @verbatim
 local lmb, rmb, mmb = event:buttons()
 @end verbatim
@@ -2548,7 +2725,7 @@ has returned.
 Returns the x and y for this mouse event in pixels, relative to the
 top-left of the window that it relates to.
 
-@example
+@example lua
 @verbatim
 local x, y = event:xy()
 @end verbatim
@@ -2560,7 +2737,7 @@ local x, y = event:xy()
 Returns a boolean value indicating whether @code{ctrl} was held when
 this event was fired.
 
-@example
+@example lua
 @verbatim
 local ctrl = event:ctrl()
 @end verbatim
@@ -2572,7 +2749,7 @@ local ctrl = event:ctrl()
 Returns a boolean value indicating whether @code{shift} was held when
 this event was fired.
 
-@example
+@example lua
 @verbatim
 local shift = event:shift()
 @end verbatim
@@ -2585,7 +2762,7 @@ Returns a boolean value indicating whether the meta key (also known as
 super, command, or the "windows key") was held when this event was
 fired.
 
-@example
+@example lua
 @verbatim
 local meta = event:meta()
 @end verbatim
@@ -2597,7 +2774,7 @@ local meta = event:meta()
 Returns a boolean value indicating whether @code{alt} was held when this
 event was fired.
 
-@example
+@example lua
 @verbatim
 local alt = event:alt()
 @end verbatim
@@ -2609,7 +2786,7 @@ local alt = event:alt()
 Returns a boolean value indicating whether caps lock was on when this
 event was fired.
 
-@example
+@example lua
 @verbatim
 local capslock = event:capslock()
 @end verbatim
@@ -2621,7 +2798,7 @@ local capslock = event:capslock()
 Returns a boolean value indicating whether numlock was on when this
 event was fired.
 
-@example
+@example lua
 @verbatim
 local numlock = event:numlock()
 @end verbatim
@@ -2634,7 +2811,7 @@ Returns three boolean values indicating whether each primary mouse
 button was held when this event fired, in the order: left, right,
 middle.
 
-@example
+@example lua
 @verbatim
 local lmb, rmb, mmb = event:buttons()
 @end verbatim
@@ -2664,7 +2841,7 @@ has returned.
 Returns the x and y for this mouse event in pixels, relative to the
 top-left of the window that it relates to.
 
-@example
+@example lua
 @verbatim
 local x, y = event:xy()
 @end verbatim
@@ -2676,7 +2853,7 @@ local x, y = event:xy()
 Returns a boolean value indicating whether @code{ctrl} was held when
 this event was fired.
 
-@example
+@example lua
 @verbatim
 local ctrl = event:ctrl()
 @end verbatim
@@ -2688,7 +2865,7 @@ local ctrl = event:ctrl()
 Returns a boolean value indicating whether @code{shift} was held when
 this event was fired.
 
-@example
+@example lua
 @verbatim
 local shift = event:shift()
 @end verbatim
@@ -2701,7 +2878,7 @@ Returns a boolean value indicating whether the meta key (also known as
 super, command, or the "windows key") was held when this event was
 fired.
 
-@example
+@example lua
 @verbatim
 local meta = event:meta()
 @end verbatim
@@ -2713,7 +2890,7 @@ local meta = event:meta()
 Returns a boolean value indicating whether @code{alt} was held when this
 event was fired.
 
-@example
+@example lua
 @verbatim
 local alt = event:alt()
 @end verbatim
@@ -2725,7 +2902,7 @@ local alt = event:alt()
 Returns a boolean value indicating whether caps lock was on when this
 event was fired.
 
-@example
+@example lua
 @verbatim
 local capslock = event:capslock()
 @end verbatim
@@ -2737,7 +2914,7 @@ local capslock = event:capslock()
 Returns a boolean value indicating whether numlock was on when this
 event was fired.
 
-@example
+@example lua
 @verbatim
 local numlock = event:numlock()
 @end verbatim
@@ -2750,7 +2927,7 @@ Returns three boolean values indicating whether each primary mouse
 button was held when this event fired, in the order: left, right,
 middle.
 
-@example
+@example lua
 @verbatim
 local lmb, rmb, mmb = event:buttons()
 @end verbatim
@@ -2763,7 +2940,7 @@ Returns a boolean value representing the scroll direction. False means
 scrolling down, toward the user, and true means scrolling up, away from
 the user.
 
-@example
+@example lua
 @verbatim
 local direction = event:direction()
 @end verbatim
@@ -2785,7 +2962,7 @@ has returned.
 Returns the x and y for this mouse event in pixels, relative to the
 top-left of the window that it relates to.
 
-@example
+@example lua
 @verbatim
 local x, y = event:xy()
 @end verbatim
@@ -2797,7 +2974,7 @@ local x, y = event:xy()
 Returns a boolean value indicating whether @code{ctrl} was held when
 this event was fired.
 
-@example
+@example lua
 @verbatim
 local ctrl = event:ctrl()
 @end verbatim
@@ -2809,7 +2986,7 @@ local ctrl = event:ctrl()
 Returns a boolean value indicating whether @code{shift} was held when
 this event was fired.
 
-@example
+@example lua
 @verbatim
 local shift = event:shift()
 @end verbatim
@@ -2822,7 +2999,7 @@ Returns a boolean value indicating whether the meta key (also known as
 super, command, or the "windows key") was held when this event was
 fired.
 
-@example
+@example lua
 @verbatim
 local meta = event:meta()
 @end verbatim
@@ -2834,7 +3011,7 @@ local meta = event:meta()
 Returns a boolean value indicating whether @code{alt} was held when this
 event was fired.
 
-@example
+@example lua
 @verbatim
 local alt = event:alt()
 @end verbatim
@@ -2846,7 +3023,7 @@ local alt = event:alt()
 Returns a boolean value indicating whether caps lock was on when this
 event was fired.
 
-@example
+@example lua
 @verbatim
 local capslock = event:capslock()
 @end verbatim
@@ -2858,7 +3035,7 @@ local capslock = event:capslock()
 Returns a boolean value indicating whether numlock was on when this
 event was fired.
 
-@example
+@example lua
 @verbatim
 local numlock = event:numlock()
 @end verbatim
@@ -2871,7 +3048,7 @@ Returns three boolean values indicating whether each primary mouse
 button was held when this event fired, in the order: left, right,
 middle.
 
-@example
+@example lua
 @verbatim
 local lmb, rmb, mmb = event:buttons()
 @end verbatim

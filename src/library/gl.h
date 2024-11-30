@@ -5,8 +5,8 @@
 
 #include "../../modules/hashmap/hashmap.h"
 #include "rwlock/rwlock.h"
+#include "plugin/plugin.h"
 struct hashmap;
-struct SurfaceFunctions;
 
 /* types from gl.h */
 typedef unsigned int GLenum;
@@ -97,12 +97,13 @@ struct GLLibFunctions {
     void (*GenTextures)(GLsizei, GLuint*);
     GLenum (*GetError)(void);
     void (*ReadPixels)(GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, void*);
-    void (*TexParameteri)(GLenum, GLenum, GLfloat);
+    void (*TexParameteri)(GLenum, GLenum, GLint);
     void (*TexSubImage2D)(GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, const void*);
     void (*Viewport)(GLint, GLint, GLsizei, GLsizei);
 };
 
 /* consts used from libgl */
+#define GL_NONE 0
 #define GL_TEXTURE 5890
 #define GL_TEXTURE_2D 3553
 #define GL_RGB 6407
@@ -158,6 +159,7 @@ struct GLLibFunctions {
 #define GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE 36048
 #define GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME 36049
 #define GL_MAX_VERTEX_ATTRIBS 34921
+#define GL_TEXTURE_COMPARE_MODE 34892
 
 /* bolt re-implementation of some gl objects, storing only the things we need */
 
@@ -177,6 +179,10 @@ struct GLTexture2D {
     GLsizei height;
     double minimap_center_x;
     double minimap_center_y;
+    GLenum internalformat;
+    GLint compare_mode;
+    struct ItemIcon icon;
+    struct hashmap* icons;
     uint8_t is_minimap_tex_big;
     uint8_t is_minimap_tex_small;
 };
@@ -325,11 +331,14 @@ void _bolt_gl_onClear(GLbitfield);
 /// Call this in response to glViewport, which needs to be hooked from libgl.
 void _bolt_gl_onViewport(GLint, GLint, GLsizei, GLsizei);
 
+/// Call this in response to glTexParameteri, which needs to be hooked from libgl.
+void _bolt_gl_onTexParameteri(GLenum, GLenum, GLint);
+
 /* plugin library interop stuff */
 
 struct GLPluginDrawElementsVertex2DUserData {
     struct GLContext* c;
-    unsigned short* indices;
+    const unsigned short* indices;
     struct GLTexture2D* atlas;
     struct GLAttrBinding* position;
     struct GLAttrBinding* atlas_min;
@@ -341,7 +350,7 @@ struct GLPluginDrawElementsVertex2DUserData {
 
 struct GLPluginDrawElementsVertex3DUserData {
     struct GLContext* c;
-    unsigned short* indices;
+    const unsigned short* indices;
     int atlas_scale;
     struct GLTexture2D* atlas;
     struct GLTexture2D* settings_atlas;

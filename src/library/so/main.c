@@ -361,6 +361,13 @@ void glViewport(GLint x, GLint y, GLsizei width, GLsizei height) {
     LOG("glViewport end\n");
 }
 
+void glTexParameteri(GLenum target, GLenum pname, GLint param) {
+    LOG("glTexParameteri\n");
+    libgl.TexParameteri(target, pname, param);
+    _bolt_gl_onTexParameteri(target, pname, param);
+    LOG("glTexParameteri end\n");
+}
+
 void* eglGetProcAddress(const char* name) {
     LOG("eglGetProcAddress('%s')\n", name);
     void* ret = _bolt_gl_GetProcAddress(name);
@@ -739,6 +746,8 @@ static void* _bolt_dl_lookup(void* handle, const char* symbol) {
         if (strcmp(symbol, "glTexSubImage2D") == 0) return glTexSubImage2D;
         if (strcmp(symbol, "glDeleteTextures") == 0) return glDeleteTextures;
         if (strcmp(symbol, "glClear") == 0) return glClear;
+        if (strcmp(symbol, "glViewport") == 0) return glViewport;
+        if (strcmp(symbol, "glTexParameteri") == 0) return glTexParameteri;
     } else if (handle == libxcb_addr) {
         if (strcmp(symbol, "xcb_poll_for_event") == 0) return xcb_poll_for_event;
         if (strcmp(symbol, "xcb_poll_for_queued_event") == 0) return xcb_poll_for_queued_event;

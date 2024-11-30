@@ -109,6 +109,20 @@ static uint64_t _bolt_plugin_map_hash(const void* item, uint64_t seed0, uint64_t
     return hashmap_sip(&p->id, sizeof(p->id), seed0, seed1);
 }
 
+int _bolt_plugin_itemicon_compare(const void* a, const void* b, void* udata) {
+    const struct ItemIcon* i1 = a;
+    const struct ItemIcon* i2 = b;
+    uint64_t xywh1, xywh2;
+    memcpy(&xywh1, &i1->x, sizeof xywh1);
+    memcpy(&xywh2, &i2->x, sizeof xywh2);
+    return xywh2 - xywh1;
+}
+
+uint64_t _bolt_plugin_itemicon_hash(const void* item, uint64_t seed0, uint64_t seed1) {
+    const struct ItemIcon* icon = item;
+    return hashmap_sip(&icon->x, 4 * sizeof icon->x, seed0, seed1);
+}
+
 static struct hashmap* plugins;
 
 #define DEFINE_CALLBACK(APINAME, STRUCTNAME) \
@@ -1110,6 +1124,7 @@ uint8_t _bolt_plugin_handle_mouse_event(struct MouseEvent* event, ptrdiff_t bool
 DEFINE_CALLBACK_STATIC(swapbuffers, SwapBuffersEvent)
 DEFINE_CALLBACK(render2d, RenderBatch2D)
 DEFINE_CALLBACK(render3d, Render3D)
+DEFINE_CALLBACK(rendericon, RenderItemIconEvent)
 DEFINE_CALLBACK(minimap, RenderMinimapEvent)
 DEFINE_CALLBACK(mousemotion, MouseMotionEvent)
 DEFINE_CALLBACK(mousebutton, MouseButtonEvent)
@@ -1203,6 +1218,7 @@ _bolt_api_push_metatable_##NAME(plugin->state); \
 lua_settable(plugin->state, LUA_REGISTRYINDEX);
     SETMETA(render2d)
     SETMETA(render3d)
+    SETMETA(rendericon)
     SETMETA(minimap)
     SETMETA(point)
     SETMETA(transform)
