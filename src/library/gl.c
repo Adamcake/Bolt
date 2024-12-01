@@ -1537,14 +1537,14 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
                         }
                         int32_t xy0[2];
                         int32_t xy2[2];
-                        _bolt_get_attr_binding_int(c, vertex_userdata.position, i, 2, xy0);
-                        _bolt_get_attr_binding_int(c, vertex_userdata.position, i + 2, 2, xy2);
+                        _bolt_get_attr_binding_int(c, vertex_userdata.position, indices[i], 2, xy0);
+                        _bolt_get_attr_binding_int(c, vertex_userdata.position, indices[i + 2], 2, xy2);
                         struct RenderItemIconEvent event;
                         event.icon = icon;
-                        event.target_x = (int16_t)xy0[0];
-                        event.target_y = (int16_t)(batch.screen_height - xy0[1]);
-                        event.target_w = xy2[0] - xy0[0];
-                        event.target_h = xy0[1] - xy2[1];
+                        event.target_x = (int16_t)xy2[0];
+                        event.target_y = (int16_t)((int32_t)batch.screen_height - xy2[1]);
+                        event.target_w = (uint16_t)(xy0[0] - xy2[0]);
+                        event.target_h = (uint16_t)(xy2[1] - xy0[1]);
                         _bolt_plugin_handle_rendericon(&event);
                         batch_start = i + batch.vertices_per_icon;
                     }
