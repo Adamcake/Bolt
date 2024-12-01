@@ -2406,6 +2406,23 @@ local red, green, blue, alpha = event:modelvertexcolour(model, vertex)
 
 Alias for @ref{renderitemicon-modelvertexcolour}
 
+@node renderitemicon-targetsize
+@subsection targetsize
+
+Returns the width and height of the target area of this render, in
+pixels.
+
+This will be proportional to the size of the inner area of the game
+window, given by @ref{functions-gamewindowsize} - that is, if the user
+has an interface scaling other than 100%, it will be bigger or smaller
+than that area, proportionally.
+
+@example lua
+@verbatim
+local width, height = event:targetsize()
+@end verbatim
+@end example
+
 @node renderitemicon-modelviewmatrix
 @subsection modelviewmatrix
 
@@ -2523,7 +2540,7 @@ being drawn, in pixels.
 
 @example lua
 @verbatim
-local x, y, width, height = event:targetxywh()
+local x, y, width, height = event:sourcexywh()
 @end verbatim
 @end example
 
@@ -2537,6 +2554,23 @@ top-left pixel of the inner area of the window.
 @example lua
 @verbatim
 local x, y, width, height = event:targetxywh()
+@end verbatim
+@end example
+
+@node renderminimap-targetsize
+@subsection targetsize
+
+Returns the width and height of the target area of this render, in
+pixels.
+
+This will be proportional to the size of the inner area of the game
+window, given by @ref{functions-gamewindowsize} - that is, if the user
+has an interface scaling other than 100%, it will be bigger or smaller
+than that area, proportionally.
+
+@example lua
+@verbatim
+local width, height = event:targetsize()
 @end verbatim
 @end example
 

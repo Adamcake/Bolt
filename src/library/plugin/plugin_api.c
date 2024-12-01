@@ -803,6 +803,13 @@ static int api_renderminimap_targetxywh(lua_State* state) {
     return 4;
 }
 
+static int api_renderminimap_targetsize(lua_State* state) {
+    const struct RenderMinimapEvent* render = require_self_userdata(state, "targetsize");
+    lua_pushinteger(state, render->screen_width);
+    lua_pushinteger(state, render->screen_height);
+    return 2;
+}
+
 static int api_point_transform(lua_State* state) {
     const struct Point3D* point = require_self_userdata(state, "transform");
     const struct Transform3D* transform = require_userdata(state, 2, "transform");
@@ -1265,6 +1272,13 @@ static int api_rendericon_colour(lua_State* state) {
     return 4;
 }
 
+static int api_rendericon_targetsize(lua_State* state) {
+    const struct RenderItemIconEvent* event = require_self_userdata(state, "targetsize");
+    lua_pushinteger(state, event->screen_width);
+    lua_pushinteger(state, event->screen_height);
+    return 2;
+}
+
 static int api_rendericon_modelviewmatrix(lua_State* state) {
     const struct RenderItemIconEvent* event = require_self_userdata(state, "modelviewmatrix");
     const size_t model = luaL_checkinteger(state, 2);
@@ -1658,6 +1672,7 @@ static struct ApiFuncTemplate rendericon_functions[] = {
     BOLTALIAS(modelvertexcolour, modelvertexcolor, rendericon),
     BOLTFUNC(colour, rendericon),
     BOLTALIAS(colour, color, rendericon),
+    BOLTFUNC(targetsize, rendericon),
 };
 
 static struct ApiFuncTemplate minimapterrain_functions[] = {
@@ -1669,6 +1684,7 @@ static struct ApiFuncTemplate minimapterrain_functions[] = {
 static struct ApiFuncTemplate renderminimap_functions[] = {
     BOLTFUNC(sourcexywh, renderminimap),
     BOLTFUNC(targetxywh, renderminimap),
+    BOLTFUNC(targetsize, renderminimap),
 };
 
 static struct ApiFuncTemplate point_functions[] = {

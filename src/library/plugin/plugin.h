@@ -298,6 +298,8 @@ uint64_t _bolt_plugin_itemicon_hash(const void* item, uint64_t seed0, uint64_t s
 
 struct RenderItemIconEvent {
     const struct ItemIcon* icon;
+    uint32_t screen_width;
+    uint32_t screen_height;
     uint16_t target_x;
     uint16_t target_y;
     uint16_t target_w;
@@ -313,6 +315,8 @@ struct MinimapTerrainEvent {
 };
 
 struct RenderMinimapEvent {
+    uint32_t screen_width;
+    uint32_t screen_height;
     int16_t source_x;
     int16_t source_y;
     uint16_t source_w;

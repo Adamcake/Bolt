@@ -1406,13 +1406,16 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
             const int16_t x2 = (int16_t)roundf(uv2[0] * tex->width);
             const int16_t y1 = (int16_t)roundf(uv2[1] * tex->height);
             const int16_t y2 = (int16_t)roundf(uv0[1] * tex->height);
+            const float screen_height_float = roundf(2.0 / projection_matrix[5]);
             const struct RenderMinimapEvent event = {
+                .screen_width = roundf(2.0 / projection_matrix[0]),
+                .screen_height = screen_height_float,
                 .source_x = x1,
                 .source_y = y1,
                 .source_w = x2 - x1,
                 .source_h = y2 - y1,
                 .target_x = (int16_t)xy0[0],
-                .target_y = (int16_t)(roundf(2.0 / projection_matrix[5]) - xy0[1]),
+                .target_y = (int16_t)(screen_height_float - xy0[1]),
                 .target_w = (uint16_t)(xy2[0] - xy0[0]),
                 .target_h = (uint16_t)(xy0[1] - xy2[1]),
             };
@@ -1542,6 +1545,8 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
                         _bolt_get_attr_binding_int(c, vertex_userdata.position, indices[i + 2], 2, xy2);
                         struct RenderItemIconEvent event;
                         event.icon = icon;
+                        event.screen_width = batch.screen_width;
+                        event.screen_height = batch.screen_height;
                         event.target_x = (int16_t)xy2[0];
                         event.target_y = (int16_t)((int32_t)batch.screen_height - xy2[1]);
                         event.target_w = (uint16_t)(xy0[0] - xy2[0]);
