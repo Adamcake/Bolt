@@ -100,10 +100,13 @@ DWORD __stdcall BOLT_STUB_ENTRYNAME(struct PluginInjectParams* data) {
     libgl.Clear = (void(*)(GLbitfield))data->pGetProcAddress(libgl_module, "glClear");
     libgl.ClearColor = (void(*)(GLfloat, GLfloat, GLfloat, GLfloat))data->pGetProcAddress(libgl_module, "glClearColor");
     libgl.DeleteTextures = (void(*)(GLsizei, const GLuint*))data->pGetProcAddress(libgl_module, "glDeleteTextures");
+    libgl.Disable = (void(*)(GLenum))data->pGetProcAddress(libgl_module, "glDisable");
     libgl.DrawArrays = (void(*)(GLenum, GLint, GLsizei))data->pGetProcAddress(libgl_module, "glDrawArrays");
     libgl.DrawElements = (void(*)(GLenum, GLsizei, GLenum, const void*))data->pGetProcAddress(libgl_module, "glDrawElements");
+    libgl.Enable = (void(*)(GLenum))data->pGetProcAddress(libgl_module, "glEnable");
     libgl.Flush = (void(*)(void))data->pGetProcAddress(libgl_module, "glFlush");
     libgl.GenTextures = (void(*)(GLsizei, GLuint*))data->pGetProcAddress(libgl_module, "glGenTextures");
+    libgl.GetBooleanv = (void(*)(GLenum, GLboolean*))data->pGetProcAddress(libgl_module, "glGetBooleanv");
     libgl.GetError = (GLenum(*)(void))data->pGetProcAddress(libgl_module, "glGetError");
     libgl.ReadPixels = (void(*)(GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, void*))data->pGetProcAddress(libgl_module, "glReadPixels");
     libgl.TexParameteri = (void(*)(GLenum, GLenum, GLint))data->pGetProcAddress(libgl_module, "glTexParameteri");

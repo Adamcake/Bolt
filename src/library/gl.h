@@ -91,10 +91,13 @@ struct GLLibFunctions {
     void (*Clear)(GLbitfield);
     void (*ClearColor)(GLfloat, GLfloat, GLfloat, GLfloat);
     void (*DeleteTextures)(GLsizei, const GLuint*);
+    void (*Disable)(GLenum);
     void (*DrawArrays)(GLenum, GLint, GLsizei);
     void (*DrawElements)(GLenum, GLsizei, GLenum, const void*);
+    void (*Enable)(GLenum);
     void (*Flush)(void);
     void (*GenTextures)(GLsizei, GLuint*);
+    void (*GetBooleanv)(GLenum, GLboolean*);
     GLenum (*GetError)(void);
     void (*ReadPixels)(GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, void*);
     void (*TexParameteri)(GLenum, GLenum, GLint);
@@ -127,6 +130,9 @@ struct GLLibFunctions {
 #define GL_TEXTURE_WRAP_S 10242
 #define GL_TEXTURE_WRAP_T 10243
 #define GL_CLAMP_TO_EDGE 33071
+#define GL_DEPTH_TEST 2929
+#define GL_SCISSOR_TEST 3089
+#define GL_CULL_FACE 2884
 #define GL_COMPRESSED_RGB_S3TC_DXT1_EXT 33776
 #define GL_COMPRESSED_RGBA_S3TC_DXT1_EXT 33777
 #define GL_COMPRESSED_RGBA_S3TC_DXT3_EXT 33778

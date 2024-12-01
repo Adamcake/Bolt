@@ -2120,6 +2120,10 @@ static void _bolt_gl_plugin_surface_subimage(void* _userdata, int x, int y, int 
 static void _bolt_gl_plugin_surface_drawtoscreen(void* _userdata, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh) {
     struct PluginSurfaceUserdata* userdata = _userdata;
     struct GLContext* c = _bolt_context();
+    GLboolean depth_test, scissor_test, cull_face;
+    lgl->GetBooleanv(GL_DEPTH_TEST, &depth_test);
+    lgl->GetBooleanv(GL_SCISSOR_TEST, &scissor_test);
+    lgl->GetBooleanv(GL_CULL_FACE, &cull_face);
 
     gl.UseProgram(program_direct_screen);
     lgl->BindTexture(GL_TEXTURE_2D, userdata->renderbuffer);
@@ -2130,8 +2134,14 @@ static void _bolt_gl_plugin_surface_drawtoscreen(void* _userdata, int sx, int sy
     gl.Uniform4i(program_direct_screen_s_xywh, sx, sy, sw, sh);
     gl.Uniform4i(program_direct_screen_src_wh_dest_wh, userdata->width, userdata->height, gl_width, gl_height);
     lgl->Viewport(0, 0, gl_width, gl_height);
+    lgl->Disable(GL_DEPTH_TEST);
+    lgl->Disable(GL_SCISSOR_TEST);
+    lgl->Disable(GL_CULL_FACE);
     lgl->DrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
+    if (depth_test) lgl->Enable(GL_DEPTH_TEST);
+    if (scissor_test) lgl->Enable(GL_SCISSOR_TEST);
+    if (cull_face) lgl->Enable(GL_CULL_FACE);
     lgl->Viewport(c->viewport_x, c->viewport_y, c->viewport_w, c->viewport_h);
     const struct GLTexture2D* original_tex = c->texture_units[c->active_texture];
     lgl->BindTexture(GL_TEXTURE_2D, original_tex ? original_tex->id : 0);
@@ -2144,6 +2154,10 @@ static void _bolt_gl_plugin_surface_drawtosurface(void* _userdata, void* _target
     struct PluginSurfaceUserdata* userdata = _userdata;
     struct PluginSurfaceUserdata* target = _target;
     struct GLContext* c = _bolt_context();
+    GLboolean depth_test, scissor_test, cull_face;
+    lgl->GetBooleanv(GL_DEPTH_TEST, &depth_test);
+    lgl->GetBooleanv(GL_SCISSOR_TEST, &scissor_test);
+    lgl->GetBooleanv(GL_CULL_FACE, &cull_face);
 
     gl.UseProgram(program_direct_surface);
     lgl->BindTexture(GL_TEXTURE_2D, userdata->renderbuffer);
@@ -2154,8 +2168,14 @@ static void _bolt_gl_plugin_surface_drawtosurface(void* _userdata, void* _target
     gl.Uniform4i(program_direct_surface_s_xywh, sx, sy, sw, sh);
     gl.Uniform4i(program_direct_surface_src_wh_dest_wh, userdata->width, userdata->height, target->width, target->height);
     lgl->Viewport(0, 0, target->width, target->height);
+    lgl->Disable(GL_DEPTH_TEST);
+    lgl->Disable(GL_SCISSOR_TEST);
+    lgl->Disable(GL_CULL_FACE);
     lgl->DrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
+    if (depth_test) lgl->Enable(GL_DEPTH_TEST);
+    if (scissor_test) lgl->Enable(GL_SCISSOR_TEST);
+    if (cull_face) lgl->Enable(GL_CULL_FACE);
     lgl->Viewport(c->viewport_x, c->viewport_y, c->viewport_w, c->viewport_h);
     const struct GLTexture2D* original_tex = c->texture_units[c->active_texture];
     lgl->BindTexture(GL_TEXTURE_2D, original_tex ? original_tex->id : 0);
@@ -2167,14 +2187,25 @@ static void _bolt_gl_plugin_surface_drawtosurface(void* _userdata, void* _target
 static void _bolt_gl_plugin_draw_region_outline(void* userdata, int16_t x, int16_t y, uint16_t width, uint16_t height) {
     struct PluginSurfaceUserdata* target = userdata;
     struct GLContext* c = _bolt_context();
+    GLboolean depth_test, scissor_test, cull_face;
+    lgl->GetBooleanv(GL_DEPTH_TEST, &depth_test);
+    lgl->GetBooleanv(GL_SCISSOR_TEST, &scissor_test);
+    lgl->GetBooleanv(GL_CULL_FACE, &cull_face);
+
     gl.UseProgram(program_region);
     gl.BindVertexArray(program_direct_vao);
     gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, target->framebuffer);
     lgl->Viewport(0, 0, gl_width, gl_height);
+    lgl->Disable(GL_DEPTH_TEST);
+    lgl->Disable(GL_SCISSOR_TEST);
+    lgl->Disable(GL_CULL_FACE);
     gl.Uniform4i(program_region_xywh, x, y, width, height);
     gl.Uniform2i(program_region_dest_wh, gl_width, gl_height);
     lgl->DrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
+    if (depth_test) lgl->Enable(GL_DEPTH_TEST);
+    if (scissor_test) lgl->Enable(GL_SCISSOR_TEST);
+    if (cull_face) lgl->Enable(GL_CULL_FACE);
     lgl->Viewport(c->viewport_x, c->viewport_y, c->viewport_w, c->viewport_h);
     gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, c->current_draw_framebuffer);
     gl.BindVertexArray(c->bound_vao->id);
