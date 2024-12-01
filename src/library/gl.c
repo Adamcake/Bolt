@@ -1625,16 +1625,17 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
             if (tex && tex->compare_mode == GL_NONE && tex->internalformat == GL_RGBA8 && tex->width == GAME_ITEM_ICON_SIZE && tex->height == GAME_ITEM_ICON_SIZE && tex->icon.model_count < MAX_MODELS_PER_ICON) {
                 struct ItemIconModel* model = &tex->icon.models[tex->icon.model_count];
                 tex->icon.model_count += 1;
-                GLfloat model_matrix[16];
                 GLint ubo_binding, ubo_view_index;
                 gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ViewTransforms, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
                 gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_view_index);
                 const uint8_t* ubo_view_buf = (uint8_t*)_bolt_context_get_buffer(c, ubo_view_index)->data;
-                gl.GetUniformfv(c->bound_program->id, c->bound_program->loc_uModelMatrix, model_matrix);
+                const float* viewmatrix = (float*)(ubo_view_buf + c->bound_program->offset_uViewMatrix);
+                const float* projmatrix = (float*)(ubo_view_buf + c->bound_program->offset_uProjectionMatrix);
+                const float* viewprojmatrix = (float*)(ubo_view_buf + c->bound_program->offset_uViewProjMatrix);
                 for (size_t i = 0; i < 16; i += 1) {
-                    model->view_matrix.matrix[i] = (double)*(float*)(ubo_view_buf + c->bound_program->offset_uViewMatrix);
-                    model->projection_matrix.matrix[i] = (double)*(float*)(ubo_view_buf + c->bound_program->offset_uProjectionMatrix);
-                    model->viewproj_matrix.matrix[i] = (double)*(float*)(ubo_view_buf + c->bound_program->offset_uViewProjMatrix);
+                    model->view_matrix.matrix[i] = (double)viewmatrix[i];
+                    model->projection_matrix.matrix[i] = (double)projmatrix[i];
+                    model->viewproj_matrix.matrix[i] = (double)viewprojmatrix[i];
                 }
                 model->vertex_count = count;
                 model->vertices = malloc(sizeof(*model->vertices) * count);
