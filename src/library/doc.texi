@@ -2430,6 +2430,29 @@ local viewprojmatrix = event:modelviewprojmatrix(model)
 @end verbatim
 @end example
 
+@node renderitemicon-colour
+@subsection colour
+
+Returns the red, green, blue and alpha values that this icon is being
+rendered with. These values are multiplied with the texture, so values
+less than 1.0 will darken the icon (or make it more transparent in the
+case of the alpha channel). This is usually used to draw transparent or
+"tinted" versions of the same pre-rendered icon. For example, a
+placeholder item in your bank will be drawn slightly transparent, even
+though the icon itself is non-transparent, to indicate that the item is
+a placeholder and not an actual item.
+
+@example lua
+@verbatim
+local red, green, blue, alpha = event:colour()
+@end verbatim
+@end example
+
+@node renderitemicon-color
+@subsection color
+
+Alias for @ref{renderitem-colour}
+
 @node objects-minimapterrain
 @section Minimap Terrain Event
 
