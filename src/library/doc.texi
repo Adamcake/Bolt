@@ -623,6 +623,21 @@ end)
 
 @eventobjectwarning{}
 
+@node functions-onrenderminimap
+@section onrenderminimap
+
+@eventhandler{minimap-rendering events, @ref{objects-renderminimap}}
+
+@example lua
+@verbatim
+bolt.onrenderminimap(function (event)
+  -- ...
+end)
+@end verbatim
+@end example
+
+@eventobjectwarning{}
+
 @node functions-onswapbuffers
 @section onswapbuffers
 
@@ -2451,7 +2466,7 @@ local red, green, blue, alpha = event:colour()
 @node renderitemicon-color
 @subsection color
 
-Alias for @ref{renderitem-colour}
+Alias for @ref{renderitemicon-colour}
 
 @node objects-minimapterrain
 @section Minimap Terrain Event
@@ -2496,7 +2511,7 @@ occurs when the minimap image gets drawn to the game window, which
 usually happens once per frame, unless the minimap isn't visible. This
 event can be used to find out the location of the minimap on the user's
 screen. To get the minimap contents, see @ref{objects-minimapterrain}
-and @ref{objects-minimaprender2d}.
+and @ref{functions-onminimaprender2d}.
 
 @eventobjectwarning{}
 
