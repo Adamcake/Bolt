@@ -312,6 +312,10 @@ struct MinimapTerrainEvent {
 };
 
 struct RenderMinimapEvent {
+    int16_t source_x;
+    int16_t source_y;
+    uint16_t source_w;
+    uint16_t source_h;
     int16_t target_x;
     int16_t target_y;
     uint16_t target_w;

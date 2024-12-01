@@ -2477,7 +2477,19 @@ and @ref{objects-minimaprender2d}.
 
 @eventobjectwarning{}
 
-@node renderminimap-xywh
+@node renderminimap-sourcexywh
+@subsection xywh
+
+Returns the x, y, width and height of the section of the minimap image
+being drawn, in pixels.
+
+@example lua
+@verbatim
+local x, y, width, height = event:targetxywh()
+@end verbatim
+@end example
+
+@node renderminimap-targetxywh
 @subsection xywh
 
 Returns the x, y, width and height of where the minimap is being drawn
@@ -2486,7 +2498,7 @@ top-left pixel of the inner area of the window.
 
 @example lua
 @verbatim
-local x, y, width, height = event:xywh()
+local x, y, width, height = event:targetxywh()
 @end verbatim
 @end example
 

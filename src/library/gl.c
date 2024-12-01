@@ -1392,12 +1392,25 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
         const uint8_t is_minimap2d_target = tex_target && tex_target->is_minimap_tex_small;
 
         if (tex->is_minimap_tex_small && count == 6) {
-            const struct GLAttrBinding* binding = &attributes[c->bound_program->loc_aVertexPosition2D];
+            const struct GLAttrBinding* position = &attributes[c->bound_program->loc_aVertexPosition2D];
+            const struct GLAttrBinding* uv = &attributes[c->bound_program->loc_aTextureUV];
             int32_t xy0[2];
             int32_t xy2[2];
-            if (!_bolt_get_attr_binding_int(c, binding, 0, 2, xy0)) return;
-            if (!_bolt_get_attr_binding_int(c, binding, 2, 2, xy2)) return;
+            float uv0[2];
+            float uv2[2];
+            if (!_bolt_get_attr_binding_int(c, position, 0, 2, xy0)) return;
+            if (!_bolt_get_attr_binding_int(c, position, 2, 2, xy2)) return;
+            _bolt_get_attr_binding(c, uv, 0, 2, uv0);
+            _bolt_get_attr_binding(c, uv, 2, 2, uv2);
+            const int16_t x1 = (int16_t)roundf(uv0[0] * tex->width);
+            const int16_t x2 = (int16_t)roundf(uv2[0] * tex->width);
+            const int16_t y1 = (int16_t)roundf(uv2[1] * tex->height);
+            const int16_t y2 = (int16_t)roundf(uv0[1] * tex->height);
             const struct RenderMinimapEvent event = {
+                .source_x = x1,
+                .source_y = y1,
+                .source_w = x2 - x1,
+                .source_h = y2 - y1,
                 .target_x = (int16_t)xy0[0],
                 .target_y = (int16_t)(roundf(2.0 / projection_matrix[5]) - xy0[1]),
                 .target_w = (uint16_t)(xy2[0] - xy0[0]),

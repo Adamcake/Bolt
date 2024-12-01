@@ -785,8 +785,17 @@ static int api_minimapterrain_position(lua_State* state) {
     return 2;
 }
 
-static int api_renderminimap_xywh(lua_State* state) {
-    const struct RenderMinimapEvent* render = require_self_userdata(state, "xywh");
+static int api_renderminimap_sourcexywh(lua_State* state) {
+    const struct RenderMinimapEvent* render = require_self_userdata(state, "sourcexywh");
+    lua_pushinteger(state, render->source_x);
+    lua_pushinteger(state, render->source_y);
+    lua_pushinteger(state, render->source_w);
+    lua_pushinteger(state, render->source_h);
+    return 4;
+}
+
+static int api_renderminimap_targetxywh(lua_State* state) {
+    const struct RenderMinimapEvent* render = require_self_userdata(state, "targetxywh");
     lua_pushinteger(state, render->target_x);
     lua_pushinteger(state, render->target_y);
     lua_pushinteger(state, render->target_w);
@@ -1648,7 +1657,8 @@ static struct ApiFuncTemplate minimapterrain_functions[] = {
 };
 
 static struct ApiFuncTemplate renderminimap_functions[] = {
-    BOLTFUNC(xywh, renderminimap),
+    BOLTFUNC(sourcexywh, renderminimap),
+    BOLTFUNC(targetxywh, renderminimap),
 };
 
 static struct ApiFuncTemplate point_functions[] = {
