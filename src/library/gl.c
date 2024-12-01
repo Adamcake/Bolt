@@ -1482,7 +1482,7 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
                     _bolt_plugin_handle_minimapterrain(&render);
                 }
             }
-        } else if (c->current_draw_framebuffer == 0 || is_minimap2d_target) {
+        } else {
             struct GLPluginDrawElementsVertex2DUserData vertex_userdata;
             vertex_userdata.c = c;
             vertex_userdata.indices = indices;
