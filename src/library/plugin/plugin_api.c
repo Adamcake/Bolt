@@ -1248,11 +1248,19 @@ static int api_rendericon_modelvertexpoint(lua_State* state) {
 }
 
 static int api_rendericon_modelvertexcolour(lua_State* state) {
-    const struct RenderItemIconEvent* event = require_self_userdata(state, "modelvertexpoint");
+    const struct RenderItemIconEvent* event = require_self_userdata(state, "modelvertexcolour");
     const size_t model = luaL_checkinteger(state, 2);
     const size_t vertex = luaL_checkinteger(state, 3);
     for (size_t i = 0; i < 4; i += 1) {
         lua_pushnumber(state, event->icon->models[model - 1].vertices[vertex - 1].rgba[i]);
+    }
+    return 4;
+}
+
+static int api_rendericon_colour(lua_State* state) {
+    const struct RenderItemIconEvent* event = require_self_userdata(state, "colour");
+    for (size_t i = 0; i < 4; i += 1) {
+        lua_pushnumber(state, event->rgba[i]);
     }
     return 4;
 }
@@ -1648,6 +1656,8 @@ static struct ApiFuncTemplate rendericon_functions[] = {
     BOLTFUNC(modelprojectionmatrix, rendericon),
     BOLTFUNC(modelviewprojmatrix, rendericon),
     BOLTALIAS(modelvertexcolour, modelvertexcolor, rendericon),
+    BOLTFUNC(colour, rendericon),
+    BOLTALIAS(colour, color, rendericon),
 };
 
 static struct ApiFuncTemplate minimapterrain_functions[] = {

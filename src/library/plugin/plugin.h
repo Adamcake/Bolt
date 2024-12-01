@@ -302,6 +302,7 @@ struct RenderItemIconEvent {
     uint16_t target_y;
     uint16_t target_w;
     uint16_t target_h;
+    float rgba[4];
 };
 
 struct MinimapTerrainEvent {
