@@ -451,12 +451,12 @@ static int api_createsurfacefrompng(lua_State* state) {
     lua_pop(state, 3);
 #undef CALL_SPNG
 
-    lua_pushinteger(state, ihdr.width);
-    lua_pushinteger(state, ihdr.height);
     struct SurfaceFunctions* functions = lua_newuserdata(state, sizeof(struct SurfaceFunctions));
     managed_functions->surface_init(functions, ihdr.width, ihdr.height, rgba);
     lua_getfield(state, LUA_REGISTRYINDEX, "surfacemeta");
     lua_setmetatable(state, -2);
+    lua_pushinteger(state, ihdr.width);
+    lua_pushinteger(state, ihdr.height);
     free(rgba);
     return 3;
 }

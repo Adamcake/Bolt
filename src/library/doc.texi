@@ -447,7 +447,9 @@ local mysurface = bolt.createsurfacefromrgba(2, 2, rgba)
 @section createsurfacefrompng
 
 Creates and returns a new @ref{objects-surface} from
-the PNG file at the given path.
+the PNG file at the given path. The first returned value is the surface
+object and the second and third values are the width and height
+respectively.
 
 The path will be interpreted similarly to require(), i.e. relative to
 the plugin directory, using '.' as file separators, and must not include
@@ -464,7 +466,7 @@ to the plugin directory.
 
 @example lua
 @verbatim
-local mysurface = bolt.createsurfacefrompng(800, 608, "images.icon")
+local mysurface, width, height = bolt.createsurfacefrompng("images.icon")
 @end verbatim
 @end example
 
