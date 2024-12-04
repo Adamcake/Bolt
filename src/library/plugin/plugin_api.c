@@ -857,23 +857,27 @@ static int api_point_get(lua_State* state) {
 
 static int api_point_aspixels(lua_State* state) {
     const struct Point3D* point = require_self_userdata(state, "aspixels");
-    double x, y;
-    if (point->integer) {
-        x = (double)point->xyzh.ints[0];
-        y = (double)point->xyzh.ints[1];
-    } else if (!point->homogenous) {
-        x = point->xyzh.floats[0];
-        y = point->xyzh.floats[1];
-    } else {
-        x = point->xyzh.floats[0] / point->xyzh.floats[3];
-        y = point->xyzh.floats[1] / point->xyzh.floats[3];
-    }
     int game_view_x, game_view_y, game_view_w, game_view_h;
     const struct PluginManagedFunctions* managed_functions = _bolt_plugin_managed_functions();
     managed_functions->game_view_rect(&game_view_x, &game_view_y, &game_view_w, &game_view_h);
+    double x, y, depth;
+    if (point->integer) {
+        x = (double)point->xyzh.ints[0];
+        y = (double)point->xyzh.ints[1];
+        depth = (double)point->xyzh.ints[2];
+    } else if (!point->homogenous) {
+        x = point->xyzh.floats[0];
+        y = point->xyzh.floats[1];
+        depth = point->xyzh.floats[2];
+    } else {
+        x = point->xyzh.floats[0] / point->xyzh.floats[3];
+        y = point->xyzh.floats[1] / point->xyzh.floats[3];
+        depth = point->xyzh.floats[2] / point->xyzh.floats[3];
+    }
     lua_pushnumber(state, ((x  + 1.0) * game_view_w / 2.0) + (double)game_view_x);
     lua_pushnumber(state, ((-y + 1.0) * game_view_h / 2.0) + (double)game_view_y);
-    return 2;
+    lua_pushnumber(state, depth);
+    return 3;
 }
 
 #define LENGTH(N1, N2, N3) sqrt((N1 * N1) + (N2 * N2) + (N3 * N3))

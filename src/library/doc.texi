@@ -1791,13 +1791,52 @@ Returns the X, Y and Z values for this point.
 @subsection aspixels
 
 For a point that's been transformed into 3D screen space, this function
-returns its X and Y in pixels, with (0, 0) being the top-left of the
-game.
+returns its X, Y, and depth. X and Y are in pixels with (0, 0) being the
+top-left of the inner area of the game window. The the depth value is
+logarithmic: -1.0 is very near the camera, 0.0 is about one tile away
+from the camera, and +1.0 is the maximum render distance away from the
+camera. Depth values outside that range indicate that the point is
+probably behind the camera.
 
-This is only useful for a point in model coordinates that has been
-transformed by a @ref{render3d-modelmatrix}, then by a
-@ref{render3d-viewprojmatrix}. In any other case the result will
+@example lua
+@verbatim
+local xpixel, ypixel, depth = mypoint:aspixels()
+if depth >= -1.0 and depth <= 1.0 then
+  -- pixel coordinates are valid, do something with them
+end
+@end verbatim
+@end example
+
+This is only useful for a point in world coordinates that has been
+transformed by a @ref{render3d-viewprojmatrix} (or by a view and
+projection matrix separately). In any other case the result will
 probably not be meaningful.
+
+To help with understanding everything this function does, here's an
+equivalent Lua function with comments:
+
+@example lua
+@verbatim
+local function aspixels(point)
+  local x, y, z = point:get()
+
+  -- get the X, Y, width and height of the 3D game view
+  local gx, gy, gw, gh = bolt.gameviewxywh()
+
+  -- x is in the range [-1.0, +1.0], so we need to map that range onto
+  -- the game view, like so:
+  local pixelx = ((x + 1.0) * gw / 2.0) + gx
+
+  -- same as above, but we also need to invert y because GPUs think -1.0
+  -- is the bottom of the screen, and we want points to be relative to
+  -- the top-left, not the bottom-left
+  local pixely = ((-y + 1.0) * gh / 2.0) + gy
+
+  -- leave depth as-is
+  return pixelx, pixely, z
+end
+@end verbatim
+@end example
 
 @node objects-transform
 @section Transform
