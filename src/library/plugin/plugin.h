@@ -158,6 +158,14 @@ struct SurfaceFunctions {
     /// Draws a rectangle from the surface, indicated by sx,sy,sw,sh, to a rectangle on the target surface,
     /// indicated by dx,dy,dw,dh. All values are in pixels.
     void (*draw_to_surface)(void* userdata, void* target, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh);
+
+    /// Sets the tint this surface will be drawn with when calling draw_to_screen or draw_to_surface.
+    /// Values are in the range [0.0 - 1.0]. Defaults are 1.0.
+    void (*set_tint)(void* userdata, double r, double g, double b);
+
+    /// Sets the transparency this surface will be drawn with when calling draw_to_screen or draw_to_surface.
+    /// Value is in the range [0.0 - 1.0] with 0.0 being invisible and 1.0 being fully opaque. Default is 1.0.
+    void (*set_alpha)(void* userdata, double alpha);
 };
 
 /// Struct containing "vtable" callback information for shaders

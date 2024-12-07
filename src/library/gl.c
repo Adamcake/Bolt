@@ -31,11 +31,13 @@ static GLint program_direct_screen_sampler;
 static GLint program_direct_screen_d_xywh;
 static GLint program_direct_screen_s_xywh;
 static GLint program_direct_screen_src_wh_dest_wh;
+static GLint program_direct_screen_rgba;
 static GLuint program_direct_surface;
 static GLint program_direct_surface_sampler;
 static GLint program_direct_surface_d_xywh;
 static GLint program_direct_surface_s_xywh;
 static GLint program_direct_surface_src_wh_dest_wh;
+static GLint program_direct_surface_rgba;
 static GLuint program_region;
 static GLint program_region_xywh;
 static GLint program_region_dest_wh;
@@ -70,8 +72,9 @@ static const GLchar program_direct_fs[] = GLSLHEADER
 "uniform sampler2D tex;"
 "uniform ivec4 s_xywh;"
 "uniform ivec4 src_wh_dest_wh;"
+"uniform vec4 rgba;"
 "void main() {"
-  "col = texture(tex, ((vPos * s_xywh.pq) + s_xywh.st) / src_wh_dest_wh.st);"
+  "col = texture(tex, ((vPos * s_xywh.pq) + s_xywh.st) / src_wh_dest_wh.st) * clamp(rgba, 0.0, 1.0);"
 "}";
 
 // "region" program draws an outline of alternating black and white pixels on a rectangular region of the screen
@@ -129,6 +132,8 @@ static void _bolt_gl_plugin_surface_clear(void* userdata, double r, double g, do
 static void _bolt_gl_plugin_surface_subimage(void* userdata, int x, int y, int w, int h, const void* pixels, uint8_t is_bgra);
 static void _bolt_gl_plugin_surface_drawtoscreen(void* userdata, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh);
 static void _bolt_gl_plugin_surface_drawtosurface(void* userdata, void* target, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh);
+static void _bolt_gl_plugin_surface_set_tint(void* userdata, double r, double g, double b);
+static void _bolt_gl_plugin_surface_set_alpha(void* userdata, double alpha);
 static void _bolt_gl_plugin_draw_region_outline(void* userdata, int16_t x, int16_t y, uint16_t width, uint16_t height);
 static void _bolt_gl_plugin_read_screen_pixels(uint32_t width, uint32_t height, void* data);
 static void _bolt_gl_plugin_game_view_rect(int* x, int* y, int* w, int* h);
@@ -168,6 +173,7 @@ struct PluginSurfaceUserdata {
     unsigned int height;
     GLuint framebuffer;
     GLuint renderbuffer;
+    GLfloat rgba[4];
 };
 
 struct PluginShaderUserdata {
@@ -622,9 +628,22 @@ static void _bolt_gl_load(void* (*GetProcAddress)(const char*)) {
     INIT_GL_FUNC(MultiDrawElements)
     INIT_GL_FUNC(ShaderSource)
     INIT_GL_FUNC(TexStorage2D)
+    INIT_GL_FUNC(Uniform1f)
+    INIT_GL_FUNC(Uniform2f)
+    INIT_GL_FUNC(Uniform3f)
+    INIT_GL_FUNC(Uniform4f)
+    INIT_GL_FUNC(Uniform1fv)
+    INIT_GL_FUNC(Uniform2fv)
+    INIT_GL_FUNC(Uniform3fv)
+    INIT_GL_FUNC(Uniform4fv)
     INIT_GL_FUNC(Uniform1i)
     INIT_GL_FUNC(Uniform2i)
+    INIT_GL_FUNC(Uniform3i)
     INIT_GL_FUNC(Uniform4i)
+    INIT_GL_FUNC(Uniform1iv)
+    INIT_GL_FUNC(Uniform2iv)
+    INIT_GL_FUNC(Uniform3iv)
+    INIT_GL_FUNC(Uniform4iv)
     INIT_GL_FUNC(UniformMatrix4fv)
     INIT_GL_FUNC(UnmapBuffer)
     INIT_GL_FUNC(UseProgram)
@@ -664,6 +683,7 @@ static void _bolt_gl_init() {
     program_direct_screen_d_xywh = gl.GetUniformLocation(program_direct_screen, "d_xywh");
     program_direct_screen_s_xywh = gl.GetUniformLocation(program_direct_screen, "s_xywh");
     program_direct_screen_src_wh_dest_wh = gl.GetUniformLocation(program_direct_screen, "src_wh_dest_wh");
+    program_direct_screen_rgba = gl.GetUniformLocation(program_direct_screen, "rgba");
 
     program_direct_surface = gl.CreateProgram();
     gl.AttachShader(program_direct_surface, direct_surface_vs);
@@ -673,6 +693,7 @@ static void _bolt_gl_init() {
     program_direct_surface_d_xywh = gl.GetUniformLocation(program_direct_surface, "d_xywh");
     program_direct_surface_s_xywh = gl.GetUniformLocation(program_direct_surface, "s_xywh");
     program_direct_surface_src_wh_dest_wh = gl.GetUniformLocation(program_direct_surface, "src_wh_dest_wh");
+    program_direct_surface_rgba = gl.GetUniformLocation(program_direct_surface, "rgba");
 
     gl.DetachShader(program_direct_screen, direct_screen_vs);
     gl.DetachShader(program_direct_screen, direct_fs);
@@ -2118,6 +2139,9 @@ static void _bolt_gl_plugin_surface_init(struct SurfaceFunctions* functions, uns
     struct GLContext* c = _bolt_context();
     userdata->width = width;
     userdata->height = height;
+    for (size_t i = 0; i < 4; i += 1) {
+        userdata->rgba[i] = 1.0;
+    }
     _bolt_gl_surface_init_buffers(userdata);
     if (data) {
         lgl->TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, data);
@@ -2130,6 +2154,8 @@ static void _bolt_gl_plugin_surface_init(struct SurfaceFunctions* functions, uns
     functions->subimage = _bolt_gl_plugin_surface_subimage;
     functions->draw_to_screen = _bolt_gl_plugin_surface_drawtoscreen;
     functions->draw_to_surface = _bolt_gl_plugin_surface_drawtosurface;
+    functions->set_tint = _bolt_gl_plugin_surface_set_tint;
+    functions->set_alpha = _bolt_gl_plugin_surface_set_alpha;
 
     const struct GLTexture2D* original_tex = c->texture_units[c->active_texture];
     lgl->BindTexture(GL_TEXTURE_2D, original_tex ? original_tex->id : 0);
@@ -2186,6 +2212,7 @@ static void _bolt_gl_plugin_surface_drawtoscreen(void* _userdata, int sx, int sy
     gl.Uniform4i(program_direct_screen_d_xywh, dx, dy, dw, dh);
     gl.Uniform4i(program_direct_screen_s_xywh, sx, sy, sw, sh);
     gl.Uniform4i(program_direct_screen_src_wh_dest_wh, userdata->width, userdata->height, gl_width, gl_height);
+    gl.Uniform4fv(program_direct_screen_rgba, 1, userdata->rgba);
     lgl->Viewport(0, 0, gl_width, gl_height);
     lgl->Disable(GL_DEPTH_TEST);
     lgl->Disable(GL_SCISSOR_TEST);
@@ -2220,6 +2247,7 @@ static void _bolt_gl_plugin_surface_drawtosurface(void* _userdata, void* _target
     gl.Uniform4i(program_direct_surface_d_xywh, dx, dy, dw, dh);
     gl.Uniform4i(program_direct_surface_s_xywh, sx, sy, sw, sh);
     gl.Uniform4i(program_direct_surface_src_wh_dest_wh, userdata->width, userdata->height, target->width, target->height);
+    gl.Uniform4fv(program_direct_screen_rgba, 1, userdata->rgba);
     lgl->Viewport(0, 0, target->width, target->height);
     lgl->Disable(GL_DEPTH_TEST);
     lgl->Disable(GL_SCISSOR_TEST);
@@ -2235,6 +2263,18 @@ static void _bolt_gl_plugin_surface_drawtosurface(void* _userdata, void* _target
     gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, c->current_draw_framebuffer);
     gl.BindVertexArray(c->bound_vao->id);
     gl.UseProgram(c->bound_program ? c->bound_program->id : 0);
+}
+
+static void _bolt_gl_plugin_surface_set_tint(void* userdata, double r, double g, double b) {
+    struct PluginSurfaceUserdata* surface = userdata;
+    surface->rgba[0] = (GLfloat)r;
+    surface->rgba[1] = (GLfloat)g;
+    surface->rgba[2] = (GLfloat)b;
+}
+
+static void _bolt_gl_plugin_surface_set_alpha(void* userdata, double alpha) {
+    struct PluginSurfaceUserdata* surface = userdata;
+    surface->rgba[3] = (GLfloat)alpha;
 }
 
 static void _bolt_gl_plugin_draw_region_outline(void* userdata, int16_t x, int16_t y, uint16_t width, uint16_t height) {

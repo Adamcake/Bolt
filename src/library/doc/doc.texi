@@ -1064,6 +1064,33 @@ mysurface:drawtowindow(mywindow, 0, 0, 100, 100, 0, 0, 1920, 1080)
 @end verbatim
 @end example
 
+@node surface-settint
+@subsection settint
+
+Sets the "tint" this surface will be drawn with when drawing it to the
+screen or to another surface. These values are in the range [0.0 - 1.0]
+and are multiplied with the red, green and blue channels of the image,
+so values less than 1.0 will darken the image. The defaults are all 1.0.
+
+@example lua
+@verbatim
+mysurface:settint(red, green, blue)
+@end verbatim
+@end example
+
+@node surface-setalpha
+@subsection setalpha
+
+Sets the alpha transparency this surface will be drawn with when drawing
+it to the screen or to another surface. The value is in the range [0.0 -
+1.0] where 0.0 is invisible and 1.0 is fully opaque. The default is 1.0.
+
+@example lua
+@verbatim
+mysurface:setalpha(0.5)
+@end verbatim
+@end example
+
 @node objects-buffer
 @section Buffer
 

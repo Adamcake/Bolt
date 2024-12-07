@@ -1076,6 +1076,22 @@ static int api_surface_drawtowindow(lua_State* state) {
     return 0;
 }
 
+static int api_surface_settint(lua_State* state) {
+    const struct SurfaceFunctions* functions = require_self_userdata(state, "settint");
+    const lua_Number r = luaL_checknumber(state, 2);
+    const lua_Number g = luaL_checknumber(state, 3);
+    const lua_Number b = luaL_checknumber(state, 4);
+    functions->set_tint(functions->userdata, r, g, b);
+    return 0;
+}
+
+static int api_surface_setalpha(lua_State* state) {
+    const struct SurfaceFunctions* functions = require_self_userdata(state, "setalpha");
+    const lua_Number alpha = luaL_checknumber(state, 2);
+    functions->set_alpha(functions->userdata, alpha);
+    return 0;
+}
+
 static int api_window_close(lua_State* state) {
     struct EmbeddedWindow* window = require_self_userdata(state, "state");
     window->is_deleted = true;
@@ -1841,6 +1857,8 @@ static struct ApiFuncTemplate surface_functions[] = {
     BOLTFUNC(drawtoscreen, surface),
     BOLTFUNC(drawtosurface, surface),
     BOLTFUNC(drawtowindow, surface),
+    BOLTFUNC(settint, surface),
+    BOLTFUNC(setalpha, surface),
 };
 
 static struct ApiFuncTemplate window_functions[] = {
