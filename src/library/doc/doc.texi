@@ -2002,7 +2002,7 @@ shaders.
 @customshaderapifooter{object}
 
 @node shaderprogram-setattribute
-@section setattribute
+@subsection setattribute
 
 Sets a shader attribute. This function is somewhat analogous to
 glVertexAttribPointer, but not exactly the same. Firstly, this function
@@ -2222,7 +2222,7 @@ myprogram:setuniformsurface(location, mysurface)
 @end example
 
 @node shaderprogram-drawtosurface
-@section drawtosurface
+@subsection drawtosurface
 
 Invokes this shader program to draw to a surface. Parameters are the
 target surface, a shader buffer, and an integer indicating the number of
