@@ -2040,6 +2040,187 @@ myprogram:setattribute(0, 4, true, false, 3, 0, 12)
 @end verbatim
 @end example
 
+@node shaderprogram-setuniform1i
+@subsection setuniform1i
+
+Sets one integer as a uniform value. The first param is the "location"
+specified in GLSL and the second is the value. This value will be
+permanently associated with this location for this program, until it's
+overwritten by another setuniform call.
+
+@example lua
+@verbatim
+myprogram:setuniform1i(location, myinteger)
+@end verbatim
+@end example
+
+@node shaderprogram-setuniform2i
+@subsection setuniform2i
+
+Sets two integers as a uniform value. The first param is the "location"
+specified in GLSL and the rest are the values. These values will be
+permanently associated with this location for this program, until it's
+overwritten by another setuniform call.
+
+@example lua
+@verbatim
+myprogram:setuniform2i(location, myint1, myint2)
+@end verbatim
+@end example
+
+@node shaderprogram-setuniform3i
+@subsection setuniform3i
+
+Sets three integers as a uniform value. The first param is the
+"location" specified in GLSL and the rest are the values. These values
+will be permanently associated with this location for this program,
+until it's overwritten by another setuniform call.
+
+@example lua
+@verbatim
+myprogram:setuniform3i(location, myint1, myint2, myint3)
+@end verbatim
+@end example
+
+@node shaderprogram-setuniform4i
+@subsection setuniform4i
+
+Sets four integers as a uniform value. The first param is the "location"
+specified in GLSL and the rest are the values. These values will be
+permanently associated with this location for this program, until it's
+overwritten by another setuniform call.
+
+@example lua
+@verbatim
+myprogram:setuniform4i(location, myint1, myint2, myint3, myint4)
+@end verbatim
+@end example
+
+@node shaderprogram-setuniform1f
+@subsection setuniform1f
+
+Sets one float as a uniform value. The first param is the "location"
+specified in GLSL and the second is the value. This value will be
+permanently associated with this location for this program, until it's
+overwritten by another setuniform call.
+
+@example lua
+@verbatim
+myprogram:setuniform1f(location, mynumber)
+@end verbatim
+@end example
+
+@node shaderprogram-setuniform2f
+@subsection setuniform2f
+
+Sets two floats as a uniform value. The first param is the "location"
+specified in GLSL and the rest are the values. These values will be
+permanently associated with this location for this program, until it's
+overwritten by another setuniform call.
+
+@example lua
+@verbatim
+myprogram:setuniform2f(location, mynum1, mynum2)
+@end verbatim
+@end example
+
+@node shaderprogram-setuniform3f
+@subsection setuniform3f
+
+Sets three floats as a uniform value. The first param is the "location"
+specified in GLSL and the rest are the values. These values will be
+permanently associated with this location for this program, until it's
+overwritten by another setuniform call.
+
+@example lua
+@verbatim
+myprogram:setuniform3f(location, mynum1, mynum2, mynum3)
+@end verbatim
+@end example
+
+@node shaderprogram-setuniform4f
+@subsection setuniform4f
+
+Sets four floats as a uniform value. The first param is the "location"
+specified in GLSL and the rest are the values. These values will be
+permanently associated with this location for this program, until it's
+overwritten by another setuniform call.
+
+@example lua
+@verbatim
+myprogram:setuniform4f(location, mynum1, mynum2, mynum3, mynum4)
+@end verbatim
+@end example
+
+@node shaderprogram-setuniformmatrix2f
+@subsection setuniformmatrix2f
+
+Sets four floats as a uniform mat2x2 value. The first param is the
+"location" specified in GLSL, the second is the "transpose" boolean, and
+the rest are the values. Transposing a matrix turns it from row-major to
+column-major or vice versa. These values will be permanently associated
+with this location for this program, until it's overwritten by another
+setuniform call.
+
+@example lua
+@verbatim
+myprogram:setuniformmatrix2f(location, false, n11, n21, n12, n22)
+@end verbatim
+@end example
+
+@node shaderprogram-setuniformmatrix3f
+@subsection setuniformmatrix3f
+
+Sets nine floats as a uniform mat3x3 value. The first param is the
+"location" specified in GLSL, the second is the "transpose" boolean, and
+the rest are the values. Transposing a matrix turns it from row-major to
+column-major or vice versa. These values will be permanently associated
+with this location for this program, until it's overwritten by another
+setuniform call.
+
+@example lua
+@verbatim
+myprogram:setuniformmatrix3f(location, false, n11, n21, n31, n12, n22, n32, n13, n23, n33)
+@end verbatim
+@end example
+
+@node shaderprogram-setuniformmatrix4f
+@subsection setuniformmatrix4f
+
+Sets 16 floats as a uniform mat4x4 value. The first param is the
+"location" specified in GLSL, the second is the "transpose" boolean, and
+the rest are the values. Transposing a matrix turns it from row-major to
+column-major or vice versa. These values will be permanently associated
+with this location for this program, until it's overwritten by another
+setuniform call.
+
+In the following example, the 16 values are returned from
+@ref{transform-get}, taking advantage of the Lua feature where multiple
+return values can be used implicitly as multiple function arguments:
+
+@example lua
+@verbatim
+myprogram:setuniformmatrix4f(location, false, mytransform:get())
+@end verbatim
+@end example
+
+@node shaderprogram-setuniformsurface
+@subsection setuniformsurface
+
+Sets a @ref{objects-surface} as a uniform value. This will usually be
+used for uniform sampler2D variables. This value will be permanently
+associated with this location for this program, until it's overwritten
+by another setuniform call. Note that if the surface is destroyed before
+being used for a render, the results will be undefined, so make sure to
+keep your surface object in scope for as long as it remains bound to any
+uniforms.
+
+@example lua
+@verbatim
+myprogram:setuniformsurface(location, mysurface)
+@end verbatim
+@end example
+
 @node shaderprogram-drawtosurface
 @section drawtosurface
 
@@ -3542,7 +3723,9 @@ the data will be 2 bytes.
 
 By the way, there's no way to query attribute locations by name, so
 using @code{layout(location=...)} in your GLSL code is required to be
-able to pass data in. The same goes for uniform variables.
+able to pass data in. The same goes for uniform variables. The behaviour
+of attributes or uniforms with overlapping memory regions is undefined
+in Bolt, so don't do it.
 
 You'll notice we defined the format of our data, but we don't actually
 have any data yet. The format of each attribute is defined in the shader

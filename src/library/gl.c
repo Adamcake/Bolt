@@ -45,6 +45,7 @@ static GLuint program_direct_vao;
 static GLuint buffer_vertices_square;
 
 #define GLSLHEADER "#version 330 core\n"
+#define GLSLPLUGINEXTENSIONHEADER "#extension GL_ARB_explicit_uniform_location : require\n"
 
 // "direct" program is basically a blit but with transparency.
 // there are different vertex shaders for targeting the screen vs targeting a surface.
@@ -143,6 +144,10 @@ static uint8_t _bolt_gl_plugin_shaderprogram_init(struct ShaderProgramFunctions*
 static void _bolt_gl_plugin_shader_destroy(void* userdata);
 static void _bolt_gl_plugin_shaderprogram_destroy(void* userdata);
 static uint8_t _bolt_gl_plugin_shaderprogram_set_attribute(void* userdata, uint8_t attribute, uint8_t type_width, uint8_t type_is_signed, uint8_t type_is_float, uint8_t size, uint32_t offset, uint32_t stride);
+static void _bolt_gl_plugin_shaderprogram_set_uniform_floats(void* userdata, int location, uint8_t count, double* values);
+static void _bolt_gl_plugin_shaderprogram_set_uniform_ints(void* userdata, int location, uint8_t count, int* values);
+static void _bolt_gl_plugin_shaderprogram_set_uniform_matrix(void* userdata, int location, uint8_t transpose, uint8_t size, double* values);
+static void _bolt_gl_plugin_shaderprogram_set_uniform_surface(void* userdata, int location, void* target);
 static void _bolt_gl_plugin_shaderprogram_drawtosurface(void* userdata, void* surface_, void* buffer_, uint32_t count);
 static void _bolt_gl_plugin_shaderbuffer_init(struct ShaderBufferFunctions* out, const void* data, uint32_t len);
 static void _bolt_gl_plugin_shaderbuffer_destroy(void* userdata);
@@ -192,12 +197,76 @@ struct PluginProgramUserdata {
     GLuint program;
     GLuint vao;
     GLbitfield bindings_enabled;
+    struct hashmap* uniforms;
     struct PluginProgramAttrBinding bindings[MAX_PROGRAM_BINDINGS];
 };
 
 struct PluginShaderBufferUserdata {
     GLuint buffer;
 };
+
+struct PluginProgramUniform {
+    GLint location;
+    uint8_t count;
+    uint8_t type; // 0 = vec, 1 = matrix, 2 = sampler
+    union {
+        uint8_t is_float; // for type=0
+        uint8_t transpose; // for type=1
+        GLuint sampler; // for type=2
+    } sub;
+    union {
+        GLint i[4]; // for type=0 && !is_float
+        GLfloat f[16]; // for everything else
+    } values;
+};
+
+static int uniform_compare(const void* a, const void* b, void* udata) {
+    return (*(GLuint*)a) - (*(GLuint*)b);
+}
+
+static uint64_t uniform_hash(const void* item, uint64_t seed0, uint64_t seed1) {
+    const GLint* const id = item;
+    return hashmap_sip(id, sizeof *id, seed0, seed1);
+}
+
+#define UCASE(N,TYPE) case N: gl.Uniform##N##TYPE##v(uniform->location, 1, uniform->values.TYPE); break;
+#define UMATCASE(N) case N: gl.UniformMatrix##N##fv(uniform->location, 1, uniform->sub.transpose, uniform->values.f); break;
+static void uniform_upload(const struct PluginProgramUniform* uniform, uint32_t* active_texture) {
+    switch (uniform->type) {
+        case 0:
+            if (uniform->sub.is_float) {
+                switch (uniform->count) {
+                    UCASE(1,f)
+                    UCASE(2,f)
+                    UCASE(3,f)
+                    UCASE(4,f)
+                }
+            } else {
+                switch (uniform->count) {
+                    UCASE(1,i)
+                    UCASE(2,i)
+                    UCASE(3,i)
+                    UCASE(4,i)
+                }
+            }
+            break;
+        case 1:
+            switch (uniform->count) {
+                UMATCASE(2)
+                UMATCASE(3)
+                UMATCASE(4)
+            }
+            break;
+        case 2:
+            gl.ActiveTexture(GL_TEXTURE0 + *active_texture);
+            lgl->BindTexture(GL_TEXTURE_2D, uniform->sub.sampler);
+            gl.Uniform1i(uniform->location, *active_texture);
+            *active_texture += 1;
+            break;
+    }
+}
+#undef UCASE
+#undef UMATCASE
 
 struct GLContext* _bolt_context() {
 #if defined(_WIN32)
@@ -644,6 +713,8 @@ static void _bolt_gl_load(void* (*GetProcAddress)(const char*)) {
     INIT_GL_FUNC(Uniform2iv)
     INIT_GL_FUNC(Uniform3iv)
     INIT_GL_FUNC(Uniform4iv)
+    INIT_GL_FUNC(UniformMatrix2fv)
+    INIT_GL_FUNC(UniformMatrix3fv)
     INIT_GL_FUNC(UniformMatrix4fv)
     INIT_GL_FUNC(UnmapBuffer)
     INIT_GL_FUNC(UseProgram)
@@ -2319,9 +2390,9 @@ static void _bolt_gl_plugin_game_view_rect(int* x, int* y, int* w, int* h) {
 
 static uint8_t _bolt_gl_plugin_vertex_shader_init(struct ShaderFunctions* out, const char* source, int len, char* output, int output_len) {
     const GLuint shader = gl.CreateShader(GL_VERTEX_SHADER);
-    const GLchar* sources[] = {GLSLHEADER, source};
-    const GLint lengths[] = {sizeof(GLSLHEADER) - sizeof(*GLSLHEADER), len};
-    gl.ShaderSource(shader, 2, sources, lengths);
+    const GLchar* sources[] = {GLSLHEADER, GLSLPLUGINEXTENSIONHEADER, source};
+    const GLint lengths[] = {sizeof(GLSLHEADER) - sizeof(*GLSLHEADER), sizeof(GLSLPLUGINEXTENSIONHEADER) - sizeof(*GLSLPLUGINEXTENSIONHEADER), len};
+    gl.ShaderSource(shader, 3, sources, lengths);
     gl.CompileShader(shader);
     GLint status;
     gl.GetShaderiv(shader, GL_COMPILE_STATUS, &status);
@@ -2336,9 +2407,9 @@ static uint8_t _bolt_gl_plugin_vertex_shader_init(struct ShaderFunctions* out, c
 
 static uint8_t _bolt_gl_plugin_fragment_shader_init(struct ShaderFunctions* out, const char* source, int len, char* output, int output_len) {
     const GLuint shader = gl.CreateShader(GL_FRAGMENT_SHADER);
-    const GLchar* sources[] = {GLSLHEADER, source};
-    const GLint lengths[] = {sizeof(GLSLHEADER) - sizeof(*GLSLHEADER), len};
-    gl.ShaderSource(shader, 2, sources, lengths);
+    const GLchar* sources[] = {GLSLHEADER, GLSLPLUGINEXTENSIONHEADER, source};
+    const GLint lengths[] = {sizeof(GLSLHEADER) - sizeof(*GLSLHEADER), sizeof(GLSLPLUGINEXTENSIONHEADER) - sizeof(*GLSLPLUGINEXTENSIONHEADER), len};
+    gl.ShaderSource(shader, 3, sources, lengths);
     gl.CompileShader(shader);
     GLint status;
     gl.GetShaderiv(shader, GL_COMPILE_STATUS, &status);
@@ -2368,11 +2439,16 @@ static uint8_t _bolt_gl_plugin_shaderprogram_init(struct ShaderProgramFunctions*
     gl.DetachShader(program, fs);
     out->userdata = malloc(sizeof(struct PluginProgramUserdata));
     struct PluginProgramUserdata* userdata = (struct PluginProgramUserdata*)out->userdata;
+    userdata->uniforms = hashmap_new(sizeof(struct PluginProgramUniform), 16, 0, 0, uniform_hash, uniform_compare, NULL, NULL);
     userdata->program = program;
     userdata->bindings_enabled = 0;
     gl.GenVertexArrays(1, &userdata->vao);
     out->set_attribute = _bolt_gl_plugin_shaderprogram_set_attribute;
     out->draw_to_surface = _bolt_gl_plugin_shaderprogram_drawtosurface;
+    out->set_uniform_floats = _bolt_gl_plugin_shaderprogram_set_uniform_floats;
+    out->set_uniform_ints = _bolt_gl_plugin_shaderprogram_set_uniform_ints;
+    out->set_uniform_matrix = _bolt_gl_plugin_shaderprogram_set_uniform_matrix;
+    out->set_uniform_surface = _bolt_gl_plugin_shaderprogram_set_uniform_surface;
     return true;
 }
 
@@ -2383,6 +2459,7 @@ static void _bolt_gl_plugin_shader_destroy(void* userdata) {
 
 static void _bolt_gl_plugin_shaderprogram_destroy(void* userdata) {
     struct PluginProgramUserdata* program = (struct PluginProgramUserdata*)userdata;
+    hashmap_free(program->uniforms);
     gl.DeleteProgram(program->program);
     gl.DeleteVertexArrays(1, &program->vao);
     free(userdata);
@@ -2434,6 +2511,60 @@ static uint8_t _bolt_gl_plugin_shaderprogram_set_attribute(void* userdata, uint8
     return true;
 }
 
+static void _bolt_gl_plugin_shaderprogram_set_uniform_floats(void* userdata, int location, uint8_t count, double* values) {
+    const struct PluginProgramUserdata* program = (struct PluginProgramUserdata*)userdata;
+    struct PluginProgramUniform uniform = {
+        .location = location,
+        .count = count,
+        .type = 0,
+        .sub.is_float = true,
+    };
+    for (size_t i = 0; i < count; i += 1) {
+        uniform.values.f[i] = (GLfloat)values[i];
+    }
+    hashmap_set(program->uniforms, &uniform);
+}
+
+static void _bolt_gl_plugin_shaderprogram_set_uniform_ints(void* userdata, int location, uint8_t count, int* values) {
+    const struct PluginProgramUserdata* program = (struct PluginProgramUserdata*)userdata;
+    struct PluginProgramUniform uniform = {
+        .location = location,
+        .count = count,
+        .type = 0,
+        .sub.is_float = false,
+    };
+    for (size_t i = 0; i < count; i += 1) {
+        uniform.values.i[i] = (GLint)values[i];
+    }
+    hashmap_set(program->uniforms, &uniform);
+}
+
+static void _bolt_gl_plugin_shaderprogram_set_uniform_matrix(void* userdata, int location, uint8_t transpose, uint8_t size, double* values) {
+    const struct PluginProgramUserdata* program = (struct PluginProgramUserdata*)userdata;
+    struct PluginProgramUniform uniform = {
+        .location = location,
+        .count = size,
+        .type = 1,
+        .sub.transpose = transpose,
+    };
+    for (size_t i = 0; i < (size * size); i += 1) {
+        uniform.values.f[i] = (GLfloat)values[i];
+    }
+    hashmap_set(program->uniforms, &uniform);
+}
+
+static void _bolt_gl_plugin_shaderprogram_set_uniform_surface(void* userdata, int location, void* target) {
+    const struct PluginProgramUserdata* program = (struct PluginProgramUserdata*)userdata;
+    const struct PluginSurfaceUserdata* surface = (struct PluginSurfaceUserdata*)target;
+    struct PluginProgramUniform uniform = {
+        .location = location,
+        .count = 1,
+        .type = 2,
+        .sub.sampler = surface->renderbuffer,
+    };
+    hashmap_set(program->uniforms, &uniform);
+}
+
 static void _bolt_gl_plugin_shaderprogram_drawtosurface(void* userdata, void* surface_, void* buffer_, uint32_t count) {
     const struct PluginProgramUserdata* program = (struct PluginProgramUserdata*)userdata;
     const struct PluginSurfaceUserdata* surface = surface_;
@@ -2462,6 +2593,12 @@ static void _bolt_gl_plugin_shaderprogram_drawtosurface(void* userdata, void* su
             gl.DisableVertexAttribArray(i);
         }
     }
+    uint32_t active_texture = 0;
+    size_t iter = 0;
+    void* item;
+    while (hashmap_iter(program->uniforms, &iter, &item)) {
+        uniform_upload(item, &active_texture);
+    }
     gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, surface->framebuffer);
     lgl->Viewport(0, 0, surface->width, surface->height);
     lgl->Disable(GL_DEPTH_TEST);
@@ -2469,6 +2606,13 @@ static void _bolt_gl_plugin_shaderprogram_drawtosurface(void* userdata, void* su
     lgl->Disable(GL_CULL_FACE);
     lgl->DrawArrays(GL_TRIANGLES, 0, count);
 
+    if (active_texture > 0) {
+        for (size_t i = 0; i < active_texture; i += 1) {
+            gl.ActiveTexture(GL_TEXTURE0 + i);
+            lgl->BindTexture(GL_TEXTURE_2D, c->texture_units[i]->id);
+        }
+        gl.ActiveTexture(GL_TEXTURE0 + c->active_texture);
+    }
     if (depth_test) lgl->Enable(GL_DEPTH_TEST);
     if (scissor_test) lgl->Enable(GL_SCISSOR_TEST);
     if (cull_face) lgl->Enable(GL_CULL_FACE);

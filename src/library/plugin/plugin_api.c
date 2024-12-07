@@ -1648,6 +1648,60 @@ static int api_shaderprogram_setattribute(lua_State* state) {
     return 0;
 }
 
+#define DEFSETUNIFORM(N) \
+static int api_shaderprogram_setuniform##N##i(lua_State* state) { \
+    struct ShaderProgramFunctions* program = require_self_userdata(state, "setuniform" #N "i"); \
+    const lua_Integer location = luaL_checkinteger(state, 2); \
+    int values[N]; \
+    for (size_t i = 0; i < N; i += 1) { \
+        values[i] = (int)luaL_checkinteger(state, i + 3); \
+    } \
+    program->set_uniform_ints(program->userdata, location, N, values); \
+    return 0; \
+} \
+static int api_shaderprogram_setuniform##N##f(lua_State* state) { \
+    struct ShaderProgramFunctions* program = require_self_userdata(state, "setuniform" #N "f"); \
+    const lua_Integer location = luaL_checkinteger(state, 2); \
+    double values[N]; \
+    for (size_t i = 0; i < N; i += 1) { \
+        values[i] = (double)luaL_checknumber(state, i + 3); \
+    } \
+    program->set_uniform_floats(program->userdata, location, N, values); \
+    return 0; \
+}
+
+DEFSETUNIFORM(1)
+DEFSETUNIFORM(2)
+DEFSETUNIFORM(3)
+DEFSETUNIFORM(4)
+#undef DEFSETUNIFORM
+
+#define DEFSETUNIFORMMATRIX(N) \
+static int api_shaderprogram_setuniformmatrix##N##f(lua_State* state) { \
+    struct ShaderProgramFunctions* program = require_self_userdata(state, "setuniformmatrix" #N "f"); \
+    const lua_Integer location = luaL_checkinteger(state, 2); \
+    const uint8_t transpose = lua_toboolean(state, 3); \
+    double values[N * N]; \
+    for (size_t i = 0; i < (N * N); i += 1) { \
+        values[i] = (double)luaL_checknumber(state, i + 4); \
+    } \
+    program->set_uniform_matrix(program->userdata, location, transpose, N, values); \
+    return 0; \
+}
+
+DEFSETUNIFORMMATRIX(2)
+DEFSETUNIFORMMATRIX(3)
+DEFSETUNIFORMMATRIX(4)
+#undef DEFSETUNIFORMMATRIX
+
+static int api_shaderprogram_setuniformsurface(lua_State* state) {
+    struct ShaderProgramFunctions* program = require_self_userdata(state, "setuniformsurface");
+    const lua_Integer location = luaL_checkinteger(state, 2);
+    const struct SurfaceFunctions* surface = require_userdata(state, 3, "setuniformsurface");
+    program->set_uniform_surface(program->userdata, location, surface->userdata);
+    return 0;
+}
+
 static int api_shaderprogram_drawtosurface(lua_State* state) {
     const struct ShaderProgramFunctions* program = require_self_userdata(state, "drawtosurface");
     const struct SurfaceFunctions* surface = require_userdata(state, 2, "drawtosurface");
@@ -1848,6 +1902,18 @@ static struct ApiFuncTemplate buffer_functions[] = {
 
 static struct ApiFuncTemplate shaderprogram_functions[] = {
     BOLTFUNC(setattribute, shaderprogram),
+    BOLTFUNC(setuniform1i, shaderprogram),
+    BOLTFUNC(setuniform2i, shaderprogram),
+    BOLTFUNC(setuniform3i, shaderprogram),
+    BOLTFUNC(setuniform4i, shaderprogram),
+    BOLTFUNC(setuniform1f, shaderprogram),
+    BOLTFUNC(setuniform2f, shaderprogram),
+    BOLTFUNC(setuniform3f, shaderprogram),
+    BOLTFUNC(setuniform4f, shaderprogram),
+    BOLTFUNC(setuniformmatrix2f, shaderprogram),
+    BOLTFUNC(setuniformmatrix3f, shaderprogram),
+    BOLTFUNC(setuniformmatrix4f, shaderprogram),
+    BOLTFUNC(setuniformsurface, shaderprogram),
     BOLTFUNC(drawtosurface, shaderprogram),
 };
 

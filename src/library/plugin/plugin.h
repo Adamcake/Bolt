@@ -186,6 +186,19 @@ struct ShaderProgramFunctions {
 
     /// Draws to a surface using this shader program.
     void (*draw_to_surface)(void* userdata, void* surface_, void* buffer_, uint32_t count);
+
+    /// Associates some values with a uniform in this shader program by its location.
+    void (*set_uniform_floats)(void* userdata, int location, uint8_t count, double* values);
+
+    /// Associates some values with a uniform in this shader program by its location.
+    void (*set_uniform_ints)(void* userdata, int location, uint8_t count, int* values);
+
+    /// Associates some values with a uniform in this shader program by its location.
+    void (*set_uniform_matrix)(void* userdata, int location, uint8_t transpose, uint8_t size, double* values);
+
+    /// Associates a surface userdata object with a uniform in this shader program by its location.
+    /// Typically this will be used for a sampler2D variable.
+    void (*set_uniform_surface)(void* userdata, int location, void* target);
 };
 
 /// Struct containing "vtable" callback information for shader buffers

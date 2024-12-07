@@ -97,6 +97,8 @@ struct GLProcFunctions {
     void (*Uniform2iv)(GLint, GLsizei, const GLint*);
     void (*Uniform3iv)(GLint, GLsizei, const GLint*);
     void (*Uniform4iv)(GLint, GLsizei, const GLint*);
+    void (*UniformMatrix2fv)(GLint, GLsizei, GLboolean, const GLfloat*);
+    void (*UniformMatrix3fv)(GLint, GLsizei, GLboolean, const GLfloat*);
     void (*UniformMatrix4fv)(GLint, GLsizei, GLboolean, const GLfloat*);
     GLboolean (*UnmapBuffer)(GLenum);
     void (*UseProgram)(GLuint);
