@@ -42,9 +42,11 @@ static GLint program_region_dest_wh;
 static GLuint program_direct_vao;
 static GLuint buffer_vertices_square;
 
+#define GLSLHEADER "#version 330 core\n"
+
 // "direct" program is basically a blit but with transparency.
 // there are different vertex shaders for targeting the screen vs targeting a surface.
-static const GLchar program_direct_screen_vs[] = "#version 330 core\n"
+static const GLchar program_direct_screen_vs[] = GLSLHEADER
 "layout (location = 0) in vec2 aPos;"
 "out vec2 vPos;"
 "uniform ivec4 d_xywh;"
@@ -53,7 +55,7 @@ static const GLchar program_direct_screen_vs[] = "#version 330 core\n"
   "vPos = aPos;"
   "gl_Position = vec4(((((aPos * d_xywh.pq) + d_xywh.st) * vec2(2.0, 2.0) / src_wh_dest_wh.pq) - vec2(1.0, 1.0)) * vec2(1.0, -1.0), 0.0, 1.0);"
 "}";
-static const GLchar program_direct_surface_vs[] = "#version 330 core\n"
+static const GLchar program_direct_surface_vs[] = GLSLHEADER
 "layout (location = 0) in vec2 aPos;"
 "out vec2 vPos;"
 "uniform ivec4 d_xywh;"
@@ -62,7 +64,7 @@ static const GLchar program_direct_surface_vs[] = "#version 330 core\n"
   "vPos = aPos;"
   "gl_Position = vec4(((((aPos * d_xywh.pq) + d_xywh.st) * vec2(2.0, 2.0) / src_wh_dest_wh.pq) - vec2(1.0, 1.0)), 0.0, 1.0);"
 "}";
-static const GLchar program_direct_fs[] = "#version 330 core\n"
+static const GLchar program_direct_fs[] = GLSLHEADER
 "in vec2 vPos;"
 "layout (location = 0) out vec4 col;"
 "uniform sampler2D tex;"
@@ -73,7 +75,7 @@ static const GLchar program_direct_fs[] = "#version 330 core\n"
 "}";
 
 // "region" program draws an outline of alternating black and white pixels on a rectangular region of the screen
-static const GLchar program_region_vs[] = "#version 330 core\n"
+static const GLchar program_region_vs[] = GLSLHEADER
 "layout (location = 0) in vec2 aPos;"
 "out vec2 vPos;"
 "uniform ivec4 xywh;"
@@ -82,7 +84,7 @@ static const GLchar program_region_vs[] = "#version 330 core\n"
   "vPos = aPos;"
   "gl_Position = vec4(((((aPos * xywh.pq) + xywh.st) * vec2(2.0, 2.0) / vec2(dest_wh)) - vec2(1.0, 1.0)), 0.0, 1.0);"
 "}";
-static const GLchar program_region_fs[] = "#version 330 core\n"
+static const GLchar program_region_fs[] = GLSLHEADER
 "in vec2 vPos;"
 "layout (location = 0) out vec4 col;"
 "uniform ivec4 xywh;"
@@ -130,6 +132,15 @@ static void _bolt_gl_plugin_surface_drawtosurface(void* userdata, void* target, 
 static void _bolt_gl_plugin_draw_region_outline(void* userdata, int16_t x, int16_t y, uint16_t width, uint16_t height);
 static void _bolt_gl_plugin_read_screen_pixels(uint32_t width, uint32_t height, void* data);
 static void _bolt_gl_plugin_game_view_rect(int* x, int* y, int* w, int* h);
+static uint8_t _bolt_gl_plugin_vertex_shader_init(struct ShaderFunctions* out, const char* source, int len, char* output, int output_len);
+static uint8_t _bolt_gl_plugin_fragment_shader_init(struct ShaderFunctions* out, const char* source, int len, char* output, int output_len);
+static uint8_t _bolt_gl_plugin_shaderprogram_init(struct ShaderProgramFunctions* out, void* vertex, void* fragment, char* output, int output_len);
+static void _bolt_gl_plugin_shader_destroy(void* userdata);
+static void _bolt_gl_plugin_shaderprogram_destroy(void* userdata);
+static uint8_t _bolt_gl_plugin_shaderprogram_set_attribute(void* userdata, uint8_t attribute, uint8_t type_width, uint8_t type_is_signed, uint8_t type_is_float, uint8_t size, uint32_t offset, uint32_t stride);
+static void _bolt_gl_plugin_shaderprogram_drawtosurface(void* userdata, void* surface_, void* buffer_, uint32_t count);
+static void _bolt_gl_plugin_shaderbuffer_init(struct ShaderBufferFunctions* out, const void* data, uint32_t len);
+static void _bolt_gl_plugin_shaderbuffer_destroy(void* userdata);
 
 #define MAX_TEXTURE_UNITS 4096 // would be nice if there was a way to query this at runtime, but it would be awkward to set up
 #define BUFFER_LIST_CAPACITY 256 * 256
@@ -155,8 +166,31 @@ static pthread_key_t current_context_tls;
 struct PluginSurfaceUserdata {
     unsigned int width;
     unsigned int height;
-    unsigned int framebuffer;
-    unsigned int renderbuffer;
+    GLuint framebuffer;
+    GLuint renderbuffer;
+};
+
+struct PluginShaderUserdata {
+    GLuint shader;
+};
+
+struct PluginProgramAttrBinding {
+    uintptr_t offset;
+    unsigned int stride;
+    GLenum type;
+    uint8_t size;
+    uint8_t is_double;
+};
+
+struct PluginProgramUserdata {
+    GLuint program;
+    GLuint vao;
+    GLbitfield bindings_enabled;
+    struct PluginProgramAttrBinding bindings[MAX_PROGRAM_BINDINGS];
+};
+
+struct PluginShaderBufferUserdata {
+    GLuint buffer;
 };
 
 struct GLContext* _bolt_context() {
@@ -559,6 +593,7 @@ static void _bolt_gl_load(void* (*GetProcAddress)(const char*)) {
     INIT_GL_FUNC(DeleteProgram)
     INIT_GL_FUNC(DeleteShader)
     INIT_GL_FUNC(DeleteVertexArrays)
+    INIT_GL_FUNC(DetachShader)
     INIT_GL_FUNC(DisableVertexAttribArray)
     INIT_GL_FUNC(DrawElements)
     INIT_GL_FUNC(EnableVertexAttribArray)
@@ -573,6 +608,10 @@ static void _bolt_gl_load(void* (*GetProcAddress)(const char*)) {
     INIT_GL_FUNC(GetFramebufferAttachmentParameteriv)
     INIT_GL_FUNC(GetIntegeri_v)
     INIT_GL_FUNC(GetIntegerv)
+    INIT_GL_FUNC(GetProgramInfoLog)
+    INIT_GL_FUNC(GetProgramiv)
+    INIT_GL_FUNC(GetShaderInfoLog)
+    INIT_GL_FUNC(GetShaderiv)
     INIT_GL_FUNC(GetUniformBlockIndex)
     INIT_GL_FUNC(GetUniformfv)
     INIT_GL_FUNC(GetUniformIndices)
@@ -589,6 +628,7 @@ static void _bolt_gl_load(void* (*GetProcAddress)(const char*)) {
     INIT_GL_FUNC(UniformMatrix4fv)
     INIT_GL_FUNC(UnmapBuffer)
     INIT_GL_FUNC(UseProgram)
+    INIT_GL_FUNC(VertexAttribLPointer)
     INIT_GL_FUNC(VertexAttribPointer)
 #undef INIT_GL_FUNC
 }
@@ -634,6 +674,10 @@ static void _bolt_gl_init() {
     program_direct_surface_s_xywh = gl.GetUniformLocation(program_direct_surface, "s_xywh");
     program_direct_surface_src_wh_dest_wh = gl.GetUniformLocation(program_direct_surface, "src_wh_dest_wh");
 
+    gl.DetachShader(program_direct_screen, direct_screen_vs);
+    gl.DetachShader(program_direct_screen, direct_fs);
+    gl.DetachShader(program_direct_surface, direct_surface_vs);
+    gl.DetachShader(program_direct_surface, direct_fs);
     gl.DeleteShader(direct_screen_vs);
     gl.DeleteShader(direct_surface_vs);
     gl.DeleteShader(direct_fs);
@@ -656,6 +700,8 @@ static void _bolt_gl_init() {
     gl.LinkProgram(program_region);
     program_region_xywh = gl.GetUniformLocation(program_region, "xywh");
     program_region_dest_wh = gl.GetUniformLocation(program_region, "dest_wh");
+    gl.DetachShader(program_region, region_vs);
+    gl.DetachShader(program_region, region_fs);
     gl.DeleteShader(region_vs);
     gl.DeleteShader(region_fs);
 
@@ -1336,6 +1382,13 @@ void _bolt_gl_onMakeCurrent(void* context) {
             .draw_region_outline = _bolt_gl_plugin_draw_region_outline,
             .read_screen_pixels = _bolt_gl_plugin_read_screen_pixels,
             .game_view_rect = _bolt_gl_plugin_game_view_rect,
+            .vertex_shader_init = _bolt_gl_plugin_vertex_shader_init,
+            .fragment_shader_init = _bolt_gl_plugin_fragment_shader_init,
+            .shader_program_init = _bolt_gl_plugin_shaderprogram_init,
+            .shader_buffer_init = _bolt_gl_plugin_shaderbuffer_init,
+            .shader_destroy = _bolt_gl_plugin_shader_destroy,
+            .shader_program_destroy = _bolt_gl_plugin_shaderprogram_destroy,
+            .shader_buffer_destroy = _bolt_gl_plugin_shaderbuffer_destroy,
         };
         _bolt_plugin_init(&functions);
     }
@@ -2222,4 +2275,182 @@ static void _bolt_gl_plugin_game_view_rect(int* x, int* y, int* w, int* h) {
     *y = c->game_view_y;
     *w = c->game_view_w;
     *h = c->game_view_h;
+}
+
+static uint8_t _bolt_gl_plugin_vertex_shader_init(struct ShaderFunctions* out, const char* source, int len, char* output, int output_len) {
+    const GLuint shader = gl.CreateShader(GL_VERTEX_SHADER);
+    const GLchar* sources[] = {GLSLHEADER, source};
+    const GLint lengths[] = {sizeof(GLSLHEADER) - sizeof(*GLSLHEADER), len};
+    gl.ShaderSource(shader, 2, sources, lengths);
+    gl.CompileShader(shader);
+    GLint status;
+    gl.GetShaderiv(shader, GL_COMPILE_STATUS, &status);
+    if (!status) {
+        gl.GetShaderInfoLog(shader, output_len, NULL, output);
+        return false;
+    }
+    out->userdata = malloc(sizeof(struct PluginShaderUserdata));
+    ((struct PluginShaderUserdata*)out->userdata)->shader = shader;
+    return true;
+}
+
+static uint8_t _bolt_gl_plugin_fragment_shader_init(struct ShaderFunctions* out, const char* source, int len, char* output, int output_len) {
+    const GLuint shader = gl.CreateShader(GL_FRAGMENT_SHADER);
+    const GLchar* sources[] = {GLSLHEADER, source};
+    const GLint lengths[] = {sizeof(GLSLHEADER) - sizeof(*GLSLHEADER), len};
+    gl.ShaderSource(shader, 2, sources, lengths);
+    gl.CompileShader(shader);
+    GLint status;
+    gl.GetShaderiv(shader, GL_COMPILE_STATUS, &status);
+    if (!status) {
+        gl.GetShaderInfoLog(shader, output_len, NULL, output);
+        return false;
+    }
+    out->userdata = malloc(sizeof(struct PluginShaderUserdata));
+    ((struct PluginShaderUserdata*)out->userdata)->shader = shader;
+    return true;
+}
+
+static uint8_t _bolt_gl_plugin_shaderprogram_init(struct ShaderProgramFunctions* out, void* vertex, void* fragment, char* output, int output_len) {
+    const GLuint program = gl.CreateProgram();
+    const GLuint vs = ((struct PluginShaderUserdata*)vertex)->shader;
+    const GLuint fs = ((struct PluginShaderUserdata*)fragment)->shader;
+    gl.AttachShader(program, vs);
+    gl.AttachShader(program, fs);
+    gl.LinkProgram(program);
+    GLint status;
+    gl.GetProgramiv(program, GL_LINK_STATUS, &status);
+    if (!status) {
+        gl.GetProgramInfoLog(program, output_len, NULL, output);
+        return false;
+    }
+    gl.DetachShader(program, vs);
+    gl.DetachShader(program, fs);
+    out->userdata = malloc(sizeof(struct PluginProgramUserdata));
+    struct PluginProgramUserdata* userdata = (struct PluginProgramUserdata*)out->userdata;
+    userdata->program = program;
+    userdata->bindings_enabled = 0;
+    gl.GenVertexArrays(1, &userdata->vao);
+    out->set_attribute = _bolt_gl_plugin_shaderprogram_set_attribute;
+    out->draw_to_surface = _bolt_gl_plugin_shaderprogram_drawtosurface;
+    return true;
+}
+
+static void _bolt_gl_plugin_shader_destroy(void* userdata) {
+    gl.DeleteShader(((struct PluginShaderUserdata*)userdata)->shader);
+    free(userdata);
+}
+
+static void _bolt_gl_plugin_shaderprogram_destroy(void* userdata) {
+    struct PluginProgramUserdata* program = (struct PluginProgramUserdata*)userdata;
+    gl.DeleteProgram(program->program);
+    gl.DeleteVertexArrays(1, &program->vao);
+    free(userdata);
+}
+
+static uint8_t _bolt_gl_plugin_shaderprogram_set_attribute(void* userdata, uint8_t attribute, uint8_t type_width, uint8_t type_is_signed, uint8_t type_is_float, uint8_t size, uint32_t offset, uint32_t stride) {
+    struct PluginProgramUserdata* program = (struct PluginProgramUserdata*)userdata;
+    const GLbitfield bitmask = 1 << attribute;
+    if (program->bindings_enabled & bitmask) return false;
+    struct PluginProgramAttrBinding* binding = &program->bindings[attribute];
+    if (type_is_float) {
+        if (!type_is_signed) return false;
+        switch (type_width) {
+            case 2:
+                binding->type = GL_HALF_FLOAT;
+                binding->is_double = false;
+                break;
+            case 4:
+                binding->type = GL_FLOAT;
+                binding->is_double = false;
+                break;
+            case 8:
+                binding->type = GL_DOUBLE;
+                binding->is_double = true;
+                break;
+            default:
+                return false;
+        }
+    } else {
+        binding->is_double = false;
+        switch (type_width) {
+            case 1:
+                binding->type = type_is_signed ? GL_BYTE : GL_UNSIGNED_BYTE;
+                break;
+            case 2:
+                binding->type = type_is_signed ? GL_SHORT : GL_UNSIGNED_SHORT;
+                break;
+            case 4:
+                binding->type = type_is_signed ? GL_INT : GL_UNSIGNED_INT;
+                break;
+            default:
+                return false;
+        }
+    }
+    binding->size = size;
+    binding->offset = offset;
+    binding->stride = stride;
+    program->bindings_enabled |= bitmask;
+    return true;
+}
+
+static void _bolt_gl_plugin_shaderprogram_drawtosurface(void* userdata, void* surface_, void* buffer_, uint32_t count) {
+    const struct PluginProgramUserdata* program = (struct PluginProgramUserdata*)userdata;
+    const struct PluginSurfaceUserdata* surface = surface_;
+    const struct PluginShaderBufferUserdata* buffer = buffer_;
+    const struct GLContext* c = _bolt_context();
+    GLint array_binding;
+    gl.GetIntegerv(GL_ARRAY_BUFFER_BINDING, &array_binding);
+    GLboolean depth_test, scissor_test, cull_face;
+    lgl->GetBooleanv(GL_DEPTH_TEST, &depth_test);
+    lgl->GetBooleanv(GL_SCISSOR_TEST, &scissor_test);
+    lgl->GetBooleanv(GL_CULL_FACE, &cull_face);
+
+    gl.UseProgram(program->program);
+    gl.BindVertexArray(program->vao);
+    gl.BindBuffer(GL_ARRAY_BUFFER, buffer->buffer);
+    for (uint8_t i = 0; i < MAX_PROGRAM_BINDINGS; i += 1) {
+        if (program->bindings_enabled & (1 << i)) {
+            const struct PluginProgramAttrBinding* binding = &program->bindings[i];
+            gl.EnableVertexAttribArray(i);
+            if (binding->is_double) {
+                gl.VertexAttribLPointer(i, binding->size, binding->type, binding->stride, (const void*)binding->offset);
+            } else {
+                gl.VertexAttribPointer(i, binding->size, binding->type, false, binding->stride, (const void*)binding->offset);
+            }
+        } else {
+            gl.DisableVertexAttribArray(i);
+        }
+    }
+    gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, surface->framebuffer);
+    lgl->Viewport(0, 0, surface->width, surface->height);
+    lgl->Disable(GL_DEPTH_TEST);
+    lgl->Disable(GL_SCISSOR_TEST);
+    lgl->Disable(GL_CULL_FACE);
+    lgl->DrawArrays(GL_TRIANGLES, 0, count);
+
+    if (depth_test) lgl->Enable(GL_DEPTH_TEST);
+    if (scissor_test) lgl->Enable(GL_SCISSOR_TEST);
+    if (cull_face) lgl->Enable(GL_CULL_FACE);
+    lgl->Viewport(c->viewport_x, c->viewport_y, c->viewport_w, c->viewport_h);
+    gl.BindBuffer(GL_ARRAY_BUFFER, array_binding);
+    gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, c->current_draw_framebuffer);
+    gl.BindVertexArray(c->bound_vao->id);
+    gl.UseProgram(c->bound_program ? c->bound_program->id : 0);
+}
+
+static void _bolt_gl_plugin_shaderbuffer_init(struct ShaderBufferFunctions* out, const void* data, uint32_t len) {
+    out->userdata = malloc(sizeof(struct PluginShaderBufferUserdata));
+    struct PluginShaderBufferUserdata* buffer = out->userdata;
+    GLint array_binding;
+    gl.GetIntegerv(GL_ARRAY_BUFFER_BINDING, &array_binding);
+    gl.GenBuffers(1, &buffer->buffer);
+    gl.BindBuffer(GL_ARRAY_BUFFER, buffer->buffer);
+    gl.BufferData(GL_ARRAY_BUFFER, len, data, GL_STATIC_DRAW);
+    gl.BindBuffer(GL_ARRAY_BUFFER, array_binding);
+}
+
+static void _bolt_gl_plugin_shaderbuffer_destroy(void* userdata) {
+    gl.DeleteBuffers(1, &((struct PluginShaderBufferUserdata*)userdata)->buffer);
+    free(userdata);
 }

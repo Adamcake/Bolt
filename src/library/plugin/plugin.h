@@ -17,6 +17,7 @@ struct lua_State;
 #define GRAB_TYPE_STOP 2
 
 #define MAX_MODELS_PER_ICON 8
+#define MAX_PROGRAM_BINDINGS 16
 
 // a currently-running plugin.
 // note "path" is not null-terminated, and must always be converted to use '/' as path-separators
@@ -159,6 +160,32 @@ struct SurfaceFunctions {
     void (*draw_to_surface)(void* userdata, void* target, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh);
 };
 
+/// Struct containing "vtable" callback information for shaders
+struct ShaderFunctions {
+    /// Userdata which will be passed to the functions contained in this struct
+    void* userdata;
+};
+
+/// Struct containing "vtable" callback information for shader programs
+struct ShaderProgramFunctions {
+    /// Userdata which will be passed to the functions contained in this struct.
+    void* userdata;
+
+    /// Permanently enables a shader attribute and associates it with an offset, stride and data type.
+    /// Assumes attribute is < 16.
+    /// Returns false if called on an index that's already enabled, or with an invalid combination of width and is_float.
+    uint8_t (*set_attribute)(void* userdata, uint8_t attribute, uint8_t type_width, uint8_t type_is_signed, uint8_t type_is_float, uint8_t size, uint32_t offset, uint32_t stride);
+
+    /// Draws to a surface using this shader program.
+    void (*draw_to_surface)(void* userdata, void* surface_, void* buffer_, uint32_t count);
+};
+
+/// Struct containing "vtable" callback information for shader buffers
+struct ShaderBufferFunctions {
+    /// Userdata which will be passed to the functions contained in this struct.
+    void* userdata;
+};
+
 /// Struct containing functions initiated by plugin code, which must be set on startup, as opposed to
 /// being set when a callback object is created like with other vtable structs.
 struct PluginManagedFunctions {
@@ -168,6 +195,14 @@ struct PluginManagedFunctions {
     void (*draw_region_outline)(void* target, int16_t x, int16_t y, uint16_t width, uint16_t height);
     void (*read_screen_pixels)(uint32_t width, uint32_t height, void* data);
     void (*game_view_rect)(int* x, int* y, int* w, int* h);
+
+    uint8_t (*vertex_shader_init)(struct ShaderFunctions*, const char* source, int len, char* output, int output_len);
+    uint8_t (*fragment_shader_init)(struct ShaderFunctions*, const char* source, int len, char* output, int output_len);
+    uint8_t (*shader_program_init)(struct ShaderProgramFunctions*, void* vertex, void* fragment, char* output, int output_len);
+    void (*shader_buffer_init)(struct ShaderBufferFunctions* out, const void* data, uint32_t len);
+    void (*shader_destroy)(void*);
+    void (*shader_program_destroy)(void*);
+    void (*shader_buffer_destroy)(void*);
 };
 
 struct WindowPendingInput {

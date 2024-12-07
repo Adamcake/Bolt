@@ -1,5 +1,6 @@
 #include "../ipc.h"
 #include "plugin_api.h"
+#include "lua.h"
 #include "plugin.h"
 
 #include "../../../modules/hashmap/hashmap.h"
@@ -19,6 +20,8 @@
 #define API_VERSION_MAJOR 1
 #define API_VERSION_MINOR 0
 
+#define ERRORBUFSIZE 4096
+
 struct FixedBuffer {
     void* data;
     size_t size;
@@ -37,6 +40,10 @@ static void set_handler(lua_State* state, const char* regname, uint64_t window_i
     lua_settable(state, -3); /*stack: window table, event table*/ \
     lua_pop(state, 2); /*stack: (empty)*/ \
 }
+
+#define SETMETATABLE(NAME) \
+lua_getfield(state, LUA_REGISTRYINDEX, #NAME "meta"); \
+lua_setmetatable(state, -2);
 
 #define DEFINE_CALLBACK(APINAME) \
 static int api_on##APINAME(lua_State* state) { \
@@ -83,7 +90,7 @@ static void* require_self_userdata(lua_State* state, const char* apiname) {
 }
 
 static void get_binary_data(lua_State* state, int n, const void** data, size_t* size) {
-    if (lua_isuserdata(state, 2)) {
+    if (lua_isuserdata(state, n)) {
         const struct FixedBuffer* buffer = lua_touserdata(state, n);
         *data = buffer->data;
         *size = buffer->size;
@@ -102,6 +109,27 @@ static int surface_gc(lua_State* state) {
 static int buffer_gc(lua_State* state) {
     const struct FixedBuffer* buffer = lua_touserdata(state, 1);
     free(buffer->data);
+    return 0;
+}
+
+static int shader_gc(lua_State* state) {
+    const struct PluginManagedFunctions* managed_functions = _bolt_plugin_managed_functions();
+    const struct ShaderFunctions* shader = lua_touserdata(state, 1);
+    managed_functions->shader_destroy(shader->userdata);
+    return 0;
+}
+
+static int shaderprogram_gc(lua_State* state) {
+    const struct PluginManagedFunctions* managed_functions = _bolt_plugin_managed_functions();
+    const struct ShaderProgramFunctions* program = lua_touserdata(state, 1);
+    managed_functions->shader_program_destroy(program->userdata);
+    return 0;
+}
+
+static int shaderbuffer_gc(lua_State* state) {
+    const struct PluginManagedFunctions* managed_functions = _bolt_plugin_managed_functions();
+    const struct ShaderBufferFunctions* buffer = lua_touserdata(state, 1);
+    managed_functions->shader_buffer_destroy(buffer->userdata);
     return 0;
 }
 
@@ -378,8 +406,7 @@ static int api_createsurface(lua_State* state) {
     const lua_Integer h = luaL_checkinteger(state, 2);
     struct SurfaceFunctions* functions = lua_newuserdata(state, sizeof(struct SurfaceFunctions));
     managed_functions->surface_init(functions, w, h, NULL);
-    lua_getfield(state, LUA_REGISTRYINDEX, "surfacemeta");
-    lua_setmetatable(state, -2);
+    SETMETATABLE(surface)
     return 1;
 }
 
@@ -401,8 +428,7 @@ static int api_createsurfacefromrgba(lua_State* state) {
         managed_functions->surface_init(functions, w, h, ud);
         lua_pop(state, 1);
     }
-    lua_getfield(state, LUA_REGISTRYINDEX, "surfacemeta");
-    lua_setmetatable(state, -2);
+    SETMETATABLE(surface)
     return 1;
 }
 
@@ -453,8 +479,7 @@ static int api_createsurfacefrompng(lua_State* state) {
 
     struct SurfaceFunctions* functions = lua_newuserdata(state, sizeof(struct SurfaceFunctions));
     managed_functions->surface_init(functions, ihdr.width, ihdr.height, rgba);
-    lua_getfield(state, LUA_REGISTRYINDEX, "surfacemeta");
-    lua_setmetatable(state, -2);
+    SETMETATABLE(surface)
     lua_pushinteger(state, ihdr.width);
     lua_pushinteger(state, ihdr.height);
     free(rgba);
@@ -487,8 +512,7 @@ static int api_createwindow(lua_State* state) {
     if (window->metadata.height < WINDOW_MIN_SIZE) window->metadata.height = WINDOW_MIN_SIZE;
     memset(&window->input, 0, sizeof(window->input));
     managed_functions->surface_init(&window->surface_functions, window->metadata.width, window->metadata.height, NULL);
-    lua_getfield(state, LUA_REGISTRYINDEX, "windowmeta");
-    lua_setmetatable(state, -2);
+    SETMETATABLE(window)
 
     // create an event table in the registry for this window
     lua_getfield(state, LUA_REGISTRYINDEX, WINDOWS_REGISTRYNAME);
@@ -520,8 +544,7 @@ static int api_createbrowser(lua_State* state) {
     browser->plugin = plugin;
     browser->do_capture = false;
     browser->capture_id = 0;
-    lua_getfield(state, LUA_REGISTRYINDEX, "browsermeta");
-    lua_setmetatable(state, -2);
+    SETMETATABLE(browser)
 
     // create an empty event table in the registry for this window
     lua_getfield(state, LUA_REGISTRYINDEX, BROWSERS_REGISTRYNAME);
@@ -589,8 +612,7 @@ static int api_createembeddedbrowser(lua_State* state) {
     if (window->metadata.height < WINDOW_MIN_SIZE) window->metadata.height = WINDOW_MIN_SIZE;
     memset(&window->input, 0, sizeof(window->input));
     managed_functions->surface_init(&window->surface_functions, window->metadata.width, window->metadata.height, NULL);
-    lua_getfield(state, LUA_REGISTRYINDEX, "embeddedbrowsermeta");
-    lua_setmetatable(state, -2);
+    SETMETATABLE(embeddedbrowser)
 
     // create an event table in the registry for this window
     lua_getfield(state, LUA_REGISTRYINDEX, BROWSERS_REGISTRYNAME);
@@ -637,8 +659,7 @@ static int api_point(lua_State* state) {
     point->xyzh.floats[3] = 1.0;
     point->integer = false;
     point->homogenous = false;
-    lua_getfield(state, LUA_REGISTRYINDEX, "pointmeta");
-    lua_setmetatable(state, -2);
+    SETMETATABLE(point)
     return 1;
 }
 
@@ -651,8 +672,68 @@ static int api_createbuffer(lua_State* state) {
         lua_error(state);
     }
     buffer->size = size;
-    lua_getfield(state, LUA_REGISTRYINDEX, "buffermeta");
-    lua_setmetatable(state, -2);
+    SETMETATABLE(buffer)
+    return 1;
+}
+
+static int api_createvertexshader(lua_State* state) {
+    const struct PluginManagedFunctions* functions = _bolt_plugin_managed_functions();
+    size_t len;
+    const char* source = luaL_checklstring(state, 1, &len);
+    if (len >= INT_MAX) {
+        lua_pushfstring(state, "createvertexshader: source is too long (%lu bytes, max is %i)", len, source);
+        lua_error(state);
+    }
+    char buf[ERRORBUFSIZE];
+    struct ShaderFunctions* shader = lua_newuserdata(state, sizeof(struct ShaderFunctions));
+    if (!functions->vertex_shader_init(shader, source, len, buf, ERRORBUFSIZE)) {
+        lua_pushfstring(state, "createvertexshader: shader compilation error: %s", buf);
+        lua_error(state);
+    }
+    SETMETATABLE(shader)
+    return 1;
+}
+
+static int api_createfragmentshader(lua_State* state) {
+    const struct PluginManagedFunctions* functions = _bolt_plugin_managed_functions();
+    size_t len;
+    const char* source = luaL_checklstring(state, 1, &len);
+    if (len >= INT_MAX) {
+        lua_pushfstring(state, "createfragmentshader: source is too long (%lu bytes, max is %i)", len, source);
+        lua_error(state);
+    }
+    char buf[ERRORBUFSIZE];
+    struct ShaderFunctions* shader = lua_newuserdata(state, sizeof(struct ShaderFunctions));
+    if (!functions->fragment_shader_init(shader, source, len, buf, ERRORBUFSIZE)) {
+        lua_pushfstring(state, "createfragmentshader: shader compilation error: %s", buf);
+        lua_error(state);
+    }
+    SETMETATABLE(shader)
+    return 1;
+}
+
+static int api_createshaderprogram(lua_State* state) {
+    const struct PluginManagedFunctions* functions = _bolt_plugin_managed_functions();
+    const struct ShaderFunctions* vertex = require_userdata(state, 1, "createshaderprogram");
+    const struct ShaderFunctions* fragment = require_userdata(state, 2, "createshaderprogram");
+    struct ShaderProgramFunctions* program = lua_newuserdata(state, sizeof(struct ShaderProgramFunctions));
+    SETMETATABLE(shaderprogram)
+    char buf[ERRORBUFSIZE];
+    if (!functions->shader_program_init(program, vertex->userdata, fragment->userdata, buf, ERRORBUFSIZE)) {
+        lua_pushfstring(state, "createshaderprogram: link error: %s", buf);
+        lua_error(state);
+    }
+    return 1;
+}
+
+static int api_createshaderbuffer(lua_State* state) {
+    const struct PluginManagedFunctions* functions = _bolt_plugin_managed_functions();
+    size_t length;
+    const void* data;
+    get_binary_data(state, 1, &data, &length);
+    struct ShaderBufferFunctions* buffer = lua_newuserdata(state, sizeof(struct ShaderBufferFunctions));
+    functions->shader_buffer_init(buffer, data, length);
+    SETMETATABLE(shaderbuffer)
     return 1;
 }
 
@@ -832,8 +913,7 @@ static int api_point_transform(lua_State* state) {
     out->xyzh.floats[3] = (x * transform->matrix[3]) + (y * transform->matrix[7]) + (z * transform->matrix[11]) + (h * transform->matrix[15]);
     out->integer = false;
     out->homogenous = true;
-    lua_getfield(state, LUA_REGISTRYINDEX, "pointmeta");
-    lua_setmetatable(state, -2);
+    SETMETATABLE(point)
     return 1;
 }
 
@@ -949,9 +1029,7 @@ static int api_surface_subimage(lua_State* state) {
         functions->subimage(functions->userdata, x, y, w, h, (const void*)ud, 0);
         lua_pop(state, 1);
     }
-    lua_getfield(state, LUA_REGISTRYINDEX, "surfacemeta");
-    lua_setmetatable(state, -2);
-    return 1;
+    return 0;
 }
 
 static int api_surface_drawtoscreen(lua_State* state) {
@@ -1049,9 +1127,7 @@ static int api_window_subimage(lua_State* state) {
         window->surface_functions.subimage(window->surface_functions.userdata, x, y, w, h, (const void*)ud, 0);
         lua_pop(state, 1);
     }
-    lua_getfield(state, LUA_REGISTRYINDEX, "surfacemeta");
-    lua_setmetatable(state, -2);
-    return 1;
+    return 0;
 }
 
 static int api_window_startreposition(lua_State* state) {
@@ -1082,8 +1158,7 @@ static int api_render3d_vertexpoint(lua_State* state) {
     const lua_Integer index = lua_tointeger(state, 2);
     struct Point3D* point = lua_newuserdata(state, sizeof(struct Point3D));
     render->vertex_functions.xyz(index - 1, render->vertex_functions.userdata, point);
-    lua_getfield(state, LUA_REGISTRYINDEX, "pointmeta");
-    lua_setmetatable(state, -2);
+    SETMETATABLE(point)
     return 1;
 }
 
@@ -1091,8 +1166,7 @@ static int api_render3d_modelmatrix(lua_State* state) {
     const struct Render3D* render = require_self_userdata(state, "modelmatrix");
     struct Transform3D* transform = lua_newuserdata(state, sizeof(struct Transform3D));
     render->matrix_functions.model_matrix(render->matrix_functions.userdata, transform);
-    lua_getfield(state, LUA_REGISTRYINDEX, "transformmeta");
-    lua_setmetatable(state, -2);
+    SETMETATABLE(transform)
     return 1;
 }
 
@@ -1100,8 +1174,7 @@ static int api_render3d_viewmatrix(lua_State* state) {
     const struct Render3D* render = require_self_userdata(state, "viewmatrix");
     struct Transform3D* transform = lua_newuserdata(state, sizeof(struct Transform3D));
     render->matrix_functions.view_matrix(render->matrix_functions.userdata, transform);
-    lua_getfield(state, LUA_REGISTRYINDEX, "transformmeta");
-    lua_setmetatable(state, -2);
+    SETMETATABLE(transform)
     return 1;
 }
 
@@ -1109,8 +1182,7 @@ static int api_render3d_projectionmatrix(lua_State* state) {
     const struct Render3D* render = require_self_userdata(state, "projectionmatrix");
     struct Transform3D* transform = lua_newuserdata(state, sizeof(struct Transform3D));
     render->matrix_functions.proj_matrix(render->matrix_functions.userdata, transform);
-    lua_getfield(state, LUA_REGISTRYINDEX, "transformmeta");
-    lua_setmetatable(state, -2);
+    SETMETATABLE(transform)
     return 1;
 }
 
@@ -1118,8 +1190,7 @@ static int api_render3d_viewprojmatrix(lua_State* state) {
     const struct Render3D* render = require_self_userdata(state, "viewprojmatrix");
     struct Transform3D* transform = lua_newuserdata(state, sizeof(struct Transform3D));
     render->matrix_functions.viewproj_matrix(render->matrix_functions.userdata, transform);
-    lua_getfield(state, LUA_REGISTRYINDEX, "transformmeta");
-    lua_setmetatable(state, -2);
+    SETMETATABLE(transform)
     return 1;
 }
 
@@ -1214,8 +1285,7 @@ static int api_render3d_vertexanimation(lua_State* state) {
 
     struct Transform3D* transform = lua_newuserdata(state, sizeof(struct Transform3D));
     render->vertex_functions.bone_transform(vertex - 1, render->vertex_functions.userdata, transform);
-    lua_getfield(state, LUA_REGISTRYINDEX, "transformmeta");
-    lua_setmetatable(state, -2);
+    SETMETATABLE(transform)
     return 1;
 }
 
@@ -1253,8 +1323,7 @@ static int api_rendericon_modelvertexpoint(lua_State* state) {
     const size_t vertex = luaL_checkinteger(state, 3);
     struct Point3D* point = lua_newuserdata(state, sizeof(struct Point3D));
     *point = event->icon->models[model - 1].vertices[vertex - 1].point;
-    lua_getfield(state, LUA_REGISTRYINDEX, "pointmeta");
-    lua_setmetatable(state, -2);
+    SETMETATABLE(point)
     return 1;
 }
 
@@ -1288,8 +1357,7 @@ static int api_rendericon_modelviewmatrix(lua_State* state) {
     const size_t model = luaL_checkinteger(state, 2);
     struct Transform3D* transform = lua_newuserdata(state, sizeof(struct Transform3D));
     *transform = event->icon->models[model - 1].view_matrix;
-    lua_getfield(state, LUA_REGISTRYINDEX, "transformmeta");
-    lua_setmetatable(state, -2);
+    SETMETATABLE(transform)
     return 1;
 }
 
@@ -1298,8 +1366,7 @@ static int api_rendericon_modelprojectionmatrix(lua_State* state) {
     const size_t model = luaL_checkinteger(state, 2);
     struct Transform3D* transform = lua_newuserdata(state, sizeof(struct Transform3D));
     *transform = event->icon->models[model - 1].projection_matrix;
-    lua_getfield(state, LUA_REGISTRYINDEX, "transformmeta");
-    lua_setmetatable(state, -2);
+    SETMETATABLE(transform)
     return 1;
 }
 
@@ -1308,8 +1375,7 @@ static int api_rendericon_modelviewprojmatrix(lua_State* state) {
     const size_t model = luaL_checkinteger(state, 2);
     struct Transform3D* transform = lua_newuserdata(state, sizeof(struct Transform3D));
     *transform = event->icon->models[model - 1].viewproj_matrix;
-    lua_getfield(state, LUA_REGISTRYINDEX, "transformmeta");
-    lua_setmetatable(state, -2);
+    SETMETATABLE(transform)
     return 1;
 }
 
@@ -1546,6 +1612,39 @@ static int api_buffer_setbuffer(lua_State* state) {
     return 0;
 }
 
+static int api_shaderprogram_setattribute(lua_State* state) {
+    struct ShaderProgramFunctions* program = require_self_userdata(state, "setattribute");
+    const lua_Integer attribute = luaL_checkinteger(state, 2);
+    if (attribute < 0 || attribute >= MAX_PROGRAM_BINDINGS) {
+        lua_pushfstring(state, "setattribute: invalid attribute %li - must be positive and less than %i", attribute, MAX_PROGRAM_BINDINGS);
+        lua_error(state);
+    }
+    const uint8_t width = luaL_checkinteger(state, 3);
+    const uint8_t is_signed = lua_toboolean(state, 4);
+    const uint8_t is_float = lua_toboolean(state, 5);
+    const uint8_t size = luaL_checkinteger(state, 6);
+    const lua_Integer offset = luaL_checkinteger(state, 7);
+    const lua_Integer stride = luaL_checkinteger(state, 8);
+    if (!program->set_attribute(program->userdata, (uint8_t)attribute, width, is_signed, is_float, size, (uint32_t)offset, (uint32_t)stride)) {
+        lua_pushfstring(state, "setattribute: invalid arguments or attribute is already enabled", attribute, MAX_PROGRAM_BINDINGS);
+        lua_error(state);
+    }
+    return 0;
+}
+
+static int api_shaderprogram_drawtosurface(lua_State* state) {
+    const struct ShaderProgramFunctions* program = require_self_userdata(state, "drawtosurface");
+    const struct SurfaceFunctions* surface = require_userdata(state, 2, "drawtosurface");
+    const struct ShaderBufferFunctions* buffer = require_userdata(state, 3, "drawtosurface");
+    const lua_Integer vertex_count = luaL_checkinteger(state, 4);
+    if (vertex_count > UINT32_MAX) {
+        lua_pushfstring(state, "drawtosurface: too many vertices: %lu, maximum is %u", vertex_count, UINT32_MAX);
+        lua_error(state);
+    }
+    program->draw_to_surface(program->userdata, surface->userdata, buffer->userdata, vertex_count);
+    return 0;
+}
+
 /* below here is API function-list builders, declared in plugin_api.h */
 
 struct ApiFuncTemplate {
@@ -1612,6 +1711,10 @@ static struct ApiFuncTemplate bolt_functions[] = {
     BOLTFUNC(createembeddedbrowser),
     BOLTFUNC(point),
     BOLTFUNC(createbuffer),
+    BOLTFUNC(createvertexshader),
+    BOLTFUNC(createfragmentshader),
+    BOLTFUNC(createshaderprogram),
+    BOLTFUNC(createshaderbuffer),
     
     BOLTFUNC(buffergetint8),
     BOLTFUNC(buffergetint16),
@@ -1727,10 +1830,10 @@ static struct ApiFuncTemplate buffer_functions[] = {
     BOLTFUNC(setbuffer, buffer),
 };
 
-// zero-size type causes ICE in MSVC
-//static struct ApiFuncTemplate swapbuffers_functions[] = {
-//
-//};
+static struct ApiFuncTemplate shaderprogram_functions[] = {
+    BOLTFUNC(setattribute, shaderprogram),
+    BOLTFUNC(drawtosurface, shaderprogram),
+};
 
 static struct ApiFuncTemplate surface_functions[] = {
     BOLTFUNC(clear, surface),
@@ -1846,6 +1949,14 @@ void _bolt_api_push_metatable_##NAME(lua_State* state) { \
 void _bolt_api_push_metatable_##NAME(lua_State* state) { \
     push_metatable_with_gc(state, NAME##_functions, sizeof NAME##_functions / sizeof *NAME##_functions, NAME##_gc); \
 }
+#define DEFPUSHEMPTYMETA(NAME) \
+void _bolt_api_push_metatable_##NAME(lua_State* state) { \
+    push_metatable(state, NULL, 0); \
+}
+#define DEFPUSHEMPTYMETAGC(NAME) \
+void _bolt_api_push_metatable_##NAME(lua_State* state) { \
+    push_metatable_with_gc(state, NULL, 0, NAME##_gc); \
+}
 
 DEFPUSHMETA(render2d)
 DEFPUSHMETA(render3d)
@@ -1855,8 +1966,11 @@ DEFPUSHMETA(renderminimap)
 DEFPUSHMETA(point)
 DEFPUSHMETA(transform)
 DEFPUSHMETAGC(buffer)
-void _bolt_api_push_metatable_swapbuffers(lua_State* state) { push_metatable(state, NULL, 0); } // DEFPUSHMETA(swapbuffers)
+DEFPUSHEMPTYMETA(swapbuffers)
 DEFPUSHMETAGC(surface)
+DEFPUSHEMPTYMETAGC(shader)
+DEFPUSHMETAGC(shaderprogram)
+DEFPUSHEMPTYMETAGC(shaderbuffer)
 DEFPUSHMETA(window)
 DEFPUSHMETA(browser)
 DEFPUSHMETA(embeddedbrowser)

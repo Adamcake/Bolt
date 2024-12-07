@@ -52,6 +52,7 @@ struct GLProcFunctions {
     void (*DeleteProgram)(GLuint);
     void (*DeleteShader)(GLuint);
     void (*DeleteVertexArrays)(GLsizei, const GLuint*);
+    void (*DetachShader)(GLuint, GLuint);
     void (*DisableVertexAttribArray)(GLuint);
     void (*DrawElements)(GLenum, GLsizei, GLenum, const void*);
     void (*EnableVertexAttribArray)(GLuint);
@@ -66,6 +67,10 @@ struct GLProcFunctions {
     void (*GetFramebufferAttachmentParameteriv)(GLenum, GLenum, GLenum, GLint*);
     void (*GetIntegeri_v)(GLenum, GLuint, GLint*);
     void (*GetIntegerv)(GLenum, GLint*);
+    void (*GetProgramInfoLog)(GLuint, GLsizei, GLsizei*, GLchar*);
+    void (*GetProgramiv)(GLuint, GLenum, GLint*);
+    void (*GetShaderInfoLog)(GLuint, GLsizei, GLsizei*, GLchar*);
+    void (*GetShaderiv)(GLuint,GLenum, GLint*);
     GLuint (*GetUniformBlockIndex)(GLuint, const GLchar*);
     void (*GetUniformfv)(GLuint, GLint, GLfloat*);
     void (*GetUniformIndices)(GLuint, GLsizei, const GLchar**, GLuint*);
@@ -82,6 +87,7 @@ struct GLProcFunctions {
     void (*UniformMatrix4fv)(GLint, GLsizei, GLboolean, const GLfloat*);
     GLboolean (*UnmapBuffer)(GLenum);
     void (*UseProgram)(GLuint);
+    void (*VertexAttribLPointer)(GLuint, GLint, GLenum, GLsizei, const void*);
     void (*VertexAttribPointer)(GLuint, GLint, GLenum, GLboolean, GLsizei, const void*);
 };
 
@@ -119,6 +125,7 @@ struct GLLibFunctions {
 #define GL_SHORT 5122
 #define GL_INT 5124
 #define GL_FLOAT 5126
+#define GL_DOUBLE 5130
 #define GL_HALF_FLOAT 5131
 #define GL_TRIANGLES 4
 #define GL_TRIANGLE_STRIP 5
@@ -166,6 +173,8 @@ struct GLLibFunctions {
 #define GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME 36049
 #define GL_MAX_VERTEX_ATTRIBS 34921
 #define GL_TEXTURE_COMPARE_MODE 34892
+#define GL_COMPILE_STATUS 35713
+#define GL_LINK_STATUS 35714
 
 /* bolt re-implementation of some gl objects, storing only the things we need */
 
