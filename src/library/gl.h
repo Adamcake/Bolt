@@ -30,6 +30,31 @@ typedef char GLchar;
 typedef intptr_t GLintptr;
 typedef uintptr_t GLsizeiptr;
 
+/*
+What's the difference between GLProcFunctions and GLLibFunctions? Well, I'm glad you asked.
+
+On Windows, OpenGL functions prior to 2.0 are exposed in a microsoft-provided library called
+"opengl32.dll" in System32, and functions after 2.0 are loaded from wgl (or egl) GetProcAddress.
+GLLibFunctions represents the former category and GLProcFunctions the latter.
+
+To this day, there remain to be two different methods of loading OpenGL functions. On platforms
+other than Windows, there is no opengl32.dll and it doesn't seem to matter what method you load any
+function by, and it also doesn't make any difference on Windows if using an AMD GPU, because AMD's
+drivers allow GetProcAddress to work for any function.
+
+However this is not the case on Windows with Nvidia drivers. Windows+Nvidia users will complain of
+segmentation faults due to these functions failing to load if they're placed in the wrong category.
+
+Additionally, the game still loads these functions by the two different methods even on Linux, even
+though it doesn't need to. To hook functions, we need to know in advance which method the game will
+use to load them. So if a function is expected to be hooked, but is placed in the wrong category,
+then the hook won't get hit - on any platform.
+
+So, to add a new OpenGL function, first run `dumpbin /exports C:\Windows\System32\opengl32.dll`. If
+the output list contains your function, it needs to go in GLLibFunctions. If not, it needs to go in
+GLProcFunctions.
+*/
+
 /// Struct representing all the OpenGL functions of interest to us that the game gets from GetProcAddress
 struct GLProcFunctions {
     void (*ActiveTexture)(GLenum);
@@ -54,7 +79,6 @@ struct GLProcFunctions {
     void (*DeleteVertexArrays)(GLsizei, const GLuint*);
     void (*DetachShader)(GLuint, GLuint);
     void (*DisableVertexAttribArray)(GLuint);
-    void (*DrawElements)(GLenum, GLsizei, GLenum, const void*);
     void (*EnableVertexAttribArray)(GLuint);
     void (*FlushMappedBufferRange)(GLenum, GLintptr, GLsizeiptr);
     void (*FramebufferTexture)(GLenum, GLenum, GLuint, GLint);
@@ -66,7 +90,6 @@ struct GLProcFunctions {
     void (*GetActiveUniformsiv)(GLuint, GLsizei, const GLuint*, GLenum, GLint*);
     void (*GetFramebufferAttachmentParameteriv)(GLenum, GLenum, GLenum, GLint*);
     void (*GetIntegeri_v)(GLenum, GLuint, GLint*);
-    void (*GetIntegerv)(GLenum, GLint*);
     void (*GetProgramInfoLog)(GLuint, GLsizei, GLsizei*, GLchar*);
     void (*GetProgramiv)(GLuint, GLenum, GLint*);
     void (*GetShaderInfoLog)(GLuint, GLsizei, GLsizei*, GLchar*);
@@ -120,6 +143,7 @@ struct GLLibFunctions {
     void (*GenTextures)(GLsizei, GLuint*);
     void (*GetBooleanv)(GLenum, GLboolean*);
     GLenum (*GetError)(void);
+    void (*GetIntegerv)(GLenum, GLint*);
     void (*ReadPixels)(GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, void*);
     void (*TexParameteri)(GLenum, GLenum, GLint);
     void (*TexSubImage2D)(GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, const void*);

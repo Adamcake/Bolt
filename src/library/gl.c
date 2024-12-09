@@ -670,7 +670,6 @@ static void _bolt_gl_load(void* (*GetProcAddress)(const char*)) {
     INIT_GL_FUNC(DeleteVertexArrays)
     INIT_GL_FUNC(DetachShader)
     INIT_GL_FUNC(DisableVertexAttribArray)
-    INIT_GL_FUNC(DrawElements)
     INIT_GL_FUNC(EnableVertexAttribArray)
     INIT_GL_FUNC(FlushMappedBufferRange)
     INIT_GL_FUNC(FramebufferTexture)
@@ -682,7 +681,6 @@ static void _bolt_gl_load(void* (*GetProcAddress)(const char*)) {
     INIT_GL_FUNC(GetActiveUniformsiv)
     INIT_GL_FUNC(GetFramebufferAttachmentParameteriv)
     INIT_GL_FUNC(GetIntegeri_v)
-    INIT_GL_FUNC(GetIntegerv)
     INIT_GL_FUNC(GetProgramInfoLog)
     INIT_GL_FUNC(GetProgramiv)
     INIT_GL_FUNC(GetShaderInfoLog)
@@ -977,7 +975,7 @@ static void _bolt_glVertexAttribPointer(GLuint index, GLint size, GLenum type, G
     gl.VertexAttribPointer(index, size, type, normalised, stride, pointer);
     struct GLContext* c = _bolt_context();
     GLint array_binding;
-    gl.GetIntegerv(GL_ARRAY_BUFFER_BINDING, &array_binding);
+    lgl->GetIntegerv(GL_ARRAY_BUFFER_BINDING, &array_binding);
     _bolt_set_attr_binding(c, &c->bound_vao->attributes[index], array_binding, size, pointer, stride, type, normalised);
     LOG("glVertexAttribPointer end\n");
 }
@@ -1003,7 +1001,7 @@ static void _bolt_glBufferData(GLenum target, GLsizeiptr size, const void* data,
     GLenum binding_type = _bolt_binding_for_buffer(target);
     if (binding_type != -1) {
         GLint buffer_id;
-        gl.GetIntegerv(binding_type, &buffer_id);
+        lgl->GetIntegerv(binding_type, &buffer_id);
         void* buffer_content = malloc(size);
         if (data) memcpy(buffer_content, data, size);
         struct GLArrayBuffer* buffer = _bolt_context_get_buffer(c, buffer_id);
@@ -1237,7 +1235,7 @@ static void* _bolt_glMapBufferRange(GLenum target, GLintptr offset, GLsizeiptr l
     GLenum binding_type = _bolt_binding_for_buffer(target);
     if (binding_type != -1) {
         GLint buffer_id;
-        gl.GetIntegerv(binding_type, &buffer_id);
+        lgl->GetIntegerv(binding_type, &buffer_id);
         struct GLArrayBuffer* buffer = _bolt_context_get_buffer(c, buffer_id);
         buffer->mapping = malloc(length);
         buffer->mapping_offset = offset;
@@ -1258,7 +1256,7 @@ static GLboolean _bolt_glUnmapBuffer(GLuint target) {
     GLenum binding_type = _bolt_binding_for_buffer(target);
     if (binding_type != -1) {
         GLint buffer_id;
-        gl.GetIntegerv(binding_type, &buffer_id);
+        lgl->GetIntegerv(binding_type, &buffer_id);
         struct GLArrayBuffer* buffer = _bolt_context_get_buffer(c, buffer_id);
         free(buffer->mapping);
         buffer->mapping = NULL;
@@ -1278,7 +1276,7 @@ static void _bolt_glBufferStorage(GLenum target, GLsizeiptr size, const void* da
     GLenum binding_type = _bolt_binding_for_buffer(target);
     if (binding_type != -1) {
         GLint buffer_id;
-        gl.GetIntegerv(binding_type, &buffer_id);
+        lgl->GetIntegerv(binding_type, &buffer_id);
         void* buffer_content = malloc(size);
         if (data) memcpy(buffer_content, data, size);
         struct GLArrayBuffer* buffer = _bolt_context_get_buffer(c, buffer_id);
@@ -1294,7 +1292,7 @@ static void _bolt_glFlushMappedBufferRange(GLenum target, GLintptr offset, GLsiz
     GLenum binding_type = _bolt_binding_for_buffer(target);
     if (binding_type != -1) {
         GLint buffer_id;
-        gl.GetIntegerv(binding_type, &buffer_id);
+        lgl->GetIntegerv(binding_type, &buffer_id);
         struct GLArrayBuffer* buffer = _bolt_context_get_buffer(c, buffer_id);
         gl.BufferSubData(target, buffer->mapping_offset + offset, length, buffer->mapping + offset);
         memcpy((uint8_t*)buffer->data + buffer->mapping_offset + offset, buffer->mapping + offset, length);
@@ -1326,7 +1324,7 @@ static void _bolt_glGenVertexArrays(GLsizei n, GLuint* arrays) {
     gl.GenVertexArrays(n, arrays);
     struct GLContext* c = _bolt_context();
     GLint attrib_count;
-    gl.GetIntegerv(GL_MAX_VERTEX_ATTRIBS, &attrib_count);
+    lgl->GetIntegerv(GL_MAX_VERTEX_ATTRIBS, &attrib_count);
     _bolt_rwlock_lock_write(&c->vaos->rwlock);
     for (GLsizei i = 0; i < n; i += 1) {
         struct GLVertexArray* array = malloc(sizeof(struct GLVertexArray));
@@ -1520,7 +1518,7 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
     struct GLContext* c = _bolt_context();
     struct GLAttrBinding* attributes = c->bound_vao->attributes;
     GLint element_binding;
-    gl.GetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &element_binding);
+    lgl->GetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &element_binding);
     struct GLArrayBuffer* element_buffer = _bolt_context_get_buffer(c, element_binding);
     const unsigned short* indices = (unsigned short*)((uint8_t*)element_buffer->data + (uintptr_t)indices_offset);
     if (type == GL_UNSIGNED_SHORT && mode == GL_TRIANGLES && count > 0 && c->bound_program->is_2d && !c->bound_program->is_minimap) {
@@ -2571,7 +2569,7 @@ static void _bolt_gl_plugin_shaderprogram_drawtosurface(void* userdata, void* su
     const struct PluginShaderBufferUserdata* buffer = buffer_;
     const struct GLContext* c = _bolt_context();
     GLint array_binding;
-    gl.GetIntegerv(GL_ARRAY_BUFFER_BINDING, &array_binding);
+    lgl->GetIntegerv(GL_ARRAY_BUFFER_BINDING, &array_binding);
     GLboolean depth_test, scissor_test, cull_face;
     lgl->GetBooleanv(GL_DEPTH_TEST, &depth_test);
     lgl->GetBooleanv(GL_SCISSOR_TEST, &scissor_test);
@@ -2627,7 +2625,7 @@ static void _bolt_gl_plugin_shaderbuffer_init(struct ShaderBufferFunctions* out,
     out->userdata = malloc(sizeof(struct PluginShaderBufferUserdata));
     struct PluginShaderBufferUserdata* buffer = out->userdata;
     GLint array_binding;
-    gl.GetIntegerv(GL_ARRAY_BUFFER_BINDING, &array_binding);
+    lgl->GetIntegerv(GL_ARRAY_BUFFER_BINDING, &array_binding);
     gl.GenBuffers(1, &buffer->buffer);
     gl.BindBuffer(GL_ARRAY_BUFFER, buffer->buffer);
     gl.BufferData(GL_ARRAY_BUFFER, len, data, GL_STATIC_DRAW);
