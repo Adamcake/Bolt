@@ -1,5 +1,7 @@
 #include "plugin/plugin.h"
 #include "gl.h"
+#include "rwlock/rwlock.h"
+#include "../../modules/hashmap/hashmap.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -15,6 +17,121 @@
 #else
 #define LOG(...)
 #endif
+
+struct GLArrayBuffer {
+    GLuint id;
+    void* data;
+    uint8_t* mapping;
+    GLintptr mapping_offset;
+    GLsizeiptr mapping_len;
+    GLbitfield mapping_access_type;
+};
+
+struct GLTexture2D {
+    GLuint id;
+    uint8_t* data;
+    GLsizei width;
+    GLsizei height;
+    double minimap_center_x;
+    double minimap_center_y;
+    GLenum internalformat;
+    GLint compare_mode;
+    struct ItemIcon icon;
+    struct hashmap* icons;
+    uint8_t is_minimap_tex_big;
+    uint8_t is_minimap_tex_small;
+};
+
+struct GLProgram {
+    GLuint id;
+    GLint loc_aVertexPosition2D;
+    GLint loc_aVertexColour;
+    GLint loc_aTextureUV;
+    GLint loc_aTextureUVAtlasMin;
+    GLint loc_aTextureUVAtlasExtents;
+    GLint loc_aMaterialSettingsSlotXY_TilePositionXZ;
+    GLint loc_aVertexPosition_BoneLabel;
+    GLint loc_aVertexSkinBones;
+    GLint loc_aVertexSkinWeights;
+    GLint loc_uProjectionMatrix;
+    GLint loc_uDiffuseMap;
+    GLint loc_uTextureAtlas;
+    GLint loc_uTextureAtlasSettings;
+    GLint loc_uAtlasMeta;
+    GLint loc_uModelMatrix;
+    GLint loc_uBoneTransforms;
+    GLint loc_uGridSize;
+    GLint loc_uVertexScale;
+    GLint loc_uSmoothSkinning;
+    GLint loc_sSceneHDRTex;
+    GLint loc_sSourceTex;
+    GLint loc_sBlurFarTex;
+    GLuint block_index_ViewTransforms;
+    GLint offset_uCameraPosition;
+    GLint offset_uViewMatrix;
+    GLint offset_uProjectionMatrix;
+    GLint offset_uViewProjMatrix;
+    uint8_t is_minimap;
+    uint8_t is_2d;
+    uint8_t is_3d;
+};
+
+struct GLAttrBinding {
+    struct GLArrayBuffer* buffer;
+    uintptr_t offset;
+    unsigned int stride;
+    int size;
+    uint32_t type;
+    uint8_t normalise;
+    uint8_t enabled;
+};
+
+struct GLVertexArray {
+    GLuint id;
+    struct GLAttrBinding* attributes;
+};
+
+struct HashMap {
+    struct hashmap* map;
+    RWLock rwlock;
+};
+
+/// Context-specific information - this is thread-specific on EGL, not sure about elsewhere
+/// this method of context-sharing takes advantage of the fact that the game never chains shares together
+/// with a depth greater than 1, and always deletes the non-owner before the owner. neither of those things
+/// are actually safe assumptions in valid OpenGL usage.
+struct GLContext {
+    uintptr_t id;
+    struct HashMap* programs;
+    struct HashMap* buffers;
+    struct HashMap* textures;
+    struct HashMap* vaos;
+    struct GLTexture2D** texture_units;
+    struct GLProgram* bound_program;
+    struct GLVertexArray* bound_vao;
+    GLenum active_texture;
+    GLuint current_draw_framebuffer;
+    GLuint current_read_framebuffer;
+    GLuint game_view_part_framebuffer;
+    GLint game_view_sSourceTex;
+    GLint game_view_sSceneHDRTex;
+    GLint depth_of_field_sSourceTex;
+    GLint target_3d_tex;
+    GLint game_view_x;
+    GLint game_view_y;
+    GLint game_view_w;
+    GLint game_view_h;
+    uint8_t is_attached;
+    uint8_t deferred_destroy;
+    uint8_t is_shared_owner;
+    uint8_t recalculate_sSceneHDRTex;
+    uint8_t does_blit_3d_target;
+    uint8_t depth_of_field_enabled;
+    GLint viewport_x;
+    GLint viewport_y;
+    GLsizei viewport_w;
+    GLsizei viewport_h;
+};
 
 static unsigned int gl_width;
 static unsigned int gl_height;
@@ -173,6 +290,44 @@ static DWORD current_context_tls;
 static pthread_key_t current_context_tls;
 #endif
 
+struct GLPluginDrawElementsVertex2DUserData {
+    struct GLContext* c;
+    const unsigned short* indices;
+    struct GLTexture2D* atlas;
+    struct GLAttrBinding* position;
+    struct GLAttrBinding* atlas_min;
+    struct GLAttrBinding* atlas_size;
+    struct GLAttrBinding* tex_uv;
+    struct GLAttrBinding* colour;
+    uint32_t screen_height;
+};
+
+struct GLPluginDrawElementsVertex3DUserData {
+    struct GLContext* c;
+    const unsigned short* indices;
+    int atlas_scale;
+    struct GLTexture2D* atlas;
+    struct GLTexture2D* settings_atlas;
+    struct GLAttrBinding* xy_xz;
+    struct GLAttrBinding* xyz_bone;
+    struct GLAttrBinding* tex_uv;
+    struct GLAttrBinding* colour;
+    struct GLAttrBinding* skin_bones;
+    struct GLAttrBinding* skin_weights;
+};
+
+struct GLPlugin3DMatrixUserData {
+    float model_matrix[16];
+    const struct GLProgram* program;
+    const float* view_matrix;
+    const float* proj_matrix;
+    const float* viewproj_matrix;
+};
+
+struct GLPluginTextureUserData {
+    struct GLTexture2D* tex;
+};
+
 struct PluginSurfaceUserdata {
     unsigned int width;
     unsigned int height;
@@ -219,6 +374,8 @@ struct PluginProgramUniform {
         GLfloat f[16]; // for everything else
     } values;
 };
+
+/* static functions */
 
 static int uniform_compare(const void* a, const void* b, void* udata) {
     return (*(GLuint*)a) - (*(GLuint*)b);
@@ -813,6 +970,8 @@ void _bolt_gl_close() {
     gl.DeleteVertexArrays(1, &program_direct_vao);
     _bolt_destroy_context((void*)egl_main_context);
 }
+
+/* glproc function hooks */
 
 static GLuint _bolt_glCreateProgram() {
     LOG("glCreateProgram\n");
@@ -1424,6 +1583,8 @@ void* _bolt_gl_GetProcAddress(const char* name) {
 #undef PROC_ADDRESS_MAP
     return NULL;
 }
+
+/* libgl function hooks (called from os-specific main.c) */
 
 void _bolt_gl_onSwapBuffers(uint32_t window_width, uint32_t window_height) {
     gl_width = window_width;

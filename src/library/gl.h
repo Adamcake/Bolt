@@ -1,12 +1,8 @@
 #ifndef _BOLT_LIBRARY_GL_H_
 #define _BOLT_LIBRARY_GL_H_
 
+#include <stdbool.h>
 #include <stdint.h>
-
-#include "../../modules/hashmap/hashmap.h"
-#include "rwlock/rwlock.h"
-#include "plugin/plugin.h"
-struct hashmap;
 
 /* types from gl.h */
 typedef unsigned int GLenum;
@@ -29,6 +25,71 @@ typedef void GLvoid;
 typedef char GLchar;
 typedef intptr_t GLintptr;
 typedef uintptr_t GLsizeiptr;
+
+/* consts used from libgl */
+#define GL_NONE 0
+#define GL_TEXTURE 5890
+#define GL_TEXTURE_2D 3553
+#define GL_RGB 6407
+#define GL_RGBA 6408
+#define GL_BGRA 32993
+#define GL_UNSIGNED_BYTE 5121
+#define GL_UNSIGNED_SHORT 5123
+#define GL_UNSIGNED_INT 5125
+#define GL_BYTE 5120
+#define GL_SHORT 5122
+#define GL_INT 5124
+#define GL_FLOAT 5126
+#define GL_DOUBLE 5130
+#define GL_HALF_FLOAT 5131
+#define GL_TRIANGLES 4
+#define GL_TRIANGLE_STRIP 5
+#define GL_MAP_READ_BIT 1
+#define GL_MAP_WRITE_BIT 2
+#define GL_MAP_FLUSH_EXPLICIT_BIT 16
+#define GL_TEXTURE_MAG_FILTER 10240
+#define GL_TEXTURE_MIN_FILTER 10241
+#define GL_TEXTURE_WRAP_S 10242
+#define GL_TEXTURE_WRAP_T 10243
+#define GL_CLAMP_TO_EDGE 33071
+#define GL_DEPTH_TEST 2929
+#define GL_SCISSOR_TEST 3089
+#define GL_CULL_FACE 2884
+#define GL_COMPRESSED_RGB_S3TC_DXT1_EXT 33776
+#define GL_COMPRESSED_RGBA_S3TC_DXT1_EXT 33777
+#define GL_COMPRESSED_RGBA_S3TC_DXT3_EXT 33778
+#define GL_COMPRESSED_RGBA_S3TC_DXT5_EXT 33779
+#define GL_COMPRESSED_SRGB_S3TC_DXT1_EXT 35916
+#define GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT 35917
+#define GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT 35918
+#define GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT 35919
+#define GL_ACTIVE_TEXTURE 34016
+#define GL_STATIC_DRAW 35044
+#define GL_FRAGMENT_SHADER 35632
+#define GL_VERTEX_SHADER 35633
+#define GL_FRAMEBUFFER 36160
+#define GL_READ_FRAMEBUFFER 36008
+#define GL_DRAW_FRAMEBUFFER 36009
+#define GL_ARRAY_BUFFER 34962
+#define GL_ELEMENT_ARRAY_BUFFER 34963
+#define GL_UNIFORM_BUFFER 35345
+#define GL_VERTEX_ARRAY_BINDING 34229
+#define GL_ARRAY_BUFFER_BINDING 34964
+#define GL_ELEMENT_ARRAY_BUFFER_BINDING 34965
+#define GL_UNIFORM_BUFFER_BINDING 35368
+#define GL_UNIFORM_OFFSET 35387
+#define GL_UNIFORM_BLOCK_BINDING 35391
+#define GL_TEXTURE0 33984
+#define GL_COLOR_ATTACHMENT0 36064
+#define GL_NEAREST 9728
+#define GL_COLOR_BUFFER_BIT 16384
+#define GL_RGBA8 32856
+#define GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE 36048
+#define GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME 36049
+#define GL_MAX_VERTEX_ATTRIBS 34921
+#define GL_TEXTURE_COMPARE_MODE 34892
+#define GL_COMPILE_STATUS 35713
+#define GL_LINK_STATUS 35714
 
 /*
 What's the difference between GLProcFunctions and GLLibFunctions? Well, I'm glad you asked.
@@ -150,188 +211,6 @@ struct GLLibFunctions {
     void (*Viewport)(GLint, GLint, GLsizei, GLsizei);
 };
 
-/* consts used from libgl */
-#define GL_NONE 0
-#define GL_TEXTURE 5890
-#define GL_TEXTURE_2D 3553
-#define GL_RGB 6407
-#define GL_RGBA 6408
-#define GL_BGRA 32993
-#define GL_UNSIGNED_BYTE 5121
-#define GL_UNSIGNED_SHORT 5123
-#define GL_UNSIGNED_INT 5125
-#define GL_BYTE 5120
-#define GL_SHORT 5122
-#define GL_INT 5124
-#define GL_FLOAT 5126
-#define GL_DOUBLE 5130
-#define GL_HALF_FLOAT 5131
-#define GL_TRIANGLES 4
-#define GL_TRIANGLE_STRIP 5
-#define GL_MAP_READ_BIT 1
-#define GL_MAP_WRITE_BIT 2
-#define GL_MAP_FLUSH_EXPLICIT_BIT 16
-#define GL_TEXTURE_MAG_FILTER 10240
-#define GL_TEXTURE_MIN_FILTER 10241
-#define GL_TEXTURE_WRAP_S 10242
-#define GL_TEXTURE_WRAP_T 10243
-#define GL_CLAMP_TO_EDGE 33071
-#define GL_DEPTH_TEST 2929
-#define GL_SCISSOR_TEST 3089
-#define GL_CULL_FACE 2884
-#define GL_COMPRESSED_RGB_S3TC_DXT1_EXT 33776
-#define GL_COMPRESSED_RGBA_S3TC_DXT1_EXT 33777
-#define GL_COMPRESSED_RGBA_S3TC_DXT3_EXT 33778
-#define GL_COMPRESSED_RGBA_S3TC_DXT5_EXT 33779
-#define GL_COMPRESSED_SRGB_S3TC_DXT1_EXT 35916
-#define GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT 35917
-#define GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT 35918
-#define GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT 35919
-#define GL_ACTIVE_TEXTURE 34016
-#define GL_STATIC_DRAW 35044
-#define GL_FRAGMENT_SHADER 35632
-#define GL_VERTEX_SHADER 35633
-#define GL_FRAMEBUFFER 36160
-#define GL_READ_FRAMEBUFFER 36008
-#define GL_DRAW_FRAMEBUFFER 36009
-#define GL_ARRAY_BUFFER 34962
-#define GL_ELEMENT_ARRAY_BUFFER 34963
-#define GL_UNIFORM_BUFFER 35345
-#define GL_VERTEX_ARRAY_BINDING 34229
-#define GL_ARRAY_BUFFER_BINDING 34964
-#define GL_ELEMENT_ARRAY_BUFFER_BINDING 34965
-#define GL_UNIFORM_BUFFER_BINDING 35368
-#define GL_UNIFORM_OFFSET 35387
-#define GL_UNIFORM_BLOCK_BINDING 35391
-#define GL_TEXTURE0 33984
-#define GL_COLOR_ATTACHMENT0 36064
-#define GL_NEAREST 9728
-#define GL_COLOR_BUFFER_BIT 16384
-#define GL_RGBA8 32856
-#define GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE 36048
-#define GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME 36049
-#define GL_MAX_VERTEX_ATTRIBS 34921
-#define GL_TEXTURE_COMPARE_MODE 34892
-#define GL_COMPILE_STATUS 35713
-#define GL_LINK_STATUS 35714
-
-/* bolt re-implementation of some gl objects, storing only the things we need */
-
-struct GLArrayBuffer {
-    GLuint id;
-    void* data;
-    uint8_t* mapping;
-    GLintptr mapping_offset;
-    GLsizeiptr mapping_len;
-    GLbitfield mapping_access_type;
-};
-
-struct GLTexture2D {
-    GLuint id;
-    uint8_t* data;
-    GLsizei width;
-    GLsizei height;
-    double minimap_center_x;
-    double minimap_center_y;
-    GLenum internalformat;
-    GLint compare_mode;
-    struct ItemIcon icon;
-    struct hashmap* icons;
-    uint8_t is_minimap_tex_big;
-    uint8_t is_minimap_tex_small;
-};
-
-struct GLProgram {
-    GLuint id;
-    GLint loc_aVertexPosition2D;
-    GLint loc_aVertexColour;
-    GLint loc_aTextureUV;
-    GLint loc_aTextureUVAtlasMin;
-    GLint loc_aTextureUVAtlasExtents;
-    GLint loc_aMaterialSettingsSlotXY_TilePositionXZ;
-    GLint loc_aVertexPosition_BoneLabel;
-    GLint loc_aVertexSkinBones;
-    GLint loc_aVertexSkinWeights;
-    GLint loc_uProjectionMatrix;
-    GLint loc_uDiffuseMap;
-    GLint loc_uTextureAtlas;
-    GLint loc_uTextureAtlasSettings;
-    GLint loc_uAtlasMeta;
-    GLint loc_uModelMatrix;
-    GLint loc_uBoneTransforms;
-    GLint loc_uGridSize;
-    GLint loc_uVertexScale;
-    GLint loc_uSmoothSkinning;
-    GLint loc_sSceneHDRTex;
-    GLint loc_sSourceTex;
-    GLint loc_sBlurFarTex;
-    GLuint block_index_ViewTransforms;
-    GLint offset_uCameraPosition;
-    GLint offset_uViewMatrix;
-    GLint offset_uProjectionMatrix;
-    GLint offset_uViewProjMatrix;
-    uint8_t is_minimap;
-    uint8_t is_2d;
-    uint8_t is_3d;
-};
-
-struct GLAttrBinding {
-    struct GLArrayBuffer* buffer;
-    uintptr_t offset;
-    unsigned int stride;
-    int size;
-    uint32_t type;
-    uint8_t normalise;
-    uint8_t enabled;
-};
-
-struct GLVertexArray {
-    GLuint id;
-    struct GLAttrBinding* attributes;
-};
-
-struct HashMap {
-    struct hashmap* map;
-    RWLock rwlock;
-};
-
-/// Context-specific information - this is thread-specific on EGL, not sure about elsewhere
-/// this method of context-sharing takes advantage of the fact that the game never chains shares together
-/// with a depth greater than 1, and always deletes the non-owner before the owner. neither of those things
-/// are actually safe assumptions in valid OpenGL usage.
-struct GLContext {
-    uintptr_t id;
-    struct HashMap* programs;
-    struct HashMap* buffers;
-    struct HashMap* textures;
-    struct HashMap* vaos;
-    struct GLTexture2D** texture_units;
-    struct GLProgram* bound_program;
-    struct GLVertexArray* bound_vao;
-    GLenum active_texture;
-    GLuint current_draw_framebuffer;
-    GLuint current_read_framebuffer;
-    GLuint game_view_part_framebuffer;
-    GLint game_view_sSourceTex;
-    GLint game_view_sSceneHDRTex;
-    GLint depth_of_field_sSourceTex;
-    GLint target_3d_tex;
-    GLint game_view_x;
-    GLint game_view_y;
-    GLint game_view_w;
-    GLint game_view_h;
-    uint8_t is_attached;
-    uint8_t deferred_destroy;
-    uint8_t is_shared_owner;
-    uint8_t recalculate_sSceneHDRTex;
-    uint8_t does_blit_3d_target;
-    uint8_t depth_of_field_enabled;
-    GLint viewport_x;
-    GLint viewport_y;
-    GLsizei viewport_w;
-    GLsizei viewport_h;
-};
-
 void _bolt_gl_close();
 
 /* os-level interop */
@@ -387,45 +266,5 @@ void _bolt_gl_onViewport(GLint, GLint, GLsizei, GLsizei);
 
 /// Call this in response to glTexParameteri, which needs to be hooked from libgl.
 void _bolt_gl_onTexParameteri(GLenum, GLenum, GLint);
-
-/* plugin library interop stuff */
-
-struct GLPluginDrawElementsVertex2DUserData {
-    struct GLContext* c;
-    const unsigned short* indices;
-    struct GLTexture2D* atlas;
-    struct GLAttrBinding* position;
-    struct GLAttrBinding* atlas_min;
-    struct GLAttrBinding* atlas_size;
-    struct GLAttrBinding* tex_uv;
-    struct GLAttrBinding* colour;
-    uint32_t screen_height;
-};
-
-struct GLPluginDrawElementsVertex3DUserData {
-    struct GLContext* c;
-    const unsigned short* indices;
-    int atlas_scale;
-    struct GLTexture2D* atlas;
-    struct GLTexture2D* settings_atlas;
-    struct GLAttrBinding* xy_xz;
-    struct GLAttrBinding* xyz_bone;
-    struct GLAttrBinding* tex_uv;
-    struct GLAttrBinding* colour;
-    struct GLAttrBinding* skin_bones;
-    struct GLAttrBinding* skin_weights;
-};
-
-struct GLPlugin3DMatrixUserData {
-    float model_matrix[16];
-    const struct GLProgram* program;
-    const float* view_matrix;
-    const float* proj_matrix;
-    const float* viewproj_matrix;
-};
-
-struct GLPluginTextureUserData {
-    struct GLTexture2D* tex;
-};
 
 #endif
