@@ -110,8 +110,8 @@ static uint64_t _bolt_plugin_map_hash(const void* item, uint64_t seed0, uint64_t
 }
 
 int _bolt_plugin_itemicon_compare(const void* a, const void* b, void* udata) {
-    const struct ItemIcon* i1 = a;
-    const struct ItemIcon* i2 = b;
+    const struct Icon* i1 = a;
+    const struct Icon* i2 = b;
     uint64_t xywh1, xywh2;
     memcpy(&xywh1, &i1->x, sizeof xywh1);
     memcpy(&xywh2, &i2->x, sizeof xywh2);
@@ -119,7 +119,7 @@ int _bolt_plugin_itemicon_compare(const void* a, const void* b, void* udata) {
 }
 
 uint64_t _bolt_plugin_itemicon_hash(const void* item, uint64_t seed0, uint64_t seed1) {
-    const struct ItemIcon* icon = item;
+    const struct Icon* icon = item;
     return hashmap_sip(&icon->x, 4 * sizeof icon->x, seed0, seed1);
 }
 
@@ -146,7 +146,7 @@ void _bolt_plugin_handle_##APINAME(const struct STRUCTNAME* e) { \
         lua_pushvalue(plugin->state, -2); /*stack: userdata, callback, userdata*/ \
         if (lua_pcall(plugin->state, 1, 0, 0)) { /*stack: userdata, ?error*/ \
             const char* e = lua_tolstring(plugin->state, -1, 0); \
-            printf("plugin callback " #APINAME " error: %s\n", e); \
+            printf("plugin callback on" #APINAME " error: %s\n", e); \
             lua_pop(plugin->state, 2); /*stack: (empty)*/ \
             _bolt_plugin_stop(plugin->id); \
             _bolt_plugin_notify_stopped(plugin->id); \
@@ -1124,7 +1124,8 @@ uint8_t _bolt_plugin_handle_mouse_event(struct MouseEvent* event, ptrdiff_t bool
 DEFINE_CALLBACK_STATIC(swapbuffers, SwapBuffersEvent)
 DEFINE_CALLBACK(render2d, RenderBatch2D)
 DEFINE_CALLBACK(render3d, Render3D)
-DEFINE_CALLBACK(rendericon, RenderItemIconEvent)
+DEFINE_CALLBACK(rendericon, RenderIconEvent)
+DEFINE_CALLBACK(renderbigicon, RenderIconEvent)
 DEFINE_CALLBACK(minimapterrain, MinimapTerrainEvent)
 DEFINE_CALLBACK(minimaprender2d, RenderBatch2D)
 DEFINE_CALLBACK(renderminimap, RenderMinimapEvent)
@@ -1246,6 +1247,7 @@ lua_settable(plugin->state, LUA_REGISTRYINDEX);
     SETMETA(mouseleave)
     DUPEMETA(mousebutton, mousebuttonup)
     DUPEMETA(render2d, minimaprender2d)
+    DUPEMETA(rendericon, renderbigicon)
 #undef SETMETA
 #undef DUPEMETA
 

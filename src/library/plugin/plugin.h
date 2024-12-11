@@ -333,27 +333,29 @@ struct ItemIconVertex {
     float rgba[4];
 };
 
-struct ItemIconModel {
+struct IconModel {
     uint32_t vertex_count;
     struct ItemIconVertex* vertices;
+    struct Transform3D model_matrix;
     struct Transform3D view_matrix;
     struct Transform3D projection_matrix;
     struct Transform3D viewproj_matrix;
 };
 
-struct ItemIcon {
+struct Icon {
     uint16_t x;
     uint16_t y;
     uint16_t w;
     uint16_t h;
     uint8_t model_count;
-    struct ItemIconModel models[MAX_MODELS_PER_ICON];
+    uint8_t is_big_icon;
+    struct IconModel models[MAX_MODELS_PER_ICON];
 };
 int _bolt_plugin_itemicon_compare(const void* a, const void* b, void* udata);
 uint64_t _bolt_plugin_itemicon_hash(const void* item, uint64_t seed0, uint64_t seed1);
 
-struct RenderItemIconEvent {
-    const struct ItemIcon* icon;
+struct RenderIconEvent {
+    const struct Icon* icon;
     uint32_t screen_width;
     uint32_t screen_height;
     uint16_t target_x;
@@ -467,8 +469,11 @@ void _bolt_plugin_handle_render2d(const struct RenderBatch2D*);
 /// Sends a Render3D to all plugins.
 void _bolt_plugin_handle_render3d(const struct Render3D*);
 
-/// Sends a RenderItemIconEvent to all plugins.
-void _bolt_plugin_handle_rendericon(const struct RenderItemIconEvent*);
+/// Sends a RenderIconEvent for the "rendericon" handler to all plugins.
+void _bolt_plugin_handle_rendericon(const struct RenderIconEvent*);
+
+/// Sends a RenderIconEvent for the "renderbigicon" handler to all plugins.
+void _bolt_plugin_handle_renderbigicon(const struct RenderIconEvent*);
 
 /// Sends a MinimapTerrainEvent to all plugins.
 void _bolt_plugin_handle_minimapterrain(const struct MinimapTerrainEvent*);

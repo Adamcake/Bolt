@@ -45,10 +45,11 @@ struct GLTexture2D {
     double minimap_center_y;
     GLenum internalformat;
     GLint compare_mode;
-    struct ItemIcon icon;
+    struct Icon icon;
     struct hashmap* icons;
     uint8_t is_minimap_tex_big;
     uint8_t is_minimap_tex_small;
+    uint8_t is_multisample;
 };
 
 struct GLProgram {
@@ -105,6 +106,11 @@ struct HashMap {
     RWLock rwlock;
 };
 
+struct TextureUnit {
+    struct GLTexture2D* texture_2d;
+    struct GLTexture2D* texture_2d_multisample;
+};
+
 /// Context-specific information - this is thread-specific on EGL, not sure about elsewhere
 /// this method of context-sharing takes advantage of the fact that the game never chains shares together
 /// with a depth greater than 1, and always deletes the non-owner before the owner. neither of those things
@@ -115,7 +121,7 @@ struct GLContext {
     struct HashMap* buffers;
     struct HashMap* textures;
     struct HashMap* vaos;
-    struct GLTexture2D** texture_units;
+    struct TextureUnit* texture_units;
     struct GLProgram* bound_program;
     struct GLVertexArray* bound_vao;
     GLenum active_texture;
@@ -286,6 +292,7 @@ static void _bolt_gl_plugin_shaderbuffer_destroy(void* userdata);
 #define CONTEXTS_CAPACITY 64 // not growable so we just have to hard-code a number and hope it's enough forever
 #define GAME_MINIMAP_BIG_SIZE 2048
 #define GAME_ITEM_ICON_SIZE 64
+#define GAME_ITEM_BIGICON_SIZE 512
 static struct GLContext contexts[CONTEXTS_CAPACITY];
 
 // since GL contexts are bound only to the thread that binds them, we use thread-local storage (TLS)
@@ -635,7 +642,7 @@ static void _bolt_glcontext_init(struct GLContext* context, void* egl_context, v
     }
     memset(context, 0, sizeof(*context));
     context->id = (uintptr_t)egl_context;
-    context->texture_units = calloc(MAX_TEXTURE_UNITS, sizeof(unsigned int));
+    context->texture_units = calloc(MAX_TEXTURE_UNITS, sizeof(struct TextureUnit));
     context->game_view_part_framebuffer = -1;
     context->game_view_sSourceTex = -1;
     context->does_blit_3d_target = false;
@@ -861,6 +868,7 @@ static void _bolt_gl_load(void* (*GetProcAddress)(const char*)) {
     INIT_GL_FUNC(MultiDrawElements)
     INIT_GL_FUNC(ShaderSource)
     INIT_GL_FUNC(TexStorage2D)
+    INIT_GL_FUNC(TexStorage2DMultisample)
     INIT_GL_FUNC(Uniform1f)
     INIT_GL_FUNC(Uniform2f)
     INIT_GL_FUNC(Uniform3f)
@@ -1127,7 +1135,7 @@ static void _bolt_glTexStorage2D(GLenum target, GLsizei levels, GLenum internalf
     gl.TexStorage2D(target, levels, internalformat, width, height);
     struct GLContext* c = _bolt_context();
     if (target == GL_TEXTURE_2D) {
-        struct GLTexture2D* tex = c->texture_units[c->active_texture];
+        struct GLTexture2D* tex = c->texture_units[c->active_texture].texture_2d;
         free(tex->data);
         tex->data = calloc(width * height * 4, sizeof(*tex->data));
         tex->internalformat = internalformat;
@@ -1136,6 +1144,23 @@ static void _bolt_glTexStorage2D(GLenum target, GLsizei levels, GLenum internalf
         tex->icon.model_count = 0;
     }
     LOG("glTexStorage2D end\n");
+}
+
+static void _bolt_glTexStorage2DMultisample(GLenum target, GLsizei levels, GLenum internalformat, GLsizei width, GLsizei height, GLboolean fixedsamplelocations) {
+    LOG("glTexStorage2DMultisample\n");
+    gl.TexStorage2DMultisample(target, levels, internalformat, width, height, fixedsamplelocations);
+    struct GLContext* c = _bolt_context();
+    if (target == GL_TEXTURE_2D_MULTISAMPLE) {
+        struct GLTexture2D* tex = c->texture_units[c->active_texture].texture_2d_multisample;
+        free(tex->data);
+        tex->data = calloc(width * height * 4, sizeof(*tex->data));
+        tex->internalformat = internalformat;
+        tex->width = width;
+        tex->height = height;
+        tex->icon.model_count = 0;
+        tex->is_multisample = true;
+    }
+    LOG("glTexStorage2DMultisample end\n");
 }
 
 static void _bolt_glVertexAttribPointer(GLuint index, GLint size, GLenum type, GLboolean normalised, GLsizei stride, const void* pointer) {
@@ -1224,7 +1249,7 @@ static void _bolt_glCompressedTexSubImage2D(GLenum target, GLint level, GLint xo
     const size_t input_stride = is_dxt1 ? 8 : 16;
     void (*const unpack565)(uint16_t, uint8_t*) = is_srgb ? _bolt_unpack_srgb565 : _bolt_unpack_rgb565;
     struct GLContext* c = _bolt_context();
-    struct GLTexture2D* tex = c->texture_units[c->active_texture];
+    struct GLTexture2D* tex = c->texture_units[c->active_texture].texture_2d;
     GLint out_xoffset = xoffset;
     GLint out_yoffset = yoffset;
     for (size_t ii = 0; ii < ((size_t)width * (size_t)height); ii += input_stride) {
@@ -1357,15 +1382,15 @@ static void _bolt_glCopyImageSubData(
                 c->does_blit_3d_target = true;
                 c->target_3d_tex = src->id;
             }
-        } else if (src->icon.model_count && dst->width > GAME_ITEM_ICON_SIZE && dst->height > GAME_ITEM_ICON_SIZE) {
+        } else if (!src->icon.is_big_icon && src->icon.model_count && dst->width > GAME_ITEM_ICON_SIZE && dst->height > GAME_ITEM_ICON_SIZE) {
             if (!dst->icons) {
-                dst->icons = hashmap_new(sizeof(struct ItemIcon), 256, 0, 0, _bolt_plugin_itemicon_hash, _bolt_plugin_itemicon_compare, NULL, NULL);
+                dst->icons = hashmap_new(sizeof(struct Icon), 256, 0, 0, _bolt_plugin_itemicon_hash, _bolt_plugin_itemicon_compare, NULL, NULL);
             }
             src->icon.x = dstX;
             src->icon.y = dstY;
             src->icon.w = srcWidth;
             src->icon.h = srcHeight;
-            const struct ItemIcon* old_icon = hashmap_set(dst->icons, &src->icon);
+            const struct Icon* old_icon = hashmap_set(dst->icons, &src->icon);
             if (old_icon) {
                 for (size_t i = 0; i < old_icon->model_count; i += 1) {
                     free(old_icon->models[i].vertices);
@@ -1557,6 +1582,13 @@ static void _bolt_glBlitFramebuffer(GLint srcX0, GLint srcY0, GLint srcX1, GLint
                 gl.GetFramebufferAttachmentParameteriv(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &tex_id);
                 c->target_3d_tex = tex_id;
             }
+        } else if (target_tex) {
+            gl.GetFramebufferAttachmentParameteriv(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &tex_id);
+            struct GLTexture2D* read_tex = _bolt_context_get_texture(c, tex_id);
+            if (read_tex && read_tex->icon.model_count && read_tex->icon.is_big_icon) {
+                target_tex->icon = read_tex->icon;
+                read_tex->icon.model_count = false;
+            }
         }
     }
     LOG("glBlitFramebuffer end\n");
@@ -1570,6 +1602,7 @@ void* _bolt_gl_GetProcAddress(const char* name) {
     PROC_ADDRESS_MAP(LinkProgram)
     PROC_ADDRESS_MAP(UseProgram)
     PROC_ADDRESS_MAP(TexStorage2D)
+    PROC_ADDRESS_MAP(TexStorage2DMultisample)
     PROC_ADDRESS_MAP(VertexAttribPointer)
     PROC_ADDRESS_MAP(GenBuffers)
     PROC_ADDRESS_MAP(BufferData)
@@ -1677,8 +1710,9 @@ void _bolt_gl_onGenTextures(GLsizei n, GLuint* textures) {
         tex->internalformat = -1;
         tex->compare_mode = -1;
         tex->icons = NULL;
-        tex->is_minimap_tex_big = 0;
-        tex->is_minimap_tex_small = 0;
+        tex->is_minimap_tex_big = false;
+        tex->is_minimap_tex_small = false;
+        tex->is_multisample = false;
         hashmap_set(c->textures->map, &tex);
     }
     _bolt_rwlock_unlock_write(&c->textures->rwlock);
@@ -1700,7 +1734,7 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
         if (c->current_draw_framebuffer) {
             gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
         }
-        struct GLTexture2D* tex = c->texture_units[diffuse_map];
+        struct GLTexture2D* tex = c->texture_units[diffuse_map].texture_2d;
         struct GLTexture2D* tex_target = _bolt_context_get_texture(c, draw_tex);
         const uint8_t is_minimap2d_target = tex_target && tex_target->is_minimap_tex_small;
 
@@ -1798,6 +1832,30 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
                     _bolt_plugin_handle_minimapterrain(&render);
                 }
             }
+        } else if (tex->icon.model_count && tex->icon.is_big_icon && count == 6) {
+            int32_t xy0[2];
+            int32_t xy2[2];
+            float abgr[4];
+            const struct GLAttrBinding* binding = &attributes[c->bound_program->loc_aVertexPosition2D];
+            _bolt_get_attr_binding_int(c, binding, indices[0], 2, xy0);
+            _bolt_get_attr_binding_int(c, binding, indices[2], 2, xy2);
+            struct RenderIconEvent event;
+            event.icon = &tex->icon;
+            event.screen_width = roundf(2.0 / projection_matrix[0]);
+            event.screen_height = roundf(2.0 / projection_matrix[5]);
+            event.target_x = (int16_t)xy2[0];
+            event.target_y = (int16_t)((int32_t)event.screen_height - xy2[1]);
+            event.target_w = (uint16_t)(xy0[0] - xy2[0]);
+            event.target_h = (uint16_t)(xy2[1] - xy0[1]);
+            _bolt_get_attr_binding(c, &attributes[c->bound_program->loc_aVertexColour], indices[0], 4, abgr);
+            for (size_t i = 0; i < 4; i += 1) {
+                event.rgba[i] = abgr[3 - i];
+            }
+            _bolt_plugin_handle_renderbigicon(&event);
+            for (size_t i = 0; i < tex->icon.model_count; i += 1) {
+                free(tex->icon.models[i].vertices);
+            }
+            tex->icon.model_count = 0;
         } else {
             struct GLPluginDrawElementsVertex2DUserData vertex_userdata;
             vertex_userdata.c = c;
@@ -1838,13 +1896,13 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
                     float wh[2];
                     _bolt_get_attr_binding(c, vertex_userdata.atlas_min, indices[i], 2, xy);
                     _bolt_get_attr_binding(c, vertex_userdata.atlas_size, indices[i], 2, wh);
-                    const struct ItemIcon dummy_icon = {
+                    const struct Icon dummy_icon = {
                         .x = (uint16_t)roundf(xy[0] * tex->width),
                         .y = (uint16_t)roundf(xy[1] * tex->height),
                         .w = (uint16_t)roundf(fabs(wh[0]) * tex->width),
                         .h = (uint16_t)roundf(fabs(wh[1]) * tex->height),
                     };
-                    const struct ItemIcon* icon = hashmap_get(tex->icons, &dummy_icon);
+                    const struct Icon* icon = hashmap_get(tex->icons, &dummy_icon);
                     if (icon) {
                         batch.index_count = i - batch_start;
                         if (batch.index_count) {
@@ -1856,7 +1914,7 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
                         float abgr[4];
                         _bolt_get_attr_binding_int(c, vertex_userdata.position, indices[i], 2, xy0);
                         _bolt_get_attr_binding_int(c, vertex_userdata.position, indices[i + 2], 2, xy2);
-                        struct RenderItemIconEvent event;
+                        struct RenderIconEvent event;
                         event.icon = icon;
                         event.screen_width = batch.screen_width;
                         event.screen_height = batch.screen_height;
@@ -1893,8 +1951,8 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
             gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uTextureAtlas, &atlas);
             gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uTextureAtlasSettings, &settings_atlas);
             gl.GetUniformfv(c->bound_program->id, c->bound_program->loc_uAtlasMeta, atlas_meta);
-            struct GLTexture2D* tex = c->texture_units[atlas];
-            struct GLTexture2D* tex_settings = c->texture_units[settings_atlas];
+            struct GLTexture2D* tex = c->texture_units[atlas].texture_2d;
+            struct GLTexture2D* tex_settings = c->texture_units[settings_atlas].texture_2d;
             gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ViewTransforms, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
             gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_view_index);
 
@@ -1945,9 +2003,17 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
             _bolt_plugin_handle_render3d(&render);
         } else {
             struct GLTexture2D* tex = _bolt_context_get_texture(c, draw_tex);
-            if (tex && tex->compare_mode == GL_NONE && tex->internalformat == GL_RGBA8 && tex->width == GAME_ITEM_ICON_SIZE && tex->height == GAME_ITEM_ICON_SIZE && tex->icon.model_count < MAX_MODELS_PER_ICON) {
-                struct ItemIconModel* model = &tex->icon.models[tex->icon.model_count];
+            const uint8_t is_icon = tex && tex->compare_mode == GL_NONE && tex->internalformat == GL_RGBA8 && tex->width == GAME_ITEM_ICON_SIZE && tex->height == GAME_ITEM_ICON_SIZE && tex->icon.model_count < MAX_MODELS_PER_ICON;
+            const uint8_t is_big_icon = tex && tex->is_multisample && tex->internalformat == GL_RGBA8 && tex->width == GAME_ITEM_BIGICON_SIZE && tex->height == GAME_ITEM_BIGICON_SIZE;
+            if (is_icon || is_big_icon) {
+                struct IconModel* model = &tex->icon.models[tex->icon.model_count];
                 tex->icon.model_count += 1;
+                tex->icon.is_big_icon = is_big_icon;
+                GLfloat model_matrix[16];
+                gl.GetUniformfv(c->bound_program->id, c->bound_program->loc_uModelMatrix, model_matrix);
+                for (size_t i = 0; i < 16; i += 1) {
+                    model->model_matrix.matrix[i] = (double)model_matrix[i];
+                }
                 GLint ubo_binding, ubo_view_index;
                 gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ViewTransforms, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
                 gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_view_index);
@@ -2006,7 +2072,7 @@ hunt strategy is as follows:
 */
 void _bolt_gl_onDrawArrays(GLenum mode, GLint first, GLsizei count) {
     struct GLContext* c = _bolt_context();
-    GLint target_tex_id;
+    GLint target_tex_id, source_tex_unit;
     gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &target_tex_id);
     struct GLTexture2D* target_tex = _bolt_context_get_texture(c, target_tex_id);
 
@@ -2020,9 +2086,8 @@ void _bolt_gl_onDrawArrays(GLenum mode, GLint first, GLsizei count) {
         target_tex->minimap_center_y = camera_position[2];
     } else if (mode == GL_TRIANGLE_STRIP && count == 4) {
         if (c->bound_program->loc_sSceneHDRTex != -1) {
-            GLint source_tex_unit;
             gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_sSceneHDRTex, &source_tex_unit);
-            struct GLTexture2D* source_tex = c->texture_units[source_tex_unit];
+            struct GLTexture2D* source_tex = c->texture_units[source_tex_unit].texture_2d;
             if (c->current_draw_framebuffer == 0 && c->game_view_sSceneHDRTex != source_tex->id) {
                 c->game_view_sSceneHDRTex = source_tex->id;
                 c->target_3d_tex = c->game_view_sSceneHDRTex;
@@ -2041,11 +2106,13 @@ void _bolt_gl_onDrawArrays(GLenum mode, GLint first, GLsizei count) {
                 c->game_view_h = source_tex->height;
                 c->recalculate_sSceneHDRTex = false;
                 printf("new sSceneHDRTex %i\n", c->target_3d_tex);
+            } else if (target_tex && source_tex->icon.model_count && source_tex->width == GAME_ITEM_BIGICON_SIZE && source_tex->height == GAME_ITEM_BIGICON_SIZE && target_tex->width == GAME_ITEM_BIGICON_SIZE && target_tex->height == GAME_ITEM_BIGICON_SIZE) {
+                target_tex->icon = source_tex->icon;
+                source_tex->icon.model_count = 0;
             }
         } else if (c->bound_program->loc_sSourceTex != -1) {
-            GLint source_tex_unit;
             gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_sSourceTex, &source_tex_unit);
-            struct GLTexture2D* source_tex = c->texture_units[source_tex_unit];
+            struct GLTexture2D* source_tex = c->texture_units[source_tex_unit].texture_2d;
             if (c->current_draw_framebuffer && c->bound_program->loc_sBlurFarTex != -1) {
                 if (c->depth_of_field_enabled || c->game_view_sSceneHDRTex != target_tex_id) return;
                 c->depth_of_field_sSourceTex = source_tex->id;
@@ -2063,22 +2130,30 @@ void _bolt_gl_onDrawArrays(GLenum mode, GLint first, GLsizei count) {
             } else if (c->recalculate_sSceneHDRTex && c->game_view_part_framebuffer == c->current_draw_framebuffer) {
                 c->game_view_sSourceTex = source_tex->id;
                 printf("new sSourceTex %i...\n", c->game_view_sSourceTex);
+            } else if (target_tex && source_tex->icon.model_count && source_tex->width == GAME_ITEM_BIGICON_SIZE && source_tex->height == GAME_ITEM_BIGICON_SIZE && target_tex->width == GAME_ITEM_BIGICON_SIZE && target_tex->height == GAME_ITEM_BIGICON_SIZE) {
+                target_tex->icon = source_tex->icon;
+                source_tex->icon.model_count = 0;
             }
         }
     }
 }
 
 void _bolt_gl_onBindTexture(GLenum target, GLuint texture) {
-    if (target == GL_TEXTURE_2D) {
-        struct GLContext* c = _bolt_context();
-        c->texture_units[c->active_texture] = _bolt_context_get_texture(c, texture);
+    struct GLContext* c = _bolt_context();
+    switch (target) {
+        case GL_TEXTURE_2D:
+            c->texture_units[c->active_texture].texture_2d = _bolt_context_get_texture(c, texture);
+            break;
+        case GL_TEXTURE_2D_MULTISAMPLE:
+            c->texture_units[c->active_texture].texture_2d_multisample = _bolt_context_get_texture(c, texture);
+            break;
     }
 }
 
 void _bolt_gl_onTexSubImage2D(GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void* pixels) {
     struct GLContext* c = _bolt_context();
     if (target == GL_TEXTURE_2D && level == 0 && format == GL_RGBA) {
-        struct GLTexture2D* tex = c->texture_units[c->active_texture];
+        struct GLTexture2D* tex = c->texture_units[c->active_texture].texture_2d;
         if (tex && !(xoffset < 0 || yoffset < 0 || xoffset + width > tex->width || yoffset + height > tex->height)) {
             for (GLsizei y = 0; y < height; y += 1) {
                 uint8_t* dest_ptr = tex->data + ((tex->width * (y + yoffset)) + xoffset) * 4;
@@ -2100,7 +2175,7 @@ void _bolt_gl_onDeleteTextures(GLsizei n, const GLuint* textures) {
             size_t iter = 0;
             void* item;
             while (hashmap_iter((*texture)->icons, &iter, &item)) {
-                const struct ItemIcon* icon = (struct ItemIcon*)item;
+                const struct Icon* icon = (struct Icon*)item;
                 for (size_t i = 0; i < icon->model_count; i += 1) {
                     free(icon->models[i].vertices);
                 }
@@ -2142,7 +2217,7 @@ void _bolt_gl_onViewport(GLint x, GLint y, GLsizei width, GLsizei height) {
 void _bolt_gl_onTexParameteri(GLenum target, GLenum pname, GLint param) {
     if (target == GL_TEXTURE_2D && pname == GL_TEXTURE_COMPARE_MODE) {
         struct GLContext* c = _bolt_context();
-        struct GLTexture2D* tex = c->texture_units[c->active_texture];
+        struct GLTexture2D* tex = c->texture_units[c->active_texture].texture_2d;
         tex->compare_mode = param;
     }
 }
@@ -2396,7 +2471,7 @@ static void _bolt_gl_plugin_surface_init(struct SurfaceFunctions* functions, uns
     functions->set_tint = _bolt_gl_plugin_surface_set_tint;
     functions->set_alpha = _bolt_gl_plugin_surface_set_alpha;
 
-    const struct GLTexture2D* original_tex = c->texture_units[c->active_texture];
+    const struct GLTexture2D* original_tex = c->texture_units[c->active_texture].texture_2d;
     lgl->BindTexture(GL_TEXTURE_2D, original_tex ? original_tex->id : 0);
     gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, c->current_draw_framebuffer);
 }
@@ -2431,7 +2506,7 @@ static void _bolt_gl_plugin_surface_subimage(void* _userdata, int x, int y, int 
     struct GLContext* c = _bolt_context();
     lgl->BindTexture(GL_TEXTURE_2D, userdata->renderbuffer);
     lgl->TexSubImage2D(GL_TEXTURE_2D, 0, x, y, w, h, is_bgra ? GL_BGRA : GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-    const struct GLTexture2D* original_tex = c->texture_units[c->active_texture];
+    const struct GLTexture2D* original_tex = c->texture_units[c->active_texture].texture_2d;
     lgl->BindTexture(GL_TEXTURE_2D, original_tex ? original_tex->id : 0);
 }
 
@@ -2462,7 +2537,7 @@ static void _bolt_gl_plugin_surface_drawtoscreen(void* _userdata, int sx, int sy
     if (scissor_test) lgl->Enable(GL_SCISSOR_TEST);
     if (cull_face) lgl->Enable(GL_CULL_FACE);
     lgl->Viewport(c->viewport_x, c->viewport_y, c->viewport_w, c->viewport_h);
-    const struct GLTexture2D* original_tex = c->texture_units[c->active_texture];
+    const struct GLTexture2D* original_tex = c->texture_units[c->active_texture].texture_2d;
     lgl->BindTexture(GL_TEXTURE_2D, original_tex ? original_tex->id : 0);
     gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, c->current_draw_framebuffer);
     gl.BindVertexArray(c->bound_vao->id);
@@ -2497,7 +2572,7 @@ static void _bolt_gl_plugin_surface_drawtosurface(void* _userdata, void* _target
     if (scissor_test) lgl->Enable(GL_SCISSOR_TEST);
     if (cull_face) lgl->Enable(GL_CULL_FACE);
     lgl->Viewport(c->viewport_x, c->viewport_y, c->viewport_w, c->viewport_h);
-    const struct GLTexture2D* original_tex = c->texture_units[c->active_texture];
+    const struct GLTexture2D* original_tex = c->texture_units[c->active_texture].texture_2d;
     lgl->BindTexture(GL_TEXTURE_2D, original_tex ? original_tex->id : 0);
     gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, c->current_draw_framebuffer);
     gl.BindVertexArray(c->bound_vao->id);
@@ -2777,7 +2852,7 @@ static void _bolt_gl_plugin_shaderprogram_drawtosurface(void* userdata, void* su
     if (active_texture > 0) {
         for (size_t i = 0; i < active_texture; i += 1) {
             gl.ActiveTexture(GL_TEXTURE0 + i);
-            lgl->BindTexture(GL_TEXTURE_2D, c->texture_units[i]->id);
+            lgl->BindTexture(GL_TEXTURE_2D, c->texture_units[i].texture_2d->id);
         }
         gl.ActiveTexture(GL_TEXTURE0 + c->active_texture);
     }

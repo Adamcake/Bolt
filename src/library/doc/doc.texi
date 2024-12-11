@@ -657,11 +657,35 @@ end)
 @node functions-onrendericon
 @section onrendericon
 
-@eventhandler{item icon rendering events, @ref{objects-renderitemicon}}
+@eventhandler{icon rendering events, @ref{objects-rendericon}}
+
+Unlike "big icons", the pre-rendered icons given by this callback are
+stored for a long time, often indefinitely. This only seems to be used
+for item icons. Icons are rendered at 64x64 resolution.
 
 @example lua
 @verbatim
 bolt.onrendericon(function (event)
+  -- ...
+end)
+@end verbatim
+@end example
+
+@eventobjectwarning{}
+
+@node functions-onrenderbigicon
+@section onrenderbigicon
+
+@eventhandler{icon rendering events, @ref{objects-rendericon}}
+
+"big icons" are larger than normal icons, and, despite being
+pre-rendered, each one seems to be used only once. Big icons are
+rendered at 512x512 resolution. They're used for NPC chat-heads and some
+specific UI elements.
+
+@example lua
+@verbatim
+bolt.onrenderbigicon(function (event)
   -- ...
 end)
 @end verbatim
@@ -2693,19 +2717,20 @@ end
 @end verbatim
 @end example
 
-@node objects-renderitemicon
-@section Render Item Icon Event
+@node objects-rendericon
+@section Render Icon Event
 
-A render-item-icon event comes from @ref{functions-onrendericon}. It
-occurs when an item icon is rendered to the game view. Item icons refer
-to items appearing in the UI, such as the player's inventory, equipment
-screen, or action bar slots. These appear to be 2D images but in reality
-they're "snapshots" of the item's 3D models, which can make them very
-difficult to work with compared to a normal 2D image. Bolt attempts to
-simplify this by storing some of the details of the models rendered at
-the time when the icon is created, and allows plugins to query this
-stored data. However this means that some data is missing compared to
-a Render3D event; most notably, the texture data is currently not saved.
+A render-icon event comes from @ref{functions-onrendericon} or
+@ref{functions-onrenderbigicon}. It occurs when a pre-rendered icon is
+drawn to the game view. Icons refer to items appearing in the UI, such
+as the player's inventory, equipment screen, or action bar slots. These
+appear to be 2D images but in reality they're pre-rendered "snapshots"
+of the item's 3D models, which can make them very difficult to work with
+compared to a normal 2D image. Bolt attempts to simplify this by storing
+some of the details of the models rendered at the time when the icon is
+created, and allows plugins to query this stored data. However this
+means that some data is missing compared to a Render3D event; most
+notably, the texture data is currently not saved.
 
 An icon may contain any number of models, and each vertex in each model
 may be queried using the functions of this event.
@@ -2733,7 +2758,7 @@ view matrix.
 
 @eventobjectwarning{}
 
-@node renderitemicon-xywh
+@node rendericon-xywh
 @subsection xywh
 
 Returns the x, y, width and height of where this icon is being drawn on
@@ -2746,7 +2771,7 @@ local x, y, width, height = event:xywh()
 @end verbatim
 @end example
 
-@node renderitemicon-modelcount
+@node rendericon-modelcount
 @subsection modelcount
 
 Returns the number of 3D models that were rendered to this icon.
@@ -2759,7 +2784,7 @@ end
 @end verbatim
 @end example
 
-@node renderitemicon-modelvertexcount
+@node rendericon-modelvertexcount
 @subsection modelvertexcount
 
 Given a model index, returns the number of vertices in that model.
@@ -2774,7 +2799,7 @@ end
 @end verbatim
 @end example
 
-@node renderitemicon-modelvertexpoint
+@node rendericon-modelvertexpoint
 @subsection modelvertexpoint
 
 Given a model number and vertex number, returns a @ref{objects-point}
@@ -2786,7 +2811,7 @@ local point = event:modelvertexpoint(model, vertex)
 @end verbatim
 @end example
 
-@node renderitemicon-modelvertexcolour
+@node rendericon-modelvertexcolour
 @subsection modelvertexcolour
 
 Given a model number and a vertex number, returns the red, green, blue
@@ -2804,12 +2829,12 @@ local red, green, blue, alpha = event:modelvertexcolour(model, vertex)
 @end verbatim
 @end example
 
-@node renderitemicon-modelvertexcolor
+@node rendericon-modelvertexcolor
 @subsection modelvertexcolor
 
-Alias for @ref{renderitemicon-modelvertexcolour}
+Alias for @ref{rendericon-modelvertexcolour}
 
-@node renderitemicon-targetsize
+@node rendericon-targetsize
 @subsection targetsize
 
 Returns the width and height of the target area of this render, in
@@ -2826,7 +2851,7 @@ local width, height = event:targetsize()
 @end verbatim
 @end example
 
-@node renderitemicon-modelviewmatrix
+@node rendericon-modelviewmatrix
 @subsection modelviewmatrix
 
 Given a model number, returns a @ref{objects-transform} representing the
@@ -2838,7 +2863,7 @@ local viewmatrix = event:modelviewmatrix(model)
 @end verbatim
 @end example
 
-@node renderitemicon-modelprojectionmatrix
+@node rendericon-modelprojectionmatrix
 @subsection modelprojectionmatrix
 
 Given a model number, returns a @ref{objects-transform} representing the
@@ -2850,7 +2875,7 @@ local projmatrix = event:modelprojectionmatrix(model)
 @end verbatim
 @end example
 
-@node renderitemicon-modelviewprojmatrix
+@node rendericon-modelviewprojmatrix
 @subsection modelviewprojmatrix
 
 Given a model number, returns a @ref{objects-transform} representing the
@@ -2865,7 +2890,7 @@ local viewprojmatrix = event:modelviewprojmatrix(model)
 @end verbatim
 @end example
 
-@node renderitemicon-colour
+@node rendericon-colour
 @subsection colour
 
 Returns the red, green, blue and alpha values that this icon is being
@@ -2883,10 +2908,10 @@ local red, green, blue, alpha = event:colour()
 @end verbatim
 @end example
 
-@node renderitemicon-color
+@node rendericon-color
 @subsection color
 
-Alias for @ref{renderitemicon-colour}
+Alias for @ref{rendericon-colour}
 
 @node objects-minimapterrain
 @section Minimap Terrain Event

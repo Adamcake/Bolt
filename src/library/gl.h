@@ -35,6 +35,7 @@ typedef uintptr_t GLsizeiptr;
 #define GL_NONE 0
 #define GL_TEXTURE 5890
 #define GL_TEXTURE_2D 3553
+#define GL_TEXTURE_2D_MULTISAMPLE 37120
 #define GL_RGB 6407
 #define GL_RGBA 6408
 #define GL_BGRA 32993
@@ -170,6 +171,7 @@ struct GLProcFunctions {
     void (*MultiDrawElements)(GLenum, const GLsizei*, GLenum, const void* const*, GLsizei);
     void (*ShaderSource)(GLuint, GLsizei, const GLchar**, const GLint*);
     void (*TexStorage2D)(GLenum, GLsizei, GLenum, GLsizei, GLsizei);
+    void (*TexStorage2DMultisample)(GLenum, GLsizei, GLenum, GLsizei, GLsizei, GLboolean);
     void (*Uniform1f)(GLint, GLfloat);
     void (*Uniform2f)(GLint, GLfloat, GLfloat);
     void (*Uniform3f)(GLint, GLfloat, GLfloat, GLfloat);
