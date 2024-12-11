@@ -8,12 +8,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-// comment or uncomment this to enable verbose logging of hooks in this file
-//#define VERBOSE
-
-// don't change this part, change the line above this instead
+// -D BOLT_LIBRARY_VERBOSE=1
 #if defined(VERBOSE)
-#define LOG(...) printf(__VA_ARGS__);fflush(stdout)
+static FILE* logfile;
+void _bolt_gl_set_logfile(FILE* f) { logfile = f; }
+#define LOG(...) if(fprintf(logfile, __VA_ARGS__))fflush(logfile)
 #else
 #define LOG(...)
 #endif

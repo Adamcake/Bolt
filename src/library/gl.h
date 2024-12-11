@@ -4,6 +4,11 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#if defined(VERBOSE)
+#include <stdio.h>
+void _bolt_gl_set_logfile(FILE* f);
+#endif
+
 /* types from gl.h */
 typedef unsigned int GLenum;
 typedef unsigned char GLboolean;

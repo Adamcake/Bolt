@@ -68,3 +68,6 @@ target_compile_definitions(${BOLT_PLUGIN_LIB_NAME} PUBLIC SPNG_STATIC=1 SPNG_USE
 if(MSVC)
     target_compile_definitions(${BOLT_PLUGIN_LIB_NAME} PUBLIC _USE_MATH_DEFINES=1)
 endif()
+if(BOLT_LIBRARY_VERBOSE)
+    target_compile_definitions(${BOLT_PLUGIN_LIB_NAME} PUBLIC VERBOSE)
+endif()

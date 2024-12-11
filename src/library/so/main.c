@@ -13,14 +13,17 @@
 #include "../plugin/plugin.h"
 #include "../../../modules/hashmap/hashmap.h"
 
-// comment or uncomment this to enable verbose logging of hooks in this file
-//#define VERBOSE
-
-// don't change this part, change the line above this instead
+// -D BOLT_LIBRARY_VERBOSE=1
 #if defined(VERBOSE)
 #define LOG(...) if(printf(__VA_ARGS__)) fflush(stdout)
 #else
 #define LOG(...)
+#endif
+
+#if defined(XCBVERBOSE)
+#define XCBLOG(...) if(printf(__VA_ARGS__)) fflush(stdout)
+#else
+#define XCBLOG(...)
 #endif
 
 // note: this is currently always triggered by single-threaded dlopen calls so no locking necessary
@@ -310,6 +313,9 @@ static void _bolt_init_functions() {
     _bolt_plugin_on_startup();
     pthread_mutex_init(&egl_lock, NULL);
     dl_iterate_phdr(_bolt_dl_iterate_callback, NULL);
+#if defined(VERBOSE)
+    _bolt_gl_set_logfile(stdout);
+#endif
     inited = 1;
 }
 
@@ -623,11 +629,11 @@ static uint8_t _bolt_handle_xcb_event(xcb_connection_t* c, xcb_generic_event_t* 
 }
 
 xcb_generic_event_t* xcb_poll_for_event(xcb_connection_t* c) {
-    LOG("xcb_poll_for_event\n");
+    XCBLOG("xcb_poll_for_event\n");
     xcb_generic_event_t* ret = real_xcb_poll_for_event(c);
     while (true) {
         if (_bolt_handle_xcb_event(c, ret)) {
-            LOG("xcb_poll_for_event end\n");
+            XCBLOG("xcb_poll_for_event end\n");
             return ret;
         }
         ret = real_xcb_poll_for_queued_event(c);
@@ -635,37 +641,37 @@ xcb_generic_event_t* xcb_poll_for_event(xcb_connection_t* c) {
 }
 
 xcb_generic_event_t* xcb_poll_for_queued_event(xcb_connection_t* c) {
-    LOG("xcb_poll_for_queued_event\n");
+    XCBLOG("xcb_poll_for_queued_event\n");
     xcb_generic_event_t* ret;
     while (true) {
         ret = real_xcb_poll_for_queued_event(c);
         if (_bolt_handle_xcb_event(c, ret)) {
-            LOG("xcb_poll_for_queued_event end\n");
+            XCBLOG("xcb_poll_for_queued_event end\n");
             return ret;
         }
     }
 }
 
 xcb_generic_event_t* xcb_wait_for_event(xcb_connection_t* c) {
-    LOG("xcb_wait_for_event\n");
+    XCBLOG("xcb_wait_for_event\n");
     xcb_generic_event_t* ret;
     while (true) {
         ret = real_xcb_wait_for_event(c);
         if (_bolt_handle_xcb_event(c, ret)) {
-            LOG("xcb_wait_for_event end\n");
+            XCBLOG("xcb_wait_for_event end\n");
             return ret;
         }
     }
 }
 
 xcb_get_geometry_reply_t* xcb_get_geometry_reply(xcb_connection_t* c, xcb_get_geometry_cookie_t cookie, xcb_generic_error_t** e) {
-    LOG("xcb_get_geometry_reply\n");
+    XCBLOG("xcb_get_geometry_reply\n");
     // currently the game appears to call this twice per frame for the main window and never for
     // any other window, so we can assume the result here applies to the main window.
     xcb_get_geometry_reply_t* ret = real_xcb_get_geometry_reply(c, cookie, e);
     main_window_width = ret->width;
     main_window_height = ret->height;
-    LOG("xcb_get_geometry_reply end (returned %u %u)\n", main_window_width, main_window_height);
+    XCBLOG("xcb_get_geometry_reply end (returned %u %u)\n", main_window_width, main_window_height);
     return ret;
 }
 

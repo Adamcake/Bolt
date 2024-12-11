@@ -67,9 +67,9 @@ static int game_height = 0;
 
 static HCURSOR cursor_default;
 
-//#define VERBOSE
-
+// -D BOLT_LIBRARY_VERBOSE=1
 #if defined(VERBOSE)
+static LPCWSTR logfilename = L"bolt-log.txt";
 static FILE* logfile = 0;
 #define LOG(...) if(fprintf(logfile, __VA_ARGS__))fflush(logfile)
 #else 
@@ -263,7 +263,7 @@ static void* bolt_GetProcAddress(const char* proc) {
 static HGLRC WINAPI hook_wglCreateContext(HDC hdc) {
     EnterCriticalSection(&wgl_lock);
 #if defined(VERBOSE)
-    if (!logfile) _wfopen_s(&logfile, L"bolt-log.txt", L"wb");
+    if (!logfile) { _wfopen_s(&logfile, logfilename, L"wb"); _bolt_gl_set_logfile(logfile); }
 #endif
     HGLRC ret = real_wglCreateContext(hdc);
     if (ret) _bolt_gl_onCreateContext(ret, NULL, &libgl, bolt_GetProcAddress, false);
@@ -316,7 +316,7 @@ static BOOL WINAPI hook_SwapBuffers(HDC hdc) {
 
 static HWND WINAPI hook_CreateWindowExA(DWORD dwExStyle, LPCSTR lpClassName, LPCSTR lpWindowName, DWORD dwStyle, int X, int Y, int nWidth, int nHeight, HWND hWndParent, HMENU hMenu, HINSTANCE hInstance, LPVOID lpParam) {
 #if defined(VERBOSE)
-    if (!logfile) _wfopen_s(&logfile, L"bolt-log.txt", L"wb");
+    if (!logfile) { _wfopen_s(&logfile, logfilename, L"wb"); _bolt_gl_set_logfile(logfile); }
 #endif
     LOG("CreateWindowExA(class=\"%s\", name=\"%s\", x=%i, y=%i, w=%i, h=%i)\n", lpClassName, lpWindowName, X, Y, nWidth, nHeight);
     HWND ret = real_CreateWindowExA(dwExStyle, lpClassName, lpWindowName, dwStyle, X, Y, nWidth, nHeight, hWndParent, hMenu, hInstance, lpParam);
