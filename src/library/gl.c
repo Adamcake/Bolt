@@ -7,14 +7,24 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 // -D BOLT_LIBRARY_VERBOSE=1
 #if defined(VERBOSE)
+#if defined(WIN32)
+#define gettid() (unsigned long)GetCurrentThreadId()
+#else
+#include <sys/syscall.h>
+#define gettid() (unsigned long)syscall(SYS_gettid)
+#endif
+
 static FILE* logfile;
 void _bolt_gl_set_logfile(FILE* f) { logfile = f; }
-#define LOG(...) if(fprintf(logfile, __VA_ARGS__))fflush(logfile)
+#define LOG(STR) if(fprintf(logfile, "[tid %lu] " STR, gettid()))fflush(logfile)
+#define LOGF(STR, ...) if(fprintf(logfile, "[tid %lu] " STR, gettid(), __VA_ARGS__))fflush(logfile)
 #else
 #define LOG(...)
+#define LOGF(...)
 #endif
 
 struct GLArrayBuffer {
@@ -1441,7 +1451,7 @@ static void _bolt_glBufferStorage(GLenum target, GLsizeiptr size, const void* da
         free(buffer->data);
         buffer->data = buffer_content;
     }
-    LOG("glBufferStorage end (%s)\n", binding_type == -1 ? "not intercepted" : "intercepted");
+    LOGF("glBufferStorage end (%s)\n", binding_type == -1 ? "not intercepted" : "intercepted");
 }
 
 static void _bolt_glFlushMappedBufferRange(GLenum target, GLintptr offset, GLsizeiptr length) {
@@ -1457,7 +1467,7 @@ static void _bolt_glFlushMappedBufferRange(GLenum target, GLintptr offset, GLsiz
     } else {
         gl.FlushMappedBufferRange(target, offset, length);
     }
-    LOG("glFlushMappedBufferRange end (%s)\n", binding_type == -1 ? "not intercepted" : "intercepted");
+    LOGF("glFlushMappedBufferRange end (%s)\n", binding_type == -1 ? "not intercepted" : "intercepted");
 }
 
 static void _bolt_glActiveTexture(GLenum texture) {

@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "x.h"
 #include "../gl.h"
@@ -15,9 +16,12 @@
 
 // -D BOLT_LIBRARY_VERBOSE=1
 #if defined(VERBOSE)
-#define LOG(...) if(printf(__VA_ARGS__)) fflush(stdout)
+#include <sys/syscall.h>
+#define LOG(STR) if(printf("[tid %li] " STR, syscall(SYS_gettid)))fflush(stdout)
+#define LOGF(STR, ...) if(printf("[tid %li] " STR, syscall(SYS_gettid), __VA_ARGS__))fflush(stdout)
 #else
 #define LOG(...)
+#define LOGF(...)
 #endif
 
 #if defined(XCBVERBOSE)
@@ -383,7 +387,7 @@ void glTexParameteri(GLenum target, GLenum pname, GLint param) {
 }
 
 void* eglGetProcAddress(const char* name) {
-    LOG("eglGetProcAddress('%s')\n", name);
+    LOGF("eglGetProcAddress('%s')\n", name);
     void* ret = _bolt_gl_GetProcAddress(name);
     return ret ? ret : real_eglGetProcAddress(name);
 }
@@ -392,7 +396,7 @@ unsigned int eglSwapBuffers(void* display, void* surface) {
     LOG("eglSwapBuffers\n");
     _bolt_gl_onSwapBuffers(main_window_width, main_window_height);
     unsigned int ret = real_eglSwapBuffers(display, surface);
-    LOG("eglSwapBuffers end (returned %u)\n", ret);
+    LOGF("eglSwapBuffers end (returned %u)\n", ret);
     return ret;
 }
 
@@ -404,7 +408,7 @@ void* eglCreateContext(void* display, void* config, void* share_context, const v
         _bolt_gl_onCreateContext(ret, share_context, &libgl, real_eglGetProcAddress, true);
         pthread_mutex_unlock(&egl_lock);
     }
-    LOG("eglCreateContext end (returned %lu)\n", (uintptr_t)ret);
+    LOGF("eglCreateContext end (returned %lu)\n", (uintptr_t)ret);
     return ret;
 }
 
@@ -416,12 +420,12 @@ unsigned int eglMakeCurrent(void* display, void* draw, void* read, void* context
         _bolt_gl_onMakeCurrent(context);
         pthread_mutex_unlock(&egl_lock);
     }
-    LOG("eglMakeCurrent end (returned %u)\n", ret);
+    LOGF("eglMakeCurrent end (returned %u)\n", ret);
     return ret;
 }
 
 unsigned int eglDestroyContext(void* display, void* context) {
-    LOG("eglDestroyContext %lu\n", (uintptr_t)context);
+    LOGF("eglDestroyContext %lu\n", (uintptr_t)context);
     unsigned int ret = real_eglDestroyContext(display, context);
     if (ret) {
         pthread_mutex_lock(&egl_lock);
@@ -434,7 +438,7 @@ unsigned int eglDestroyContext(void* display, void* context) {
         }
         pthread_mutex_unlock(&egl_lock);
     }
-    LOG("eglDestroyContext end (returned %u)\n", ret);
+    LOGF("eglDestroyContext end (returned %u)\n", ret);
     return ret;
 }
 
@@ -779,7 +783,7 @@ static void* _bolt_dl_lookup(void* handle, const char* symbol) {
 void* dlopen(const char* filename, int flags) {
     INIT();
     void* ret = real_dlopen(filename, flags);
-    LOG("dlopen('%s', %i) -> %lu\n", filename, flags, (unsigned long)ret);
+    LOGF("dlopen('%s', %i) -> %lu\n", filename, flags, (unsigned long)ret);
     // recheck if any of the modules we want to hook are now in our address space.
     // we can't strcmp filename, because it might not be something of interest but depend on something
     // of interest. for example, filename might be "libX11.so.6", which isn't of interest to bolt, but
@@ -790,14 +794,14 @@ void* dlopen(const char* filename, int flags) {
 
 void* dlsym(void* handle, const char* symbol) {
     INIT();
-    LOG("dlsym(%lu, '%s')\n", (uintptr_t)handle, symbol);
+    LOGF("dlsym(%lu, '%s')\n", (uintptr_t)handle, symbol);
     void* f = _bolt_dl_lookup(handle, symbol);
     return f ? f : real_dlsym(handle, symbol);
 }
 
 void* dlvsym(void* handle, const char* symbol, const char* version) {
     INIT();
-    LOG("dlvsym(%lu, '%s')\n", (uintptr_t)handle, symbol);
+    LOGF("dlvsym(%lu, '%s')\n", (uintptr_t)handle, symbol);
     void* f = _bolt_dl_lookup(handle, symbol);
     return f ? f : real_dlvsym(handle, symbol, version);
 }

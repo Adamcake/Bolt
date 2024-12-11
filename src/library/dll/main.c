@@ -71,9 +71,11 @@ static HCURSOR cursor_default;
 #if defined(VERBOSE)
 static LPCWSTR logfilename = L"bolt-log.txt";
 static FILE* logfile = 0;
-#define LOG(...) if(fprintf(logfile, __VA_ARGS__))fflush(logfile)
+#define LOG(STR) if(fprintf(logfile, "[tid %u] " STR, GetCurrentThreadId()))fflush(logfile)
+#define LOGF(STR, ...) if(fprintf(logfile, "[tid %u] " STR, GetCurrentThreadId(), __VA_ARGS__))fflush(logfile)
 #else 
 #define LOG(...)
+#define LOGF(...)
 #endif
 
 static void resolve_imports(HMODULE, PIMAGE_IMPORT_DESCRIPTOR, HMODULE luajit, PIMAGE_EXPORT_DIRECTORY luajit_exports, GETMODULEHANDLEW, GETPROCADDRESS, LOADLIBRARYW, VIRTUALPROTECT);
@@ -199,7 +201,7 @@ static BOOL handle_mouse_event(WPARAM wParam, POINTS point, ptrdiff_t bool_offse
 // an example of a case when we wouldn't want to pass it to the game would be a mouse-click event
 // which got captured by an embedded plugin window.
 LRESULT hook_wndproc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-    LOG("WNDPROC(%u, %llu, %llu)\n", uMsg, (ULONGLONG)wParam, (ULONGLONG)lParam);
+    LOGF("WNDPROC(%u, %llu, %llu)\n", uMsg, (ULONGLONG)wParam, (ULONGLONG)lParam);
     switch (uMsg) {
         case WM_WINDOWPOSCHANGING:
         case WM_WINDOWPOSCHANGED: {
@@ -256,7 +258,7 @@ LRESULT hook_wndproc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 
 static void* bolt_GetProcAddress(const char* proc) {
     void* ret = (void*)real_wglGetProcAddress((LPCSTR)proc);
-    LOG("bolt_GetProcAddress(\"%s\") -> %llu\n", proc, (ULONGLONG)ret);
+    LOGF("bolt_GetProcAddress(\"%s\") -> %llu\n", proc, (ULONGLONG)ret);
     return ret;
 }
 
@@ -268,12 +270,12 @@ static HGLRC WINAPI hook_wglCreateContext(HDC hdc) {
     HGLRC ret = real_wglCreateContext(hdc);
     if (ret) _bolt_gl_onCreateContext(ret, NULL, &libgl, bolt_GetProcAddress, false);
     LeaveCriticalSection(&wgl_lock);
-    LOG("wglCreateContext -> %llu\n", (ULONGLONG)ret);
+    LOGF("wglCreateContext -> %llu\n", (ULONGLONG)ret);
     return ret;
 }
 
 static BOOL WINAPI hook_wglDeleteContext(HGLRC hglrc) {
-    LOG("wglDeleteContext(%llu)\n", (ULONGLONG)hglrc);
+    LOGF("wglDeleteContext(%llu)\n", (ULONGLONG)hglrc);
     BOOL ret = real_wglDeleteContext(hglrc);
     if (ret) {
         EnterCriticalSection(&wgl_lock);
@@ -284,14 +286,14 @@ static BOOL WINAPI hook_wglDeleteContext(HGLRC hglrc) {
 }
 
 static PROC WINAPI hook_wglGetProcAddress(LPCSTR proc) {
-    LOG("wglGetProcAddress(\"%s\")\n", proc);
+    LOGF("wglGetProcAddress(\"%s\")\n", proc);
     if (!strcmp(proc, "wglCreateContextAttribsARB")) return (PROC)hook_wglCreateContextAttribsARB;
     void* ret = _bolt_gl_GetProcAddress(proc);
     return ret ? ret : real_wglGetProcAddress(proc);
 }
 
 static BOOL WINAPI hook_wglMakeCurrent(HDC hdc, HGLRC hglrc) {
-    LOG("wglMakeCurrent(%llu)\n", (ULONGLONG)hglrc);
+    LOGF("wglMakeCurrent(%llu)\n", (ULONGLONG)hglrc);
 
     BOOL ret = real_wglMakeCurrent(hdc, hglrc);
     if (ret) {
@@ -300,17 +302,17 @@ static BOOL WINAPI hook_wglMakeCurrent(HDC hdc, HGLRC hglrc) {
         _bolt_gl_onMakeCurrent(hglrc);
         LeaveCriticalSection(&wgl_lock);
     }
-    LOG("wglMakeCurrent(%llu) -> %i\n", (ULONGLONG)hglrc, (int)ret);
+    LOGF("wglMakeCurrent(%llu) -> %i\n", (ULONGLONG)hglrc, (int)ret);
     return ret;
 }
 
 static BOOL WINAPI hook_SwapBuffers(HDC hdc) {
-    LOG("SwapBuffers\n");
+    LOGF("SwapBuffers\n");
     if (game_width > 0 && game_height > 0) {
         _bolt_gl_onSwapBuffers((uint32_t)game_width, (uint32_t)game_height);
     }
     BOOL ret = real_SwapBuffers(hdc);
-    LOG("SwapBuffers -> %i\n", (int)ret);
+    LOGF("SwapBuffers -> %i\n", (int)ret);
     return ret;
 }
 
@@ -318,7 +320,7 @@ static HWND WINAPI hook_CreateWindowExA(DWORD dwExStyle, LPCSTR lpClassName, LPC
 #if defined(VERBOSE)
     if (!logfile) { _wfopen_s(&logfile, logfilename, L"wb"); _bolt_gl_set_logfile(logfile); }
 #endif
-    LOG("CreateWindowExA(class=\"%s\", name=\"%s\", x=%i, y=%i, w=%i, h=%i)\n", lpClassName, lpWindowName, X, Y, nWidth, nHeight);
+    LOGF("CreateWindowExA(class=\"%s\", name=\"%s\", x=%i, y=%i, w=%i, h=%i)\n", lpClassName, lpWindowName, X, Y, nWidth, nHeight);
     HWND ret = real_CreateWindowExA(dwExStyle, lpClassName, lpWindowName, dwStyle, X, Y, nWidth, nHeight, hWndParent, hMenu, hInstance, lpParam);
     if (!game_parent_hwnd) {
         game_parent_hwnd = ret;
@@ -353,10 +355,10 @@ static LONG_PTR WINAPI hook_GetWindowLongPtrW(HWND hWnd, int nIndex) {
 }
 
 static void hook_glGenTextures(GLsizei n, GLuint* textures) {
-    LOG("glGenTextures(%i...)\n", n);
+    LOGF("glGenTextures(%i...)\n", n);
     libgl.GenTextures(n, textures);
     _bolt_gl_onGenTextures(n, textures);
-    LOG("glGenTextures end\n", n);
+    LOG("glGenTextures end\n");
 }
 
 static void hook_glDrawElements(GLenum mode, GLsizei count, GLenum type, const void* indices) {
@@ -416,12 +418,12 @@ static void hook_glViewport(GLint x, GLint y, GLsizei width, GLsizei height) {
 }
 
 static HGLRC __stdcall hook_wglCreateContextAttribsARB(HDC hdc, HGLRC hglrc, const int* attribList) {
-    LOG("wglCreateContextAttribsARB(%llu)\n", (ULONGLONG)hglrc);
+    LOGF("wglCreateContextAttribsARB(%llu)\n", (ULONGLONG)hglrc);
     EnterCriticalSection(&wgl_lock);
     HGLRC ret = real_wglCreateContextAttribsARB(hdc, hglrc, attribList);
     if (ret) _bolt_gl_onCreateContext(ret, hglrc, &libgl, bolt_GetProcAddress, true);
     LeaveCriticalSection(&wgl_lock);
-    LOG("wglCreateContextAttribsARB(%llu) -> %llu\n", (ULONGLONG)hglrc, (ULONGLONG)ret);
+    LOGF("wglCreateContextAttribsARB(%llu) -> %llu\n", (ULONGLONG)hglrc, (ULONGLONG)ret);
     return ret;
 }
 
