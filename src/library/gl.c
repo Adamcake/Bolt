@@ -7,13 +7,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 
 // -D BOLT_LIBRARY_VERBOSE=1
 #if defined(VERBOSE)
 #if defined(WIN32)
 #define gettid() (unsigned long)GetCurrentThreadId()
 #else
+#include <unistd.h>
 #include <sys/syscall.h>
 #define gettid() (unsigned long)syscall(SYS_gettid)
 #endif
