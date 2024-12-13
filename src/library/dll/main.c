@@ -420,7 +420,7 @@ static void hook_glViewport(GLint x, GLint y, GLsizei width, GLsizei height) {
     LOG("glViewport end\n");
 }
 
-static hook_glBlendFunc(GLenum sfactor, GLenum dfactor) {
+static void hook_glBlendFunc(GLenum sfactor, GLenum dfactor) {
     LOG("glBlendFunc\n");
     libgl.BlendFunc(sfactor, dfactor);
     _bolt_gl_onBlendFunc(sfactor, dfactor);
