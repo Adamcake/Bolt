@@ -33,6 +33,10 @@ typedef uintptr_t GLsizeiptr;
 
 /* consts used from libgl */
 #define GL_NONE 0
+#define GL_ZERO 0
+#define GL_ONE 1
+#define GL_SRC_ALPHA 770
+#define GL_ONE_MINUS_SRC_ALPHA 771
 #define GL_TEXTURE 5890
 #define GL_TEXTURE_2D 3553
 #define GL_TEXTURE_2D_MULTISAMPLE 37120
@@ -130,6 +134,7 @@ struct GLProcFunctions {
     void (*BindBuffer)(GLenum, GLuint);
     void (*BindFramebuffer)(GLenum, GLuint);
     void (*BindVertexArray)(GLuint);
+    void (*BlendFuncSeparate)(GLenum, GLenum, GLenum, GLenum);
     void (*BlitFramebuffer)(GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLbitfield, GLenum);
     void (*BufferData)(GLenum, GLsizeiptr, const void*, GLenum);
     void (*BufferStorage)(GLenum, GLsizeiptr, const void*, GLbitfield);
@@ -200,6 +205,7 @@ struct GLProcFunctions {
 /// Struct representing all the OpenGL functions of interest to us that the game gets from static or dynamic linkage
 struct GLLibFunctions {
     void (*BindTexture)(GLenum, GLuint);
+    void (*BlendFunc)(GLenum, GLenum);
     void (*Clear)(GLbitfield);
     void (*ClearColor)(GLfloat, GLfloat, GLfloat, GLfloat);
     void (*DeleteTextures)(GLsizei, const GLuint*);
@@ -273,5 +279,8 @@ void _bolt_gl_onViewport(GLint, GLint, GLsizei, GLsizei);
 
 /// Call this in response to glTexParameteri, which needs to be hooked from libgl.
 void _bolt_gl_onTexParameteri(GLenum, GLenum, GLint);
+
+/// Call this in response to glBlendFunc, which needs to be hooked from libgl.
+void _bolt_gl_onBlendFunc(GLenum, GLenum);
 
 #endif

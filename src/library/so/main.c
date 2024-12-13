@@ -201,6 +201,8 @@ static void _bolt_init_libgl(unsigned long addr, const Elf32_Word* gnu_hash_tabl
     libgl_addr = (void*)addr;
     const ElfW(Sym)* sym = _bolt_lookup_symbol("glBindTexture", gnu_hash_table, hash_table, string_table, symbol_table);
     if (sym) libgl.BindTexture = sym->st_value + libgl_addr;
+    sym = _bolt_lookup_symbol("glBlendFunc", gnu_hash_table, hash_table, string_table, symbol_table);
+    if (sym) libgl.BlendFunc = sym->st_value + libgl_addr;
     sym = _bolt_lookup_symbol("glClear", gnu_hash_table, hash_table, string_table, symbol_table);
     if (sym) libgl.Clear = sym->st_value + libgl_addr;
     sym = _bolt_lookup_symbol("glClearColor", gnu_hash_table, hash_table, string_table, symbol_table);
@@ -384,6 +386,13 @@ void glTexParameteri(GLenum target, GLenum pname, GLint param) {
     libgl.TexParameteri(target, pname, param);
     _bolt_gl_onTexParameteri(target, pname, param);
     LOG("glTexParameteri end\n");
+}
+
+void glBlendFunc(GLenum sfactor, GLenum dfactor) {
+    LOG("glBlendFunc\n");
+    libgl.BlendFunc(sfactor, dfactor);
+    _bolt_gl_onBlendFunc(sfactor, dfactor);
+    LOG("glBlendFunc end\n");
 }
 
 void* eglGetProcAddress(const char* name) {
@@ -766,6 +775,7 @@ static void* _bolt_dl_lookup(void* handle, const char* symbol) {
         if (strcmp(symbol, "glClear") == 0) return glClear;
         if (strcmp(symbol, "glViewport") == 0) return glViewport;
         if (strcmp(symbol, "glTexParameteri") == 0) return glTexParameteri;
+        if (strcmp(symbol, "glBlendFunc") == 0) return glBlendFunc;
     } else if (handle == libxcb_addr) {
         if (strcmp(symbol, "xcb_poll_for_event") == 0) return xcb_poll_for_event;
         if (strcmp(symbol, "xcb_poll_for_queued_event") == 0) return xcb_poll_for_queued_event;

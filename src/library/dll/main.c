@@ -52,6 +52,7 @@ static void hook_glDeleteTextures(GLsizei, const GLuint*);
 static void hook_glClear(GLbitfield);
 static void hook_glViewport(GLint, GLint, GLsizei, GLsizei);
 static void hook_glTexParameteri(GLenum, GLenum, GLint);
+static void hook_glBlendFunc(GLenum, GLenum);
 
 static HGLRC __stdcall hook_wglCreateContextAttribsARB(HDC, HGLRC, const int*);
 
@@ -99,6 +100,7 @@ DWORD __stdcall BOLT_STUB_ENTRYNAME(struct PluginInjectParams* data) {
     // get the functions we need from libgl
     HMODULE libgl_module = data->pGetModuleHandleW(L"opengl32.dll");
     libgl.BindTexture = (void(*)(GLenum, GLuint))data->pGetProcAddress(libgl_module, "glBindTexture");
+    libgl.BlendFunc = (void(*)(GLenum, GLenum))data->pGetProcAddress(libgl_module, "glBlendFunc");
     libgl.Clear = (void(*)(GLbitfield))data->pGetProcAddress(libgl_module, "glClear");
     libgl.ClearColor = (void(*)(GLfloat, GLfloat, GLfloat, GLfloat))data->pGetProcAddress(libgl_module, "glClearColor");
     libgl.DeleteTextures = (void(*)(GLsizei, const GLuint*))data->pGetProcAddress(libgl_module, "glDeleteTextures");
@@ -145,6 +147,7 @@ DWORD __stdcall BOLT_STUB_ENTRYNAME(struct PluginInjectParams* data) {
                     FNHOOK(glTexParameteri)
                     FNHOOK(glClear)
                     FNHOOK(glViewport)
+                    FNHOOK(glBlendFunc)
                 }
                 if (bolt_cmp(module_name, "gdi32.dll", 0)) {
                     FNHOOKA(SwapBuffers, SWAPBUFFERS)
@@ -415,6 +418,13 @@ static void hook_glViewport(GLint x, GLint y, GLsizei width, GLsizei height) {
     libgl.Viewport(x, y, width, height);
     _bolt_gl_onViewport(x, y, width, height);
     LOG("glViewport end\n");
+}
+
+static hook_glBlendFunc(GLenum sfactor, GLenum dfactor) {
+    LOG("glBlendFunc\n");
+    libgl.BlendFunc(sfactor, dfactor);
+    _bolt_gl_onBlendFunc(sfactor, dfactor);
+    LOG("glBlendFunc end\n");
 }
 
 static HGLRC __stdcall hook_wglCreateContextAttribsARB(HDC hdc, HGLRC hglrc, const int* attribList) {

@@ -146,6 +146,10 @@ struct GLContext {
     GLint viewport_y;
     GLsizei viewport_w;
     GLsizei viewport_h;
+    GLenum blend_rgb_s;
+    GLenum blend_rgb_d;
+    GLenum blend_alpha_s;
+    GLenum blend_alpha_d;
 };
 
 static unsigned int gl_width;
@@ -648,6 +652,10 @@ static void _bolt_glcontext_init(struct GLContext* context, void* egl_context, v
     context->does_blit_3d_target = false;
     context->recalculate_sSceneHDRTex = false;
     context->depth_of_field_enabled = false;
+    context->blend_rgb_s = GL_ONE;
+    context->blend_rgb_d = GL_ZERO;
+    context->blend_alpha_s = GL_ONE;
+    context->blend_alpha_d = GL_ZERO;
     if (shared) {
         context->programs = shared->programs;
         context->buffers = shared->buffers;
@@ -827,6 +835,7 @@ static void _bolt_gl_load(void* (*GetProcAddress)(const char*)) {
     INIT_GL_FUNC(BindBuffer)
     INIT_GL_FUNC(BindFramebuffer)
     INIT_GL_FUNC(BindVertexArray)
+    INIT_GL_FUNC(BlendFuncSeparate)
     INIT_GL_FUNC(BlitFramebuffer)
     INIT_GL_FUNC(BufferData)
     INIT_GL_FUNC(BufferStorage)
@@ -1594,6 +1603,15 @@ static void _bolt_glBlitFramebuffer(GLint srcX0, GLint srcY0, GLint srcX1, GLint
     LOG("glBlitFramebuffer end\n");
 }
 
+static void _bolt_glBlendFuncSeparate(GLenum srcRGB, GLenum dstRGB, GLenum srcAlpha, GLenum dstAlpha) {
+    gl.BlendFuncSeparate(srcRGB, dstRGB, srcAlpha, dstAlpha);
+    struct GLContext* c = _bolt_context();
+    c->blend_rgb_s = srcRGB;
+    c->blend_rgb_d = dstRGB;
+    c->blend_alpha_s = srcAlpha;
+    c->blend_alpha_d = dstAlpha;
+}
+
 void* _bolt_gl_GetProcAddress(const char* name) {
 #define PROC_ADDRESS_MAP(FUNC) if (!strcmp(name, "gl"#FUNC)) { return gl.FUNC ? _bolt_gl##FUNC : NULL; }
     PROC_ADDRESS_MAP(CreateProgram)
@@ -1622,6 +1640,7 @@ void* _bolt_gl_GetProcAddress(const char* name) {
     PROC_ADDRESS_MAP(DeleteVertexArrays)
     PROC_ADDRESS_MAP(BindVertexArray)
     PROC_ADDRESS_MAP(BlitFramebuffer)
+    PROC_ADDRESS_MAP(BlendFuncSeparate)
 #undef PROC_ADDRESS_MAP
     return NULL;
 }
@@ -2222,6 +2241,14 @@ void _bolt_gl_onTexParameteri(GLenum target, GLenum pname, GLint param) {
     }
 }
 
+void _bolt_gl_onBlendFunc(GLenum sfactor, GLenum dfactor) {
+    struct GLContext* c = _bolt_context();
+    c->blend_rgb_s = sfactor;
+    c->blend_rgb_d = dfactor;
+    c->blend_alpha_s = sfactor;
+    c->blend_alpha_d = dfactor;
+}
+
 static void _bolt_gl_plugin_drawelements_vertex2d_xy(size_t index, void* userdata, int32_t* out) {
     struct GLPluginDrawElementsVertex2DUserData* data = userdata;
     if (_bolt_get_attr_binding_int(data->c, data->position, data->indices[index], 2, out)) {
@@ -2531,8 +2558,10 @@ static void _bolt_gl_plugin_surface_drawtoscreen(void* _userdata, int sx, int sy
     lgl->Disable(GL_DEPTH_TEST);
     lgl->Disable(GL_SCISSOR_TEST);
     lgl->Disable(GL_CULL_FACE);
+    lgl->BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     lgl->DrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
+    gl.BlendFuncSeparate(c->blend_rgb_s, c->blend_rgb_d, c->blend_alpha_s, c->blend_alpha_d);
     if (depth_test) lgl->Enable(GL_DEPTH_TEST);
     if (scissor_test) lgl->Enable(GL_SCISSOR_TEST);
     if (cull_face) lgl->Enable(GL_CULL_FACE);
@@ -2566,8 +2595,10 @@ static void _bolt_gl_plugin_surface_drawtosurface(void* _userdata, void* _target
     lgl->Disable(GL_DEPTH_TEST);
     lgl->Disable(GL_SCISSOR_TEST);
     lgl->Disable(GL_CULL_FACE);
+    lgl->BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     lgl->DrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
+    gl.BlendFuncSeparate(c->blend_rgb_s, c->blend_rgb_d, c->blend_alpha_s, c->blend_alpha_d);
     if (depth_test) lgl->Enable(GL_DEPTH_TEST);
     if (scissor_test) lgl->Enable(GL_SCISSOR_TEST);
     if (cull_face) lgl->Enable(GL_CULL_FACE);
