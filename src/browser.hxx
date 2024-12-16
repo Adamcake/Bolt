@@ -28,7 +28,7 @@ namespace Browser {
 		Window(CefRefPtr<Browser::Client> client, Details, bool);
 
 		/// Initialise with a browser_view. Should be called from a constructor, if at all.
-		void Init(CefString);
+		void Init(CefString, CefRefPtr<CefDictionaryValue>);
 
 		/// Refreshes this browser, ignoring cache. Can be called from any thread in the browser process.
 		virtual void Refresh() const;

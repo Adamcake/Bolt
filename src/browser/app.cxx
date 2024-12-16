@@ -18,6 +18,10 @@ static void* shm_file;
 static size_t shm_length;
 static bool shm_inited = false;
 
+static bool set_launcher_ui = false;
+static bool has_custom_js = false;
+static CefString custom_js;
+
 class ArrayBufferReleaseCallbackFree: public CefV8ArrayBufferReleaseCallback {
 	void ReleaseBuffer(void* buffer) override {
 		::free(buffer);
@@ -52,12 +56,24 @@ CefRefPtr<CefLoadHandler> Browser::App::GetLoadHandler() {
 
 void Browser::App::OnBrowserCreated(CefRefPtr<CefBrowser> browser, CefRefPtr<CefDictionaryValue> dict) {
 	fmt::print("[R] OnBrowserCreated for browser {}\n", browser->GetIdentifier());
+	if (dict) {
+		if (dict->HasKey("launcher")) set_launcher_ui = dict->GetBool("launcher");
+		if (dict->HasKey("customjs")) {
+			custom_js = dict->GetString("customjs");
+			has_custom_js = true;
+		}
+	}
 }
 
 void Browser::App::OnContextCreated(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefRefPtr<CefV8Context> context) {
 	const CefRefPtr<CefV8Value> global = context->GetGlobal();
-	global->SetValue("s", CefV8Value::CreateFunction("s", this), V8_PROPERTY_ATTRIBUTE_READONLY);
 	global->SetValue("close", CefV8Value::CreateUndefined(), V8_PROPERTY_ATTRIBUTE_READONLY);
+	if (set_launcher_ui) {
+		global->SetValue("s", CefV8Value::CreateFunction("s", this), V8_PROPERTY_ATTRIBUTE_READONLY);
+	}
+	if (has_custom_js) {
+		frame->ExecuteJavaScript(custom_js, CefString(), int());
+	}
 }
 
 void Browser::App::OnUncaughtException(

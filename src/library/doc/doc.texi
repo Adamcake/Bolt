@@ -505,9 +505,19 @@ must use '/' as file separators (if any). Otherwise, it will be treated
 as a URL of an internet website. The same rules go for any navigations
 or fetch requests made by the browser during its lifetime.
 
+The optional 6th parameter is some javascript code which will be run in
+an OnContextCreated callback. This is immediately after the V8 context
+has been created, so the JavaScipt @code{window} object is available but
+the DOM content is not yet loaded.
+
+The following example shows an invocation without some custom JS
+followed by one with some custom JS, to demonstrate that the parameter
+is optional.
+
 @example lua
 @verbatim
 local mybrowser = bolt.createwindow(800, 608, "https://bolt.adamcake.com")
+local mybrowser = bolt.createwindow(800, 608, "https://bolt.adamcake.com", "window.myCustomFunction = (a, b) => a + b;")
 @end verbatim
 @end example
 
@@ -522,9 +532,19 @@ will be treated as a URL of an internet website. The same rules go for
 any navigations or fetch requests made by the browser during its
 lifetime.
 
+The optional 6th parameter is some javascript code which will be run in
+an OnContextCreated callback. This is immediately after the V8 context
+has been created, so the JavaScipt @code{window} object is available but
+the DOM content is not yet loaded.
+
+The following example shows an invocation without some custom JS
+followed by one with some custom JS, to demonstrate that the parameter
+is optional.
+
 @example lua
 @verbatim
 local mybrowser = bolt.createembeddedbrowser(50, 60, 800, 608, "https://bolt.adamcake.com")
+local mybrowser = bolt.createembeddedbrowser(50, 60, 800, 608, "https://bolt.adamcake.com", "window.myCustomFunction = (a, b) => a + b;")
 @end verbatim
 @end example
 

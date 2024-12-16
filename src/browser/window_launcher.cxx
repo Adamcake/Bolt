@@ -1,5 +1,6 @@
 #include "client.hxx"
 #include "window_launcher.hxx"
+#include "include/cef_values.h"
 #include "include/internal/cef_types.h"
 #include "resource_handler.hxx"
 #include "request.hxx"
@@ -135,7 +136,9 @@ Browser::Launcher::Launcher(
 	this->plugin_config_path.append("plugins.json");
 #endif
 
-	this->Init(this->BuildURL());
+	CefRefPtr<CefDictionaryValue> dict = CefDictionaryValue::Create();
+	dict->SetBool("launcher", true);
+	this->Init(this->BuildURL(), dict);
 }
 
 CefRefPtr<CefRequestHandler> Browser::Launcher::GetRequestHandler() {

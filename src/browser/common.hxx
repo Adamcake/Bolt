@@ -17,6 +17,8 @@ namespace Browser {
 		bool resizeable;
 		bool frame;
 		bool is_devtools = false;
+		bool has_custom_js = false;
+		CefString custom_js;
 	};
 
 	struct InternalFile {

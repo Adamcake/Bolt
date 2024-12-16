@@ -31,7 +31,7 @@ constexpr bool SHOW_DEVTOOLS = true;
 constexpr bool SHOW_DEVTOOLS = false;
 #endif
 
-constexpr Browser::Details LAUNCHER_DETAILS = {
+const Browser::Details LAUNCHER_DETAILS = {
 	.preferred_width = 800,
 	.preferred_height = 608,
 	.center_on_open = true,
@@ -386,6 +386,12 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 			_bolt_ipc_receive(fd, url, header.url_length);
 			url[header.url_length] = '\0';
 
+			char* custom_js = nullptr;
+			if (header.has_custom_js) {
+				custom_js = new char[header.custom_js_length];
+				_bolt_ipc_receive(fd, custom_js, header.custom_js_length);
+			}
+
 			CefRefPtr<ActivePlugin> plugin = this->GetPluginFromFDAndID(client, header.plugin_id);
 			Browser::Details details {
 				.preferred_width = header.w,
@@ -393,9 +399,12 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 				.center_on_open = true,
 				.resizeable = true,
 				.frame = true,
+				.has_custom_js = true,
+				.custom_js = CefString(custom_js),
 			};
 			plugin->windows.push_back(new Browser::PluginWindow(this, details, url, plugin, fd, &this->send_lock, header.window_id, header.plugin_id, false));
 			delete[] url;
+			delete[] custom_js;
 			break;
 		}
 		case IPC_MSG_CREATEBROWSER_OSR: {
@@ -405,12 +414,19 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 			_bolt_ipc_receive(fd, url, header.url_length);
 			url[header.url_length] = '\0';
 
+			char* custom_js = nullptr;
+			if (header.has_custom_js) {
+				custom_js = new char[header.custom_js_length];
+				_bolt_ipc_receive(fd, custom_js, header.custom_js_length);
+			}
+
 			CefRefPtr<ActivePlugin> plugin = this->GetPluginFromFDAndID(client, header.plugin_id);
 			if (plugin) {
-				CefRefPtr<Browser::WindowOSR> window = new Browser::WindowOSR(CefString((char*)url), header.w, header.h, fd, this, &this->send_lock, header.pid, header.window_id, header.plugin_id, plugin);
+				CefRefPtr<Browser::WindowOSR> window = new Browser::WindowOSR(CefString((char*)url), header.w, header.h, fd, this, &this->send_lock, header.pid, header.window_id, header.plugin_id, plugin, custom_js);
 				plugin->windows_osr.push_back(window);
 			}
 			delete[] url;
+			delete[] custom_js;
 			break;
 		}
 		case IPC_MSG_CLOSEBROWSER_EXTERNAL: {

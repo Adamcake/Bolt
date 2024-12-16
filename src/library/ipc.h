@@ -74,6 +74,8 @@ struct BoltIPCCreateBrowserHeader {
     int pid;
     int w;
     int h;
+    uint8_t has_custom_js;
+    uint32_t custom_js_length;
 };
 
 /// Header for BoltIPCMessageTypeToHost::IPC_MSG_CLOSEBROWSER_*
