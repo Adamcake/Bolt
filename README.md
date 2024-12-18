@@ -65,6 +65,7 @@ If building with GCC, you need version 13.1 or later. If building with Clang, yo
   - note: build types "Debug" and "Release" are supported
   - note: if you have Ninja installed, specify `-G Ninja` for much faster builds
   - note: specify CC and CXX env variables at this stage to direct cmake to the C and C++ compilers you want it to use
+  - note: if you downloaded a binary distribution of CEF, you'll have to rename the `./cef/cef_binary_xxxx...` folder to `./cef/dist` before running `cmake`
 - `cmake --build build`
 - `cmake --install build --prefix build`
   - note: the last line creates a staging build in the `build` directory, this needs to be done between changing and running the program every time
