@@ -325,6 +325,21 @@ end
 @end verbatim
 @end example
 
+@node functions-playerposition
+@section playerposition
+
+Returns a @ref{objects-point} representing the last known position of
+the player, in world coordinates. This point relates to point (0,0,0) on
+the player model, which is usually on the ground between the model's
+feet during a normal standing animation. Also see
+@ref{appendix-world-coordinates}.
+
+@example lua
+@verbatim
+local worldpoint = bolt.playerposition()
+@end verbatim
+@end example
+
 @node functions-gamewindowsize
 @section gamewindowsize
 

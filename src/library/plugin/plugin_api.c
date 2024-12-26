@@ -279,6 +279,19 @@ static int api_weekday(lua_State* state) {
     return 1;
 }
 
+static int api_playerposition(lua_State* state) {
+    int32_t x, y, z;
+    const struct PluginManagedFunctions* managed_functions = _bolt_plugin_managed_functions();
+    managed_functions->player_position(&x, &y, &z);
+    struct Point3D* point = lua_newuserdata(state, sizeof(struct Point3D));
+    point->xyzh.ints[0] = x;
+    point->xyzh.ints[1] = y;
+    point->xyzh.ints[2] = z;
+    point->integer = true;
+    SETMETATABLE(point)
+    return 1;
+}
+
 static int api_gamewindowsize(lua_State* state) {
     int w, h;
     _bolt_plugin_overlay_size(&w, &h);
@@ -1788,6 +1801,7 @@ static struct ApiFuncTemplate bolt_functions[] = {
     BOLTFUNC(time),
     BOLTFUNC(datetime),
     BOLTFUNC(weekday),
+    BOLTFUNC(playerposition),
     BOLTFUNC(gamewindowsize),
     BOLTFUNC(gameviewxywh),
     BOLTFUNC(loadfile),
