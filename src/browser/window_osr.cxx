@@ -38,7 +38,7 @@ static void SendUpdateMsg(BoltSocketType fd, std::mutex* send_lock, uint64_t id,
 	send_lock->unlock();
 }
 
-Browser::WindowOSR::WindowOSR(CefString url, int width, int height, BoltSocketType client_fd, Browser::Client* main_client, std::mutex* send_lock, int pid, uint64_t window_id, uint64_t plugin_id, CefRefPtr<FileManager::Directory> file_manager):
+Browser::WindowOSR::WindowOSR(CefString url, int width, int height, BoltSocketType client_fd, Browser::Client* main_client, std::mutex* send_lock, int pid, uint64_t window_id, uint64_t plugin_id, CefRefPtr<FileManager::Directory> file_manager, const char* custom_js):
 	PluginRequestHandler(IPC_MSG_OSRBROWSERMESSAGE, send_lock),
 	deleted(false), pending_delete(false), pending_devtools(false), client_fd(client_fd), width(width), height(height), browser(nullptr), window_id(window_id),
 	plugin_id(plugin_id), main_client(main_client), stored(nullptr), remote_has_remapped(false), remote_is_idle(true), file_manager(file_manager)
@@ -69,7 +69,12 @@ Browser::WindowOSR::WindowOSR(CefString url, int width, int height, BoltSocketTy
 	window_info.SetAsWindowless(0);
 	CefBrowserSettings browser_settings;
 	browser_settings.background_color = CefColorSetARGB(0, 0, 0, 0);
-	CefBrowserHost::CreateBrowser(window_info, this, CefString(url), browser_settings, nullptr, nullptr);
+	CefRefPtr<CefDictionaryValue> dict = nullptr;
+	if (custom_js) {
+		dict = CefDictionaryValue::Create();
+		dict->SetString("customjs", custom_js);
+	}
+	CefBrowserHost::CreateBrowser(window_info, this, CefString(url), browser_settings, dict, nullptr);
 }
 
 bool Browser::WindowOSR::IsDeleted() {

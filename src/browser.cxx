@@ -30,7 +30,12 @@ Browser::Window::Window(CefRefPtr<Browser::Client> client, Browser::Details deta
 	browser_count(0), client(client.get()), show_devtools(show_devtools), details(details), window(nullptr), browser_view(nullptr), browser(nullptr), pending_child(nullptr), pending_delete(false)
 {
 	fmt::print("[B] Browser::Window constructor, this={}\n", reinterpret_cast<uintptr_t>(this));
-	this->Init(url);
+	CefRefPtr<CefDictionaryValue> dict = nullptr;
+	if (details.has_custom_js) {
+		dict = CefDictionaryValue::Create();
+		dict->SetString("customjs", details.custom_js);
+	}
+	this->Init(url, dict);
 }
 
 Browser::Window::Window(CefRefPtr<Browser::Client> client, Browser::Details details, bool show_devtools):
@@ -39,10 +44,10 @@ Browser::Window::Window(CefRefPtr<Browser::Client> client, Browser::Details deta
 	fmt::print("[B] Browser::Window popup constructor, this={}\n", reinterpret_cast<uintptr_t>(this));
 }
 
-void Browser::Window::Init(CefString url) {
+void Browser::Window::Init(CefString url, CefRefPtr<CefDictionaryValue> extra_info) {
 	CefBrowserSettings browser_settings;
 	browser_settings.background_color = CefColorSetARGB(0, 0, 0, 0);
-	this->browser_view = CefBrowserView::CreateBrowserView(this, url, browser_settings, nullptr, nullptr, this);
+	this->browser_view = CefBrowserView::CreateBrowserView(this, url, browser_settings, extra_info, nullptr, this);
 	CefWindow::CreateTopLevelWindow(this);
 }
 

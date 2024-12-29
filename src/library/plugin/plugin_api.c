@@ -279,6 +279,19 @@ static int api_weekday(lua_State* state) {
     return 1;
 }
 
+static int api_playerposition(lua_State* state) {
+    int32_t x, y, z;
+    const struct PluginManagedFunctions* managed_functions = _bolt_plugin_managed_functions();
+    managed_functions->player_position(&x, &y, &z);
+    struct Point3D* point = lua_newuserdata(state, sizeof(struct Point3D));
+    point->xyzh.ints[0] = x;
+    point->xyzh.ints[1] = y;
+    point->xyzh.ints[2] = z;
+    point->integer = true;
+    SETMETATABLE(point)
+    return 1;
+}
+
 static int api_gamewindowsize(lua_State* state) {
     int w, h;
     _bolt_plugin_overlay_size(&w, &h);
@@ -534,6 +547,15 @@ static int api_createwindow(lua_State* state) {
 }
 
 static int api_createbrowser(lua_State* state) {
+    const int w = luaL_checkinteger(state, 1);
+    const int h = luaL_checkinteger(state, 2);
+    size_t url_length;
+    const char* url = luaL_checklstring(state, 3, &url_length);
+    const char* custom_js = NULL;
+    size_t len;
+    if (lua_gettop(state) >= 4 && !lua_isnil(state, 4)) {
+        custom_js = luaL_checklstring(state, 4, &len);
+    }
     lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME);
     struct Plugin* plugin = lua_touserdata(state, -1);
     lua_pop(state, 1);
@@ -556,22 +578,23 @@ static int api_createbrowser(lua_State* state) {
 
     // send an IPC message to the host to create a browser
     const int pid = getpid();
-    size_t url_length;
-    const char* url = luaL_checklstring(state, 3, &url_length);
     const enum BoltIPCMessageTypeToHost msg_type = IPC_MSG_CREATEBROWSER_EXTERNAL;
     const struct BoltIPCCreateBrowserHeader header = {
         .plugin_id = plugin->id,
         .window_id = browser->id,
         .url_length = url_length,
         .pid = pid,
-        .w = luaL_checkinteger(state, 1),
-        .h = luaL_checkinteger(state, 2),
+        .w = w,
+        .h = h,
+        .has_custom_js = custom_js != NULL,
+        .custom_js_length = len,
     };
     const uint32_t url_length32 = (uint32_t)url_length;
     const BoltSocketType fd = _bolt_plugin_fd();
     _bolt_ipc_send(fd, &msg_type, sizeof(msg_type));
     _bolt_ipc_send(fd, &header, sizeof(header));
     _bolt_ipc_send(fd, url, url_length32);
+    if (custom_js) _bolt_ipc_send(fd, custom_js, len);
 
     // add to the hashmap
     hashmap_set(plugin->external_browsers, &browser);
@@ -579,6 +602,18 @@ static int api_createbrowser(lua_State* state) {
 }
 
 static int api_createembeddedbrowser(lua_State* state) {
+    const int x = luaL_checkinteger(state, 1);
+    const int y = luaL_checkinteger(state, 2);
+    const int w = luaL_checkinteger(state, 3);
+    const int h = luaL_checkinteger(state, 4);
+    size_t url_length;
+    const char* url = luaL_checklstring(state, 5, &url_length);
+    const char* custom_js = NULL;
+    size_t custom_js_len;
+    if (lua_gettop(state) >= 6 && !lua_isnil(state, 6)) {
+        custom_js = luaL_checklstring(state, 6, &custom_js_len);
+    }
+
     const struct PluginManagedFunctions* managed_functions = _bolt_plugin_managed_functions();
     lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME);
     const struct Plugin* plugin = lua_touserdata(state, -1);
@@ -605,10 +640,10 @@ static int api_createembeddedbrowser(lua_State* state) {
     window->plugin = state;
     _bolt_rwlock_init(&window->lock);
     _bolt_rwlock_init(&window->input_lock);
-    window->metadata.x = luaL_checkinteger(state, 1);
-    window->metadata.y = luaL_checkinteger(state, 2);
-    window->metadata.width = luaL_checkinteger(state, 3);
-    window->metadata.height = luaL_checkinteger(state, 4);
+    window->metadata.x = x;
+    window->metadata.y = y;
+    window->metadata.width = w;
+    window->metadata.height = h;
     if (window->metadata.width < WINDOW_MIN_SIZE) window->metadata.width = WINDOW_MIN_SIZE;
     if (window->metadata.height < WINDOW_MIN_SIZE) window->metadata.height = WINDOW_MIN_SIZE;
     memset(&window->input, 0, sizeof(window->input));
@@ -627,8 +662,6 @@ static int api_createembeddedbrowser(lua_State* state) {
 
     // send an IPC message to the host to create an OSR browser
     const int pid = getpid();
-    size_t url_length;
-    const char* url = luaL_checklstring(state, 5, &url_length);
     const enum BoltIPCMessageTypeToHost msg_type = IPC_MSG_CREATEBROWSER_OSR;
     const struct BoltIPCCreateBrowserHeader header = {
         .plugin_id = plugin->id,
@@ -637,12 +670,15 @@ static int api_createembeddedbrowser(lua_State* state) {
         .pid = pid,
         .w = window->metadata.width,
         .h = window->metadata.height,
+        .has_custom_js = custom_js != NULL,
+        .custom_js_length = custom_js_len,
     };
     const uint32_t url_length32 = (uint32_t)url_length;
     const BoltSocketType fd = _bolt_plugin_fd();
     _bolt_ipc_send(fd, &msg_type, sizeof(msg_type));
     _bolt_ipc_send(fd, &header, sizeof(header));
     _bolt_ipc_send(fd, url, url_length32);
+    if (custom_js) _bolt_ipc_send(fd, custom_js, custom_js_len);
 
     // set this window in the hashmap, which is accessible by backends
     struct WindowInfo* windows = _bolt_plugin_windowinfo();
@@ -1765,6 +1801,7 @@ static struct ApiFuncTemplate bolt_functions[] = {
     BOLTFUNC(time),
     BOLTFUNC(datetime),
     BOLTFUNC(weekday),
+    BOLTFUNC(playerposition),
     BOLTFUNC(gamewindowsize),
     BOLTFUNC(gameviewxywh),
     BOLTFUNC(loadfile),

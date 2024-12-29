@@ -76,6 +76,7 @@ struct GLProgram {
     GLint loc_sSceneHDRTex;
     GLint loc_sSourceTex;
     GLint loc_sBlurFarTex;
+    GLint loc_sTexture;
     GLuint block_index_ViewTransforms;
     GLint offset_uCameraPosition;
     GLint offset_uViewMatrix;
@@ -109,6 +110,7 @@ struct HashMap {
 struct TextureUnit {
     struct GLTexture2D* texture_2d;
     struct GLTexture2D* texture_2d_multisample;
+    struct GLTexture2D* recent; // useful for guessing which of the above a shader is intending to use
 };
 
 /// Context-specific information - this is thread-specific on EGL, not sure about elsewhere
@@ -132,6 +134,7 @@ struct GLContext {
     GLint game_view_sSceneHDRTex;
     GLint depth_of_field_sSourceTex;
     GLint target_3d_tex;
+    GLint player_model_tex;
     GLint game_view_x;
     GLint game_view_y;
     GLint game_view_w;
@@ -150,6 +153,9 @@ struct GLContext {
     GLenum blend_rgb_d;
     GLenum blend_alpha_s;
     GLenum blend_alpha_d;
+    int32_t player_model_x;
+    int32_t player_model_y;
+    int32_t player_model_z;
 };
 
 static unsigned int gl_width;
@@ -179,6 +185,8 @@ static GLint program_region_xywh;
 static GLint program_region_dest_wh;
 static GLuint program_direct_vao;
 static GLuint buffer_vertices_square;
+
+static uint8_t player_model_tex_seen = false;
 
 #define GLSLHEADER "#version 330 core\n"
 #define GLSLPLUGINEXTENSIONHEADER "#extension GL_ARB_explicit_uniform_location : require\n"
@@ -274,6 +282,7 @@ static void _bolt_gl_plugin_surface_set_alpha(void* userdata, double alpha);
 static void _bolt_gl_plugin_draw_region_outline(void* userdata, int16_t x, int16_t y, uint16_t width, uint16_t height);
 static void _bolt_gl_plugin_read_screen_pixels(uint32_t width, uint32_t height, void* data);
 static void _bolt_gl_plugin_game_view_rect(int* x, int* y, int* w, int* h);
+static void _bolt_gl_plugin_player_position(int32_t* x, int32_t* y, int32_t* z);
 static uint8_t _bolt_gl_plugin_vertex_shader_init(struct ShaderFunctions* out, const char* source, int len, char* output, int output_len);
 static uint8_t _bolt_gl_plugin_fragment_shader_init(struct ShaderFunctions* out, const char* source, int len, char* output, int output_len);
 static uint8_t _bolt_gl_plugin_shaderprogram_init(struct ShaderProgramFunctions* out, void* vertex, void* fragment, char* output, int output_len);
@@ -647,6 +656,7 @@ static void _bolt_glcontext_init(struct GLContext* context, void* egl_context, v
     memset(context, 0, sizeof(*context));
     context->id = (uintptr_t)egl_context;
     context->texture_units = calloc(MAX_TEXTURE_UNITS, sizeof(struct TextureUnit));
+    context->player_model_tex = -1;
     context->game_view_part_framebuffer = -1;
     context->game_view_sSourceTex = -1;
     context->does_blit_3d_target = false;
@@ -1025,6 +1035,7 @@ static GLuint _bolt_glCreateProgram() {
     program->loc_uVertexScale = -1;
     program->loc_uSmoothSkinning = -1;
     program->loc_sSceneHDRTex = -1;
+    program->loc_sTexture = -1;
     program->block_index_ViewTransforms = -1;
     program->offset_uCameraPosition = -1;
     program->offset_uViewMatrix = -1;
@@ -1087,6 +1098,7 @@ static void _bolt_glLinkProgram(GLuint program) {
     p->loc_sSceneHDRTex = gl.GetUniformLocation(program, "sSceneHDRTex");
     p->loc_sSourceTex = gl.GetUniformLocation(program, "sSourceTex");
     p->loc_sBlurFarTex = gl.GetUniformLocation(program, "sBlurFarTex");
+    p->loc_sTexture = gl.GetUniformLocation(program, "sTexture");
     p->loc_uBoneTransforms = gl.GetUniformLocation(program, "uBoneTransforms");
     p->loc_uSmoothSkinning = gl.GetUniformLocation(program, "uSmoothSkinning");
 
@@ -1650,6 +1662,7 @@ void* _bolt_gl_GetProcAddress(const char* name) {
 void _bolt_gl_onSwapBuffers(uint32_t window_width, uint32_t window_height) {
     gl_width = window_width;
     gl_height = window_height;
+    player_model_tex_seen = false;
     if (_bolt_plugin_is_inited()) _bolt_plugin_end_frame(window_width, window_height);
 }
 
@@ -1694,6 +1707,7 @@ void _bolt_gl_onMakeCurrent(void* context) {
             .draw_region_outline = _bolt_gl_plugin_draw_region_outline,
             .read_screen_pixels = _bolt_gl_plugin_read_screen_pixels,
             .game_view_rect = _bolt_gl_plugin_game_view_rect,
+            .player_position = _bolt_gl_plugin_player_position,
             .vertex_shader_init = _bolt_gl_plugin_vertex_shader_init,
             .fragment_shader_init = _bolt_gl_plugin_fragment_shader_init,
             .shader_program_init = _bolt_gl_plugin_shaderprogram_init,
@@ -1964,7 +1978,14 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
         if (c->current_draw_framebuffer) {
             gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
         }
-        if (draw_tex == c->target_3d_tex) {
+
+        if (c->current_draw_framebuffer && draw_tex == c->player_model_tex) {
+            GLfloat model_matrix[16];
+            gl.GetUniformfv(c->bound_program->id, c->bound_program->loc_uModelMatrix, model_matrix);
+            c->player_model_x = (int32_t)roundf(model_matrix[12]);
+            c->player_model_y = (int32_t)roundf(model_matrix[13]);
+            c->player_model_z = (int32_t)roundf(model_matrix[14]);
+        } else if (draw_tex == c->target_3d_tex) {
             GLint atlas, settings_atlas, ubo_binding, ubo_view_index, ubo_viewport_index;
             GLfloat atlas_meta[4];
             gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uTextureAtlas, &atlas);
@@ -2153,18 +2174,27 @@ void _bolt_gl_onDrawArrays(GLenum mode, GLint first, GLsizei count) {
                 target_tex->icon = source_tex->icon;
                 source_tex->icon.model_count = 0;
             }
+        } else if (!player_model_tex_seen && c->bound_program->loc_sTexture != -1 && c->current_draw_framebuffer == 0) {
+            gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_sTexture, &source_tex_unit);
+            struct GLTexture2D* source_tex = c->texture_units[source_tex_unit].recent;
+            if (source_tex && source_tex->width == c->game_view_w && source_tex->height == c->game_view_h) {
+                c->player_model_tex = source_tex->id;
+                player_model_tex_seen = true;
+            }
         }
     }
 }
 
 void _bolt_gl_onBindTexture(GLenum target, GLuint texture) {
     struct GLContext* c = _bolt_context();
+    struct TextureUnit* unit = &c->texture_units[c->active_texture];
+    unit->recent = _bolt_context_get_texture(c, texture);
     switch (target) {
         case GL_TEXTURE_2D:
-            c->texture_units[c->active_texture].texture_2d = _bolt_context_get_texture(c, texture);
+            c->texture_units[c->active_texture].texture_2d = unit->recent;
             break;
         case GL_TEXTURE_2D_MULTISAMPLE:
-            c->texture_units[c->active_texture].texture_2d_multisample = _bolt_context_get_texture(c, texture);
+            c->texture_units[c->active_texture].texture_2d_multisample = unit->recent;
             break;
     }
 }
@@ -2660,6 +2690,13 @@ static void _bolt_gl_plugin_game_view_rect(int* x, int* y, int* w, int* h) {
     *y = c->game_view_y;
     *w = c->game_view_w;
     *h = c->game_view_h;
+}
+
+static void _bolt_gl_plugin_player_position(int32_t* x, int32_t* y, int32_t* z) {
+    struct GLContext* c = _bolt_context();
+    *x = c->player_model_x;
+    *y = c->player_model_y;
+    *z = c->player_model_z;
 }
 
 static uint8_t _bolt_gl_plugin_vertex_shader_init(struct ShaderFunctions* out, const char* source, int len, char* output, int output_len) {

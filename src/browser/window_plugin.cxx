@@ -6,13 +6,19 @@
 #include <fmt/core.h>
 
 struct InitTask: public CefTask {
-	InitTask(CefRefPtr<Browser::PluginWindow> window, const char* url): window(window), url(CefString(url)) {}
+	InitTask(CefRefPtr<Browser::PluginWindow> window, const char* url, bool has_custom_js, CefString& custom_js): window(window), url(CefString(url)), has_custom_js(has_custom_js) {
+		if (has_custom_js) this->custom_js = custom_js;
+	}
 	void Execute() override {
-		this->window->Init(this->url);
+		CefRefPtr<CefDictionaryValue> dict = CefDictionaryValue::Create();
+		if (this->has_custom_js) dict->SetString("customjs", this->custom_js);
+		this->window->Init(this->url, dict);
 	}
 	private:
 		CefRefPtr<Browser::PluginWindow> window;
 		CefString url;
+		CefString custom_js;
+		bool has_custom_js;
 		IMPLEMENT_REFCOUNTING(InitTask);
 		DISALLOW_COPY_AND_ASSIGN(InitTask);
 };
@@ -23,9 +29,11 @@ Browser::PluginWindow::PluginWindow(CefRefPtr<Client> main_client, Details detai
 	file_manager(file_manager), client_fd(fd), window_id(id), plugin_id(plugin_id), closing(false), deleted(false)
 {
 	if (CefCurrentlyOn(TID_UI)) {
-		this->Init(CefString(url));
+		CefRefPtr<CefDictionaryValue> dict = CefDictionaryValue::Create();
+		if (details.has_custom_js) dict->SetString("customjs", details.custom_js);
+		this->Init(CefString(url), dict);
 	} else {
-		CefPostTask(TID_UI, new InitTask(this, url));
+		CefPostTask(TID_UI, new InitTask(this, url, details.has_custom_js, details.custom_js));
 	}
 }
 
