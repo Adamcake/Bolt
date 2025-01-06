@@ -379,7 +379,7 @@ static void hook_glDrawArrays(GLenum mode, GLint first, GLsizei count) {
 }
 
 static void hook_glBindTexture(GLenum target, GLuint texture) {
-    LOG("glBindTexture(%u, %u)\n", target, texture);
+    LOGF("glBindTexture(%u, %u)\n", target, texture);
     libgl.BindTexture(target, texture);
     _bolt_gl_onBindTexture(target, texture);
     LOG("glBindTexture end\n");
