@@ -394,8 +394,8 @@ static void hook_glTexSubImage2D(GLenum target, GLint level, GLint xoffset, GLin
 
 static void hook_glDeleteTextures(GLsizei n, const GLuint* textures) {
     LOG("glDeleteTextures\n");
-    libgl.DeleteTextures(n, textures);
     _bolt_gl_onDeleteTextures(n, textures);
+    libgl.DeleteTextures(n, textures);
     LOG("glDeleteTextures end\n");
 }
 

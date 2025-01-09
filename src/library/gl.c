@@ -1053,13 +1053,13 @@ static GLuint _bolt_glCreateProgram() {
 
 static void _bolt_glDeleteProgram(GLuint program) {
     LOG("glDeleteProgram\n");
-    gl.DeleteProgram(program);
     struct GLContext* c = _bolt_context();
     unsigned int* ptr = &program;
     _bolt_rwlock_lock_write(&c->programs->rwlock);
     struct GLProgram* const* p = hashmap_delete(c->programs->map, &ptr);
     free(*p);
     _bolt_rwlock_unlock_write(&c->programs->rwlock);
+    gl.DeleteProgram(program);
     LOG("glDeleteProgram end\n");
 }
 
@@ -1227,7 +1227,6 @@ static void _bolt_glBufferData(GLenum target, GLsizeiptr size, const void* data,
 
 static void _bolt_glDeleteBuffers(GLsizei n, const GLuint* buffers) {
     LOG("glDeleteBuffers\n");
-    gl.DeleteBuffers(n, buffers);
     struct GLContext* c = _bolt_context();
     _bolt_rwlock_lock_write(&c->buffers->rwlock);
     for (GLsizei i = 0; i < n; i += 1) {
@@ -1238,6 +1237,7 @@ static void _bolt_glDeleteBuffers(GLsizei n, const GLuint* buffers) {
         free(*buffer);
     }
     _bolt_rwlock_unlock_write(&c->buffers->rwlock);
+    gl.DeleteBuffers(n, buffers);
     LOG("glDeleteBuffers end\n");
 }
 
@@ -1552,7 +1552,6 @@ static void _bolt_glGenVertexArrays(GLsizei n, GLuint* arrays) {
 
 static void _bolt_glDeleteVertexArrays(GLsizei n, const GLuint* arrays) {
     LOG("glDeleteVertexArrays\n");
-    gl.DeleteVertexArrays(n, arrays);
     struct GLContext* c = _bolt_context();
     _bolt_rwlock_lock_write(&c->vaos->rwlock);
     for (GLsizei i = 0; i < n; i += 1) {
@@ -1562,6 +1561,7 @@ static void _bolt_glDeleteVertexArrays(GLsizei n, const GLuint* arrays) {
         free(*vao);
     }
     _bolt_rwlock_unlock_write(&c->vaos->rwlock);
+    gl.DeleteVertexArrays(n, arrays);
     LOG("glDeleteVertexArrays end\n");
 }
 

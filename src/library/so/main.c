@@ -362,8 +362,8 @@ void glTexSubImage2D(GLenum target, GLint level, GLint xoffset, GLint yoffset, G
 
 void glDeleteTextures(GLsizei n, const GLuint* textures) {
     LOG("glDeleteTextures\n");
-    libgl.DeleteTextures(n, textures);
     _bolt_gl_onDeleteTextures(n, textures);
+    libgl.DeleteTextures(n, textures);
     LOG("glDeleteTextures end\n");
 }
 
