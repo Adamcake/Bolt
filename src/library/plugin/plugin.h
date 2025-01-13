@@ -140,6 +140,36 @@ struct Render3DMatrixFunctions {
     void (*viewproj_matrix)(void* userdata, struct Transform3D* out);
 };
 
+/// Struct containing "vtable" callback information for particle RenderParticles' list of vertices.
+struct VertexParticleFunctions {
+    /// Userdata which will be passed to the functions contained in this struct.
+    void* userdata;
+
+    /// Returns the vertex X Y and Z, in eye-space coordinates, since that's how particle effects are shaded.
+    void (*xyz)(size_t index, void* userdata, double* out);
+    
+    /// Returns a meta-ID for the texture associated with this vertex.
+    size_t (*atlas_meta)(size_t index, void* userdata);
+
+    /// Returns the XYWH of the texture image referred to by this meta-ID, in pixel coordinates.
+    void (*atlas_xywh)(size_t meta, void* userdata, int32_t* out);
+
+    /// Returns the RGBA colour of this vertex, each one normalised from 0.0 to 1.0.
+    void (*colour)(size_t index, void* userdata, double* out);
+};
+
+/// Struct containing "vtable" callback information for particle RenderParticles' transformation matrices.
+struct MatrixParticleFunctions {
+    /// Userdata which will be passed to the functions contained in this struct.
+    void* userdata;
+    
+    /// Gets the projection matrix for this render.
+    void (*proj_matrix)(void* userdata, struct Transform3D* out);
+
+    /// Gets the inverse view matrix for this render.
+    void (*inverse_view_matrix)(void* userdata, struct Transform3D* out);
+};
+
 /// Struct containing "vtable" callback information for surfaces.
 struct SurfaceFunctions {
     /// Userdata which will be passed to the functions contained in this struct.
@@ -328,6 +358,13 @@ struct Render3D {
     struct Render3DMatrixFunctions matrix_functions;
 };
 
+struct RenderParticles {
+    uint32_t vertex_count;
+    struct VertexParticleFunctions vertex_functions;
+    struct MatrixParticleFunctions matrix_functions;
+    struct TextureFunctions texture_functions;
+};
+
 struct ItemIconVertex {
     struct Point3D point;
     uint16_t bone_id;
@@ -469,6 +506,9 @@ void _bolt_plugin_handle_render2d(const struct RenderBatch2D*);
 
 /// Sends a Render3D to all plugins.
 void _bolt_plugin_handle_render3d(const struct Render3D*);
+
+/// Sends a RenderParticles to all plugins.
+void _bolt_plugin_handle_renderparticles(const struct RenderParticles*);
 
 /// Sends a RenderIconEvent for the "rendericon" handler to all plugins.
 void _bolt_plugin_handle_rendericon(const struct RenderIconEvent*);

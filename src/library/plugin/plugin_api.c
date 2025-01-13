@@ -202,6 +202,7 @@ static int api_buffer_set##FNAME(lua_State* state) { \
 DEFINE_CALLBACK(swapbuffers)
 DEFINE_CALLBACK(render2d)
 DEFINE_CALLBACK(render3d)
+DEFINE_CALLBACK(renderparticles)
 DEFINE_CALLBACK(rendericon)
 DEFINE_CALLBACK(renderbigicon)
 DEFINE_CALLBACK(minimapterrain)
@@ -1348,6 +1349,109 @@ static int api_render3d_animated(lua_State* state) {
     return 1;
 }
 
+static int api_renderparticles_vertexcount(lua_State* state) {
+    const struct RenderParticles* render = require_self_userdata(state, "vertexcount");
+    lua_pushinteger(state, render->vertex_count);
+    return 1;
+}
+
+static int api_renderparticles_vertexxyz(lua_State* state) {
+    const struct RenderParticles* render = require_self_userdata(state, "vertexxyz");
+    const lua_Integer vertex = luaL_checkinteger(state, 2);
+    double xyz[3];
+    render->vertex_functions.xyz(vertex - 1, render->vertex_functions.userdata, xyz);
+    lua_pushnumber(state, xyz[0]);
+    lua_pushnumber(state, xyz[1]);
+    lua_pushnumber(state, xyz[2]);
+    return 3;
+}
+
+static int api_renderparticles_vertexcolour(lua_State* state) {
+    const struct RenderParticles* render = require_self_userdata(state, "vertexcolour");
+    const lua_Integer index = luaL_checkinteger(state, 2);
+    double col[4];
+    render->vertex_functions.colour(index - 1, render->vertex_functions.userdata, col);
+    lua_pushnumber(state, col[0]);
+    lua_pushnumber(state, col[1]);
+    lua_pushnumber(state, col[2]);
+    lua_pushnumber(state, col[3]);
+    return 4;
+}
+
+static int api_renderparticles_vertexmeta(lua_State* state) {
+    const struct RenderParticles* render = require_self_userdata(state, "vertexmeta");
+    const lua_Integer index = luaL_checkinteger(state, 2);
+    size_t meta = render->vertex_functions.atlas_meta(index - 1, render->vertex_functions.userdata);
+    lua_pushinteger(state, meta);
+    return 1;
+}
+
+static int api_renderparticles_atlasxywh(lua_State* state) {
+    const struct RenderParticles* render = require_self_userdata(state, "atlasxywh");
+    const lua_Integer meta = luaL_checkinteger(state, 2);
+    int32_t xywh[4];
+    render->vertex_functions.atlas_xywh(meta, render->vertex_functions.userdata, xywh);
+    lua_pushinteger(state, xywh[0]);
+    lua_pushinteger(state, xywh[1]);
+    lua_pushinteger(state, xywh[2]);
+    lua_pushinteger(state, xywh[3]);
+    return 4;
+}
+
+static int api_renderparticles_textureid(lua_State* state) {
+    const struct RenderParticles* render = require_self_userdata(state, "textureid");
+    const size_t id = render->texture_functions.id(render->texture_functions.userdata);
+    lua_pushinteger(state, id);
+    return 1;
+}
+
+static int api_renderparticles_texturesize(lua_State* state) {
+    const struct RenderParticles* render = require_self_userdata(state, "texturesize");
+    size_t size[2];
+    render->texture_functions.size(render->texture_functions.userdata, size);
+    lua_pushinteger(state, size[0]);
+    lua_pushinteger(state, size[1]);
+    return 2;
+}
+
+static int api_renderparticles_texturecompare(lua_State* state) {
+    const struct RenderParticles* render = require_self_userdata(state, "texturecompare");
+    const size_t x = luaL_checkinteger(state, 2);
+    const size_t y = luaL_checkinteger(state, 3);
+    size_t data_len;
+    const void* data;
+    get_binary_data(state, 4, &data, &data_len);
+    const uint8_t match = render->texture_functions.compare(render->texture_functions.userdata, x, y, data_len, (const unsigned char*)data);
+    lua_pushboolean(state, match);
+    return 1;
+}
+
+static int api_renderparticles_texturedata(lua_State* state) {
+    const struct RenderParticles* render = require_self_userdata(state, "texturedata");
+    const size_t x = luaL_checkinteger(state, 2);
+    const size_t y = luaL_checkinteger(state, 3);
+    const size_t len = luaL_checkinteger(state, 4);
+    const uint8_t* ret = render->texture_functions.data(render->texture_functions.userdata, x, y);
+    lua_pushlstring(state, (const char*)ret, len);
+    return 1;
+}
+
+static int api_renderparticles_projmatrix(lua_State* state) {
+    const struct RenderParticles* render = require_self_userdata(state, "projmatrix");
+    struct Transform3D* transform = lua_newuserdata(state, sizeof(struct Transform3D));
+    render->matrix_functions.proj_matrix(render->matrix_functions.userdata, transform);
+    SETMETATABLE(transform)
+    return 1;
+}
+
+static int api_renderparticles_inverseviewmatrix(lua_State* state) {
+    const struct RenderParticles* render = require_self_userdata(state, "inverseviewmatrix");
+    struct Transform3D* transform = lua_newuserdata(state, sizeof(struct Transform3D));
+    render->matrix_functions.inverse_view_matrix(render->matrix_functions.userdata, transform);
+    SETMETATABLE(transform)
+    return 1;
+}
+
 static int api_rendericon_xywh(lua_State* state) {
     const struct RenderIconEvent* event = require_self_userdata(state, "xywh");
     lua_pushinteger(state, event->target_x);
@@ -1810,6 +1914,7 @@ static struct ApiFuncTemplate bolt_functions[] = {
 
     BOLTFUNC(onrender2d),
     BOLTFUNC(onrender3d),
+    BOLTFUNC(onrenderparticles),
     BOLTFUNC(onrendericon),
     BOLTFUNC(onrenderbigicon),
     BOLTFUNC(onminimapterrain),
@@ -1883,6 +1988,20 @@ static struct ApiFuncTemplate render3d_functions[] = {
     BOLTFUNC(vertexanimation, render3d),
     BOLTFUNC(animated, render3d),
     BOLTALIAS(vertexcolour, vertexcolor, render3d),
+};
+
+static struct ApiFuncTemplate renderparticles_functions[] = {
+    BOLTFUNC(vertexcount, renderparticles),
+    BOLTFUNC(vertexxyz, renderparticles),
+    BOLTFUNC(vertexcolour, renderparticles),
+    BOLTFUNC(vertexmeta, renderparticles),
+    BOLTFUNC(atlasxywh, renderparticles),
+    BOLTFUNC(textureid, renderparticles),
+    BOLTFUNC(texturesize, renderparticles),
+    BOLTFUNC(texturecompare, renderparticles),
+    BOLTFUNC(texturedata, renderparticles),
+    BOLTFUNC(projmatrix, renderparticles),
+    BOLTFUNC(inverseviewmatrix, renderparticles),
 };
 
 static struct ApiFuncTemplate rendericon_functions[] = {
@@ -2093,6 +2212,7 @@ void _bolt_api_push_metatable_##NAME(lua_State* state) { \
 
 DEFPUSHMETA(render2d)
 DEFPUSHMETA(render3d)
+DEFPUSHMETA(renderparticles)
 DEFPUSHMETA(rendericon)
 DEFPUSHMETA(minimapterrain)
 DEFPUSHMETA(renderminimap)

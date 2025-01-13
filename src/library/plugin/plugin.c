@@ -1124,6 +1124,7 @@ uint8_t _bolt_plugin_handle_mouse_event(struct MouseEvent* event, ptrdiff_t bool
 DEFINE_CALLBACK_STATIC(swapbuffers, SwapBuffersEvent)
 DEFINE_CALLBACK(render2d, RenderBatch2D)
 DEFINE_CALLBACK(render3d, Render3D)
+DEFINE_CALLBACK(renderparticles, RenderParticles)
 DEFINE_CALLBACK(rendericon, RenderIconEvent)
 DEFINE_CALLBACK(renderbigicon, RenderIconEvent)
 DEFINE_CALLBACK(minimapterrain, MinimapTerrainEvent)
@@ -1226,6 +1227,7 @@ lua_gettable(plugin->state, LUA_REGISTRYINDEX); \
 lua_settable(plugin->state, LUA_REGISTRYINDEX);
     SETMETA(render2d)
     SETMETA(render3d)
+    SETMETA(renderparticles)
     SETMETA(rendericon)
     SETMETA(minimapterrain)
     SETMETA(renderminimap)

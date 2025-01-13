@@ -37,6 +37,7 @@ struct ExternalBrowser {
 void _bolt_api_push_bolt_table(lua_State*);
 void _bolt_api_push_metatable_render2d(lua_State*);
 void _bolt_api_push_metatable_render3d(lua_State*);
+void _bolt_api_push_metatable_renderparticles(lua_State*);
 void _bolt_api_push_metatable_rendericon(lua_State*);
 void _bolt_api_push_metatable_minimapterrain(lua_State*);
 void _bolt_api_push_metatable_renderminimap(lua_State*);
