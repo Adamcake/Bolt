@@ -145,8 +145,16 @@ struct VertexParticleFunctions {
     /// Userdata which will be passed to the functions contained in this struct.
     void* userdata;
 
-    /// Returns the vertex X Y and Z, in eye-space coordinates, since that's how particle effects are shaded.
-    void (*xyz)(size_t index, void* userdata, double* out);
+    /// Returns the X Y and Z, in world coordinates, of the particle that this vertex belongs to.
+    void (*xyz)(size_t index, void* userdata, struct Point3D* out);
+
+    /// Returns the X, Y and Z offset which would be applied to this specific vertex from its
+    /// world position in world space.
+    void (*world_offset)(size_t index, void* userdata, double* out);
+
+    /// Returns the X and Y offset which would be applied to this specific vertex from its world
+    /// position while in eye space, to render it in the correct position on screen.
+    void (*eye_offset)(size_t index, void* userdata, double* out);
     
     /// Returns a meta-ID for the texture associated with this vertex.
     size_t (*atlas_meta)(size_t index, void* userdata);

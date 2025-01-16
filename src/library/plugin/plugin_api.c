@@ -1355,15 +1355,34 @@ static int api_renderparticles_vertexcount(lua_State* state) {
     return 1;
 }
 
-static int api_renderparticles_vertexxyz(lua_State* state) {
-    const struct RenderParticles* render = require_self_userdata(state, "vertexxyz");
+static int api_renderparticles_vertexparticleorigin(lua_State* state) {
+    const struct RenderParticles* render = require_self_userdata(state, "vertexparticleorigin");
     const lua_Integer vertex = luaL_checkinteger(state, 2);
-    double xyz[3];
-    render->vertex_functions.xyz(vertex - 1, render->vertex_functions.userdata, xyz);
-    lua_pushnumber(state, xyz[0]);
-    lua_pushnumber(state, xyz[1]);
-    lua_pushnumber(state, xyz[2]);
+    struct Point3D* point = lua_newuserdata(state, sizeof(struct Point3D));
+    render->vertex_functions.xyz(vertex - 1, render->vertex_functions.userdata, point);
+    SETMETATABLE(point)
+    return 1;
+}
+
+static int api_renderparticles_vertexworldoffset(lua_State* state) {
+    const struct RenderParticles* render = require_self_userdata(state, "vertexworldoffset");
+    const lua_Integer vertex = luaL_checkinteger(state, 2);
+    double offset[3];
+    render->vertex_functions.world_offset(vertex - 1, render->vertex_functions.userdata, offset);
+    lua_pushnumber(state, offset[0]);
+    lua_pushnumber(state, offset[1]);
+    lua_pushnumber(state, offset[2]);
     return 3;
+}
+
+static int api_renderparticles_vertexeyeoffset(lua_State* state) {
+    const struct RenderParticles* render = require_self_userdata(state, "vertexeyeoffset");
+    const lua_Integer vertex = luaL_checkinteger(state, 2);
+    double offset[2];
+    render->vertex_functions.eye_offset(vertex - 1, render->vertex_functions.userdata, offset);
+    lua_pushnumber(state, offset[0]);
+    lua_pushnumber(state, offset[1]);
+    return 2;
 }
 
 static int api_renderparticles_vertexcolour(lua_State* state) {
@@ -1992,7 +2011,9 @@ static struct ApiFuncTemplate render3d_functions[] = {
 
 static struct ApiFuncTemplate renderparticles_functions[] = {
     BOLTFUNC(vertexcount, renderparticles),
-    BOLTFUNC(vertexxyz, renderparticles),
+    BOLTFUNC(vertexparticleorigin, renderparticles),
+    BOLTFUNC(vertexworldoffset, renderparticles),
+    BOLTFUNC(vertexeyeoffset, renderparticles),
     BOLTFUNC(vertexcolour, renderparticles),
     BOLTFUNC(vertexmeta, renderparticles),
     BOLTFUNC(atlasxywh, renderparticles),

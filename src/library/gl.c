@@ -64,9 +64,15 @@ struct GLProgram {
     GLint loc_aVertexSkinBones;
     GLint loc_aVertexSkinWeights;
     GLint loc_aParticleOrigin_CreationTime;
+    GLint loc_aParticleOffset;
+    GLint loc_aParticleVelocity;
+    GLint loc_aParticleEmitterUpAxis;
     GLint loc_aMaterialSettingsSlotXY_Rotation;
+    GLint loc_aParticleUVAnimationData;
     GLint loc_uProjectionMatrix;
     GLint loc_uInvViewMatrix;
+    GLint loc_uParticleEmitterTransforms[8];
+    GLint loc_uParticleEmitterTransformRanges[14];
     GLint loc_uDiffuseMap;
     GLint loc_uTextureAtlas;
     GLint loc_uTextureAtlasSettings;
@@ -266,7 +272,9 @@ static void _bolt_gl_plugin_drawelements_vertex3d_uv(size_t index, void* userdat
 static void _bolt_gl_plugin_drawelements_vertex3d_colour(size_t index, void* userdata, double* out);
 static uint8_t _bolt_gl_plugin_drawelements_vertex3d_boneid(size_t index, void* userdata);
 static void _bolt_gl_plugin_drawelements_vertex3d_transform(size_t vertex, void* userdata, struct Transform3D* out);
-static void _bolt_gl_plugin_drawelements_vertexparticles_xyz(size_t index, void* userdata, double* out);
+static void _bolt_gl_plugin_drawelements_vertexparticles_xyz(size_t index, void* userdata, struct Point3D* out);
+static void _bolt_gl_plugin_drawelements_vertexparticles_world_offset(size_t index, void* userdata, double* out);
+static void _bolt_gl_plugin_drawelements_vertexparticles_eye_offset(size_t index, void* userdata, double* out);
 static size_t _bolt_gl_plugin_drawelements_vertexparticles_atlas_meta(size_t index, void* userdata);
 static void _bolt_gl_plugin_drawelements_vertexparticles_meta_xywh(size_t index, void* userdata, int32_t* out);
 static void _bolt_gl_plugin_drawelements_vertexparticles_colour(size_t index, void* userdata, double* out);
@@ -362,8 +370,18 @@ struct GLPluginDrawElementsVertexParticlesUserData {
     struct GLTexture2D* atlas;
     struct GLTexture2D* settings_atlas;
     struct GLAttrBinding* origin;
+    struct GLAttrBinding* offset;
+    struct GLAttrBinding* velocity;
+    struct GLAttrBinding* up_axis;
     struct GLAttrBinding* xy_rotation;
     struct GLAttrBinding* colour;
+    struct GLAttrBinding* uv_animation_data;
+    const float* camera_position;
+
+    GLint ranges[14];
+    GLfloat transform[16];
+    uint8_t transform_index;
+    uint8_t ranges_known;
 };
 
 struct GLPluginDrawElementsMatrixParticlesUserData {
@@ -432,6 +450,39 @@ struct PluginProgramUniform {
 };
 
 /* static functions */
+
+// like the glsl function but modifies a vec3 in-place
+static void normalise(float* values) {
+    const float length = sqrtf((values[0] * values[0]) + (values[1] * values[1]) + (values[2] * values[2]));
+    values[0] /= length;
+    values[1] /= length;
+    values[2] /= length;
+}
+
+// like the glsl function, operates on vec3
+static void cross(float* x, float* y, float* out) {
+    out[0] = (x[1] * y[2]) - (y[1] * x[2]);
+    out[1] = (x[2] * y[0]) - (y[2] * x[0]);
+    out[2] = (x[0] * y[1]) - (y[0] * x[1]);
+}
+
+static void _bolt_gl_vertexparticlesuserdata_set_transform(unsigned short vertex, const struct GLProgram* program, struct GLPluginDrawElementsVertexParticlesUserData* userdata) {
+    if (!userdata->ranges_known) {
+        for (size_t i = 0; i < 14; i += 1) {
+            gl.GetUniformiv(program->id, program->loc_uParticleEmitterTransformRanges[i], &userdata->ranges[i]);
+        }
+        userdata->ranges_known = true;
+    }
+    size_t i;
+    for (i = 0; i < 7; i += 1) {
+        const size_t n = i * 2;
+        if (vertex >= userdata->ranges[n] && vertex < userdata->ranges[n + 1]) break;
+    }
+    if (userdata->transform_index != i) {
+        gl.GetUniformfv(program->id, program->loc_uParticleEmitterTransforms[i], userdata->transform);
+        userdata->transform_index = i;
+    }
+}
 
 static int uniform_compare(const void* a, const void* b, void* udata) {
     return (*(GLuint*)a) - (*(GLuint*)b);
@@ -1052,7 +1103,11 @@ static GLuint _bolt_glCreateProgram() {
     program->loc_aVertexSkinBones = -1;
     program->loc_aVertexSkinWeights = -1;
     program->loc_aParticleOrigin_CreationTime = -1;
+    program->loc_aParticleOffset = -1;
+    program->loc_aParticleVelocity = -1;
+    program->loc_aParticleEmitterUpAxis = -1;
     program->loc_aMaterialSettingsSlotXY_Rotation = -1;
+    program->loc_aParticleUVAnimationData = -1;
     program->loc_uProjectionMatrix = -1;
     program->loc_uInvViewMatrix = -1;
     program->loc_uDiffuseMap = -1;
@@ -1110,7 +1165,11 @@ static void _bolt_glBindAttribLocation(GLuint program, GLuint index, const GLcha
     ATTRIB_MAP(aVertexSkinBones)
     ATTRIB_MAP(aVertexSkinWeights)
     ATTRIB_MAP(aParticleOrigin_CreationTime)
+    ATTRIB_MAP(aParticleOffset)
+    ATTRIB_MAP(aParticleVelocity)
+    ATTRIB_MAP(aParticleEmitterUpAxis)
     ATTRIB_MAP(aMaterialSettingsSlotXY_Rotation)
+    ATTRIB_MAP(aParticleUVAnimationData)
 #undef ATTRIB_MAP
     LOG("glBindAttribLocation end\n");
 }
@@ -1126,6 +1185,8 @@ static void _bolt_glLinkProgram(GLuint program) {
     const GLint uTextureAtlas = gl.GetUniformLocation(program, "uTextureAtlas");
     const GLint uTextureAtlasSettings = gl.GetUniformLocation(program, "uTextureAtlasSettings");
     const GLint uAtlasMeta = gl.GetUniformLocation(program, "uAtlasMeta");
+    const GLint uParticleEmitterTransforms0 = gl.GetUniformLocation(program, "uParticleEmitterTransforms[0]");
+    const GLint uParticleEmitterTransformRanges0 = gl.GetUniformLocation(program, "uParticleEmitterTransformRanges[0]");
     const GLint loc_uModelMatrix = gl.GetUniformLocation(program, "uModelMatrix");
     const GLint loc_uGridSize = gl.GetUniformLocation(program, "uGridSize");
     const GLint loc_uVertexScale = gl.GetUniformLocation(program, "uVertexScale");
@@ -1174,11 +1235,33 @@ static void _bolt_glLinkProgram(GLuint program) {
         p->offset_uViewProjMatrix = view_offsets[3];
         p->is_3d = 1;
     }
-    if (p && p->loc_aParticleOrigin_CreationTime != -1 && p->loc_aMaterialSettingsSlotXY_Rotation != -1 && p->loc_aVertexColour != -1 && uTextureAtlas != -1 && uAtlasMeta != -1 && uInvViewMatrix != -1 && uTextureAtlasSettings != -1 && block_index_ViewTransforms != -1) {
+    if (p && p->loc_aParticleOrigin_CreationTime != -1 && p->loc_aParticleOffset != -1 && p->loc_aParticleVelocity != -1 && p->loc_aParticleEmitterUpAxis != -1 && p->loc_aMaterialSettingsSlotXY_Rotation != -1 && p->loc_aVertexColour != -1 && p->loc_aParticleUVAnimationData != -1 && uTextureAtlas != -1 && uAtlasMeta != -1 && uInvViewMatrix != -1 && uTextureAtlasSettings != -1 && uParticleEmitterTransforms0 != -1 && uParticleEmitterTransformRanges0 != -1 && block_index_ViewTransforms != -1) {
         p->loc_uTextureAtlas = uTextureAtlas;
         p->loc_uTextureAtlasSettings = uTextureAtlasSettings;
         p->loc_uAtlasMeta = uAtlasMeta;
         p->loc_uInvViewMatrix = uInvViewMatrix;
+        p->loc_uParticleEmitterTransforms[0] = uParticleEmitterTransforms0;
+        p->loc_uParticleEmitterTransforms[1] = gl.GetUniformLocation(program, "uParticleEmitterTransforms[1]");
+        p->loc_uParticleEmitterTransforms[2] = gl.GetUniformLocation(program, "uParticleEmitterTransforms[2]");
+        p->loc_uParticleEmitterTransforms[3] = gl.GetUniformLocation(program, "uParticleEmitterTransforms[3]");
+        p->loc_uParticleEmitterTransforms[4] = gl.GetUniformLocation(program, "uParticleEmitterTransforms[4]");
+        p->loc_uParticleEmitterTransforms[5] = gl.GetUniformLocation(program, "uParticleEmitterTransforms[5]");
+        p->loc_uParticleEmitterTransforms[6] = gl.GetUniformLocation(program, "uParticleEmitterTransforms[6]");
+        p->loc_uParticleEmitterTransforms[7] = gl.GetUniformLocation(program, "uParticleEmitterTransforms[7]");
+        p->loc_uParticleEmitterTransformRanges[0] = uParticleEmitterTransformRanges0;
+        p->loc_uParticleEmitterTransformRanges[1] = gl.GetUniformLocation(program, "uParticleEmitterTransformRanges[1]");
+        p->loc_uParticleEmitterTransformRanges[2] = gl.GetUniformLocation(program, "uParticleEmitterTransformRanges[2]");
+        p->loc_uParticleEmitterTransformRanges[3] = gl.GetUniformLocation(program, "uParticleEmitterTransformRanges[3]");
+        p->loc_uParticleEmitterTransformRanges[4] = gl.GetUniformLocation(program, "uParticleEmitterTransformRanges[4]");
+        p->loc_uParticleEmitterTransformRanges[5] = gl.GetUniformLocation(program, "uParticleEmitterTransformRanges[5]");
+        p->loc_uParticleEmitterTransformRanges[6] = gl.GetUniformLocation(program, "uParticleEmitterTransformRanges[6]");
+        p->loc_uParticleEmitterTransformRanges[7] = gl.GetUniformLocation(program, "uParticleEmitterTransformRanges[7]");
+        p->loc_uParticleEmitterTransformRanges[8] = gl.GetUniformLocation(program, "uParticleEmitterTransformRanges[8]");
+        p->loc_uParticleEmitterTransformRanges[9] = gl.GetUniformLocation(program, "uParticleEmitterTransformRanges[9]");
+        p->loc_uParticleEmitterTransformRanges[10] = gl.GetUniformLocation(program, "uParticleEmitterTransformRanges[10]");
+        p->loc_uParticleEmitterTransformRanges[11] = gl.GetUniformLocation(program, "uParticleEmitterTransformRanges[11]");
+        p->loc_uParticleEmitterTransformRanges[12] = gl.GetUniformLocation(program, "uParticleEmitterTransformRanges[12]");
+        p->loc_uParticleEmitterTransformRanges[13] = gl.GetUniformLocation(program, "uParticleEmitterTransformRanges[13]");
         p->block_index_ViewTransforms = block_index_ViewTransforms;
         p->offset_uCameraPosition = view_offsets[0];
         p->offset_uViewMatrix = view_offsets[1];
@@ -2147,8 +2230,15 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
             vertex_userdata.atlas = tex;
             vertex_userdata.settings_atlas = tex_settings;
             vertex_userdata.origin = &attributes[c->bound_program->loc_aParticleOrigin_CreationTime];
+            vertex_userdata.offset = &attributes[c->bound_program->loc_aParticleOffset];
+            vertex_userdata.velocity = &attributes[c->bound_program->loc_aParticleVelocity];
+            vertex_userdata.up_axis = &attributes[c->bound_program->loc_aParticleEmitterUpAxis];
             vertex_userdata.xy_rotation = &attributes[c->bound_program->loc_aMaterialSettingsSlotXY_Rotation];
             vertex_userdata.colour = &attributes[c->bound_program->loc_aVertexColour];
+            vertex_userdata.uv_animation_data = &attributes[c->bound_program->loc_aParticleUVAnimationData];
+            vertex_userdata.camera_position = (float*)(ubo_view_buf + c->bound_program->offset_uCameraPosition);
+            vertex_userdata.transform_index = -1;
+            vertex_userdata.ranges_known = false;
 
             struct GLPluginDrawElementsMatrixParticlesUserData matrix_userdata;
             matrix_userdata.program = c->bound_program;
@@ -2161,6 +2251,8 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
             render.vertex_count = count;
             render.vertex_functions.userdata = &vertex_userdata;
             render.vertex_functions.xyz = _bolt_gl_plugin_drawelements_vertexparticles_xyz;
+            render.vertex_functions.world_offset = _bolt_gl_plugin_drawelements_vertexparticles_world_offset;
+            render.vertex_functions.eye_offset = _bolt_gl_plugin_drawelements_vertexparticles_eye_offset;
             render.vertex_functions.atlas_meta = _bolt_gl_plugin_drawelements_vertexparticles_atlas_meta;
             render.vertex_functions.atlas_xywh = _bolt_gl_plugin_drawelements_vertexparticles_meta_xywh;
             render.vertex_functions.colour = _bolt_gl_plugin_drawelements_vertexparticles_colour;
@@ -2546,31 +2638,139 @@ static void _bolt_gl_plugin_drawelements_vertex3d_transform(size_t vertex, void*
     *out = ret;
 }
 
-static void _bolt_gl_plugin_drawelements_vertexparticles_xyz(size_t index, void* userdata, double* out) {
+static void _bolt_gl_plugin_drawelements_vertexparticles_xyz(size_t index, void* userdata, struct Point3D* out) {
     struct GLPluginDrawElementsVertexParticlesUserData* data = userdata;
+    const unsigned short vertex = data->indices[index];
     float xyz[3];
-    _bolt_get_attr_binding(data->c, data->origin, data->indices[index], 3, xyz);
-    out[0] = (double)xyz[0];
-    out[1] = (double)xyz[1];
-    out[2] = (double)xyz[2];
+    _bolt_get_attr_binding(data->c, data->origin, vertex, 3, xyz);
+    int32_t uv_animation_data[4];
+    _bolt_get_attr_binding_int(data->c, data->uv_animation_data, vertex, 4, uv_animation_data);
+
+    if (uv_animation_data[2] & (1 << 7)) {
+        _bolt_gl_vertexparticlesuserdata_set_transform(vertex, data->c->bound_program, data);
+        const GLfloat* transform = data->transform;
+        out->xyzh.floats[0] = (xyz[0] * transform[0]) + (xyz[1] * transform[4]) + (xyz[2] * transform[8]) + transform[12];
+        out->xyzh.floats[1] = (xyz[0] * transform[1]) + (xyz[1] * transform[5]) + (xyz[2] * transform[9]) + transform[13];
+        out->xyzh.floats[2] = (xyz[0] * transform[2]) + (xyz[1] * transform[6]) + (xyz[2] * transform[10]) + transform[14];
+        out->xyzh.floats[3] = (xyz[0] * transform[3]) + (xyz[1] * transform[7]) + (xyz[2] * transform[11]) + transform[15];
+        out->integer = false;
+        out->homogenous = true;
+        return;
+    }
+
+    out->xyzh.floats[0] = (double)xyz[0];
+    out->xyzh.floats[1] = (double)xyz[1];
+    out->xyzh.floats[2] = (double)xyz[2];
+    out->xyzh.floats[3] = 1.0;
+    out->integer = false;
+    out->homogenous = false;
+}
+
+static void _bolt_gl_plugin_drawelements_vertexparticles_world_offset(size_t index, void* userdata, double* out) {
+    struct GLPluginDrawElementsVertexParticlesUserData* data = userdata;
+    const unsigned short vertex = data->indices[index];
+    float offset[2];
+    float velocity[3];
+    float up_axis[3];
+    int32_t xy_rotation[4];
+    int32_t uv_animation_data[4];
+    _bolt_get_attr_binding_int(data->c, data->uv_animation_data, vertex, 4, uv_animation_data);
+    if (!(uv_animation_data[2] & (1 << 1))) {
+        // this isn't a world-space type of particle
+        out[0] = 0.0;
+        out[1] = 0.0;
+        out[2] = 0.0;
+        return;
+    }
+
+    _bolt_get_attr_binding(data->c, data->offset, vertex, 2, offset);
+    _bolt_get_attr_binding(data->c, data->velocity, vertex, 3, velocity);
+    _bolt_get_attr_binding(data->c, data->up_axis, vertex, 3, up_axis);
+    _bolt_get_attr_binding_int(data->c, data->xy_rotation, vertex, 4, xy_rotation);
+    const double angle = (double)((xy_rotation[2] & 0xFF) + ((xy_rotation[3] & 0xFF) << 8)) / 65535.0;
+    const double anglesin = sin(angle);
+    const double anglecos = cos(angle);
+    const double offsetx = (double)offset[0];
+    const double offsety = (double)offset[1];
+    const double offsetx2d = (offsetx * anglecos) - (offsety * anglesin);
+    const double offsety2d = (offsetx * anglesin) + (offsety * anglecos);
+
+    // I don't know how most of this works, it's just copied from a GLSL shader from the engine
+    if (uv_animation_data[2] & (1 << 7)) {
+        _bolt_gl_vertexparticlesuserdata_set_transform(vertex, data->c->bound_program, data);
+        const GLfloat* transform = data->transform;
+        const float vx = (velocity[0] * transform[0]) + (velocity[1] * transform[4]) + (velocity[2] * transform[8]);
+        const float vy = (velocity[0] * transform[1]) + (velocity[1] * transform[5]) + (velocity[2] * transform[9]);
+        const float vz = (velocity[0] * transform[2]) + (velocity[1] * transform[6]) + (velocity[2] * transform[10]);
+        velocity[0] = vx;
+        velocity[1] = vy;
+        velocity[2] = vz;
+    }
+    if (up_axis[0] == 0.0 && up_axis[1] == 0.0 && up_axis[2] == 0.0) {
+        float xyz[3];
+        _bolt_get_attr_binding(data->c, data->origin, vertex, 3, xyz);
+        up_axis[0] = data->camera_position[0] - xyz[0];
+        up_axis[1] = data->camera_position[1] - xyz[1];
+        up_axis[2] = data->camera_position[2] - xyz[2];
+        normalise(up_axis);
+    }
+    if (velocity[0] == 0.0 && velocity[1] == 0.0 && velocity[2] == 0.0) {
+        velocity[0] = 0.0;
+        velocity[1] = 0.0;
+        velocity[2] = 1.0;
+    } else {
+        normalise(velocity);
+    }
+    float cross_product[3];
+    cross(velocity, up_axis, cross_product);
+    normalise(cross_product);
+    out[0] = velocity[0] * offsety2d + cross_product[0] * offsetx2d;
+    out[1] = velocity[1] * offsety2d + cross_product[1] * offsetx2d;
+    out[2] = velocity[2] * offsety2d + cross_product[2] * offsetx2d;
+}
+
+static void _bolt_gl_plugin_drawelements_vertexparticles_eye_offset(size_t index, void* userdata, double* out) {
+    const struct GLPluginDrawElementsVertexParticlesUserData* data = userdata;
+    const unsigned short vertex = data->indices[index];
+    float offset[2];
+    int32_t xy_rotation[4];
+    int32_t uv_animation_data[4];
+    _bolt_get_attr_binding_int(data->c, data->uv_animation_data, vertex, 4, uv_animation_data);
+
+    if (uv_animation_data[2] & (1 << 1)) {
+        // this isn't an eye-space type of particle
+        out[0] = 0.0;
+        out[1] = 0.0;
+        return;
+    }
+
+    _bolt_get_attr_binding(data->c, data->offset, vertex, 2, offset);
+    _bolt_get_attr_binding_int(data->c, data->xy_rotation, vertex, 4, xy_rotation);
+    const double angle = (double)((xy_rotation[2] & 0xFF) + ((xy_rotation[3] & 0xFF) << 8)) / 65535.0;
+    const double anglesin = sin(angle);
+    const double anglecos = cos(angle);
+    const double offsetx = (double)offset[0];
+    const double offsety = (double)offset[1];
+    out[0] = (offsetx * anglecos) - (offsety * anglesin);
+    out[1] = (offsetx * anglesin) + (offsety * anglecos);
 }
 
 static size_t _bolt_gl_plugin_drawelements_vertexparticles_atlas_meta(size_t index, void* userdata) {
-    struct GLPluginDrawElementsVertexParticlesUserData* data = userdata;
+    const struct GLPluginDrawElementsVertexParticlesUserData* data = userdata;
     int material_xy[2];
     _bolt_get_attr_binding_int(data->c, data->xy_rotation, data->indices[index], 2, material_xy);
     return ((size_t)material_xy[1] << 16) | (size_t)material_xy[0];
 }
 
 static void _bolt_gl_plugin_drawelements_vertexparticles_meta_xywh(size_t meta, void* userdata, int32_t* out) {
-    struct GLPluginDrawElementsVertexParticlesUserData* data = userdata;
+    const struct GLPluginDrawElementsVertexParticlesUserData* data = userdata;
     size_t slot_x = meta & 0xFF;
     size_t slot_y = meta >> 16;
     xywh_from_meta_atlas(data->settings_atlas, slot_x, slot_y, data->atlas_scale, out);
 }
 
 static void _bolt_gl_plugin_drawelements_vertexparticles_colour(size_t index, void* userdata, double* out) {
-    struct GLPluginDrawElementsVertexParticlesUserData* data = userdata;
+    const struct GLPluginDrawElementsVertexParticlesUserData* data = userdata;
     float colour[4];
     _bolt_get_attr_binding(data->c, data->colour, data->indices[index], 4, colour);
     out[0] = (double)colour[0];
