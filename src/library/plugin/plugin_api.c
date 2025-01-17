@@ -1385,6 +1385,16 @@ static int api_renderparticles_vertexeyeoffset(lua_State* state) {
     return 2;
 }
 
+static int api_renderparticles_vertexuv(lua_State* state) {
+    const struct RenderParticles* render = require_self_userdata(state, "vertexuv");
+    const lua_Integer vertex = luaL_checkinteger(state, 2);
+    double uv[2];
+    render->vertex_functions.uv(vertex - 1, render->vertex_functions.userdata, uv);
+    lua_pushnumber(state, uv[0]);
+    lua_pushnumber(state, uv[1]);
+    return 2;
+}
+
 static int api_renderparticles_vertexcolour(lua_State* state) {
     const struct RenderParticles* render = require_self_userdata(state, "vertexcolour");
     const lua_Integer index = luaL_checkinteger(state, 2);
@@ -2014,6 +2024,7 @@ static struct ApiFuncTemplate renderparticles_functions[] = {
     BOLTFUNC(vertexparticleorigin, renderparticles),
     BOLTFUNC(vertexworldoffset, renderparticles),
     BOLTFUNC(vertexeyeoffset, renderparticles),
+    BOLTFUNC(vertexuv, renderparticles),
     BOLTFUNC(vertexcolour, renderparticles),
     BOLTFUNC(vertexmeta, renderparticles),
     BOLTFUNC(atlasxywh, renderparticles),

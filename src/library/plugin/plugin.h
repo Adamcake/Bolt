@@ -155,6 +155,10 @@ struct VertexParticleFunctions {
     /// Returns the X and Y offset which would be applied to this specific vertex from its world
     /// position while in eye space, to render it in the correct position on screen.
     void (*eye_offset)(size_t index, void* userdata, double* out);
+
+    /// Returns the U and V of this vertex in pixel coordinates, normalised from 0.0 to 1.0 within
+    /// the sub-image specified by atlas xy and wh.
+    void (*uv)(size_t index, void* userdata, double* out);
     
     /// Returns a meta-ID for the texture associated with this vertex.
     size_t (*atlas_meta)(size_t index, void* userdata);

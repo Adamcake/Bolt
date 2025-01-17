@@ -82,6 +82,7 @@ struct GLProgram {
     GLint loc_uGridSize;
     GLint loc_uVertexScale;
     GLint loc_uSmoothSkinning;
+    GLint loc_uTextureAnimationTime;
     GLint loc_sSceneHDRTex;
     GLint loc_sSourceTex;
     GLint loc_sBlurFarTex;
@@ -275,6 +276,7 @@ static void _bolt_gl_plugin_drawelements_vertex3d_transform(size_t vertex, void*
 static void _bolt_gl_plugin_drawelements_vertexparticles_xyz(size_t index, void* userdata, struct Point3D* out);
 static void _bolt_gl_plugin_drawelements_vertexparticles_world_offset(size_t index, void* userdata, double* out);
 static void _bolt_gl_plugin_drawelements_vertexparticles_eye_offset(size_t index, void* userdata, double* out);
+static void _bolt_gl_plugin_drawelements_vertexparticles_uv(size_t index, void* userdata, double* out);
 static size_t _bolt_gl_plugin_drawelements_vertexparticles_atlas_meta(size_t index, void* userdata);
 static void _bolt_gl_plugin_drawelements_vertexparticles_meta_xywh(size_t index, void* userdata, int32_t* out);
 static void _bolt_gl_plugin_drawelements_vertexparticles_colour(size_t index, void* userdata, double* out);
@@ -380,8 +382,10 @@ struct GLPluginDrawElementsVertexParticlesUserData {
 
     GLint ranges[14];
     GLfloat transform[16];
+    GLfloat animation_time;
     uint8_t transform_index;
     uint8_t ranges_known;
+    uint8_t animation_time_known;
 };
 
 struct GLPluginDrawElementsMatrixParticlesUserData {
@@ -1119,6 +1123,7 @@ static GLuint _bolt_glCreateProgram() {
     program->loc_uGridSize = -1;
     program->loc_uVertexScale = -1;
     program->loc_uSmoothSkinning = -1;
+    program->loc_uTextureAnimationTime = -1;
     program->loc_sSceneHDRTex = -1;
     program->loc_sTexture = -1;
     program->block_index_ViewTransforms = -1;
@@ -1196,6 +1201,7 @@ static void _bolt_glLinkProgram(GLuint program) {
     p->loc_sTexture = gl.GetUniformLocation(program, "sTexture");
     p->loc_uBoneTransforms = gl.GetUniformLocation(program, "uBoneTransforms");
     p->loc_uSmoothSkinning = gl.GetUniformLocation(program, "uSmoothSkinning");
+    p->loc_uTextureAnimationTime = gl.GetUniformLocation(program, "uTextureAnimationTime");
 
     const GLchar* view_var_names[] = {"uCameraPosition", "uViewMatrix", "uProjectionMatrix", "uViewProjMatrix"};
     const GLuint block_index_ViewTransforms = gl.GetUniformBlockIndex(program, "ViewTransforms");
@@ -2239,6 +2245,7 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
             vertex_userdata.camera_position = (float*)(ubo_view_buf + c->bound_program->offset_uCameraPosition);
             vertex_userdata.transform_index = -1;
             vertex_userdata.ranges_known = false;
+            vertex_userdata.animation_time_known = false;
 
             struct GLPluginDrawElementsMatrixParticlesUserData matrix_userdata;
             matrix_userdata.program = c->bound_program;
@@ -2253,6 +2260,7 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
             render.vertex_functions.xyz = _bolt_gl_plugin_drawelements_vertexparticles_xyz;
             render.vertex_functions.world_offset = _bolt_gl_plugin_drawelements_vertexparticles_world_offset;
             render.vertex_functions.eye_offset = _bolt_gl_plugin_drawelements_vertexparticles_eye_offset;
+            render.vertex_functions.uv = _bolt_gl_plugin_drawelements_vertexparticles_uv;
             render.vertex_functions.atlas_meta = _bolt_gl_plugin_drawelements_vertexparticles_atlas_meta;
             render.vertex_functions.atlas_xywh = _bolt_gl_plugin_drawelements_vertexparticles_meta_xywh;
             render.vertex_functions.colour = _bolt_gl_plugin_drawelements_vertexparticles_colour;
@@ -2753,6 +2761,60 @@ static void _bolt_gl_plugin_drawelements_vertexparticles_eye_offset(size_t index
     const double offsety = (double)offset[1];
     out[0] = (offsetx * anglecos) - (offsety * anglesin);
     out[1] = (offsetx * anglesin) + (offsety * anglecos);
+}
+
+// I ported this function from a vertex shader through great suffering. Don't try to understand it. Seriously.
+static void _bolt_gl_plugin_drawelements_vertexparticles_uv(size_t index, void* userdata, double* out) {
+    struct GLPluginDrawElementsVertexParticlesUserData* data = userdata;
+    const unsigned short vertex = data->indices[index];
+    int32_t uv_animation_data[4];
+    float offset[2];
+    _bolt_get_attr_binding_int(data->c, data->uv_animation_data, vertex, 4, uv_animation_data);
+    _bolt_get_attr_binding(data->c, data->offset, vertex, 2, offset);
+    if (uv_animation_data[0] != 0) {
+        const int32_t s = (uv_animation_data[0] & 15) + 1;
+        const int32_t o = ((uv_animation_data[0] & 240) >> 4) + 1;
+        const double ts = offset[0] <= 0.0 ? (1.0 / (double)s) : 0.0;
+        const double tt = offset[1] <= 0.0 ? (1.0 / (double)o) : 0.0;
+        if (uv_animation_data[2] & (1 << 2)) {
+            if (!data->animation_time_known) {
+                const struct GLProgram* program = data->c->bound_program;
+                gl.GetUniformfv(program->id, program->loc_uTextureAnimationTime, &data->animation_time);
+                data->animation_time_known = true;
+            }
+            float origin[4];
+            _bolt_get_attr_binding(data->c, data->origin, vertex, 4, origin);
+            const int32_t A = uv_animation_data[1];
+            const float m = data->animation_time - origin[3];
+            const float T = m * A;
+            const int32_t p = o * s;
+            const float S = floorf(T);
+            const float e = fmodf(S, p);
+            const float V = fmodf(e + 1.0, p);
+            const float h = fmodf(e, s);
+            const float Y = (e - h) / (float)s;
+            const float c = fmodf(V, s);
+            const float E = (V - c) / (float)s;
+            const float us = 1.0 / (float)s;
+            const float ds = 1.0 - us - (h / (float)s);
+            const float dt = Y / (float)o;
+            const float rs = 1.0 - us - (c / (float)s);
+            const float rt = E / (float)o;
+            const float interpolation_amount = T - S;
+            out[0] = ts + (ds * (1.0 - interpolation_amount)) + (rs * interpolation_amount);
+            out[1] = tt + (dt * (1.0 - interpolation_amount)) + (rt * interpolation_amount);
+        } else {
+            const int32_t p = uv_animation_data[1] % s;
+            const double T = (double)(uv_animation_data[1] - p) / (double)s;
+            const double rs = 1.0 - (1.0 / (double)s) - ((double)p / (double)s);
+            const double rt = T / (double)o;
+            out[0] = ts + rs;
+            out[1] = tt + rt;
+        }
+    } else {
+        out[0] = offset[0] <= 0.0 ? 1.0 : 0.0;
+        out[1] = offset[1] <= 0.0 ? 1.0 : 0.0;
+    }
 }
 
 static size_t _bolt_gl_plugin_drawelements_vertexparticles_atlas_meta(size_t index, void* userdata) {
