@@ -2043,6 +2043,7 @@ static struct ApiFuncTemplate renderparticles_functions[] = {
     BOLTFUNC(viewmatrix, renderparticles),
     BOLTFUNC(projmatrix, renderparticles),
     BOLTFUNC(inverseviewmatrix, renderparticles),
+    BOLTALIAS(vertexcolour, vertexcolor, renderparticles),
 };
 
 static struct ApiFuncTemplate rendericon_functions[] = {
