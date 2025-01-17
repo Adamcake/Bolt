@@ -689,6 +689,21 @@ end)
 
 @eventobjectwarning{}
 
+@node functions-onrenderparticles
+@section onrenderparticles
+
+@eventhandler{particle rendering events, @ref{objects-renderparticles}}
+
+@example lua
+@verbatim
+bolt.onrenderparticles(function (event)
+  -- ...
+end)
+@end verbatim
+@end example
+
+@eventobjectwarning{}
+
 @node functions-onrendericon
 @section onrendericon
 
@@ -2751,6 +2766,235 @@ if event:animated() then
 end
 @end verbatim
 @end example
+
+@node objects-renderparticles
+@section Render Particles Event
+
+A render-particles event comes from @ref{functions-onrenderparticles}.
+It occurs when a set of particles from one or more particle emitters are
+rendered to the 3D game view. Render-particles events are fairly similar
+to render3d events in the way textures and transforms work, with one big
+difference: the world position of a particle vertex cannot be queried
+directly. Instead, plugins can query the world position the particle a
+vertex belongs to, using the @ref{renderparticles-vertexparticleorigin}
+function. If a plugin really needs to know the positioning of each
+individual vertex, it will need to apply two offsets to that position:
+the 3D offset given by @ref{renderparticles-vertexworldoffset}, which is
+added directly to the world position, and the 2D offset given by
+@ref{renderparticles-vertexeyeoffset}, which is added in eye-space, i.e.
+relative to the direction the camera is facing, for billboarding.
+
+@example lua
+@verbatim
+bolt.onrenderparticles(function (event)
+  for i = 1, event:vertexcount() do
+    -- view and projection matrix
+    local viewmatrix = event:viewmatrix()
+    local projmatrix = event:projmatrix()
+    
+    -- the world position of this particle
+    local x, y, z = event:vertexparticleorigin(i):get()
+
+    -- world offset of this individual vertex of the particle
+    local wx, wy, wz = event:vertexworldoffset(i)
+
+    -- eye offset of this individual vertex of the particle
+    local ex, ey = event:vertexeyeoffset(i)
+
+    -- apply transforms and offsets in the correct order:
+    local eyepoint = bolt.point(x + wx, y + wy, z + wz):transform(viewmatrix)
+    local eyex, eyey, eyez = eyepoint:get()
+    local screenpoint = bolt.point(eyex + ex, eyey + ey, eyez):transform(projmatrix)
+    local xpixel, ypixel, depth = screenpoint:aspixels()
+  end
+end)
+@end verbatim
+@end example
+
+@node renderparticles-vertexcount
+@subsection vertexcount
+
+Returns the number of vertices being rendered.
+
+@example lua
+@verbatim
+local count = event:vertexcount()
+@end verbatim
+@end example
+
+@node renderparticles-vertexparticleorigin
+@subsection vertexparticleorigin
+
+Given a vertex number, returns a @ref{objects-point} representing the
+position of the particle that the vertex belongs to, in world
+coordinates. All vertices of a particle will have the same origin, since
+they all belong to the same particle.
+
+@example lua
+@verbatim
+local worldpoint = event:vertexparticleorigin(i)
+@end verbatim
+@end example
+
+@node renderparticles-vertexworldoffset
+@subsection vertexworldoffset
+
+Given a vertex number, returns three numbers representing the X, Y and Z
+offset of that vertex from the particle's origin, in world space. See
+@ref{objects-renderparticles} for more info on offsets.
+
+@example lua
+@verbatim
+local xoffset, yoffset, zoffset = event:vertexworldoffset(i)
+@end verbatim
+@end example
+
+@node renderparticles-vertexeyeoffset
+@subsection vertexeyeoffset
+
+Given a vertex number, returns two numbers representing the X and Y
+offset of that vertex from the particle's origin, in eye-space (i.e.
+relative to the direction the camera is facing, for billboarding.) See
+@ref{objects-renderparticles} for more info on offsets.
+
+@example lua
+@verbatim
+local xoffset, yoffset = event:vertexeyeoffset(i)
+@end verbatim
+@end example
+
+@node renderparticles-vertexuv
+@subsection vertexuv
+
+Given a vertex number, returns the vertex's associated "UV" coordinates.
+
+The values will be floating-point numbers, usually in the range 0.0 -
+1.0. They are relative to image in the texture atlas. They may fall
+outside the image (and therefore outside the range 0.0 - 1.0), in which
+case they're expected to wrap around within the image.
+
+@node renderparticles-vertexcolour
+@subsection vertexcolour
+
+Given a vertex number, returns the red, green, blue and alpha values for
+that vertex, in that order. All four values will be floating-point
+numbers in the range 0.0 - 1.0.
+
+These values are multiplied with the texture, so values less than 1.0
+will darken the texture (or make it more transparent in the case of the
+alpha channel). A common use for this is to draw differently "tinted"
+versions of the same type of particle using the same texture.
+
+@node renderparticles-vertexcolor
+@subsection vertexcolor
+
+Alias for @ref{renderparticles-vertexcolour}
+
+@node renderparticles-vertexmeta
+@subsection vertexmeta
+
+Given a vertex number, returns a meta-ID (an integer) relating to its
+associated texture image. This can then be passed to
+@ref{renderparticles-atlasxywh}.
+
+@example lua
+@verbatim
+local meta = event:vertexmeta(1)
+local x, y, w, h = event:atlasxywh(meta)
+@end verbatim
+@end example
+
+@node renderparticles-atlasxywh
+@subsection atlasxywh
+
+Given a vertex number, returns the X, Y, width and height of its
+associated image in the texture atlas, in pixel coordinates.
+
+@example lua
+@verbatim
+local meta = event:vertexmeta(1)
+local x, y, w, h = event:atlasxywh(meta)
+@end verbatim
+@end example
+
+@node renderparticles-textureid
+@subsection textureid
+
+Returns the unique ID of the texture associated with this render. There
+will always be one (and only one) texture atlas associated with a
+particle render.
+
+The plugin API does not have a way to get a texture by its ID; this is
+intentional, as it wouldn't always be safe to do so. The purpose of this
+function is to be able to compare texture IDs together to check if the
+current texture is the same one that was used in a previous render.
+
+@node renderparticles-texturesize
+@subsection texturesize
+
+Returns the size of the overall texture atlas associated with this
+render, in pixels.
+
+@node renderparticles-texturecompare
+@subsection texturecompare
+
+Compares a section of the texture atlas for this batch to some RGBA
+pixel data. The data can be a string or a @ref{objects-buffer}. The
+function will return true only if the bytes are an exact match. It
+internally uses memcmp from the C library. This means comparing each set
+of contiguous data is very fast, but, since the data needs to be
+contiguous, it can only be checked one row at a time.
+
+Internally, Bolt compares against data taken from the CPU just before
+being uploaded to the GPU, so there will never be any imprecision issues
+caused by different GPUs/drivers/etc.
+
+The example below checks if the pixels at x,y and (x+1),y are fully
+opaque and red.
+
+@example lua
+@verbatim
+event:texturecompare(x, y, "\xFF\x00\x00\xFF\xFF\x00\x00\xFF")
+@end verbatim
+@end example
+
+@node renderparticles-texturedata
+@subsection texturedata
+
+Gets the RGBA data starting at a given coordinate of the texture atlas,
+and returns it as a Lua string.
+
+The following example would return an 8-bytes-long string, containing
+the RGBA data for two pixels.
+
+@example lua
+@verbatim
+mybatch:texturedata(x, y, 8)
+@end verbatim
+@end example
+
+Using this function to search for specific textures isn't recommended as
+it would be noticeably slower than using
+@ref{renderparticles-texturecompare}.
+
+@node renderparticles-viewmatrix
+@subsection viewmatrix
+
+Returns a @ref{objects-transform} representing the view matrix being
+used for this particle render.
+
+@node renderparticles-projmatrix
+@subsection projmatrix
+
+Returns a @ref{objects-transform} representing the projection matrix
+being used for this particle render.
+
+@node renderparticles-inverseviewmatrix
+@subsection inverseviewmatrix
+
+Returns a @ref{objects-transform} representing the inverse of the view
+matrix (a.k.a. the camera matrix) for this particle render. This can be
+used to transform points from eye-space to world-space.
 
 @node objects-rendericon
 @section Render Icon Event
