@@ -174,6 +174,9 @@ struct VertexParticleFunctions {
 struct MatrixParticleFunctions {
     /// Userdata which will be passed to the functions contained in this struct.
     void* userdata;
+
+    /// Gets the view matrix for this render.
+    void (*view_matrix)(void* userdata, struct Transform3D* out);
     
     /// Gets the projection matrix for this render.
     void (*proj_matrix)(void* userdata, struct Transform3D* out);

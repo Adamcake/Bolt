@@ -1465,6 +1465,14 @@ static int api_renderparticles_texturedata(lua_State* state) {
     return 1;
 }
 
+static int api_renderparticles_viewmatrix(lua_State* state) {
+    const struct RenderParticles* render = require_self_userdata(state, "viewmatrix");
+    struct Transform3D* transform = lua_newuserdata(state, sizeof(struct Transform3D));
+    render->matrix_functions.view_matrix(render->matrix_functions.userdata, transform);
+    SETMETATABLE(transform)
+    return 1;
+}
+
 static int api_renderparticles_projmatrix(lua_State* state) {
     const struct RenderParticles* render = require_self_userdata(state, "projmatrix");
     struct Transform3D* transform = lua_newuserdata(state, sizeof(struct Transform3D));
@@ -2032,6 +2040,7 @@ static struct ApiFuncTemplate renderparticles_functions[] = {
     BOLTFUNC(texturesize, renderparticles),
     BOLTFUNC(texturecompare, renderparticles),
     BOLTFUNC(texturedata, renderparticles),
+    BOLTFUNC(viewmatrix, renderparticles),
     BOLTFUNC(projmatrix, renderparticles),
     BOLTFUNC(inverseviewmatrix, renderparticles),
 };

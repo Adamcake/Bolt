@@ -280,6 +280,7 @@ static void _bolt_gl_plugin_drawelements_vertexparticles_uv(size_t index, void* 
 static size_t _bolt_gl_plugin_drawelements_vertexparticles_atlas_meta(size_t index, void* userdata);
 static void _bolt_gl_plugin_drawelements_vertexparticles_meta_xywh(size_t index, void* userdata, int32_t* out);
 static void _bolt_gl_plugin_drawelements_vertexparticles_colour(size_t index, void* userdata, double* out);
+static void _bolt_gl_plugin_matrixparticles_viewmatrix(void* userdata, struct Transform3D* out);
 static void _bolt_gl_plugin_matrixparticles_projectionmatrix(void* userdata, struct Transform3D* out);
 static void _bolt_gl_plugin_matrixparticles_invviewmatrix(void* userdata, struct Transform3D* out);
 static void _bolt_gl_plugin_matrix3d_model(void* userdata, struct Transform3D* out);
@@ -391,6 +392,7 @@ struct GLPluginDrawElementsVertexParticlesUserData {
 struct GLPluginDrawElementsMatrixParticlesUserData {
     float inv_view_matrix[16];
     const struct GLProgram* program;
+    const float* view_matrix;
     const float* proj_matrix;
 };
 
@@ -2249,6 +2251,7 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
 
             struct GLPluginDrawElementsMatrixParticlesUserData matrix_userdata;
             matrix_userdata.program = c->bound_program;
+            matrix_userdata.view_matrix = (float*)(ubo_view_buf + c->bound_program->offset_uViewMatrix);
             matrix_userdata.proj_matrix = (float*)(ubo_view_buf + c->bound_program->offset_uProjectionMatrix);
 
             struct GLPluginTextureUserData tex_userdata;
@@ -2265,6 +2268,7 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
             render.vertex_functions.atlas_xywh = _bolt_gl_plugin_drawelements_vertexparticles_meta_xywh;
             render.vertex_functions.colour = _bolt_gl_plugin_drawelements_vertexparticles_colour;
             render.matrix_functions.userdata = &matrix_userdata;
+            render.matrix_functions.view_matrix = _bolt_gl_plugin_matrixparticles_viewmatrix;
             render.matrix_functions.proj_matrix = _bolt_gl_plugin_matrixparticles_projectionmatrix;
             render.matrix_functions.inverse_view_matrix = _bolt_gl_plugin_matrixparticles_invviewmatrix;
             render.texture_functions.userdata = &tex_userdata;
@@ -2839,6 +2843,13 @@ static void _bolt_gl_plugin_drawelements_vertexparticles_colour(size_t index, vo
     out[1] = (double)colour[1];
     out[2] = (double)colour[2];
     out[3] = (double)colour[3];
+}
+
+static void _bolt_gl_plugin_matrixparticles_viewmatrix(void* userdata, struct Transform3D* out) {
+    const struct GLPluginDrawElementsMatrixParticlesUserData* data = userdata;
+    for (size_t i = 0; i < 16; i += 1) {
+        out->matrix[i] = (double)data->view_matrix[i];
+    }
 }
 
 static void _bolt_gl_plugin_matrixparticles_projectionmatrix(void* userdata, struct Transform3D* out) {
