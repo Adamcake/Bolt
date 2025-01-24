@@ -31,12 +31,12 @@ typedef FileManager::Launcher CLIENT_FILEHANDLER;
 
 namespace Browser {
 	/// Implementation of CefClient, CefBrowserProcessHandler, CefLifeSpanHandler, CefRequestHandler.
-	/// https://github.com/chromiumembedded/cef/blob/5735/include/cef_client.h
-	/// https://github.com/chromiumembedded/cef/blob/5735/include/cef_browser_process_handler.h
-	/// https://github.com/chromiumembedded/cef/blob/5735/include/cef_life_span_handler.h
-	/// https://github.com/chromiumembedded/cef/blob/5735/include/cef_request_handler.h
+	/// https://github.com/chromiumembedded/cef/blob/6478/include/cef_client.h
+	/// https://github.com/chromiumembedded/cef/blob/6478/include/cef_browser_process_handler.h
+	/// https://github.com/chromiumembedded/cef/blob/6478/include/cef_life_span_handler.h
+	/// https://github.com/chromiumembedded/cef/blob/6478/include/cef_request_handler.h
 	/// If building wqith plugin support, also a CefWindowDelegate for the purpose of hosting a dummy IPC frame
-	/// https://github.com/chromiumembedded/cef/blob/5735/include/views/cef_window_delegate.h
+	/// https://github.com/chromiumembedded/cef/blob/6478/include/views/cef_window_delegate.h
 	struct Client: public CefClient, CefBrowserProcessHandler, CefLifeSpanHandler, CefRequestHandler, CLIENT_FILEHANDLER
 #if defined(BOLT_PLUGINS)
 	, CefWindowDelegate

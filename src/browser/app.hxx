@@ -7,10 +7,10 @@
 
 namespace Browser {
 	/// Implementation of CefApp, CefRenderProcessHandler, CefLoadHandler, CefV8Handler. Store on the stack, but access only via CefRefPtr.
-	/// https://github.com/chromiumembedded/cef/blob/5735/include/cef_app.h
-	/// https://github.com/chromiumembedded/cef/blob/5735/include/cef_render_process_handler.h
-	/// https://github.com/chromiumembedded/cef/blob/5735/include/cef_load_handler.h
-	/// https://github.com/chromiumembedded/cef/blob/5735/include/cef_v8.h#L230
+	/// https://github.com/chromiumembedded/cef/blob/6478/include/cef_app.h
+	/// https://github.com/chromiumembedded/cef/blob/6478/include/cef_render_process_handler.h
+	/// https://github.com/chromiumembedded/cef/blob/6478/include/cef_load_handler.h
+	/// https://github.com/chromiumembedded/cef/blob/6478/include/cef_v8.h#L230
 	struct App: public CefApp, CefRenderProcessHandler, CefLoadHandler, CefV8Handler {
 		App();
 		void SetBrowserProcessHandler(CefRefPtr<CefBrowserProcessHandler> handler);
