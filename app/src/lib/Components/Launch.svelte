@@ -1,5 +1,4 @@
 <script lang="ts">
-	import LaunchConfirmModal from './LaunchConfirmModal.svelte';
 	import PluginModal from '$lib/Components/PluginModal.svelte';
 	import { BoltService } from '$lib/Services/BoltService';
 	import { bolt, Platform } from '$lib/State/Bolt';
@@ -13,10 +12,11 @@
 	import { Client, clientMap, Game } from '$lib/Util/interfaces';
 	import { logger } from '$lib/Util/Logger';
 	import { writable, type Writable } from 'svelte/store';
+	import LaunchConfirmModal from './LaunchConfirmModal.svelte';
 
 	let confirmModal: LaunchConfirmModal;
 	let pluginModal: PluginModal;
-	let { config } = GlobalState;
+	let { config, initialized } = GlobalState;
 	$: selectedUserId = $config.selected.user_id;
 	$: selectedAccountId = $config.userDetails[selectedUserId ?? '']?.account_id;
 	$: accounts = BoltService.findSession($config.selected.user_id)?.accounts ?? [];
@@ -102,7 +102,7 @@
 
 <div class="bg-grad flex h-full flex-col border-slate-300 p-5 duration-200 dark:border-slate-800">
 	{#if $psa}
-		<div class="absolute left-[2%] w-[96%] rounded-lg rounded-lg bg-blue-400 px-2 text-black">
+		<div class="absolute left-[2%] w-[96%] rounded-lg bg-blue-400 px-2 text-black">
 			{$psa}
 		</div>
 	{/if}
@@ -113,7 +113,8 @@
 			class="mb-3 w-24 rounded-3xl bg-gradient-to-br from-rose-500 to-violet-500 p-5"
 		/>
 		<button
-			class="w-52 rounded-lg bg-emerald-500 p-2 font-bold text-black duration-200 hover:opacity-75"
+			class="w-52 rounded-lg bg-emerald-500 p-2 font-bold text-black duration-200 enabled:hover:opacity-75 disabled:bg-gray-500"
+			disabled={!$initialized}
 			on:click={() => {
 				if ($gameEnabled) {
 					launch($config.selected.game, $config.selected.client);
@@ -158,7 +159,7 @@
 			<select
 				id="character_select"
 				class="mx-auto w-52 cursor-pointer rounded-lg border-2 border-slate-300 bg-inherit p-2 text-inherit duration-200 hover:opacity-75 dark:border-slate-800"
-				disabled={$config.selected.user_id === null}
+				disabled={!$initialized || $config.selected.user_id === null}
 				value={selectedAccountId}
 				on:change={handleAccountChange}
 			>
