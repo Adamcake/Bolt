@@ -14,20 +14,29 @@ export class BoltService {
 	static async login(tokens: AuthTokens, session_id: string): Promise<Result<Session, string>> {
 		const sessionResult = await UserService.buildSession(tokens, session_id);
 		if (!sessionResult.ok) return error(sessionResult.error);
-		const { config, sessions } = GlobalState;
 		const newSession = sessionResult.value;
-		const sessionExists = BoltService.findSession(tokens.sub);
-		if (!sessionExists) {
-			sessions.update((session) => {
-				session.push(newSession);
-				return session;
+		const sessions = get(GlobalState.sessions);
+		const existingSessionIndex = sessions.findIndex(
+			(session) => session.user.userId === tokens.sub
+		);
+		if (existingSessionIndex !== -1) {
+			// Update saved session with new session details (i.e. in case character name changes)
+			GlobalState.sessions.update((_sessions) => {
+				_sessions[existingSessionIndex] = newSession;
+				return _sessions;
 			});
-			config.update((c) => {
-				c.selected.user_id = newSession.user.userId;
-				return c;
+		} else {
+			// Add new session to global list of sessions
+			GlobalState.sessions.update((_sessions) => {
+				_sessions.push(newSession);
+				return _sessions;
+			});
+			// Update currently selected userid to the new userid
+			GlobalState.config.update((_config) => {
+				_config.selected.user_id = newSession.user.userId;
+				return _config;
 			});
 		}
-		if (!get(config).selected.user_id === null) newSession.user.userId;
 		return ok(newSession);
 	}
 
