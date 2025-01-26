@@ -2181,7 +2181,7 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
         } else {
             struct GLTexture2D* tex = _bolt_context_get_texture(c, draw_tex);
             const uint8_t is_icon = tex && tex->compare_mode == GL_NONE && tex->internalformat == GL_RGBA8 && tex->width == GAME_ITEM_ICON_SIZE && tex->height == GAME_ITEM_ICON_SIZE && tex->icon.model_count < MAX_MODELS_PER_ICON;
-            const uint8_t is_big_icon = tex && tex->is_multisample && tex->internalformat == GL_RGBA8 && tex->width == GAME_ITEM_BIGICON_SIZE && tex->height == GAME_ITEM_BIGICON_SIZE;
+            const uint8_t is_big_icon = tex && tex->internalformat == GL_RGBA8 && tex->width == GAME_ITEM_BIGICON_SIZE && tex->height == GAME_ITEM_BIGICON_SIZE;
             if (is_icon || is_big_icon) {
                 struct IconModel* model = &tex->icon.models[tex->icon.model_count];
                 tex->icon.model_count += 1;
