@@ -172,6 +172,7 @@
 	on:close={() => {
 		if (pluginConfigDirty) {
 			savePluginConfig();
+			pluginConfigDirty = false;
 		}
 	}}
 >
