@@ -26,7 +26,9 @@ if (window.opener || window.location.search.includes('&id_token')) {
 	initBolt();
 	initConfig();
 	addMessageListeners();
-	refreshStoredSessions();
+	refreshStoredSessions().finally(() => {
+		GlobalState.initialized.set(true);
+	});
 	app = new BoltApp(appConfig);
 }
 
@@ -154,6 +156,8 @@ async function refreshStoredSessions() {
 	const sessions = get(GlobalState.sessions);
 	const expiredTokens: string[] = [];
 
+	if (sessions.length > 0) logger.info(`Logging in...`);
+
 	for (const session of sessions) {
 		const tokensResult = await AuthService.refreshOAuthToken(session.tokens);
 		if (!tokensResult.ok) {
@@ -184,10 +188,10 @@ async function refreshStoredSessions() {
 		}
 	}
 
-	expiredTokens.forEach((sub) => {
-		BoltService.logout(sub);
+	expiredTokens.forEach(async (sub) => {
+		await BoltService.logout(sub);
 	});
 
 	GlobalState.sessions.set(sessions);
-	BoltService.saveCredentials();
+	await BoltService.saveCredentials();
 }
