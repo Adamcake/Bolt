@@ -148,6 +148,16 @@
 	$: selectedPluginMeta = bolt.pluginList[selectedPlugin];
 	$: selectedPluginPath = selectedPluginMeta ? selectedPluginMeta.path : null;
 	$: managementPluginPromise = getPluginConfigPromiseFromID(selectedPlugin);
+	$: if (managementPluginPromise) {
+		managementPluginPromise.then((x) => {
+			// if the name in bolt.json has been changed, update it in the PluginMeta and our plugin config file
+			if (x.name !== selectedPluginMeta.name) {
+				selectedPluginMeta.name = x.name;
+				selectedPluginMeta = selectedPluginMeta;
+				pluginConfigDirty = true;
+			}
+		});
+	}
 
 	// connected clients list
 	var isClientSelected: boolean = false;
@@ -246,8 +256,9 @@
 						</button>
 						<button
 							class="mx-auto mb-1 w-[min(144px,_25%)] rounded-lg p-2 font-bold text-black duration-200 enabled:bg-blue-500 enabled:hover:opacity-75 disabled:bg-gray-500"
-							on:click={() =>
-								(managementPluginPromise = getPluginConfigPromiseFromID(selectedPlugin))}
+							on:click={() => {
+								managementPluginPromise = getPluginConfigPromiseFromID(selectedPlugin);
+							}}
 						>
 							Reload
 						</button>
