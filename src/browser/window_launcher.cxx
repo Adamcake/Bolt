@@ -358,7 +358,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 				std::filesystem::path p = this->data_dir;
 				p.append("plugins");
 				p.append(sid);
-				spath = p.string();
+				spath = p.string() + '/';
 			}
 			this->client->StartPlugin(client, sid, spath, std::string(main));
 			QSENDOK();
