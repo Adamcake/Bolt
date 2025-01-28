@@ -145,7 +145,7 @@
 		{:else if $config.selected.game === Game.rs3}
 			<button
 				disabled={!bolt.hasBoltPlugins}
-				title={bolt.hasBoltPlugins ? null : 'Coming soon...'}
+				title={bolt.hasBoltPlugins ? null : 'This feature is disabled'}
 				class="w-52 rounded-lg p-2 font-bold text-black duration-200 enabled:bg-blue-500 enabled:hover:opacity-75 disabled:bg-gray-500"
 				on:click={() => {
 					pluginModal.open();
