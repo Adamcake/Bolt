@@ -65,75 +65,49 @@ export class BoltService {
 		return get(sessions);
 	}
 
+	// sends an asynchronous POST request containing some JSON and calls the callback with a fetch
+	// response object
+	static postJSON(
+		api: string,
+		object: object,
+		callback: ((r: Response) => void) | null = null
+	): Promise<void> {
+		const body: string = JSON.stringify(object);
+		const headers = { 'Content-Type': 'application/json' };
+		return fetch(api, { method: 'POST', body, headers }).then((response) => {
+			if (!response.ok)
+				response.text().then((text) => logger.error(`${api} error: ${response.status}: ${text}`));
+			if (callback) callback(response);
+		});
+	}
+
 	// sends an asynchronous request to save the current user config to disk, if it has changed
 	static saveConfig(checkForPendingChanges = true) {
 		if (saveInProgress) return;
 		if (checkForPendingChanges && !GlobalState.configHasPendingChanges) return;
-
 		saveInProgress = true;
-		const xml = new XMLHttpRequest();
-		xml.open('POST', '/save-config', true);
-		xml.onreadystatechange = () => {
-			if (xml.readyState == 4) {
-				logger.info(`Save config status: '${xml.responseText.trim()}'`);
-				saveInProgress = false;
-			}
-		};
-		xml.setRequestHeader('Content-Type', 'application/json');
-
 		const config = get(GlobalState.config);
-		xml.send(JSON.stringify(config));
+		this.postJSON('/save-config', config, () => (saveInProgress = false));
 		return config;
 	}
 
+	// sends an asynchronous request to save the current plugin config to disk, if it has changed
 	static savePluginConfig(checkForPendingChanges = true) {
 		if (savePluginInProgress) return;
 		if (checkForPendingChanges && !GlobalState.pluginConfigHasPendingChanges) return;
-
 		savePluginInProgress = true;
-		fetch('/save-plugin-config', {
-			method: 'POST',
-			body: JSON.stringify(bolt.pluginConfig),
-			headers: { 'Content-Type': 'application/json' }
-		}).then((x) => {
-			savePluginInProgress = false;
-			logger.info(`Save-plugin-config status: ${x.status}`);
-		});
+		this.postJSON('/save-plugin-config', bolt.pluginConfig, () => (savePluginInProgress = false));
 	}
 
 	// sends a request to save all credentials to their config file,
 	// overwriting the previous file, if any
-	static async saveCredentials(): Promise<undefined> {
-		new Promise((resolve) => {
-			const xml = new XMLHttpRequest();
-			xml.open('POST', '/save-credentials', true);
-			xml.setRequestHeader('Content-Type', 'application/json');
-			xml.onreadystatechange = () => {
-				if (xml.readyState == 4) {
-					resolve(undefined);
-				}
-			};
-
-			const sessions = get(GlobalState.sessions);
-			xml.send(JSON.stringify(sessions));
-		});
+	static async saveCredentials(): Promise<void> {
+		return this.postJSON('/save-credentials', get(GlobalState.sessions));
 	}
 
-	static async openFilePicker(): Promise<string | undefined> {
-		return new Promise((resolve) => {
-			const xml = new XMLHttpRequest();
-			xml.onreadystatechange = () => {
-				if (xml.readyState == 4) {
-					// if the user closes the file picker without selecting a file, status here is 204
-					if (xml.status == 200) {
-						return resolve(xml.responseText);
-					}
-					return resolve(undefined);
-				}
-			};
-			xml.open('GET', '/jar-file-picker', true);
-			xml.send();
-		});
+	static async openFilePicker(): Promise<string | null> {
+		const response = await fetch('/jar-file-picker');
+		return response.status === 200 ? response.text() : null;
 	}
 
 	static findSession(userId: string | null): Session | undefined {
