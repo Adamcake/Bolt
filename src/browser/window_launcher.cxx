@@ -6,9 +6,15 @@
 #include "request.hxx"
 
 #include <fcntl.h>
+#include <filesystem>
 #include <fmt/core.h>
 #include <fstream>
 #include <sstream>
+
+#if defined(HAS_LIBARCHIVE) && defined(BOLT_PLUGINS)
+#include <archive.h>
+#include <archive_entry.h>
+#endif
 
 #define BOLTDOMAIN "bolt-internal"
 #define BOLTURI "https://" BOLTDOMAIN
@@ -342,10 +348,19 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 				PQINT(client)
 			});
 			QREQPARAM(id);
-			QREQPARAM(path);
 			QREQPARAM(main);
 			QREQPARAMINT(client);
-			this->client->StartPlugin(client, std::string(id), std::string(path), std::string(main));
+			std::string sid = id;
+			std::string spath;
+			if (has_path) {
+				spath = path;
+			} else {
+				std::filesystem::path p = this->data_dir;
+				p.append("plugins");
+				p.append(sid);
+				spath = p.string();
+			}
+			this->client->StartPlugin(client, sid, spath, std::string(main));
 			QSENDOK();
 #else
 			QSENDNOTSUPPORTED();
@@ -372,6 +387,103 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 #else
 			QSENDNOTSUPPORTED();
 #endif
+		}
+
+		// request to unpack a file using libarchive and save the contents in a plugin data directory,
+		// creating it if it doesn't exist, or overwriting any prior contents if it does
+		if (path == "/install-plugin") {
+#if defined(HAS_LIBARCHIVE) && defined(BOLT_PLUGINS)
+			CefRefPtr<CefPostData> post_data = request->GetPostData();
+			QSENDBADREQUESTIF(!post_data || post_data->GetElementCount() != 1);
+
+			QSTRING id;
+			bool has_id = false;
+			ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
+				PQSTRING(id)
+			});
+			QREQPARAM(id);
+			std::filesystem::path plugin_dir = this->data_dir;
+			plugin_dir.append("plugins");
+			plugin_dir.append(id);
+			std::error_code err;
+			QSENDSYSTEMERRORIF(std::filesystem::remove_all(plugin_dir, err) == -1);
+			QSENDSYSTEMERRORIF(!std::filesystem::create_directories(plugin_dir, err));
+
+			CefPostData::ElementVector elements;
+			post_data->GetElements(elements);
+			size_t file_length = elements[0]->GetBytesCount();
+			char* archive_file = new char[file_length];
+			elements[0]->GetBytes(file_length, archive_file);
+
+			struct archive* archive = archive_read_new();
+			archive_read_support_format_all(archive);
+			archive_read_support_filter_all(archive);
+			archive_read_open_memory(archive, archive_file, file_length);
+
+			char buf[65536];
+			struct archive_entry* entry;
+			while (true) {
+				const int r = archive_read_next_header(archive, &entry);
+				if (r == ARCHIVE_EOF) break;
+				if (r != ARCHIVE_OK) {
+					archive_read_close(archive);
+					archive_read_free(archive);
+					delete[] archive_file;
+					QSENDSTR("file is malformed", 400);
+				}
+				std::filesystem::path p = plugin_dir;
+				const char* pathname = archive_entry_pathname(entry);
+				p.append(pathname);
+				std::filesystem::create_directories(p.parent_path(), err);
+				std::ofstream ofs(p, std::ofstream::binary);
+				if (ofs.fail()) {
+					archive_read_close(archive);
+					archive_read_free(archive);
+					delete[] archive_file;
+					QSENDSTR("failed to create files", 500);
+				}
+
+				const la_int64_t entry_size = archive_entry_size(entry);
+				ssize_t written = 0;
+				while (written < entry_size) {
+					const ssize_t w = archive_read_data(archive, buf, sizeof(buf));
+					ofs.write(buf, w);
+					written += w;
+				}
+				ofs.close();
+			}
+
+			archive_read_close(archive);
+			archive_read_free(archive);
+			delete[] archive_file;
+			QSENDOK();
+#else
+			QSENDNOTSUPPORTED();
+#endif
+		}
+
+		// gets the bolt.json from a plugin data directory by id
+		if (path == "/get-plugindir-json") {
+			QSTRING id;
+			bool has_id = false;
+			ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
+				PQSTRING(id)
+			});
+			QREQPARAM(id);
+			std::filesystem::path plugin_dir = this->data_dir;
+			plugin_dir.append("plugins");
+			plugin_dir.append(id);
+			plugin_dir.append("bolt.json");
+			std::ifstream file(plugin_dir, std::ios::in | std::ios::binary);
+			if (!file.fail()) {
+				std::stringstream ss;
+				ss << file.rdbuf();
+				std::string str = ss.str();
+				file.close();
+				return new Browser::ResourceHandler(str, 200, "application/json");
+			} else {
+				QSENDNOTFOUND();
+			}
 		}
 
 		// instruction to try to open an external URL in the user's browser
@@ -450,6 +562,9 @@ CefString Browser::Launcher::BuildURL() const {
 	url << DEFAULTURL "?platform=" URLPLATFORM
 #if defined(BOLT_FLATHUB_BUILD)
 	"&flathub=1"
+#endif
+#if defined(HAS_LIBARCHIVE)
+	"&has_libarchive=1"
 #endif
 	;
 
