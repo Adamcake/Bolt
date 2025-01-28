@@ -284,19 +284,6 @@ export function requestNewClientListPromise(): void {
 	xml.send();
 }
 
-// TODO: move to BoltService
-export function savePluginConfig(): void {
-	const xml = new XMLHttpRequest();
-	xml.open('POST', '/save-plugin-config', true);
-	xml.setRequestHeader('Content-Type', 'application/json');
-	xml.onreadystatechange = () => {
-		if (xml.readyState == 4) {
-			logger.info(`Save-plugin-config status: ${xml.responseText.trim()}`);
-		}
-	};
-	xml.send(JSON.stringify(bolt.pluginList));
-}
-
 // download and attempt to launch an official windows or mac client
 // (not the official linux client - that comes from a different url, see launchRS3Linux)
 export async function launchOfficialClient(

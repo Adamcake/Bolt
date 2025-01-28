@@ -4,8 +4,10 @@ import { GlobalState } from '$lib/State/GlobalState';
 import { error, ok, type Result } from '$lib/Util/interfaces';
 import { logger } from '$lib/Util/Logger';
 import { get } from 'svelte/store';
+import { bolt } from '$lib/State/Bolt';
 
 let saveInProgress: boolean = false;
+let savePluginInProgress: boolean = false;
 
 export class BoltService {
 	// After refreshing or adding a new account, this function will need to be called.
@@ -82,6 +84,19 @@ export class BoltService {
 		const config = get(GlobalState.config);
 		xml.send(JSON.stringify(config));
 		return config;
+	}
+
+	static savePluginConfig() {
+		if (savePluginInProgress) return;
+		savePluginInProgress = true;
+		fetch('/save-plugin-config', {
+			method: 'POST',
+			body: JSON.stringify(bolt.pluginList),
+			headers: { 'Content-Type': 'application/json' }
+		}).then((x) => {
+			savePluginInProgress = false;
+			logger.info(`Save-plugin-config status: ${x.status}`);
+		});
 	}
 
 	// sends a request to save all credentials to their config file,

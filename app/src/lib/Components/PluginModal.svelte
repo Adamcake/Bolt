@@ -1,7 +1,8 @@
 <script lang="ts">
 	import Modal from '$lib/Components/CommonUI/Modal.svelte';
 	import { bolt } from '$lib/State/Bolt';
-	import { requestNewClientListPromise, savePluginConfig } from '$lib/Util/functions';
+	import { BoltService } from '$lib/Services/BoltService';
+	import { requestNewClientListPromise } from '$lib/Util/functions';
 	import {
 		type PluginConfig,
 		type PluginMeta,
@@ -300,7 +301,7 @@
 	class="h-[90%] w-[90%] text-center"
 	on:close={() => {
 		if (pluginConfigDirty) {
-			savePluginConfig();
+			BoltService.savePluginConfig();
 			pluginConfigDirty = false;
 		}
 	}}
