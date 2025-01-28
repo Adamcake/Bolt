@@ -38,7 +38,7 @@ export interface Bolt {
 	isFlathub: boolean;
 	hasLibArchive: boolean;
 	hasBoltPlugins: boolean;
-	pluginList: { [key: string]: PluginMeta }; // May need to be a writable
+	pluginConfig: { [key: string]: PluginMeta }; // I think this should be in GlobalState?
 }
 
 declare const s: () => BoltEnv;
@@ -56,5 +56,5 @@ export const bolt: Bolt = {
 	isFlathub: false,
 	hasLibArchive: false,
 	hasBoltPlugins: false,
-	pluginList: {}
+	pluginConfig: {}
 };

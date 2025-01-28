@@ -14,7 +14,7 @@
 <svelte:window
 	on:beforeunload={() => {
 		BoltService.saveConfig();
-		if (bolt.hasBoltPlugins) BoltService.savePluginConfig();
+		if (bolt.hasBoltPlugins) BoltService.savePluginConfig(true);
 	}}
 />
 

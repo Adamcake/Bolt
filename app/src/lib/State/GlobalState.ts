@@ -5,6 +5,7 @@ import { writable } from 'svelte/store';
 export const GlobalState = {
 	initialized: writable(false),
 	configHasPendingChanges: false,
+	pluginConfigHasPendingChanges: false,
 	config: writable<Config>(defaultConfig),
 	sessions: writable<Session[]>([])
 };

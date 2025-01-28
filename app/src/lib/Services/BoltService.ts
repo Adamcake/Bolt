@@ -86,12 +86,14 @@ export class BoltService {
 		return config;
 	}
 
-	static savePluginConfig() {
+	static savePluginConfig(checkForPendingChanges = true) {
 		if (savePluginInProgress) return;
+		if (checkForPendingChanges && !GlobalState.pluginConfigHasPendingChanges) return;
+
 		savePluginInProgress = true;
 		fetch('/save-plugin-config', {
 			method: 'POST',
-			body: JSON.stringify(bolt.pluginList),
+			body: JSON.stringify(bolt.pluginConfig),
 			headers: { 'Content-Type': 'application/json' }
 		}).then((x) => {
 			savePluginInProgress = false;
