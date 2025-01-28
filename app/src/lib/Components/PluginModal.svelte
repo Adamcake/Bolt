@@ -2,7 +2,11 @@
 	import Modal from '$lib/Components/CommonUI/Modal.svelte';
 	import { bolt } from '$lib/State/Bolt';
 	import { requestNewClientListPromise, savePluginConfig } from '$lib/Util/functions';
-	import { type PluginConfig } from '$lib/Util/interfaces';
+	import {
+		type PluginConfig,
+		type PluginMeta,
+		type PluginUpdaterConfig
+	} from '$lib/Util/interfaces';
 	import { logger } from '$lib/Util/Logger';
 	import { clientList } from '$lib/Util/store';
 
@@ -14,10 +18,11 @@
 	const defaultMainLuaFilename: string = 'main.lua';
 
 	export function open() {
+		showURLEntry = false;
 		modal.open();
 	}
 
-	const getPluginConfigPromise = (dirpath: string): Promise<PluginConfig> => {
+	const getPluginConfigPromiseFromPath = (dirpath: string): Promise<PluginConfig> => {
 		return new Promise((resolve, reject) => {
 			const path: string = dirpath.concat(
 				dirpath.endsWith(platformFileSep) ? configFileName : sepConfigFileName
@@ -37,32 +42,86 @@
 		});
 	};
 
+	const getPluginConfigPromiseFromDataDir = (id: string): Promise<PluginConfig> => {
+		return fetch('/get-plugindir-json?'.concat(new URLSearchParams({ id }).toString())).then(
+			(x) => {
+				if (!x.ok) return null;
+				return x.json();
+			}
+		);
+	};
+
 	const getPluginConfigPromiseFromID = (id: string): Promise<PluginConfig> | null => {
 		const list = bolt.pluginList;
 		const meta = list[id];
 		if (!meta) return null;
 		const path = meta.path;
-		return path ? getPluginConfigPromise(path) : null;
+		if (path) return getPluginConfigPromiseFromPath(path);
+		return getPluginConfigPromiseFromDataDir(id);
 	};
 
-	// new plugin handler
+	const getNewPluginID = () => {
+		let id;
+		do {
+			id = crypto.randomUUID();
+		} while (Object.keys(bolt.pluginList).includes(id));
+		return id;
+	};
+
+	// new plugin handlers
 	const unnamedPluginName = '(unnamed)';
 	const unnamedClientName = '(new character)';
-	const handleNewPlugin = (folderPath: string, configPath: string) => {
-		getPluginConfigPromise(folderPath)
+	const addPluginFromPath = (folderPath: string, configPath: string) => {
+		getPluginConfigPromiseFromPath(folderPath)
 			.then((plugin: PluginConfig) => {
-				do {
-					selectedPlugin = crypto.randomUUID();
-				} while (Object.keys(bolt.pluginList).includes(selectedPlugin));
+				selectedPlugin = getNewPluginID();
 				bolt.pluginList[selectedPlugin] = {
 					name: plugin.name ?? unnamedPluginName,
-					path: folderPath
+					path: folderPath,
+					version: plugin.version
 				};
 				pluginConfigDirty = true;
 			})
 			.catch((reason) => {
 				console.error(`Config file '${configPath}' couldn't be fetched, reason: ${reason}`);
 			});
+	};
+	const addPluginFromUpdaterURL = (url: string) => {
+		fetch(url).then(async (x) => {
+			if (!x.ok) return;
+			const config: PluginUpdaterConfig = await x.json();
+			if (config.url) {
+				const data = await fetch(config.url).then((x) => x.arrayBuffer());
+				if (config.sha256) {
+					const hash = await crypto.subtle.digest('SHA-256', data);
+					const hashStr = Array.from(new Uint8Array(hash))
+						.map((x) => x.toString(16).padStart(2, '0'))
+						.join('');
+					if (config.sha256 !== hashStr) {
+						console.error(`not installing plugin: incorrect file hash`);
+						return;
+					}
+				}
+
+				const id = getNewPluginID();
+				const r = await fetch('/install-plugin?'.concat(new URLSearchParams({ id }).toString()), {
+					method: 'POST',
+					body: data
+				});
+				if (!r.ok) return;
+				const plugin = await getPluginConfigPromiseFromDataDir(id);
+				if (plugin) {
+					selectedPlugin = id;
+					bolt.pluginList[selectedPlugin] = {
+						name: plugin.name ?? unnamedPluginName,
+						version: plugin.version,
+						updaterURL: url,
+						sha256: config.sha256
+					};
+					pluginConfigDirty = true;
+				}
+			}
+		});
 	};
 
 	// json file picker
@@ -80,9 +139,9 @@
 							0,
 							xml.responseText.length - configFileName.length
 						);
-						handleNewPlugin(subpath, xml.responseText);
+						addPluginFromPath(subpath, xml.responseText);
 					} else {
-						console.log(`Selection '${xml.responseText}' is not named bolt.json; ignored`);
+						console.log(`Selection '${xml.responseText}' is not named ${configFileName}; ignored`);
 					}
 				}
 			}
@@ -100,12 +159,15 @@
 	}
 
 	// function to start a plugin
-	const startPlugin = (client: number, id: string, path: string, main: string) => {
-		const pathWithCorrectSeps: string =
-			bolt.platform === 'windows' ? path.replaceAll('\\', '/') : path;
-		const newPath = pathWithCorrectSeps.endsWith(platformFileSep)
-			? pathWithCorrectSeps
-			: pathWithCorrectSeps.concat('/');
+	const startPlugin = (client: number, id: string, path: string | null, main: string) => {
+		let newPath = null;
+		if (path) {
+			const pathWithCorrectSeps: string =
+				bolt.platform === 'windows' ? path.replaceAll('\\', '/') : path;
+			newPath = pathWithCorrectSeps.endsWith(platformFileSep)
+				? pathWithCorrectSeps
+				: pathWithCorrectSeps.concat('/');
+		}
 
 		var xml = new XMLHttpRequest();
 		xml.onreadystatechange = () => {
@@ -114,13 +176,23 @@
 				logger.info(`Start-plugin status: ${xml.statusText.trim()}`);
 			}
 		};
-		xml.open(
-			'GET',
-			'/start-plugin?'.concat(
-				new URLSearchParams({ client: client.toString(), id, path: newPath, main }).toString()
-			),
-			true
-		);
+		if (newPath) {
+			xml.open(
+				'GET',
+				'/start-plugin?'.concat(
+					new URLSearchParams({ client: client.toString(), id, main, path: newPath }).toString()
+				),
+				true
+			);
+		} else {
+			xml.open(
+				'GET',
+				'/start-plugin?'.concat(
+					new URLSearchParams({ client: client.toString(), id, main }).toString()
+				),
+				true
+			);
+		}
 		xml.send();
 	};
 
@@ -143,6 +215,52 @@
 		xml.send();
 	};
 
+	// update a plugin by downloading the contents of its updater URL and checking for a new version
+	const updatePlugin = (meta: PluginMeta, id: string) => {
+		// this function can only be called for PluginMetas that have an updaterURL
+		const url: string = <string>meta.updaterURL;
+		fetch(url).then(async (x) => {
+			let config: PluginUpdaterConfig = await x.json();
+			let downloadNeeded = false;
+			if (config.sha256) {
+				if (meta.sha256 !== config.sha256) {
+					downloadNeeded = true;
+				}
+			} else if (config.version) {
+				if (meta.version !== config.version) {
+					downloadNeeded = true;
+				}
+			}
+
+			if (downloadNeeded && config.url) {
+				const r = await fetch(config.url);
+				if (!r.ok) return null;
+				const data = await r.arrayBuffer();
+				if (config.sha256) {
+					const hash = await crypto.subtle.digest('SHA-256', data);
+					const hashStr = Array.from(new Uint8Array(hash))
+						.map((x) => x.toString(16).padStart(2, '0'))
+						.join('');
+					if (config.sha256 !== hashStr) {
+						console.error(`not updating plugin '${meta.name}': incorrect file hash`);
+						return;
+					}
+				}
+				fetch('/install-plugin?'.concat(new URLSearchParams({ id }).toString()), {
+					method: 'POST',
+					body: data
+				});
+				const plugin = await getPluginConfigPromiseFromDataDir(id);
+				if (plugin) {
+					if (config.sha256) meta.sha256 = config.sha256;
+					if (plugin.name) meta.name = plugin.name;
+					if (plugin.version) meta.version = plugin.version;
+					pluginConfigDirty = true;
+				}
+			}
+		});
+	};
+
 	// plugin management interface - currently-selected plugin
 	var selectedPlugin: string;
 	$: selectedPluginMeta = bolt.pluginList[selectedPlugin];
@@ -151,8 +269,16 @@
 	$: if (managementPluginPromise) {
 		managementPluginPromise.then((x) => {
 			// if the name in bolt.json has been changed, update it in the PluginMeta and our plugin config file
+			let dirty = false;
 			if (x.name !== selectedPluginMeta.name) {
 				selectedPluginMeta.name = x.name;
+				dirty = true;
+			}
+			if (x.version !== selectedPluginMeta.version) {
+				selectedPluginMeta.version = x.version;
+				dirty = true;
+			}
+			if (dirty) {
 				selectedPluginMeta = selectedPluginMeta;
 				pluginConfigDirty = true;
 			}
@@ -162,6 +288,9 @@
 	// connected clients list
 	var isClientSelected: boolean = false;
 	var selectedClientId: number;
+
+	let showURLEntry: boolean = false;
+	let textURLEntry: string;
 
 	let pluginConfigDirty: boolean = false;
 </script>
@@ -196,6 +325,8 @@
 					on:click={() => {
 						selectedClientId = client.uid;
 						isClientSelected = true;
+						showURLEntry = false;
+						textURLEntry = '';
 					}}
 					class="m-1 h-[28px] w-[95%] rounded-lg border-2 {isClientSelected &&
 					selectedClientId === client.uid
@@ -219,14 +350,57 @@
 				{/each}
 			</select>
 			{#if !isClientSelected}
-				<button
-					class="aspect-square w-8 rounded-lg border-2 border-blue-500 text-[20px] font-bold duration-200 enabled:hover:opacity-75 disabled:border-gray-500"
-					on:click={jsonFilePicker}
-					disabled={disableButtons}
-				>
-					+
-				</button>
+				<span class="align-middle">
+					<button
+						class="mx-1 aspect-square w-9 rounded-md bg-blue-500 p-1 text-[20px] font-bold duration-200 enabled:hover:opacity-75 disabled:bg-gray-500"
+						on:click={() => {
+							showURLEntry = !showURLEntry;
+							textURLEntry = '';
+						}}
+						disabled={!bolt.hasLibArchive || disableButtons}
+						title="Install plugin from updater URL"
+					>
+						<img src="svgs/download-solid.svg" alt="Install plugin from updater URL" />
+					</button>
+					<button
+						class="aspect-square w-9 rounded-md bg-blue-500 p-1 text-[20px] font-bold duration-200 enabled:hover:opacity-75 disabled:bg-gray-500"
+						on:click={jsonFilePicker}
+						disabled={disableButtons}
+						title="Install plugin from local directory"
+					>
+						<img src="svgs/folder-solid.svg" alt="Install plugin from local directory" />
+					</button>
+				</span>
 				<br />
+				{#if showURLEntry}
+					<label for="plugin-updater-url-input">URL:</label>
+					<textarea
+						rows="1"
+						id="plugin-updater-url-input"
+						class="w-[50%] max-w-[60%] resize-x rounded border-2 border-slate-300 bg-slate-100 text-slate-950 dark:border-slate-800"
+						bind:value={textURLEntry}
+					/>
+					<button
+						title="Confirm"
+						on:click={() => {
+							addPluginFromUpdaterURL(textURLEntry);
+							showURLEntry = false;
+							textURLEntry = '';
+						}}
+						class="rounded-sm bg-emerald-500 hover:opacity-75"
+						><img src="svgs/check-solid.svg" class="h-5 w-5" alt="Confirm" /></button
+					>
+					<button
+						title="Close URL entry"
+						on:click={() => {
+							showURLEntry = false;
+							textURLEntry = '';
+						}}
+						class="rounded-sm bg-rose-500 hover:opacity-75"
+						><img src="svgs/xmark-solid.svg" class="h-5 w-5" alt="Close" /></button
+					>
+					<br /><br />
+				{/if}
 				{#if Object.entries(bolt.pluginList).length !== 0}
 					{#if Object.keys(bolt.pluginList).includes(selectedPlugin) && managementPluginPromise !== null}
 						{#await managementPluginPromise}
@@ -234,6 +408,12 @@
 						{:then plugin}
 							<p class="pb-4 text-xl font-bold">
 								{plugin.name ?? unnamedPluginName}
+								{#if plugin.version}
+									<br />
+									<span class="pb-4 text-xl font-bold italic text-slate-600">
+										v{plugin.version}
+									</span>
+								{/if}
 							</p>
 							<p class={plugin.description ? null : 'italic'}>
 								{plugin.description ?? 'no description'}
@@ -255,19 +435,20 @@
 						>
 							Remove
 						</button>
-						<button
-							class="mx-auto mb-1 w-[min(144px,_25%)] rounded-lg p-2 font-bold text-black duration-200 enabled:bg-blue-500 enabled:hover:opacity-75 disabled:bg-gray-500"
-							on:click={() => {
-								managementPluginPromise = getPluginConfigPromiseFromID(selectedPlugin);
-							}}
-						>
-							Reload
-						</button>
+						{#if selectedPluginMeta.updaterURL}
+							&nbsp;
+							<button
+								class="mx-auto mb-1 w-[min(144px,_25%)] rounded-lg p-2 font-bold text-black duration-200 enabled:bg-blue-500 enabled:hover:opacity-75 disabled:bg-gray-500"
+								on:click={() => updatePlugin(selectedPluginMeta, selectedPlugin)}
+							>
+								Check updates
+							</button>
+						{/if}
 					{/if}
 				{:else}
 					<p>
-						You have no plugins installed. Click the + button and select a plugin's bolt.json file
-						to add it.
+						You have no plugins installed. You can install plugins either from an updater URL, or by
+						downloading them onto your computer and selecting the "bolt.json" file.
 					</p>
 				{/if}
 			{:else}
@@ -276,22 +457,18 @@
 					<p>loading...</p>
 				{:then plugin}
 					{#if plugin && plugin.main && Object.keys(bolt.pluginList).includes(selectedPlugin)}
-						{#if selectedPluginPath}
-							<button
-								class="mx-auto mb-1 w-auto rounded-lg bg-emerald-500 p-2 font-bold text-black duration-200 hover:opacity-75"
-								on:click={() =>
-									startPlugin(
-										selectedClientId,
-										selectedPlugin,
-										selectedPluginPath,
-										plugin.main ?? defaultMainLuaFilename
-									)}
-							>
-								Start {plugin.name}
-							</button>
-						{:else}
-							<p>can't start plugin: no path is configured</p>
-						{/if}
+						<button
+							class="mx-auto mb-1 w-auto rounded-lg bg-emerald-500 p-2 font-bold text-black duration-200 hover:opacity-75"
+							on:click={() =>
+								startPlugin(
+									selectedClientId,
+									selectedPlugin,
+									selectedPluginPath ?? null,
+									plugin.main ?? defaultMainLuaFilename
+								)}
+						>
+							Start {plugin.name}
+						</button>
 					{:else if Object.entries(bolt.pluginList).length === 0}
 						<p>(no plugins installed)</p>
 					{:else}

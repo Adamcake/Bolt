@@ -36,6 +36,7 @@ export interface Bolt {
 	runeLiteInstalledId: string | null;
 	hdosInstalledVersion: string | null;
 	isFlathub: boolean;
+	hasLibArchive: boolean;
 	hasBoltPlugins: boolean;
 	pluginList: { [key: string]: PluginMeta }; // May need to be a writable
 }
@@ -53,6 +54,7 @@ export const bolt: Bolt = {
 	runeLiteInstalledId: null,
 	hdosInstalledVersion: null,
 	isFlathub: false,
+	hasLibArchive: false,
 	hasBoltPlugins: false,
 	pluginList: {}
 };

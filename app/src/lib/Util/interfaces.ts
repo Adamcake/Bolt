@@ -52,6 +52,9 @@ export interface GameClient {
 export interface PluginMeta {
 	path?: string;
 	name?: string;
+	updaterURL?: string;
+	version?: string;
+	sha256?: string;
 }
 
 // rs3 plugin config, from the plugin's bolt.json
@@ -60,6 +63,13 @@ export interface PluginConfig {
 	version?: string;
 	description?: string;
 	main?: string;
+}
+
+// config downloaded from an updater URL
+export interface PluginUpdaterConfig {
+	version?: string;
+	sha256?: string;
+	url?: string;
 }
 
 interface AuthTokenUpdateMessage {
