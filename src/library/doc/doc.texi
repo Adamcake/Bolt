@@ -191,6 +191,55 @@ which needs to be passed as the first argument to its functions - that's
 true for all types of object in the Bolt API. In Lua, ':' is shorthand
 for doing exactly that.
 
+@node Updater URLs
+@section Updater URLs
+
+There are two ways to install a plugin via the plugin menu: the first is
+a file picker which needs you to navigate to the "bolt.json" file on
+your computer, assuming you've already downloaded or created a plugin.
+The second way is to enter an updater URL and allow the plugin menu to
+download the plugin onto your computer for you. For most users this is
+far simpler as it only needs them to copy-paste a hyperlink into the
+menu and press enter. Even more convenient is that this same URL will be
+queried each time the user wants to check for a newer version of your
+plugin, whereas there's no way to update-check a plugin that was
+selected from the file picker.
+
+Updater URLs return JSON which should look like this:
+
+@example json
+@verbatim
+{
+  "url": "https://bolt.adamcake.com/my-plugin-v1.0.1.zip",
+  "version": "1.0.1",
+  "sha256": "ec3791c5fcbd9b7f077ac292a2ea319f428e7023919d01e33ff118dcbbb29d16"
+}
+@end verbatim
+@end example
+
+When initially installing a plugin from an updater URL, the file at
+"url" will be downloaded. Next, if the optional "sha256" is present, the
+downloaded file is hashed and will be rejected if the checksums don't
+match. The file contents will be extracted to a new directory in bolt's
+data location, and "bolt.json" will then be selected from that location.
+
+When checking for updates, the updater URL will be queried. If "sha256"
+is present in the response and does not match the hash that was
+previously installed, the plugin will be re-downloaded from "url",
+hashed, and like before it will be rejected if the hash doesn't match
+the sha256 string. If "sha256" is not present, it will instead compare
+the "version" in the response to the version in the previously-installed
+"bolt.json", and, if they're not an exact match, the plugin will be
+re-downloaded on that basis. To clarify, "version" is completely
+ignored if "sha256" is present - you only need one or the other. Either
+way, after downloading the new version, it will be extracted to the same
+location as it was installed previously, after deleting all previous
+contents of that directory.
+
+Note that updater URLs and the "url" contained in them must respond with
+a status of "200 OK", otherwise the plugin menu will not continue with
+the process of installing/updating the plugin.
+
 @node Functions
 @chapter List of Functions
 
