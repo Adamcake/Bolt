@@ -51,7 +51,7 @@ function initBolt() {
 	bolt.hasBoltPlugins = plugins !== null;
 	if (plugins !== null) {
 		try {
-			bolt.pluginList = JSON.parse(plugins);
+			bolt.pluginConfig = JSON.parse(plugins);
 		} catch (e) {
 			logger.error('Unable to parse plugin list');
 		}
