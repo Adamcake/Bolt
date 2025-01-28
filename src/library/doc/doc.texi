@@ -62,6 +62,9 @@ This is the API reference manual for version 1.0 of Bolt Launcher's API
 for Lua plugins. All of the available functions and types are listed
 along with a simple usage example.
 
+This document is for developers. If you're not looking to develop
+plugins, you don't need to read this document.
+
 @summarycontents
 
 @node Introduction
@@ -235,6 +238,15 @@ ignored if "sha256" is present - you only need one or the other. Either
 way, after downloading the new version, it will be extracted to the same
 location as it was installed previously, after deleting all previous
 contents of that directory.
+
+In the above example, the downloaded file is a .zip, but Bolt supports
+every type of archive format that can be auto-detected by libarchive
+(which is practically every format ever created.) If possible, consider
+using a format like .tar.xz, which is slow to create but can be
+extracted very quickly and has an extremely high compression ratio (i.e.
+small download size), for the fastest possible user experience.
+Generally speaking, .zip and .rar are the worst in both of these
+aspects, but you can use them if you really want to.
 
 Note that updater URLs and the "url" contained in them must respond with
 a status of "200 OK", otherwise the plugin menu will not continue with
