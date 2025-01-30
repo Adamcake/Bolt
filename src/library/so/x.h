@@ -31,7 +31,11 @@
 #define XCB_CLIENT_MESSAGE 33
 #define XCB_GE_GENERIC 35
 
+#define XCB_INPUT_BUTTON_PRESS 4
+#define XCB_INPUT_BUTTON_RELEASE 5
 #define XCB_INPUT_MOTION 6
+#define XCB_INPUT_ENTER 7
+#define XCB_INPUT_LEAVE 8
 #define XCB_INPUT_RAW_BUTTON_PRESS 15
 #define XCB_INPUT_RAW_BUTTON_RELEASE 16
 #define XCB_INPUT_RAW_MOTION 17
@@ -225,5 +229,33 @@ typedef struct xcb_input_button_press_event_t {
     xcb_input_group_info_t    group;
 } xcb_input_button_press_event_t;
 typedef xcb_input_button_press_event_t xcb_input_motion_event_t;
+typedef xcb_input_button_press_event_t xcb_input_button_release_event_t;
+
+typedef struct xcb_input_enter_event_t {
+    uint8_t                   response_type;
+    uint8_t                   extension;
+    uint16_t                  sequence;
+    uint32_t                  length;
+    uint16_t                  event_type;
+    xcb_input_device_id_t     deviceid;
+    xcb_timestamp_t           time;
+    xcb_input_device_id_t     sourceid;
+    uint8_t                   mode;
+    uint8_t                   detail;
+    xcb_window_t              root;
+    xcb_window_t              event;
+    xcb_window_t              child;
+    uint32_t                  full_sequence;
+    xcb_input_fp1616_t        root_x;
+    xcb_input_fp1616_t        root_y;
+    xcb_input_fp1616_t        event_x;
+    xcb_input_fp1616_t        event_y;
+    uint8_t                   same_screen;
+    uint8_t                   focus;
+    uint16_t                  buttons_len;
+    xcb_input_modifier_info_t mods;
+    xcb_input_group_info_t    group;
+} xcb_input_enter_event_t;
+typedef xcb_input_enter_event_t xcb_input_leave_event_t;
 
 #endif

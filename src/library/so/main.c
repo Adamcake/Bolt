@@ -465,27 +465,27 @@ unsigned int eglTerminate(void* display) {
     return 1;
 }
 
-static void _bolt_mouseevent_from_xcb(int16_t x, int16_t y, uint32_t detail, struct MouseEvent* out) {
+static void _bolt_mouseevent_from_xcb(int16_t x, int16_t y, uint32_t state, struct MouseEvent* out) {
     out->x = x;
     out->y = y;
-    out->ctrl = (detail >> 2) & 1;
-    out->shift = detail & 1;
-    out->meta = (detail >> 6) & 1;
-    out->alt = (((1 << 3) | (1 << 7)) & detail) ? 1 : 0;
-    out->capslock = (detail >> 1) & 1;
-    out->numlock = (detail >> 4) & 1;
-    out->mb_left = (detail >> 8) & 1;
-    out->mb_right = (detail >> 10) & 1;
-    out->mb_middle = (detail >> 9) & 1;
+    out->ctrl = (state >> 2) & 1;
+    out->shift = state & 1;
+    out->meta = (state >> 6) & 1;
+    out->alt = (((1 << 3) | (1 << 7)) & state) ? 1 : 0;
+    out->capslock = (state >> 1) & 1;
+    out->numlock = (state >> 4) & 1;
+    out->mb_left = (state >> 8) & 1;
+    out->mb_right = (state >> 10) & 1;
+    out->mb_middle = (state >> 9) & 1;
 }
 
 static uint8_t point_in_rect(int x, int y, int rx, int ry, int rw, int rh) {
     return rx <= x && rx + rw > x && ry <= y && ry + rh > y;
 }
 
-static uint8_t handle_mouse_event(int16_t x, int16_t y, uint32_t detail, ptrdiff_t bool_offset, ptrdiff_t event_offset, uint8_t grab_type) {
+static uint8_t handle_mouse_event(int16_t x, int16_t y, uint32_t state, ptrdiff_t bool_offset, ptrdiff_t event_offset, uint8_t grab_type) {
     struct MouseEvent event;
-    _bolt_mouseevent_from_xcb(x, y, detail, &event);
+    _bolt_mouseevent_from_xcb(x, y, state, &event);
     const uint8_t mousein_fake_old = mousein_fake;
     const uint8_t ret = _bolt_plugin_handle_mouse_event(&event, bool_offset, event_offset, grab_type, &mousein_fake, &mousein_real);
     if (mousein_fake_old != mousein_fake) {
@@ -493,6 +493,77 @@ static uint8_t handle_mouse_event(int16_t x, int16_t y, uint32_t detail, ptrdiff
         xcursor_change_pending = ret ? 1 : 2;
         pthread_mutex_unlock(&xcursor_lock);
     }
+    return ret;
+}
+
+static uint8_t handle_buttonpress_event(int16_t x, int16_t y, uint32_t detail, uint16_t state) {
+    switch (detail) {
+        case 1:
+            return handle_mouse_event(x, y, state, offsetof(struct WindowPendingInput, mouse_left), offsetof(struct WindowPendingInput, mouse_left_event), GRAB_TYPE_START);
+        case 2:
+            return handle_mouse_event(x, y, state, offsetof(struct WindowPendingInput, mouse_middle), offsetof(struct WindowPendingInput, mouse_middle_event), GRAB_TYPE_NONE);
+        case 3:
+            return handle_mouse_event(x, y, state, offsetof(struct WindowPendingInput, mouse_right), offsetof(struct WindowPendingInput, mouse_right_event), GRAB_TYPE_NONE);
+        case 4:
+            return handle_mouse_event(x, y, state, offsetof(struct WindowPendingInput, mouse_scroll_up), offsetof(struct WindowPendingInput, mouse_scroll_up_event), GRAB_TYPE_NONE);
+        case 5:
+            return handle_mouse_event(x, y, state, offsetof(struct WindowPendingInput, mouse_scroll_down), offsetof(struct WindowPendingInput, mouse_scroll_down_event), GRAB_TYPE_NONE);
+    }
+    return true;
+}
+
+static uint8_t handle_buttonrelease_event(int16_t x, int16_t y, uint32_t detail, uint16_t state) {
+    switch (detail) {
+        case 1:
+            return handle_mouse_event(x, y, state, offsetof(struct WindowPendingInput, mouse_left_up), offsetof(struct WindowPendingInput, mouse_left_up_event), GRAB_TYPE_STOP);
+        case 2:
+            return handle_mouse_event(x, y, state, offsetof(struct WindowPendingInput, mouse_middle_up), offsetof(struct WindowPendingInput, mouse_middle_up_event), GRAB_TYPE_NONE);
+        case 3:
+            return handle_mouse_event(x, y, state, offsetof(struct WindowPendingInput, mouse_right_up), offsetof(struct WindowPendingInput, mouse_right_up_event), GRAB_TYPE_NONE);
+        case 4:
+        case 5: {
+            // for mousewheel-up events, we don't need to do anything with them, but we do
+            // still need to figure out if they should go to the game window or not.
+            struct WindowInfo* windows = _bolt_plugin_windowinfo();
+            uint8_t ret = true;
+            _bolt_rwlock_lock_read(&windows->lock);
+            size_t iter = 0;
+            void* item;
+            while (hashmap_iter(windows->map, &iter, &item)) {
+                struct EmbeddedWindow** window = item;
+                _bolt_rwlock_lock_read(&(*window)->lock);
+                const uint8_t in_window = point_in_rect(x, y, (*window)->metadata.x, (*window)->metadata.y, (*window)->metadata.width, (*window)->metadata.height);
+                _bolt_rwlock_unlock_read(&(*window)->lock);
+                ret &= !in_window;
+                if (!ret) break;
+            }
+            _bolt_rwlock_unlock_read(&windows->lock);
+            return ret;
+        }
+    }
+    return true;
+}
+
+static uint8_t handle_mouseleave_event(int16_t x, int16_t y, uint16_t state) {
+    struct WindowInfo* windows = _bolt_plugin_windowinfo();
+    _bolt_rwlock_lock_read(&windows->lock);
+    const uint64_t p = _bolt_plugin_get_last_mouseevent_windowid();
+    const uint64_t* pp = &p;
+    struct EmbeddedWindow* const* window = hashmap_get(windows->map, &pp);
+    if (window) {
+        _bolt_rwlock_lock_read(&(*window)->lock);
+        const int16_t wx = (*window)->metadata.x;
+        const int16_t wy = (*window)->metadata.y;
+        _bolt_rwlock_unlock_read(&(*window)->lock);
+        _bolt_rwlock_lock_write(&(*window)->input_lock);
+        (*window)->input.mouse_leave = 1;
+        _bolt_mouseevent_from_xcb(x - wx, y - wy, state, &(*window)->input.mouse_leave_event);
+        _bolt_rwlock_unlock_write(&(*window)->input_lock);
+    }
+    _bolt_rwlock_unlock_read(&windows->lock);
+    const uint8_t ret = mousein_fake;
+    mousein_real = 0;
+    mousein_fake = 0;
     return ret;
 }
 
@@ -515,9 +586,30 @@ static uint8_t _bolt_handle_xcb_event(xcb_connection_t* c, xcb_generic_event_t* 
             const xcb_ge_generic_event_t* const event = (const xcb_ge_generic_event_t* const)e;
             if (event->extension != XINPUTEXTENSION) break;
             switch (event->event_type) {
+                case XCB_INPUT_BUTTON_PRESS: { // when pressing a mouse button that's received by the game window (SDL3 only)
+                    const xcb_input_button_press_event_t* event = (xcb_input_button_press_event_t*)e;
+                    if (event->event != main_window_xcb) return true;
+                    return handle_buttonpress_event(event->event_x >> 16, event->event_y >> 16, event->detail, event->mods.effective);
+                }
+                case XCB_INPUT_BUTTON_RELEASE: { // when releasing a mouse button that's received by the game window (SDL3 only)
+                    const xcb_input_button_release_event_t* event = (xcb_input_button_release_event_t*)e;
+                    if (event->event != main_window_xcb) return true;
+                    return handle_buttonrelease_event(event->event_x >> 16, event->event_y >> 16, event->detail, event->mods.effective);
+                }
                 case XCB_INPUT_MOTION: { // when mouse moves (not drag) inside the game window
-                    xcb_input_motion_event_t* event = (xcb_input_motion_event_t*)e;
+                    const xcb_input_motion_event_t* event = (xcb_input_motion_event_t*)e;
+                    if (event->event != main_window_xcb) return true;
                     return handle_mouse_event(event->event_x >> 16, event->event_y >> 16, event->mods.effective, offsetof(struct WindowPendingInput, mouse_motion), offsetof(struct WindowPendingInput, mouse_motion_event), GRAB_TYPE_NONE);
+                }
+                case XCB_INPUT_ENTER: { // when mouse moves into this window, having previously been in another window (SDL3 only)
+                    const xcb_input_enter_event_t* event = (xcb_input_enter_event_t*)e;
+                    if (event->event != main_window_xcb) return true;
+                    return handle_mouse_event(event->event_x >> 16, event->event_y >> 16, event->mods.effective, offsetof(struct WindowPendingInput, mouse_motion), offsetof(struct WindowPendingInput, mouse_motion_event), GRAB_TYPE_NONE);
+                }
+                case XCB_INPUT_LEAVE: { // when mouse moves into another window, having previously been in this window (SDL3 only)
+                    const xcb_input_leave_event_t* event = (xcb_input_leave_event_t*)e;
+                    if (event->event != main_window_xcb) return true;
+                    return handle_mouseleave_event(event->event_x >> 16, event->event_y >> 16, event->mods.effective);
                 }
                 case XCB_INPUT_RAW_MOTION: // when mouse moves (not drag) anywhere globally on the PC
                 case XCB_INPUT_RAW_BUTTON_PRESS: // when pressing a mouse button anywhere globally on the PC
@@ -529,94 +621,30 @@ static uint8_t _bolt_handle_xcb_event(xcb_connection_t* c, xcb_generic_event_t* 
             }
             break;
         }
-        case XCB_BUTTON_PRESS: { // when pressing a mouse button that's received by the game window
-            xcb_button_press_event_t* event = (xcb_button_release_event_t*)e;
+        case XCB_BUTTON_PRESS: { // when pressing a mouse button that's received by the game window (SDL2 only)
+            const xcb_button_press_event_t* event = (xcb_button_release_event_t*)e;
             if (event->event != main_window_xcb) return true;
-            switch (event->detail) {
-                case 1:
-                    return handle_mouse_event(event->event_x, event->event_y, event->state, offsetof(struct WindowPendingInput, mouse_left), offsetof(struct WindowPendingInput, mouse_left_event), GRAB_TYPE_START);
-                case 2:
-                    return handle_mouse_event(event->event_x, event->event_y, event->state, offsetof(struct WindowPendingInput, mouse_middle), offsetof(struct WindowPendingInput, mouse_middle_event), GRAB_TYPE_NONE);
-                case 3:
-                    return handle_mouse_event(event->event_x, event->event_y, event->state, offsetof(struct WindowPendingInput, mouse_right), offsetof(struct WindowPendingInput, mouse_right_event), GRAB_TYPE_NONE);
-                case 4:
-                    return handle_mouse_event(event->event_x, event->event_y, event->state, offsetof(struct WindowPendingInput, mouse_scroll_up), offsetof(struct WindowPendingInput, mouse_scroll_up_event), GRAB_TYPE_NONE);
-                case 5:
-                    return handle_mouse_event(event->event_x, event->event_y, event->state, offsetof(struct WindowPendingInput, mouse_scroll_down), offsetof(struct WindowPendingInput, mouse_scroll_down_event), GRAB_TYPE_NONE);
-            }
-            break;
+            return handle_buttonpress_event(event->event_x, event->event_y, event->detail, event->state);
         }
-        case XCB_BUTTON_RELEASE: { // when releasing a mouse button for which the press was received by the game window
-            xcb_button_release_event_t* event = (xcb_button_release_event_t*)e;
+        case XCB_BUTTON_RELEASE: { // when releasing a mouse button for which the press was received by the game window (SDL2 only)
+            const xcb_button_release_event_t* event = (xcb_button_release_event_t*)e;
             if (event->event != main_window_xcb) return true;
-            switch (event->detail) {
-                case 1:
-                    return handle_mouse_event(event->event_x, event->event_y, event->state, offsetof(struct WindowPendingInput, mouse_left_up), offsetof(struct WindowPendingInput, mouse_left_up_event), GRAB_TYPE_STOP);
-                case 2:
-                    return handle_mouse_event(event->event_x, event->event_y, event->state, offsetof(struct WindowPendingInput, mouse_middle_up), offsetof(struct WindowPendingInput, mouse_middle_up_event), GRAB_TYPE_NONE);
-                case 3:
-                    return handle_mouse_event(event->event_x, event->event_y, event->state, offsetof(struct WindowPendingInput, mouse_right_up), offsetof(struct WindowPendingInput, mouse_right_up_event), GRAB_TYPE_NONE);
-                case 4:
-                case 5: {
-                    // for mousewheel-up events, we don't need to do anything with them, but we do
-                    // still need to figure out if they should go to the game window or not.
-                    struct WindowInfo* windows = _bolt_plugin_windowinfo();
-                    uint8_t ret = true;
-                    _bolt_rwlock_lock_read(&windows->lock);
-                    size_t iter = 0;
-                    void* item;
-                    while (hashmap_iter(windows->map, &iter, &item)) {
-                        struct EmbeddedWindow** window = item;
-                        _bolt_rwlock_lock_read(&(*window)->lock);
-                        const uint8_t in_window = point_in_rect(event->event_x, event->event_y, (*window)->metadata.x, (*window)->metadata.y, (*window)->metadata.width, (*window)->metadata.height);
-                        _bolt_rwlock_unlock_read(&(*window)->lock);
-                        ret &= !in_window;
-                        if (!ret) break;
-                    }
-                    _bolt_rwlock_unlock_read(&windows->lock);
-                    return ret;
-                }
-            }
-            break;
+            return handle_buttonrelease_event(event->event_x, event->event_y, event->detail, event->state);
         }
         case XCB_MOTION_NOTIFY: { // when mouse moves while dragging from inside the game window
-            xcb_motion_notify_event_t* event = (xcb_motion_notify_event_t*)e;
+            const xcb_motion_notify_event_t* event = (xcb_motion_notify_event_t*)e;
             if (event->event != main_window_xcb) return true;
             return handle_mouse_event(event->event_x, event->event_y, event->state, offsetof(struct WindowPendingInput, mouse_motion), offsetof(struct WindowPendingInput, mouse_motion_event), GRAB_TYPE_NONE);
         }
-        case XCB_ENTER_NOTIFY: {
-            xcb_enter_notify_event_t* event = (xcb_enter_notify_event_t*)e;
+        case XCB_ENTER_NOTIFY: { // when mouse moves into this window, having previously been in another window
+            const xcb_enter_notify_event_t* event = (xcb_enter_notify_event_t*)e;
             if (event->event != main_window_xcb) return true;
-
-            // treat an enter event like a motion event, but also update mouse-in state
-            const uint8_t ret = handle_mouse_event(event->event_x, event->event_y, event->state, offsetof(struct WindowPendingInput, mouse_motion), offsetof(struct WindowPendingInput, mouse_motion_event), GRAB_TYPE_NONE);
-            return ret;
+            return handle_mouse_event(event->event_x, event->event_y, event->state, offsetof(struct WindowPendingInput, mouse_motion), offsetof(struct WindowPendingInput, mouse_motion_event), GRAB_TYPE_NONE);
         }
-        case XCB_LEAVE_NOTIFY: {
-            xcb_leave_notify_event_t* event = (xcb_leave_notify_event_t*)e;
+        case XCB_LEAVE_NOTIFY: { // when mouse moves into another window, having previously been in this window
+            const xcb_leave_notify_event_t* event = (xcb_leave_notify_event_t*)e;
             if (event->event != main_window_xcb) return true;
-
-            // set mouse-leave event if there's an embedded window that needed one
-            struct WindowInfo* windows = _bolt_plugin_windowinfo();
-            _bolt_rwlock_lock_read(&windows->lock);
-            const uint64_t p = _bolt_plugin_get_last_mouseevent_windowid();
-            const uint64_t* pp = &p;
-            struct EmbeddedWindow* const* window = hashmap_get(windows->map, &pp);
-            if (window) {
-                _bolt_rwlock_lock_read(&(*window)->lock);
-                const int16_t wx = (*window)->metadata.x;
-                const int16_t wy = (*window)->metadata.y;
-                _bolt_rwlock_unlock_read(&(*window)->lock);
-                _bolt_rwlock_lock_write(&(*window)->input_lock);
-                (*window)->input.mouse_leave = 1;
-                _bolt_mouseevent_from_xcb(event->event_x - wx, event->event_y - wy, event->detail, &(*window)->input.mouse_leave_event);
-                _bolt_rwlock_unlock_write(&(*window)->input_lock);
-            }
-            _bolt_rwlock_unlock_read(&windows->lock);
-            const uint8_t ret = mousein_fake;
-            mousein_real = 0;
-            mousein_fake = 0;
-            return ret;
+            return handle_mouseleave_event(event->event_x, event->event_y, event->state);
         }
         case XCB_KEY_PRESS: // when a keyboard key is pressed while the game window is focused
         case XCB_KEY_RELEASE: // when a keyboard key is released while the game window is focused
