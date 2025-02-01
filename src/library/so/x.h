@@ -55,6 +55,30 @@ typedef unsigned long XWindow;
 typedef unsigned long XCursor;
 
 typedef struct {
+	int x, y;
+	int width, height;
+	int border_width;
+	int depth;
+	void* visual;
+	XWindow root;
+	int class;
+	int bit_gravity;
+	int win_gravity;
+	int backing_store;
+	unsigned long backing_planes;
+	unsigned long backing_pixel;
+	int save_under;
+	unsigned long colormap;
+	int map_installed;
+	int map_state;
+	long all_event_masks;
+	long your_event_mask;
+	long do_not_propagate_mask;
+	int override_redirect;
+	void* screen;
+} XWindowAttributes;
+
+typedef struct {
     uint8_t  response_type;
     uint8_t  pad0;
     uint16_t sequence;
@@ -188,6 +212,22 @@ typedef struct xcb_enter_notify_event_t {
     uint8_t         same_screen_focus;
 } xcb_enter_notify_event_t;
 typedef xcb_enter_notify_event_t xcb_leave_notify_event_t;
+
+typedef struct xcb_configure_notify_event_t {
+    uint8_t      response_type;
+    uint8_t      pad0;
+    uint16_t     sequence;
+    xcb_window_t event;
+    xcb_window_t window;
+    xcb_window_t above_sibling;
+    int16_t      x;
+    int16_t      y;
+    uint16_t     width;
+    uint16_t     height;
+    uint16_t     border_width;
+    uint8_t      override_redirect;
+    uint8_t      pad1;
+} xcb_configure_notify_event_t;
 
 typedef struct xcb_input_modifier_info_t {
     uint32_t base;

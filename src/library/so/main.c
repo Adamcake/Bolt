@@ -71,7 +71,6 @@ static unsigned int (*real_eglTerminate)(void*) = NULL;
 static xcb_generic_event_t* (*real_xcb_poll_for_event)(xcb_connection_t*) = NULL;
 static xcb_generic_event_t* (*real_xcb_poll_for_queued_event)(xcb_connection_t*) = NULL;
 static xcb_generic_event_t* (*real_xcb_wait_for_event)(xcb_connection_t*) = NULL;
-static xcb_get_geometry_reply_t* (*real_xcb_get_geometry_reply)(xcb_connection_t*, xcb_get_geometry_cookie_t, xcb_generic_error_t**) = NULL;
 static int (*real_xcb_flush)(xcb_connection_t*) = NULL;
 
 static int (*real_XDefineCursor)(void*, XWindow, XCursor) = NULL;
@@ -245,8 +244,6 @@ static void _bolt_init_libxcb(unsigned long addr, const Elf32_Word* gnu_hash_tab
     if (sym) real_xcb_poll_for_queued_event = sym->st_value + libxcb_addr;
     sym = _bolt_lookup_symbol("xcb_wait_for_event", gnu_hash_table, hash_table, string_table, symbol_table);
     if (sym) real_xcb_wait_for_event = sym->st_value + libxcb_addr;
-    sym = _bolt_lookup_symbol("xcb_get_geometry_reply", gnu_hash_table, hash_table, string_table, symbol_table);
-    if (sym) real_xcb_get_geometry_reply = sym->st_value + libxcb_addr;
     sym = _bolt_lookup_symbol("xcb_flush", gnu_hash_table, hash_table, string_table, symbol_table);
     if (sym) real_xcb_flush = sym->st_value + libxcb_addr;
 }
@@ -649,6 +646,13 @@ static uint8_t _bolt_handle_xcb_event(xcb_connection_t* c, xcb_generic_event_t* 
         case XCB_KEY_PRESS: // when a keyboard key is pressed while the game window is focused
         case XCB_KEY_RELEASE: // when a keyboard key is released while the game window is focused
             break;
+        case XCB_CONFIGURE_NOTIFY: { // when the game window gets resized (or when a few other things happen)
+            const xcb_configure_notify_event_t* event = (xcb_configure_notify_event_t*)e;
+            if (event->event != main_window_xcb) return true;
+            main_window_width = event->width;
+            main_window_height = event->height;
+            break;
+        }
         case XCB_FOCUS_IN: // when the game window gains focus
         case XCB_FOCUS_OUT: // when the game window loses focus
         case XCB_KEYMAP_NOTIFY:
@@ -658,7 +662,6 @@ static uint8_t _bolt_handle_xcb_event(xcb_connection_t* c, xcb_generic_event_t* 
         case XCB_UNMAP_NOTIFY:
         case XCB_REPARENT_NOTIFY:
         case XCB_DESTROY_NOTIFY:
-        case XCB_CONFIGURE_NOTIFY:
         case XCB_PROPERTY_NOTIFY:
         case XCB_CLIENT_MESSAGE:
             break;
@@ -703,17 +706,6 @@ xcb_generic_event_t* xcb_wait_for_event(xcb_connection_t* c) {
             return ret;
         }
     }
-}
-
-xcb_get_geometry_reply_t* xcb_get_geometry_reply(xcb_connection_t* c, xcb_get_geometry_cookie_t cookie, xcb_generic_error_t** e) {
-    XCBLOG("xcb_get_geometry_reply\n");
-    // currently the game appears to call this twice per frame for the main window and never for
-    // any other window, so we can assume the result here applies to the main window.
-    xcb_get_geometry_reply_t* ret = real_xcb_get_geometry_reply(c, cookie, e);
-    main_window_width = ret->width;
-    main_window_height = ret->height;
-    XCBLOG("xcb_get_geometry_reply end (returned %u %u)\n", main_window_width, main_window_height);
-    return ret;
 }
 
 int xcb_flush(xcb_connection_t* c) {
@@ -808,7 +800,6 @@ static void* _bolt_dl_lookup(void* handle, const char* symbol) {
         if (strcmp(symbol, "xcb_poll_for_event") == 0) return xcb_poll_for_event;
         if (strcmp(symbol, "xcb_poll_for_queued_event") == 0) return xcb_poll_for_queued_event;
         if (strcmp(symbol, "xcb_wait_for_event") == 0) return xcb_wait_for_event;
-        if (strcmp(symbol, "xcb_get_geometry_reply") == 0) return xcb_get_geometry_reply;
         if (strcmp(symbol, "xcb_flush") == 0) return xcb_flush;
     } else if (handle == libx11_addr) {
         if (strcmp(symbol, "XDefineCursor") == 0) return XDefineCursor;
