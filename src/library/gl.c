@@ -1838,6 +1838,7 @@ void _bolt_gl_onMakeCurrent(void* context) {
         egl_main_context_makecurrent_pending = 0;
         _bolt_gl_init();
         const struct PluginManagedFunctions functions = {
+            .flash_window = _bolt_flash_window,
             .surface_init = _bolt_gl_plugin_surface_init,
             .surface_destroy = _bolt_gl_plugin_surface_destroy,
             .surface_resize_and_clear = _bolt_gl_plugin_surface_resize,

@@ -177,6 +177,16 @@ DWORD __stdcall BOLT_STUB_ENTRYNAME(struct PluginInjectParams* data) {
     return 0;
 }
 
+void _bolt_flash_window() {
+    FLASHWINFO info;
+    info.cbSize = sizeof info;
+    info.hwnd = game_hwnd;
+    info.dwFlags = FLASHW_ALL | FLASHW_TIMERNOFG;
+    info.uCount = -1;
+    info.dwTimeout = 0;
+    FlashWindowEx(&info);
+}
+
 static void winapi_to_mouseevent(int x, int y, WPARAM param, struct MouseEvent* out) {
     out->x = x;
     out->y = y;

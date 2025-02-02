@@ -76,6 +76,9 @@ static int (*real_xcb_flush)(xcb_connection_t*) = NULL;
 static int (*real_XDefineCursor)(void*, XWindow, XCursor) = NULL;
 static int (*real_XUndefineCursor)(void*, XWindow) = NULL;
 static int (*real_XFreeCursor)(void*, XCursor) = NULL;
+static XWMHints* (*real_XGetWMHints)(void*, XWindow) = NULL;
+static int (*real_XSetWMHints)(void*, XWindow, XWMHints*) = NULL;
+static int (*real_XFree)(void*) = NULL;
 
 static struct GLLibFunctions libgl = {0};
 
@@ -84,6 +87,12 @@ static XCursor xcursor_cursor;
 static uint8_t xcursor_defined = false;
 static uint8_t xcursor_change_pending = 0;
 static pthread_mutex_t xcursor_lock;
+
+static pthread_mutex_t focus_lock;
+static uint8_t window_focus = false;
+
+static uint8_t flash_change_pending = false;
+static uint8_t pending_flash;
 
 static ElfW(Word) _bolt_hash_elf(const char* name) {
 	ElfW(Word) tmp, hash = 0;
@@ -256,6 +265,12 @@ static void _bolt_init_libx11(unsigned long addr, const Elf32_Word* gnu_hash_tab
     if (sym) real_XUndefineCursor = sym->st_value + libx11_addr;
     sym = _bolt_lookup_symbol("XFreeCursor", gnu_hash_table, hash_table, string_table, symbol_table);
     if (sym) real_XFreeCursor = sym->st_value + libx11_addr;
+    sym = _bolt_lookup_symbol("XGetWMHints", gnu_hash_table, hash_table, string_table, symbol_table);
+    if (sym) real_XGetWMHints = sym->st_value + libx11_addr;
+    sym = _bolt_lookup_symbol("XSetWMHints", gnu_hash_table, hash_table, string_table, symbol_table);
+    if (sym) real_XSetWMHints = sym->st_value + libx11_addr;
+    sym = _bolt_lookup_symbol("XFree", gnu_hash_table, hash_table, string_table, symbol_table);
+    if (sym) real_XFree = sym->st_value + libx11_addr;
 }
 
 static int _bolt_dl_iterate_callback(struct dl_phdr_info* info, size_t size, void* args) {
@@ -315,11 +330,23 @@ static int _bolt_dl_iterate_callback(struct dl_phdr_info* info, size_t size, voi
 static void _bolt_init_functions() {
     _bolt_plugin_on_startup();
     pthread_mutex_init(&egl_lock, NULL);
+    pthread_mutex_init(&focus_lock, NULL);
     dl_iterate_phdr(_bolt_dl_iterate_callback, NULL);
 #if defined(VERBOSE)
     _bolt_gl_set_logfile(stdout);
 #endif
     inited = 1;
+}
+
+void _bolt_flash_window() {
+    pthread_mutex_lock(&focus_lock);
+    const uint8_t focus = window_focus;
+    pthread_mutex_unlock(&focus_lock);
+    if (focus) return;
+    pthread_mutex_lock(&xcursor_lock);
+    flash_change_pending = true;
+    pending_flash = true;
+    pthread_mutex_unlock(&xcursor_lock);
 }
 
 void glGenTextures(GLsizei n, GLuint* textures) {
@@ -653,8 +680,26 @@ static uint8_t _bolt_handle_xcb_event(xcb_connection_t* c, xcb_generic_event_t* 
             main_window_height = event->height;
             break;
         }
-        case XCB_FOCUS_IN: // when the game window gains focus
-        case XCB_FOCUS_OUT: // when the game window loses focus
+        case XCB_FOCUS_IN: { // when the game window gains focus
+            const xcb_focus_in_event_t* event = (xcb_focus_in_event_t*)e;
+            if (event->event != main_window_xcb) return true;
+            pthread_mutex_lock(&focus_lock);
+            window_focus = true;
+            pthread_mutex_unlock(&focus_lock);
+            pthread_mutex_lock(&xcursor_lock);
+            flash_change_pending = true;
+            pending_flash = false;
+            pthread_mutex_unlock(&xcursor_lock);
+            break;
+        }
+        case XCB_FOCUS_OUT: {// when the game window loses focus
+            const xcb_focus_out_event_t* event = (xcb_focus_out_event_t*)e;
+            if (event->event != main_window_xcb) return true;
+            pthread_mutex_lock(&focus_lock);
+            window_focus = false;
+            pthread_mutex_unlock(&focus_lock);
+            break;
+        }
         case XCB_KEYMAP_NOTIFY:
         case XCB_EXPOSE:
         case XCB_VISIBILITY_NOTIFY:
@@ -712,20 +757,61 @@ int xcb_flush(xcb_connection_t* c) {
     const int ret = real_xcb_flush(c);
     pthread_mutex_lock(&xcursor_lock);
     if (xcursor_display) {
+        const uint8_t change_pending = flash_change_pending;
+        const uint8_t do_flash = pending_flash;
+        void* display = xcursor_display;
+
         switch (xcursor_change_pending) {
             case 1:
                 if (xcursor_defined) {
-                    real_XDefineCursor(xcursor_display, main_window_xcb, xcursor_cursor);
                     xcursor_change_pending = 0;
+                    pthread_mutex_unlock(&xcursor_lock);
+                    real_XDefineCursor(xcursor_display, main_window_xcb, xcursor_cursor);
+                } else {
+                    pthread_mutex_unlock(&xcursor_lock);
                 }
                 break;
             case 2:
-                real_XUndefineCursor(xcursor_display, main_window_xcb);
                 xcursor_change_pending = 0;
+                pthread_mutex_unlock(&xcursor_lock);
+                real_XUndefineCursor(xcursor_display, main_window_xcb);
                 break;
+            default:
+                pthread_mutex_unlock(&xcursor_lock);
         }
+
+        if (change_pending) {
+            if (do_flash) {
+                pthread_mutex_lock(&focus_lock);
+                const uint8_t focus = window_focus;
+                pthread_mutex_unlock(&focus_lock);
+                if (focus) return ret;
+            }
+
+            XWMHints hints;
+            XWMHints* ptr_hints;
+            if (display) {
+                ptr_hints = real_XGetWMHints(display, main_window_xcb);
+                const uint8_t is_static = !ptr_hints;
+                if (is_static) {
+                    memset(&hints, 0, sizeof hints);
+                    if (do_flash) hints.flags = (1 << 8);
+                    ptr_hints = &hints;
+                } else {
+                    if (do_flash) {
+                        ptr_hints->flags |= (1 << 8);
+                    } else {
+                        ptr_hints->flags &= ~(1 << 8);
+                    }
+                }
+                real_XSetWMHints(display, main_window_xcb, ptr_hints);
+                if (!is_static) real_XFree(ptr_hints);
+            }
+        }
+    } else {
+        pthread_mutex_unlock(&xcursor_lock);
     }
-    pthread_mutex_unlock(&xcursor_lock);
+
     return ret;
 }
 

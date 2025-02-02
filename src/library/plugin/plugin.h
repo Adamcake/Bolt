@@ -255,6 +255,7 @@ struct ShaderBufferFunctions {
 /// Struct containing functions initiated by plugin code, which must be set on startup, as opposed to
 /// being set when a callback object is created like with other vtable structs.
 struct PluginManagedFunctions {
+    void (*flash_window)(void);
     void (*surface_init)(struct SurfaceFunctions*, unsigned int, unsigned int, const void*);
     void (*surface_destroy)(void*);
     void (*surface_resize_and_clear)(void*, unsigned int, unsigned int);

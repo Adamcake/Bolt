@@ -429,6 +429,17 @@ local x, y, width, height = bolt.gameviewxywh()
 @end verbatim
 @end example
 
+@node functions-flashwindow
+@section flashwindow
+
+Makes the game window "flash" to grab the user's attention until the
+window is next brought into focus. If the window is already focused,
+this function does nothing.
+
+The exact behaviour of this function will depend on the user's platform
+and window manager, but the most common result is for the taskbar icon
+to flash orange.
+
 @node functions-loadfile
 @section loadfile
 

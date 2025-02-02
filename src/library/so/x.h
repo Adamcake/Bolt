@@ -79,6 +79,17 @@ typedef struct {
 } XWindowAttributes;
 
 typedef struct {
+	long flags;
+	int input;
+	int initial_state;
+	unsigned long icon_pixmap;
+	XWindow icon_window;
+	int icon_x, icon_y;
+	unsigned long icon_mask;
+	unsigned long window_group;
+} XWMHints;
+
+typedef struct {
     uint8_t  response_type;
     uint8_t  pad0;
     uint16_t sequence;
@@ -212,6 +223,16 @@ typedef struct xcb_enter_notify_event_t {
     uint8_t         same_screen_focus;
 } xcb_enter_notify_event_t;
 typedef xcb_enter_notify_event_t xcb_leave_notify_event_t;
+
+typedef struct xcb_focus_in_event_t {
+    uint8_t      response_type;
+    uint8_t      detail;
+    uint16_t     sequence;
+    xcb_window_t event;
+    uint8_t      mode;
+    uint8_t      pad0[3];
+} xcb_focus_in_event_t;
+typedef xcb_focus_in_event_t xcb_focus_out_event_t;
 
 typedef struct xcb_configure_notify_event_t {
     uint8_t      response_type;

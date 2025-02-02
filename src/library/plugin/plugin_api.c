@@ -312,6 +312,12 @@ static int api_gameviewxywh(lua_State* state) {
     return 4;
 }
 
+static int api_flashwindow(lua_State* state) {
+    const struct PluginManagedFunctions* managed_functions = _bolt_plugin_managed_functions();
+    managed_functions->flash_window();
+    return 0;
+}
+
 static int api_loadfile(lua_State* state) {
     lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME);
     const struct Plugin* plugin = lua_touserdata(state, -1);
@@ -1945,6 +1951,7 @@ static struct ApiFuncTemplate bolt_functions[] = {
     BOLTFUNC(playerposition),
     BOLTFUNC(gamewindowsize),
     BOLTFUNC(gameviewxywh),
+    BOLTFUNC(flashwindow),
     BOLTFUNC(loadfile),
     BOLTFUNC(loadconfig),
     BOLTFUNC(saveconfig),
