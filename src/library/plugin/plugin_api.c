@@ -1207,6 +1207,15 @@ static int api_window_cancelreposition(lua_State* state) {
     return 0;
 }
 
+static int api_window_xywh(lua_State* state) {
+    struct EmbeddedWindow* window = require_self_userdata(state, "xywh");
+    lua_pushinteger(state, window->metadata.x);
+    lua_pushinteger(state, window->metadata.y);
+    lua_pushinteger(state, window->metadata.width);
+    lua_pushinteger(state, window->metadata.height);
+    return 4;
+}
+
 static int api_render3d_vertexcount(lua_State* state) {
     const struct Render3D* render = require_self_userdata(state, "vertexcount");
     lua_pushinteger(state, render->vertex_count);
@@ -2153,6 +2162,7 @@ static struct ApiFuncTemplate window_functions[] = {
     BOLTFUNC(startreposition, window),
     BOLTFUNC(cancelreposition, window),
     BOLTFUNC(onreposition, window),
+    BOLTFUNC(xywh, window),
     BOLTFUNC(onmousemotion, window),
     BOLTFUNC(onmousebutton, window),
     BOLTFUNC(onmousebuttonup, window),
@@ -2175,6 +2185,7 @@ static struct ApiFuncTemplate embeddedbrowser_functions[] = {
     BOLTFUNC(sendmessage, embeddedbrowser),
     BOLTFUNC(startreposition, window),
     BOLTFUNC(cancelreposition, window),
+    BOLTFUNC(xywh, window),
     BOLTFUNC(enablecapture, embeddedbrowser),
     BOLTFUNC(disablecapture, embeddedbrowser),
     BOLTFUNC(showdevtools, embeddedbrowser),
