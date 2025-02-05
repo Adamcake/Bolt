@@ -1609,17 +1609,6 @@ local id = mywindow:id()
 @end verbatim
 @end example
 
-@node window-size
-@subsection size
-
-Returns the width and height of the window.
-
-@example lua
-@verbatim
-local width, height = mywindow:size()
-@end verbatim
-@end example
-
 @node window-clear
 @subsection clear
 

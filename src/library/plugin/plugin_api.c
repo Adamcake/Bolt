@@ -1159,15 +1159,6 @@ static int api_window_id(lua_State* state) {
     return 1;
 }
 
-static int api_window_size(lua_State* state) {
-    struct EmbeddedWindow* window = require_self_userdata(state, "size");
-    _bolt_rwlock_lock_read(&window->lock);
-    lua_pushinteger(state, window->metadata.width);
-    lua_pushinteger(state, window->metadata.height);
-    _bolt_rwlock_unlock_read(&window->lock);
-    return 2;
-}
-
 static int api_window_subimage(lua_State* state) {
     const struct EmbeddedWindow* window = require_self_userdata(state, "subimage");
     const lua_Integer x = luaL_checkinteger(state, 2);
@@ -1209,10 +1200,12 @@ static int api_window_cancelreposition(lua_State* state) {
 
 static int api_window_xywh(lua_State* state) {
     struct EmbeddedWindow* window = require_self_userdata(state, "xywh");
+    _bolt_rwlock_lock_read(&window->lock);
     lua_pushinteger(state, window->metadata.x);
     lua_pushinteger(state, window->metadata.y);
     lua_pushinteger(state, window->metadata.width);
     lua_pushinteger(state, window->metadata.height);
+    _bolt_rwlock_unlock_read(&window->lock);
     return 4;
 }
 
@@ -2156,7 +2149,6 @@ static struct ApiFuncTemplate surface_functions[] = {
 static struct ApiFuncTemplate window_functions[] = {
     BOLTFUNC(close, window),
     BOLTFUNC(id, window),
-    BOLTFUNC(size, window),
     BOLTFUNC(clear, window),
     BOLTFUNC(subimage, window),
     BOLTFUNC(startreposition, window),
