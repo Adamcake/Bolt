@@ -41,6 +41,12 @@ then any previous event handler will be deleted. See \reference\ for
 documentation on this event object.
 @end macro
 
+@macro browserjavascriptevents {}
+The appropriate JavaScript events will also be sent internally to the
+browser; plugins don't need to handle this event from Lua in order to
+implement any browser functionality.
+@end macro
+
 @macro eventobjectwarning {}
 It's @strong{not safe} to use an event object after the event handler
 has returned.
@@ -1663,6 +1669,17 @@ mywindow:cancelreposition()
 @end verbatim
 @end example
 
+@node window-xywh
+@subsection xywh
+
+Returns the x, y, width and height of this window.
+
+@example lua
+@verbatim
+local x, y, w, h = mywindow:xywh()
+@end verbatim
+@end example
+
 @node window-onreposition
 @subsection onreposition
 
@@ -1677,17 +1694,6 @@ end)
 @end example
 
 @eventobjectwarning{}
-
-@node window-xywh
-@subsection xywh
-
-Returns the x, y, width and height of this window.
-
-@example lua
-@verbatim
-local x, y, w, h = mywindow:xywh()
-@end verbatim
-@end example
 
 @node window-onmousemotion
 @subsection onmousemotion
@@ -2026,6 +2032,117 @@ end)
 Note that this example assumes that the message is safely formattable
 text. This may or may not be the case, depending on what your browser's
 web page is programmed to send.
+
+@node embeddedbrowser-onreposition
+@subsection onreposition
+
+@windoweventhandler{browser, reposition events, @ref{objects-reposition}}
+
+@browserjavascriptevents{}
+
+@example lua
+@verbatim
+mybrowser:onreposition(function (event)
+  -- ...
+end)
+@end verbatim
+@end example
+
+@eventobjectwarning{}
+
+@node embeddedbrowser-onmousemotion
+@subsection onmousemotion
+
+@windoweventhandler{embeddedbrowser, mouse motion events, @ref{objects-mousemotion}}
+
+@browserjavascriptevents{}
+
+@example lua
+@verbatim
+mybrowser:onmousemotion(function (event)
+  -- ...
+end)
+@end verbatim
+@end example
+
+@eventobjectwarning{}
+
+@node embeddedbrowser-onmousebutton
+@subsection onmousebutton
+
+@windoweventhandler{browser, mouse button events, @ref{objects-mousebutton}}
+
+@browserjavascriptevents{}
+
+This handler runs immediately after a button is pressed down. When the
+button is released, @ref{embeddedbrowser-onmousebuttonup} will run.
+
+@example lua
+@verbatim
+mybrowser:onmousebutton(function (event)
+  -- ...
+end)
+@end verbatim
+@end example
+
+@eventobjectwarning{}
+
+@node embeddedbrowser-onmousebuttonup
+@subsection onmousebuttonup
+
+@windoweventhandler{browser, mouse button-up events, @ref{objects-mousebutton}}
+
+@browserjavascriptevents{}
+
+This handler runs immediately after a button is released. It shares the
+same type of event object as @ref{embeddedbrowser-onmousebutton}. If the user
+clicks the window and drags their mouse outside the window, the mouse
+motion events and button-up will still usually be captured by the
+window.
+
+@example lua
+@verbatim
+mybrowser:onmousebuttonup(function (event)
+  -- ...
+end)
+@end verbatim
+@end example
+
+@eventobjectwarning{}
+
+@node embeddedbrowser-onscroll
+@subsection onscroll
+
+@windoweventhandler{browser, mouse scroll events, @ref{objects-scroll}}
+
+@browserjavascriptevents{}
+
+@example lua
+@verbatim
+mybrowser:onscroll(function (event)
+  -- ...
+end)
+@end verbatim
+@end example
+
+@eventobjectwarning{}
+
+@node embeddedbrowser-onmouseleave
+@subsection onmouseleave
+
+@windoweventhandler{browser, mouse leave events, @ref{objects-mouseleave}}
+
+@browserjavascriptevents{}
+
+@example lua
+@verbatim
+mybrowser:onmouseleave(function (event)
+  -- ...
+end)
+@end verbatim
+@end example
+
+@eventobjectwarning{}
 
 @node objects-point
 @section Point

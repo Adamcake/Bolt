@@ -170,12 +170,11 @@ void _bolt_plugin_window_on##APINAME(struct EmbeddedWindow* window, const struct
         _bolt_ipc_send(fd, &msg_type, sizeof(msg_type)); \
         _bolt_ipc_send(fd, &header, sizeof(header)); \
         _bolt_ipc_send(fd, event, sizeof(struct EVNAME)); \
-        return; \
     } \
-    lua_getfield(state, LUA_REGISTRYINDEX, WINDOWS_REGISTRYNAME); /*stack: window table*/ \
+    lua_getfield(state, LUA_REGISTRYINDEX, window->is_browser ? BROWSERS_REGISTRYNAME : WINDOWS_REGISTRYNAME); /*stack: window table*/ \
     lua_pushinteger(state, window->id); /*stack: window table, window id*/ \
     lua_gettable(state, -2); /*stack: window table, event table*/ \
-    lua_pushinteger(state, WINDOW_ON##REGNAME); /*stack: window table, event table, event id*/ \
+    lua_pushinteger(state, window->is_browser ? BROWSER_ON##REGNAME : WINDOW_ON##REGNAME); /*stack: window table, event table, event id*/ \
     lua_gettable(state, -2); /*stack: window table, event table, function or nil*/ \
     if (lua_isfunction(state, -1)) { \
         void* newud = lua_newuserdata(state, sizeof(struct EVNAME)); /*stack: window table, event table, function, event*/ \
@@ -184,7 +183,7 @@ void _bolt_plugin_window_on##APINAME(struct EmbeddedWindow* window, const struct
         lua_setmetatable(state, -2); /*stack: window table, event table, function, event*/ \
         if (lua_pcall(state, 1, 0, 0)) { /*stack: window table, event table, ?error*/ \
             const char* e = lua_tolstring(state, -1, 0); \
-            printf("plugin window on" #APINAME " error: %s\n", e); \
+            printf("plugin %s:on" #APINAME " error: %s\n", window->is_browser ? "browser" : "window", e); \
             lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME); /*stack: window table, event table, error, plugin*/ \
             const struct Plugin* plugin = lua_touserdata(state, -1); \
             lua_pop(state, 4); /*stack: (empty)*/ \

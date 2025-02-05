@@ -62,7 +62,8 @@ static int api_window_on##APINAME(lua_State* state) { \
     const struct EmbeddedWindow* window = require_self_userdata(state, "on" #APINAME); \
     set_handler(state, WINDOWS_REGISTRYNAME, window->id, WINDOW_ON##REGNAME); \
     return 0; \
-}
+} \
+DEFINE_BROWSEREVENT(APINAME, REGNAME)
 
 #define DEFINE_BROWSEREVENT(APINAME, REGNAME) \
 static int api_browser_on##APINAME(lua_State* state) { \
@@ -2153,8 +2154,8 @@ static struct ApiFuncTemplate window_functions[] = {
     BOLTFUNC(subimage, window),
     BOLTFUNC(startreposition, window),
     BOLTFUNC(cancelreposition, window),
-    BOLTFUNC(onreposition, window),
     BOLTFUNC(xywh, window),
+    BOLTFUNC(onreposition, window),
     BOLTFUNC(onmousemotion, window),
     BOLTFUNC(onmousebutton, window),
     BOLTFUNC(onmousebuttonup, window),
@@ -2183,6 +2184,12 @@ static struct ApiFuncTemplate embeddedbrowser_functions[] = {
     BOLTFUNC(showdevtools, embeddedbrowser),
     BOLTFUNC(oncloserequest, browser),
     BOLTFUNC(onmessage, browser),
+    BOLTFUNC(onreposition, browser),
+    BOLTFUNC(onmousemotion, browser),
+    BOLTFUNC(onmousebutton, browser),
+    BOLTFUNC(onmousebuttonup, browser),
+    BOLTFUNC(onscroll, browser),
+    BOLTFUNC(onmouseleave, browser),
 };
 
 static struct ApiFuncTemplate reposition_functions[] = {
