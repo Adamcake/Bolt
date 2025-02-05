@@ -1609,17 +1609,6 @@ local id = mywindow:id()
 @end verbatim
 @end example
 
-@node window-size
-@subsection size
-
-Returns the width and height of the window.
-
-@example lua
-@verbatim
-local width, height = mywindow:size()
-@end verbatim
-@end example
-
 @node window-clear
 @subsection clear
 
@@ -1688,6 +1677,17 @@ end)
 @end example
 
 @eventobjectwarning{}
+
+@node window-xywh
+@subsection xywh
+
+Returns the x, y, width and height of this window.
+
+@example lua
+@verbatim
+local x, y, w, h = mywindow:xywh()
+@end verbatim
+@end example
 
 @node window-onmousemotion
 @subsection onmousemotion
@@ -1958,6 +1958,12 @@ window:startreposition}.
 
 Cancels repositioning for this browser. @xref{window-cancelreposition,,
 window:cancelreposition}.
+
+@node embeddedbrowser-xywh
+@subsection xywh
+
+Returns the new x, y, width and height for this browser. @xref{window-xywh,,
+window:xywh}.
 
 @node embeddedbrowser-enablecapture
 @subsection enablecapture
