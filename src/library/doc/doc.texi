@@ -1822,6 +1822,12 @@ function. Note that the binary data will be transferred exactly as it
 appeared in Lua, byte-for-byte - it will not be decoded or re-encoded in
 any way.
 
+If this function is called immediately after creating the browser, it's
+possible the message may arrive at the JavaScript process before the
+page has actually loaded. In this case, Bolt will queue the message
+until after the loading is complete. It's therefore safe to assume
+plugin messages will never arrive before the 'DOMContentLoaded' event.
+
 @example lua
 @verbatim
 mybrowser:sendmessage("some message contents")
@@ -4031,7 +4037,9 @@ to self-close must use the @ref{browserapis-close-request} API instead.
 A message has been received from the Lua sendmessage function being
 called on this Browser or Embedded Browser object.
 @code{event.data.content} is an ArrayBuffer containing the binary data
-that was passed to the function.
+that was passed to the function. This type of message will never arrive
+before the initial 'DOMContentLoaded' event for the page, as Bolt will
+queue them until after the page has completely loaded.
 
 @example js
 @verbatim
