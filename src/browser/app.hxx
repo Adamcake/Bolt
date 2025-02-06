@@ -4,6 +4,7 @@
 #include "include/cef_app.h"
 #include "include/cef_base.h"
 #include "include/cef_browser_process_handler.h"
+#include <vector>
 
 namespace Browser {
 	/// Implementation of CefApp, CefRenderProcessHandler, CefLoadHandler, CefV8Handler. Store on the stack, but access only via CefRefPtr.
@@ -34,6 +35,8 @@ namespace Browser {
 		private:
 			CefRefCount ref_count;
 			CefRefPtr<CefBrowserProcessHandler> browser_process_handler;
+			std::vector<CefRefPtr<CefProcessMessage>> pending_plugin_messages;
+			bool loaded;
 	};
 }
 
