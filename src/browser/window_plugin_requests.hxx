@@ -27,6 +27,10 @@ namespace Browser {
 			bool&
 		) override;
 
+		void AddPendingMessage(CefRefPtr<CefProcessMessage>);
+		uint64_t CurrentCaptureID() const;
+		void SetCurrentCaptureID(uint64_t);
+
 		virtual uint64_t WindowID() const = 0;
 		virtual uint64_t PluginID() const = 0;
 		virtual BoltSocketType ClientFD() const = 0;

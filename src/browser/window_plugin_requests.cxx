@@ -2,51 +2,94 @@
 #if defined(BOLT_PLUGINS)
 #include "resource_handler.hxx"
 #include "request.hxx"
+#include "include/cef_task.h"
 
 #include <format>
+
+struct SendPluginMessageTask: public CefTask {
+	SendPluginMessageTask(CefRefPtr<Browser::PluginRequestHandler> self, CefRefPtr<CefProcessMessage> message): self(self), message(message) {}
+	void Execute() override {
+		CefRefPtr<CefBrowser> browser = self->Browser();
+		if (browser) {
+			browser->GetMainFrame()->SendProcessMessage(PID_RENDERER, message);
+		} else {
+			self->AddPendingMessage(message);
+		}
+	}
+	private:
+		CefRefPtr<Browser::PluginRequestHandler> self;
+		CefRefPtr<CefProcessMessage> message;
+		IMPLEMENT_REFCOUNTING(SendPluginMessageTask);
+		DISALLOW_COPY_AND_ASSIGN(SendPluginMessageTask);
+};
+
+struct SendCaptureMessageTask: public CefTask {
+	SendCaptureMessageTask(CefRefPtr<Browser::PluginRequestHandler> self, uint64_t pid, uint64_t capture_id, int width, int height, bool needs_remap):
+		self(self), pid(pid), capture_id(capture_id), width(width), height(height), needs_remap(needs_remap) {}
+	void Execute() override {
+		CefRefPtr<CefBrowser> browser = self->Browser();
+		if (!browser) {
+			// can't process this yet - inform the game process that we're done and don't do any further handling
+			self->SendCaptureDone();
+			return;
+		}
+
+		CefRefPtr<CefProcessMessage> message = CefProcessMessage::Create("__bolt_plugin_capture");
+		CefRefPtr<CefListValue> list = message->GetArgumentList();
+		const uint64_t current_capture_id = self->CurrentCaptureID();
+		if (needs_remap || capture_id != current_capture_id) {
+			list->SetSize(3);
+#if !defined(_WIN32)
+			if (capture_id != current_capture_id) {
+#endif
+			const CefString str = std::format("/bolt-{}-sc-{}", pid, capture_id);
+			list->SetString(2, str);
+#if !defined(_WIN32)
+			} else {
+				list->SetNull(2);
+			}
+#endif
+		} else {
+			list->SetSize(2);
+		}
+		list->SetInt(0, width);
+		list->SetInt(1, height);
+		browser->GetMainFrame()->SendProcessMessage(PID_RENDERER, message);
+		self->SetCurrentCaptureID(capture_id);
+	}
+	private:
+		CefRefPtr<Browser::PluginRequestHandler> self;
+		uint64_t pid;
+		uint64_t capture_id;
+		int width;
+		int height;
+		bool needs_remap;
+		IMPLEMENT_REFCOUNTING(SendCaptureMessageTask);
+		DISALLOW_COPY_AND_ASSIGN(SendCaptureMessageTask);
+};
+
+void Browser::PluginRequestHandler::AddPendingMessage(CefRefPtr<CefProcessMessage> message) {
+	this->pending_messages.push_back(message);
+}
+
+uint64_t Browser::PluginRequestHandler::CurrentCaptureID() const {
+	return this->current_capture_id;
+}
+
+void Browser::PluginRequestHandler::SetCurrentCaptureID(uint64_t id) {
+	this->current_capture_id = id;
+}
 
 void Browser::PluginRequestHandler::HandlePluginMessage(const uint8_t* data, size_t len) {
 	CefRefPtr<CefProcessMessage> message = CefProcessMessage::Create("__bolt_plugin_message");
 	CefRefPtr<CefListValue> list = message->GetArgumentList();
 	list->SetSize(1);
 	list->SetBinary(0, CefBinaryValue::Create(data, len));
-	CefRefPtr<CefBrowser> browser = this->Browser();
-	if (browser) {
-		browser->GetMainFrame()->SendProcessMessage(PID_RENDERER, message);
-	} else {
-		this->pending_messages.push_back(message);
-	}
+	CefPostTask(TID_UI, new SendPluginMessageTask(this, message));
 }
 
 void Browser::PluginRequestHandler::HandleCaptureNotify(uint64_t pid, uint64_t capture_id, int width, int height, bool needs_remap) {
-	CefRefPtr<CefBrowser> browser = this->Browser();
-	if (!browser) {
-		// can't process this yet - inform the game process that we're done and don't do any further handling
-		this->SendCaptureDone();
-		return;
-	}
-
-	CefRefPtr<CefProcessMessage> message = CefProcessMessage::Create("__bolt_plugin_capture");
-	CefRefPtr<CefListValue> list = message->GetArgumentList();
-	if (needs_remap || capture_id != this->current_capture_id) {
-		list->SetSize(3);
-#if !defined(_WIN32)
-		if (capture_id != this->current_capture_id) {
-#endif
-		const CefString str = std::format("/bolt-{}-sc-{}", pid, capture_id);
-		list->SetString(2, str);
-#if !defined(_WIN32)
-		} else {
-			list->SetNull(2);
-		}
-#endif
-	} else {
-		list->SetSize(2);
-	}
-	list->SetInt(0, width);
-	list->SetInt(1, height);
-	browser->GetMainFrame()->SendProcessMessage(PID_RENDERER, message);
-	this->current_capture_id = capture_id;
+	CefPostTask(TID_UI, new SendCaptureMessageTask(this, pid, capture_id, width, height, needs_remap));
 }
 
 void Browser::PluginRequestHandler::NotifyBrowserCreated(CefRefPtr<CefBrowser> browser) {
