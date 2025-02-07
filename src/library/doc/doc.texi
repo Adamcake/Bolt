@@ -598,11 +598,11 @@ mywindow:clear(1, 0, 0)
 @section createbrowser
 
 Creates and returns a new @ref{objects-browser} with the given initial
-values for width, height, and URL. If the URL begins with "file://", it
-will be interpreted as a file path relative to the plugin directory, and
-must use '/' as file separators (if any). Otherwise, it will be treated
-as a URL of an internet website. The same rules go for any navigations
-or fetch requests made by the browser during its lifetime.
+values for width, height, and URL. If the URL begins with "plugin://",
+it will be interpreted as a file path relative to the plugin directory,
+and must use '/' as file separators (if any). Otherwise, it will be
+treated as a URL of an internet website. The same rules go for any
+navigations or fetch requests made by the browser during its lifetime.
 
 The optional 6th parameter is some javascript code which will be run in
 an OnContextCreated callback. This is immediately after the V8 context
@@ -625,11 +625,11 @@ local mybrowser = bolt.createwindow(800, 608, "https://bolt.adamcake.com", "wind
 
 Creates and returns a new @ref{objects-embeddedbrowser} with the given
 initial values for x, y, width, height and URL. If the URL begins with
-"file://", it will be interpreted as a file path relative to the plugin
-directory, and must use '/' as file separators (if any). Otherwise, it
-will be treated as a URL of an internet website. The same rules go for
-any navigations or fetch requests made by the browser during its
-lifetime.
+"plugin://", it will be interpreted as a file path relative to the
+plugin directory, and must use '/' as file separators (if any).
+Otherwise, it will be treated as a URL of an internet website. The same
+rules go for any navigations or fetch requests made by the browser
+during its lifetime.
 
 The optional 6th parameter is some javascript code which will be run in
 an OnContextCreated callback. This is immediately after the V8 context
@@ -1786,7 +1786,7 @@ A browser object is a webview in an external OS-level window. It's a
 chromium-based browser backed by CEF. The browser takes up the whole
 window - there are no decorations like tabs or a URL bar or back button,
 etc. The browser can navigate or fetch normal internet URLs via
-@code{https://}, or files in the plugin directory with @code{file://}.
+@code{https://}, or files in the plugin directory with @code{plugin://}.
 It can also request certain URLs at @code{https://bolt-api/} to
 communicate with the Lua code running in the game process. Incoming
 messages will be sent via the JavaScript @code{window.postMessage}
@@ -1931,7 +1931,7 @@ The browser is chromium-based, backed by CEF. The webview takes up the
 whole rectangle - there are no decorations like tabs or a URL bar or
 back button, etc. The browser can navigate or fetch normal internet URLs
 via @code{https://}, or files in the plugin directory with
-@code{file://}. It can also request certain URLs at
+@code{plugin://}. It can also request certain URLs at
 @code{https://bolt-api/} to communicate with the Lua code running in the
 game process. Incoming messages will be sent via the JavaScript
 @code{window.postMessage} function.
