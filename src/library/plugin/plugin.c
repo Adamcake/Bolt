@@ -894,13 +894,13 @@ static void handle_ipc_HOST_STOPPED_PLUGIN(struct BoltIPCHostStoppedPluginHeader
 }
 
 static size_t get_tail_ipc_OsrUpdate(const struct BoltIPCOsrUpdateHeader* header) {
-    return (size_t)header->width * (size_t)header->height * 4;
+    return (size_t)header->rect_count * sizeof(struct BoltIPCOsrUpdateRect);
 }
 
 static void handle_ipc_OSRUPDATE(struct BoltIPCOsrUpdateHeader* header, struct EmbeddedWindow* window) {
     struct BoltIPCOsrUpdateRect rect;
     if (header->needs_remap) {
-        _bolt_plugin_shm_remap(&window->browser_shm, get_tail_ipc_OsrUpdate(header), header->needs_remap);
+        _bolt_plugin_shm_remap(&window->browser_shm, (size_t)header->width * (size_t)header->height * 4, header->needs_remap);
     }
     for (uint32_t i = 0; i < header->rect_count; i += 1) {
         // the backend needs contiguous pixels for the rectangle, so here we ignore
