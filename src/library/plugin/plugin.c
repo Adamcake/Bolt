@@ -72,6 +72,22 @@ const struct PluginManagedFunctions* _bolt_plugin_managed_functions() {
     return &managed_functions;
 }
 
+// these functions are only called from the thread that runs lua code, and are used to protect
+// against re-entry on that thread specifically, because re-entry is undefined with posix rwlock.
+static size_t windows_read_lock_count = 0;
+static void lock_windows_for_reading() {
+    if (windows_read_lock_count == 0) {
+        _bolt_rwlock_lock_read(&windows.lock);
+    }
+    windows_read_lock_count += 1;
+}
+static void unlock_windows_for_reading() {
+    windows_read_lock_count -= 1;
+    if (windows_read_lock_count == 0) {
+        _bolt_rwlock_unlock_read(&windows.lock);
+    }
+}
+
 uint64_t _bolt_plugin_new_windowid() {
     const uint64_t ret = next_window_id;
     next_window_id += 1;
@@ -392,7 +408,7 @@ static void _bolt_process_embedded_windows(uint32_t window_width, uint32_t windo
     }
 
     bool any_deleted = false;
-    _bolt_rwlock_lock_read(&windows.lock);
+    lock_windows_for_reading();
     size_t iter = 0;
     void* item;
     while (hashmap_iter(windows.map, &iter, &item)) {
@@ -539,7 +555,7 @@ static void _bolt_process_embedded_windows(uint32_t window_width, uint32_t windo
             managed_functions.draw_region_outline(overlay.userdata, window->repos_target_x, window->repos_target_y, window->repos_target_w, window->repos_target_h);
         }
     }
-    _bolt_rwlock_unlock_read(&windows.lock);
+    unlock_windows_for_reading();
 
     if (any_deleted) {
         _bolt_rwlock_lock_write(&windows.lock);
@@ -594,7 +610,7 @@ static void _bolt_process_captures(uint32_t window_width, uint32_t window_height
     }
     managed_functions.read_screen_pixels(window_width, window_height, capture_shm.file);
     
-    _bolt_rwlock_lock_read(&windows.lock);
+    lock_windows_for_reading();
     size_t iter = 0;
     void* item;
     while (hashmap_iter(windows.map, &iter, &item)) {
@@ -617,7 +633,7 @@ static void _bolt_process_captures(uint32_t window_width, uint32_t window_height
             window->capture_id = capture_id;
         }
     }
-    _bolt_rwlock_unlock_read(&windows.lock);
+    unlock_windows_for_reading();
 
     iter = 0;
     while (hashmap_iter(plugins, &iter, &item)) {
@@ -757,14 +773,14 @@ static struct ExternalBrowser* get_externalbrowser(const uint64_t plugin_id, con
 
 /// can return nullptr if the window is nonexistent or deleted
 static struct EmbeddedWindow* get_embeddedwindow(const uint64_t* window_id) {
-    _bolt_rwlock_lock_read(&windows.lock);
+    lock_windows_for_reading();
     struct EmbeddedWindow** pwindow = (struct EmbeddedWindow**)hashmap_get(windows.map, &window_id);
     if (!pwindow) {
-        _bolt_rwlock_unlock_read(&windows.lock);
+        unlock_windows_for_reading();
         return NULL;
     }
     struct EmbeddedWindow* window = *pwindow;
-    _bolt_rwlock_unlock_read(&windows.lock);
+    unlock_windows_for_reading();
     if (window->is_deleted) return NULL;
     return window;
 }
@@ -1020,7 +1036,7 @@ static uint8_t point_in_rect(int x, int y, int rx, int ry, int rw, int rh) {
 uint8_t _bolt_plugin_handle_mouse_event(struct MouseEvent* event, ptrdiff_t bool_offset, ptrdiff_t event_offset, uint8_t grab_type, uint8_t* mousein_fake, uint8_t* mousein_real) {
     if (mousein_real) *mousein_real = true;
     uint8_t ret = true;
-    _bolt_rwlock_lock_read(&windows.lock);
+    lock_windows_for_reading();
 
     // if the left mouse button is being held, try to route this event to the window that was clicked on
     if (event->mb_left || grab_type == GRAB_TYPE_STOP) {
@@ -1056,7 +1072,7 @@ uint8_t _bolt_plugin_handle_mouse_event(struct MouseEvent* event, ptrdiff_t bool
 
             // save this window as the most recent one to receive an event, unlock the windows mutex
             // before returning, then return 0 to indicate that this event shouldn't be forwarded to the game
-            _bolt_rwlock_unlock_read(&windows.lock);
+            unlock_windows_for_reading();
             last_mouseevent_window_id = (*window)->id;
             return false;
         }
@@ -1106,7 +1122,7 @@ uint8_t _bolt_plugin_handle_mouse_event(struct MouseEvent* event, ptrdiff_t bool
         (*mouseleave_window)->input.mouse_leave_event = *event;
         _bolt_rwlock_unlock_write(&(*mouseleave_window)->input_lock);
     }
-    _bolt_rwlock_unlock_read(&windows.lock);
+    unlock_windows_for_reading();
 
     // if `ret` is false, this event was consumed by an embedded window, so return 0 immediately to indicate that.
     // otherwise, set relevant events and variables for the game window, and return 1.
@@ -1254,14 +1270,14 @@ lua_settable(plugin->state, LUA_REGISTRYINDEX);
 
     // attempt to run the function
     if (lua_pcall(plugin->state, 0, 0, 0)) {
-        _bolt_rwlock_lock_read(&windows.lock);
+        lock_windows_for_reading();
         size_t iter = 0;
         void* item;
         while (hashmap_iter(windows.map, &iter, &item)) {
             struct EmbeddedWindow* window = *(struct EmbeddedWindow**)item;
             window->is_deleted = true;
         }
-        _bolt_rwlock_unlock_read(&windows.lock);
+        unlock_windows_for_reading();
 
         const char* e = lua_tolstring(plugin->state, -1, 0);
         printf("plugin startup error: %s\n", e);
@@ -1276,12 +1292,12 @@ lua_settable(plugin->state, LUA_REGISTRYINDEX);
 void _bolt_plugin_stop(uint64_t uid) {
     size_t iter = 0;
     void* item;
-    _bolt_rwlock_lock_read(&windows.lock);
+    lock_windows_for_reading();
     while (hashmap_iter(windows.map, &iter, &item)) {
         struct EmbeddedWindow* window = *(struct EmbeddedWindow**)item;
         if (window->plugin_id == uid) window->is_deleted = true;
     }
-    _bolt_rwlock_unlock_read(&windows.lock);
+    unlock_windows_for_reading();
 
     struct Plugin p = {.id = uid};
     struct Plugin* pp = &p;
