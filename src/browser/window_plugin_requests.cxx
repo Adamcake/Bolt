@@ -116,7 +116,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::PluginRequestHandler::GetResourceR
 	if (request_url.begin() + colon + 1 == request_url.end()) return nullptr;
 	if (request_url.at(colon + 1) != '/') return nullptr;
 
-	if (schema == "file") {
+	if (schema == "plugin") {
 		disable_default_handling = true;
 		const std::string::size_type question_mark = request_url.find_first_of('?');
 		std::string_view req_path(request_url.begin() + colon + 1, (question_mark == std::string::npos) ? request_url.end() : request_url.begin() + question_mark);

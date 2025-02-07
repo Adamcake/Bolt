@@ -330,3 +330,7 @@ bool Browser::App::Execute(const CefString&, CefRefPtr<CefV8Value>, const CefV8V
 	retval->SetValue("games", games, V8_PROPERTY_ATTRIBUTE_READONLY);
 	return true;
 }
+
+void Browser::App::OnRegisterCustomSchemes(CefRawPtr<CefSchemeRegistrar> registrar) {	
+	registrar->AddCustomScheme("plugin", CEF_SCHEME_OPTION_CORS_ENABLED | CEF_SCHEME_OPTION_SECURE | CEF_SCHEME_OPTION_CSP_BYPASSING | CEF_SCHEME_OPTION_FETCH_ENABLED);
+}
