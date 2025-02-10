@@ -414,7 +414,7 @@ endif()
 
 # install libarchive.dll on windows
 if(WIN32 AND BOLT_LIBARCHIVE_DIR)
-    install(FILES "${BOLT_LIBARCHIVE_DIR}/bin/libarchive2.dll" DESTINATION "${BOLT_CEF_INSTALLDIR}/bolt-launcher")
+    install(FILES "${BOLT_LIBARCHIVE_DIR}/bin/libarchive.dll" DESTINATION "${BOLT_CEF_INSTALLDIR}/bolt-launcher")
 endif()
 
 # Finally, install shell script and metadata
