@@ -19,6 +19,7 @@ const std::map<std::string, const char*> map({
 	{".png", "image/png"},
 	{".svg", "image/svg+xml"},
 
+	{".mp3", "audio/mpeg"},
 	{".aac", "audio/aac"},
 	{".mp4", "audio/aac"},
 	{".m4a", "audio/aac"},
