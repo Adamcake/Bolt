@@ -288,6 +288,9 @@
 		});
 	}
 
+	const openAboutPlugins = () =>
+		fetch('/open-external-url', { method: 'POST', body: 'https://bolt.adamcake.com/plugins' });
+
 	// connected clients list
 	var isClientSelected: boolean = false;
 	var selectedClientId: number;
@@ -501,5 +504,11 @@
 		{:else}
 			<p>error</p>
 		{/if}
+	</div>
+	<div class="absolute bottom-2 right-4">
+		<button
+			class="m-0 cursor-pointer border-none bg-transparent p-0 text-sm text-gray-500 underline"
+			on:click={openAboutPlugins}>about plugins</button
+		>
 	</div>
 </Modal>
