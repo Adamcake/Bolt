@@ -8,6 +8,9 @@
 #include "../rwlock/rwlock.h"
 #include "../event.h"
 
+#include "../../sha256/sha256.h"
+#define CHARHASHSIZE (SHA256_BLOCK_SIZE * 2)
+
 struct RenderBatch2D;
 struct Plugin;
 struct lua_State;
@@ -570,5 +573,8 @@ void _bolt_plugin_draw_to_overlay(const struct SurfaceFunctions*, int, int, int,
 /// Gets the width and height of the internal overlay, which will also be the last known size of
 /// the client area of the game window.
 void _bolt_plugin_overlay_size(int* w, int* h);
+
+/// Retrieves the character id hash. This is a pointer to CHARHASHSIZE bytes and is not null-terminated.
+const char* _bolt_plugin_character_hash(void);
 
 #endif

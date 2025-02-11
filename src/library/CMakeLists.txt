@@ -8,7 +8,7 @@ set(LIBRARY_IPC_OS_SPECIFIC "${CMAKE_CURRENT_SOURCE_DIR}/ipc_posix.c" PARENT_SCO
 if(UNIX AND NOT APPLE)
     add_library(${BOLT_PLUGIN_LIB_NAME} SHARED so/main.c plugin/plugin.c plugin/plugin_api.c gl.c
     rwlock/rwlock_posix.c ipc_posix.c plugin/plugin_posix.c ../../modules/hashmap/hashmap.c
-    ../miniz/miniz.c ../../modules/spng/spng/spng.c)
+    ../miniz/miniz.c ../sha256/sha256.c ../../modules/spng/spng/spng.c)
     target_link_libraries(${BOLT_PLUGIN_LIB_NAME} luajit-5.1)
     target_include_directories(${BOLT_PLUGIN_LIB_NAME} PUBLIC "${BOLT_LUAJIT_INCLUDE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/../miniz")
     install(TARGETS ${BOLT_PLUGIN_LIB_NAME} DESTINATION "${BOLT_LIBDIR}")
@@ -21,7 +21,7 @@ if (WIN32)
 
     add_library(${BOLT_PLUGIN_LIB_NAME} SHARED dll/main.c dll/common.c plugin/plugin.c plugin/plugin_api.c gl.c
     rwlock/rwlock_win32.c ipc_posix.c plugin/plugin_win32.c ../../modules/hashmap/hashmap.c
-    ../miniz/miniz.c ../../modules/spng/spng/spng.c "${CMAKE_CURRENT_BINARY_DIR}/plugin.def")
+    ../miniz/miniz.c ../sha256/sha256.c ../../modules/spng/spng/spng.c "${CMAKE_CURRENT_BINARY_DIR}/plugin.def")
     target_compile_definitions(${BOLT_PLUGIN_LIB_NAME} PUBLIC BOLT_STUB_ENTRYNAME=${BOLT_STUB_ENTRYNAME})
     target_link_libraries(${BOLT_PLUGIN_LIB_NAME} PUBLIC "${BOLT_LUAJIT_DIR}/lua51.lib" "Ws2_32.lib")
     target_include_directories(${BOLT_PLUGIN_LIB_NAME} PUBLIC "${BOLT_LUAJIT_DIR}" "${BOLT_ZLIB_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/../miniz")

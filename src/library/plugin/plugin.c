@@ -50,6 +50,8 @@ static uint8_t capture_inited;
 static uint64_t last_mouseevent_window_id = 0;
 static uint64_t grabbed_window_id = 0;
 
+static char character_hash[SHA256_BLOCK_SIZE * 2] = {0};
+
 uint64_t _bolt_plugin_get_last_mouseevent_windowid() { return last_mouseevent_window_id; }
 
 static void _bolt_plugin_ipc_init(BoltSocketType*);
@@ -70,6 +72,10 @@ static void _bolt_plugin_handle_swapbuffers(const struct SwapBuffersEvent*);
 
 const struct PluginManagedFunctions* _bolt_plugin_managed_functions() {
     return &managed_functions;
+}
+
+const char* _bolt_plugin_character_hash(void) {
+    return character_hash;
 }
 
 // these functions are only called from the thread that runs lua code, and are used to protect
@@ -237,6 +243,16 @@ void _bolt_plugin_init(const struct PluginManagedFunctions* functions) {
         _bolt_ipc_send(fd, &msg_type, sizeof(msg_type));
         _bolt_ipc_send(fd, &header, sizeof(header));
         _bolt_ipc_send(fd, display_name, name_len);
+    }
+
+    const char* character_id = getenv("JX_CHARACTER_ID");
+    SHA256_CTX ctx;
+    BYTE hash[SHA256_BLOCK_SIZE];
+    sha256_init(&ctx);
+    sha256_update(&ctx, (const unsigned char*)character_id, character_id ? strlen(character_id) : 0);
+    sha256_final(&ctx, hash);
+    for (size_t i = 0; i < SHA256_BLOCK_SIZE; i += 1) {
+        sprintf(&character_hash[i * 2], "%02x", hash[i]);
     }
 
     managed_functions = *functions;
