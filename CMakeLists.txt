@@ -375,7 +375,7 @@ elseif(WIN32)
     endif()
     if(BOLT_LIBARCHIVE_DIR)
         target_compile_definitions(bolt PUBLIC HAS_LIBARCHIVE)
-        target_link_libraries(bolt PUBLIC "${BOLT_LIBARCHIVE_DIR}/lib/libarchive.lib")
+        target_link_libraries(bolt PUBLIC "${BOLT_LIBARCHIVE_DIR}/lib/archive.lib")
         target_include_directories(bolt PUBLIC "${BOLT_LIBARCHIVE_DIR}/include")
     endif()
 elseif(APPLE)
@@ -412,9 +412,9 @@ else()
     endif()
 endif()
 
-# install libarchive.dll on windows
+# install libarchive dll on windows
 if(WIN32 AND BOLT_LIBARCHIVE_DIR)
-    install(FILES "${BOLT_LIBARCHIVE_DIR}/bin/libarchive.dll" DESTINATION "${BOLT_CEF_INSTALLDIR}/bolt-launcher")
+    install(FILES "${BOLT_LIBARCHIVE_DIR}/bin/archive.dll" DESTINATION "${BOLT_CEF_INSTALLDIR}/bolt-launcher")
 endif()
 
 # Finally, install shell script and metadata
