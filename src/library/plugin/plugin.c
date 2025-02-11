@@ -247,7 +247,7 @@ void _bolt_plugin_init(const struct PluginManagedFunctions* functions) {
 
     const char* character_id = getenv("JX_CHARACTER_ID");
     SHA256_CTX ctx;
-    BYTE hash[SHA256_BLOCK_SIZE];
+    unsigned char hash[SHA256_BLOCK_SIZE];
     sha256_init(&ctx);
     sha256_update(&ctx, (const unsigned char*)character_id, character_id ? strlen(character_id) : 0);
     sha256_final(&ctx, hash);
