@@ -433,6 +433,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 				}
 				std::filesystem::path p = plugin_dir;
 				const char* pathname = archive_entry_pathname(entry);
+				if (pathname[0] == '\0' || pathname[strlen(pathname) - 1] == '/') continue;
 				p.append(pathname);
 				std::filesystem::create_directories(p.parent_path(), err);
 				std::ofstream ofs(p, std::ofstream::binary);
