@@ -445,9 +445,9 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 				}
 
 				const la_int64_t entry_size = archive_entry_size(entry);
-				ssize_t written = 0;
+				la_int64_t written = 0;
 				while (written < entry_size) {
-					const ssize_t w = archive_read_data(archive, buf, sizeof(buf));
+					const la_ssize_t w = archive_read_data(archive, buf, sizeof(buf));
 					ofs.write(buf, w);
 					written += w;
 				}
