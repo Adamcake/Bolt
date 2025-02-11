@@ -338,7 +338,7 @@ static void _bolt_init_functions() {
     inited = 1;
 }
 
-void _bolt_flash_window() {
+void _bolt_flash_window(void) {
     pthread_mutex_lock(&focus_lock);
     const uint8_t focus = window_focus;
     pthread_mutex_unlock(&focus_lock);

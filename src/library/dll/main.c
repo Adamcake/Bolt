@@ -177,7 +177,7 @@ DWORD __stdcall BOLT_STUB_ENTRYNAME(struct PluginInjectParams* data) {
     return 0;
 }
 
-void _bolt_flash_window() {
+void _bolt_flash_window(void) {
     FLASHWINFO info;
     info.cbSize = sizeof info;
     info.hwnd = game_hwnd;
