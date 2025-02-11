@@ -17,6 +17,7 @@ permissions:
 env:
   WINDOWS_CEF_VERSION: '114.0.5735.199'
   LINUX_CEF_VERSION: '126.0.6478.183'
+  LIBARCHIVE_VERSION: '3.7.7'
   LUAJIT_VERSION: '2.1'
   ENABLE_WINDOWS_RELEASES: 'true'
   ENABLE_LINUX_RELEASES: 'true'
@@ -78,6 +79,27 @@ jobs:
           path: LuaJIT
           key: 'windows-luajit-${{ env.LUAJIT_VERSION }}'
 
+      - name: Checkout libarchive
+        uses: actions/checkout@v4.2.0
+        with:
+          path: libarchive
+          repository: libarchive/libarchive
+          ref: v${{ env.LIBARCHIVE_VERSION }}
+
+      - name: Build libarchive
+        uses: threeal/cmake-action@v2.0.0
+        with:
+          source-dir: libarchive
+          build-dir: builddir
+          generator: Visual Studio 17
+          options: | 
+            CMAKE_BUILD_TYPE=Release
+            CMAKE_INSTALL_PREFIX=libarchive\builddir
+          build-args: --config Release -j 4
+
+      - name: Create libarchive release
+        run: cmake --install builddir/
+
       - name: Restore CEF from Cache
         id: restore-cef-cache
         uses: actions/cache/restore@v4
@@ -101,6 +123,8 @@ jobs:
       
       # At this point the file tree looks like
       # D:\a\Bolt\Bolt
+      # - libarchive
+      #   - <whole libarchive source>
       # - LuaJIT
       #   - <whole luaJIT source>
       # - Bolt
@@ -121,6 +145,7 @@ jobs:
           build-dir: build # Makes it so that the build directory is set to Bolt/build
           generator: Visual Studio 17
           options: | 
+            BOLT_LIBARCHIVE_DIR=D:\a\Bolt\Bolt\libarchive\builddir
             BOLT_LUAJIT_DIR=D:\a\Bolt\Bolt\LuaJIT\src
             CMAKE_BUILD_TYPE=Release
             BOLT_CEF_INSTALLDIR=D:\a\Bolt\Bolt\install-location
