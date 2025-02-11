@@ -452,6 +452,40 @@ bolt.flashwindow()
 @end verbatim
 @end example
 
+@node functions-isfocused
+@section isfocused
+
+Returns a boolean value indicating whether the game window is the
+currently-focused window on the user's desktop.
+
+@example lua
+@verbatim
+if bolt.isfocused() then
+  -- ...
+end
+@end verbatim
+@end example
+
+@node functions-characterid
+@section characterid
+
+Returns a string which uniquely identifies the game character currently
+being played. The string will contain only alphanumeric characters. The
+same character will always have the same ID, even if the display name is
+changed. It's also not possible to change characters without restarting
+the game client, so there's no need to call this function more than once
+per run of a plugin.
+
+The value returned by this function is a hash, so it's not considered
+sensitive in terms of account security, although users will still
+appreciate their privacy being respected.
+
+@example lua
+@verbatim
+local id = bolt.characterid()
+@end verbatim
+@end example
+
 @node functions-loadfile
 @section loadfile
 
