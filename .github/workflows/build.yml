@@ -95,6 +95,7 @@ jobs:
           options: | 
             CMAKE_BUILD_TYPE=Release
             CMAKE_INSTALL_PREFIX=libarchive\builddir
+            ENABLE_OPENSSL=OFF
           build-args: --config Release -j 4
 
       - name: Create libarchive release
