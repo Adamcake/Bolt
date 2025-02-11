@@ -283,7 +283,8 @@ void _bolt_gl_onTexParameteri(GLenum, GLenum, GLint);
 /// Call this in response to glBlendFunc, which needs to be hooked from libgl.
 void _bolt_gl_onBlendFunc(GLenum, GLenum);
 
-/// Implemented in os-specific code and referred to by gl.c
+/* Implemented in os-specific code and referred to by gl.c */
 void _bolt_flash_window(void);
+uint8_t _bolt_window_has_focus(void);
 
 #endif

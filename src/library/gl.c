@@ -1839,6 +1839,7 @@ void _bolt_gl_onMakeCurrent(void* context) {
         _bolt_gl_init();
         const struct PluginManagedFunctions functions = {
             .flash_window = _bolt_flash_window,
+            .window_has_focus = _bolt_window_has_focus,
             .surface_init = _bolt_gl_plugin_surface_init,
             .surface_destroy = _bolt_gl_plugin_surface_destroy,
             .surface_resize_and_clear = _bolt_gl_plugin_surface_resize,

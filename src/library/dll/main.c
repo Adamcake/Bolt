@@ -187,6 +187,10 @@ void _bolt_flash_window(void) {
     FlashWindowEx(&info);
 }
 
+uint8_t _bolt_window_has_focus(void) {
+    return GetFocus() == game_hwnd;
+}
+
 static void winapi_to_mouseevent(int x, int y, WPARAM param, struct MouseEvent* out) {
     out->x = x;
     out->y = y;

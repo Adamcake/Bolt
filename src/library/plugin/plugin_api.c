@@ -319,6 +319,12 @@ static int api_flashwindow(lua_State* state) {
     return 0;
 }
 
+static int api_isfocused(lua_State* state) {
+    const struct PluginManagedFunctions* managed_functions = _bolt_plugin_managed_functions();
+    lua_pushboolean(state, managed_functions->window_has_focus());
+    return 1;
+}
+
 static int api_loadfile(lua_State* state) {
     lua_getfield(state, LUA_REGISTRYINDEX, PLUGIN_REGISTRYNAME);
     const struct Plugin* plugin = lua_touserdata(state, -1);
@@ -1955,6 +1961,7 @@ static struct ApiFuncTemplate bolt_functions[] = {
     BOLTFUNC(gamewindowsize),
     BOLTFUNC(gameviewxywh),
     BOLTFUNC(flashwindow),
+    BOLTFUNC(isfocused),
     BOLTFUNC(loadfile),
     BOLTFUNC(loadconfig),
     BOLTFUNC(saveconfig),

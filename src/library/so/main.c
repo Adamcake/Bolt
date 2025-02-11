@@ -349,6 +349,13 @@ void _bolt_flash_window(void) {
     pthread_mutex_unlock(&xcursor_lock);
 }
 
+uint8_t _bolt_window_has_focus(void) {
+    pthread_mutex_lock(&focus_lock);
+    const uint8_t focus = window_focus;
+    pthread_mutex_unlock(&focus_lock);
+    return focus;
+}
+
 void glGenTextures(GLsizei n, GLuint* textures) {
     LOG("glGenTextures\n");
     libgl.GenTextures(n, textures);
