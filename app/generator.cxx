@@ -20,7 +20,7 @@ bool output_file_contents_var(std::filesystem::path& path, size_t index, size_t&
     file.seekg(0, std::ios::beg);
     char* buffer = new char[size];
     if (file.read(buffer, size)) {
-        std::cout << "constexpr unsigned char _" << index << "[] = {";
+        std::cout << "static constexpr unsigned char _" << index << "[] = {";
         bool first = true;
         for (size_t i = 0; i < size; i += 1) {
             unsigned short num = static_cast<unsigned short>(static_cast<unsigned char>(buffer[i]));
