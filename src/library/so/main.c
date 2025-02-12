@@ -36,6 +36,7 @@ static uint8_t inited = 0;
 
 static pthread_mutex_t egl_lock;
 
+static pthread_mutex_t window_size_lock;
 static xcb_window_t main_window_xcb = 0;
 static uint32_t main_window_width = 0;
 static uint32_t main_window_height = 0;
@@ -330,6 +331,7 @@ static int _bolt_dl_iterate_callback(struct dl_phdr_info* info, size_t size, voi
 static void _bolt_init_functions() {
     _bolt_plugin_on_startup();
     pthread_mutex_init(&egl_lock, NULL);
+    pthread_mutex_init(&window_size_lock, NULL);
     pthread_mutex_init(&focus_lock, NULL);
     dl_iterate_phdr(_bolt_dl_iterate_callback, NULL);
 #if defined(VERBOSE)
@@ -434,7 +436,11 @@ void* eglGetProcAddress(const char* name) {
 
 unsigned int eglSwapBuffers(void* display, void* surface) {
     LOG("eglSwapBuffers\n");
-    _bolt_gl_onSwapBuffers(main_window_width, main_window_height);
+    pthread_mutex_lock(&window_size_lock);
+    const uint32_t w = main_window_width;
+    const uint32_t h = main_window_height;
+    pthread_mutex_unlock(&window_size_lock);
+    _bolt_gl_onSwapBuffers(w, h);
     unsigned int ret = real_eglSwapBuffers(display, surface);
     LOGF("eglSwapBuffers end (returned %u)\n", ret);
     return ret;
@@ -683,8 +689,10 @@ static uint8_t _bolt_handle_xcb_event(xcb_connection_t* c, xcb_generic_event_t* 
         case XCB_CONFIGURE_NOTIFY: { // when the game window gets resized (or when a few other things happen)
             const xcb_configure_notify_event_t* event = (xcb_configure_notify_event_t*)e;
             if (event->event != main_window_xcb) return true;
+            pthread_mutex_lock(&window_size_lock);
             main_window_width = event->width;
             main_window_height = event->height;
+            pthread_mutex_unlock(&window_size_lock);
             break;
         }
         case XCB_FOCUS_IN: { // when the game window gains focus
