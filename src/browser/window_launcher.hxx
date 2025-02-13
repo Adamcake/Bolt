@@ -69,7 +69,10 @@ namespace Browser {
 		CefRefPtr<CefResourceRequestHandler> StartPlugin(CefRefPtr<CefRequest>, std::string_view);
 		CefRefPtr<CefResourceRequestHandler> StopPlugin(CefRefPtr<CefRequest>, std::string_view);
 		CefRefPtr<CefResourceRequestHandler> InstallPlugin(CefRefPtr<CefRequest>, std::string_view);
+		CefRefPtr<CefResourceRequestHandler> UninstallPlugin(CefRefPtr<CefRequest>, std::string_view);
 		CefRefPtr<CefResourceRequestHandler> GetPluginDirJson(CefRefPtr<CefRequest>, std::string_view);
+		CefRefPtr<CefResourceRequestHandler> BrowsePluginData(CefRefPtr<CefRequest>, std::string_view);
+		CefRefPtr<CefResourceRequestHandler> BrowsePluginConfig(CefRefPtr<CefRequest>, std::string_view);
 #endif
 
 		private:
@@ -93,6 +96,8 @@ namespace Browser {
 			std::filesystem::path hdos_version_path;
 #if defined(BOLT_PLUGINS)
 			std::filesystem::path plugin_config_path;
+			std::filesystem::path plugins_data_dir;
+			std::filesystem::path plugins_config_dir;
 #endif
 	};
 }

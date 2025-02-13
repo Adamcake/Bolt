@@ -138,6 +138,12 @@ Browser::Launcher::Launcher(
 #if defined(BOLT_PLUGINS)
 	this->plugin_config_path = config_dir;
 	this->plugin_config_path.append("plugins.json");
+
+	this->plugins_data_dir = data_dir;
+	this->plugins_data_dir.append("plugins");
+
+	this->plugins_config_dir = config_dir;
+	this->plugins_config_dir.append("plugins");
 #endif
 
 	CefRefPtr<CefDictionaryValue> dict = CefDictionaryValue::Create();
@@ -260,7 +266,10 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 		ROUTEIFPLUGINS("start-plugin", StartPlugin)
 		ROUTEIFPLUGINS("stop-plugin", StopPlugin)
 		ROUTEIFPLUGINS("install-plugin", InstallPlugin)
+		ROUTEIFPLUGINS("uninstall-plugin", UninstallPlugin)
 		ROUTEIFPLUGINS("get-plugindir-json", GetPluginDirJson)
+		ROUTEIFPLUGINS("browse-plugin-data", BrowsePluginData)
+		ROUTEIFPLUGINS("browse-plugin-config", BrowsePluginConfig)
 	}
 
 	// internal hashmap of filenames - allowed to fetch these either if the request is from an internal origin,
@@ -408,9 +417,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::OpenExternalUrl(CefRefPt
 }
 
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::BrowseData(CefRefPtr<CefRequest> request, std::string_view query) {
-	if (BrowseFile(this->data_dir)) {
-		QSENDSTR("Error creating process", 500);
-	}
+	QSENDSYSTEMERRORIF(BrowseFile(this->data_dir));
 	QSENDOK();
 }
 
@@ -481,8 +488,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::StartPlugin(CefRefPtr<Ce
 	if (has_path) {
 		spath = path;
 	} else {
-		std::filesystem::path p = this->data_dir;
-		p.append("plugins");
+		std::filesystem::path p = this->plugins_data_dir;
 		p.append(sid);
 		spath = p.string() + '/';
 	}
@@ -517,8 +523,8 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::InstallPlugin(CefRefPtr<
 		PQSTRING(id)
 	});
 	QREQPARAM(id);
-	std::filesystem::path plugin_dir = this->data_dir;
-	plugin_dir.append("plugins");
+	QSENDBADREQUESTIF(id.size() == 0);
+	std::filesystem::path plugin_dir = this->plugins_data_dir;
 	plugin_dir.append(id);
 	std::error_code err;
 	QSENDSYSTEMERRORIF(std::filesystem::remove_all(plugin_dir, err) == -1);
@@ -575,6 +581,52 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::InstallPlugin(CefRefPtr<
 	QSENDOK();
 }
 
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::UninstallPlugin(CefRefPtr<CefRequest> request, std::string_view query) {
+	QSTRING id;
+	bool has_id = false;
+	ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
+		PQSTRING(id)
+	});
+	QREQPARAM(id);
+	QSENDBADREQUESTIF(id.size() == 0);
+
+	std::filesystem::path plugin_dir = this->plugins_data_dir;
+	plugin_dir.append(id);
+	std::filesystem::remove_all(plugin_dir);
+	std::filesystem::path config_dir = this->plugins_config_dir;
+	config_dir.append(id);
+	std::filesystem::remove_all(config_dir);
+	QSENDOK();
+}
+
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::BrowsePluginData(CefRefPtr<CefRequest> request, std::string_view query) {
+	QSTRING id;
+	bool has_id = false;
+	ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
+		PQSTRING(id)
+	});
+	QREQPARAM(id);
+	QSENDBADREQUESTIF(id.size() == 0);
+	std::filesystem::path plugin_dir = this->plugins_data_dir;
+	plugin_dir.append(id);
+	QSENDSYSTEMERRORIF(BrowseFile(plugin_dir));
+	QSENDOK();
+}
+
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::BrowsePluginConfig(CefRefPtr<CefRequest> request, std::string_view query) {
+	QSTRING id;
+	bool has_id = false;
+	ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
+		PQSTRING(id)
+	});
+	QREQPARAM(id);
+	QSENDBADREQUESTIF(id.size() == 0);
+	std::filesystem::path plugin_dir = this->plugins_config_dir;
+	plugin_dir.append(id);
+	QSENDSYSTEMERRORIF(BrowseFile(plugin_dir));
+	QSENDOK();
+}
+
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetPluginDirJson(CefRefPtr<CefRequest> request, std::string_view query) {
 	QSTRING id;
 	bool has_id = false;
@@ -582,8 +634,8 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetPluginDirJson(CefRefP
 		PQSTRING(id)
 	});
 	QREQPARAM(id);
-	std::filesystem::path plugin_dir = this->data_dir;
-	plugin_dir.append("plugins");
+	QSENDBADREQUESTIF(id.size() == 0);
+	std::filesystem::path plugin_dir = this->plugins_data_dir;
 	plugin_dir.append(id);
 	plugin_dir.append("bolt.json");
 	std::ifstream file(plugin_dir, std::ios::in | std::ios::binary);
