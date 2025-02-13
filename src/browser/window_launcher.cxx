@@ -584,15 +584,19 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::InstallPlugin(CefRefPtr<
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::UninstallPlugin(CefRefPtr<CefRequest> request, std::string_view query) {
 	QSTRING id;
 	bool has_id = false;
+	bool delete_data_dir = false;
 	ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
 		PQSTRING(id)
+		PQBOOL(delete_data_dir)
 	});
 	QREQPARAM(id);
 	QSENDBADREQUESTIF(id.size() == 0);
 
-	std::filesystem::path plugin_dir = this->plugins_data_dir;
-	plugin_dir.append(id);
-	std::filesystem::remove_all(plugin_dir);
+	if (delete_data_dir) {
+		std::filesystem::path plugin_dir = this->plugins_data_dir;
+		plugin_dir.append(id);
+		std::filesystem::remove_all(plugin_dir);
+	}
 	std::filesystem::path config_dir = this->plugins_config_dir;
 	config_dir.append(id);
 	std::filesystem::remove_all(config_dir);
