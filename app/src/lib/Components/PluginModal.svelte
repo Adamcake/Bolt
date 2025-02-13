@@ -423,7 +423,46 @@
 							<br />
 						{/await}
 						<button
-							class="mx-auto mb-1 w-[min(144px,_25%)] rounded-lg p-2 font-bold text-black duration-200 enabled:bg-rose-500 enabled:hover:opacity-75 disabled:bg-gray-500"
+							class="mx-auto mb-1 w-[min(144px,_25%)] rounded-lg bg-blue-500 p-2 font-bold text-black duration-200 hover:opacity-75"
+							on:click={() => {
+								const path = bolt.pluginConfig[selectedPlugin].path;
+								if (path) {
+									fetch('/browse-directory?'.concat(new URLSearchParams({ path }).toString()));
+								} else {
+									fetch(
+										'/browse-plugin-data?'.concat(
+											new URLSearchParams({ id: selectedPlugin }).toString()
+										)
+									);
+								}
+							}}
+						>
+							Browse data
+						</button>
+						&nbsp;
+						<button
+							class="mx-auto mb-1 w-[min(144px,_25%)] rounded-lg bg-blue-500 p-2 font-bold text-black duration-200 hover:opacity-75"
+							on:click={() =>
+								fetch(
+									'/browse-plugin-config?'.concat(
+										new URLSearchParams({ id: selectedPlugin }).toString()
+									)
+								)}
+						>
+							Browse config
+						</button>
+						<br />
+						{#if selectedPluginMeta.updaterURL}
+							<button
+								class="m-1 mx-auto w-[min(144px,_25%)] rounded-lg p-2 font-bold text-black duration-200 enabled:bg-blue-500 enabled:hover:opacity-75 disabled:bg-gray-500"
+								on:click={() => updatePlugin(selectedPluginMeta, selectedPlugin)}
+							>
+								Check updates
+							</button>
+							&nbsp;
+						{/if}
+						<button
+							class="m-1 mx-auto w-[min(144px,_25%)] rounded-lg p-2 font-bold text-black duration-200 enabled:bg-rose-500 enabled:hover:opacity-75 disabled:bg-gray-500"
 							on:click={() => {
 								managementPluginPromise = null;
 								GlobalState.pluginConfigHasPendingChanges = true;
@@ -434,8 +473,7 @@
 										'/uninstall-plugin?'.concat(
 											new URLSearchParams({
 												id: selectedPlugin,
-												delete_data_dir:
-													typeof list[selectedPlugin].updaterURL === 'string' ? '1' : '0'
+												delete_data_dir: typeof meta.path === 'string' ? '0' : '1'
 											}).toString()
 										)
 									);
@@ -446,15 +484,6 @@
 						>
 							Remove
 						</button>
-						{#if selectedPluginMeta.updaterURL}
-							&nbsp;
-							<button
-								class="mx-auto mb-1 w-[min(144px,_25%)] rounded-lg p-2 font-bold text-black duration-200 enabled:bg-blue-500 enabled:hover:opacity-75 disabled:bg-gray-500"
-								on:click={() => updatePlugin(selectedPluginMeta, selectedPlugin)}
-							>
-								Check updates
-							</button>
-						{/if}
 					{/if}
 				{:else}
 					<p>
