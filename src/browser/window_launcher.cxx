@@ -32,8 +32,6 @@
 #define URLPLATFORM "mac"
 #endif
 
-CefRefPtr<CefResourceRequestHandler> SaveFileFromPost(CefRefPtr<CefRequest>, const std::filesystem::path::value_type*);
-
 struct FilePicker: public CefRunFileDialogCallback, Browser::ResourceHandler {
 	FilePicker(CefRefPtr<CefBrowser> browser, std::vector<CefString> accept_filters):
 		accept_filters(accept_filters), callback(nullptr), browser_host(browser->GetHost()), ResourceHandler("text/plain") { }
@@ -151,6 +149,12 @@ CefRefPtr<CefRequestHandler> Browser::Launcher::GetRequestHandler() {
 	return this;
 }
 
+#define ROUTE(API, FUNC) if (path == "/" API) { return this->FUNC(request, query); }
+#if defined(BOLT_PLUGINS)
+#define ROUTEIFPLUGINS(API, FUNC) if (path == "/" API) { return this->FUNC(request, query); }
+#else
+#define ROUTEIFPLUGINS(API, FUNC) if (path == "/" API) { QSENDNOTSUPPORTED(); }
+#endif
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandler(
 	CefRefPtr<CefBrowser> browser,
 	CefRefPtr<CefFrame> frame,
@@ -235,296 +239,28 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 
 	// internal API endpoints - only allowed if it's a request from internal URL to internal URL
 	if (is_internal_target && is_internal_initiator) {
-
-		// instruction to launch RS3 .deb
-		if (path == "/launch-rs3-deb") {
-			return this->LaunchRs3Deb(request, query);
-		}
-
-		// instruction to launch RS3 .exe
-		if (path == "/launch-rs3-exe") {
-			return this->LaunchRs3Exe(request, query);
-		}
-
-		// instruction to launch RS3 app (mac)
-		if (path == "/launch-rs3-app") {
-			return this->LaunchRs3App(request, query);
-		}
-
-		// instruction to launch OSRS .exe
-		if (path == "/launch-osrs-exe") {
-			return this->LaunchOsrsExe(request, query);
-		}
-
-		// instruction to launch OSRS app (mac)
-		if (path == "/launch-osrs-app") {
-			return this->LaunchOsrsApp(request, query);
-		}
-
-		// instruction to launch RuneLite.jar
-		if (path == "/launch-runelite-jar") {
-			return this->LaunchRuneliteJar(request, query, false);
-		}
-
-		// instruction to launch RuneLite.jar with --configure
-		if (path == "/launch-runelite-jar-configure") {
-			return this->LaunchRuneliteJar(request, query, true);
-		}
-
-		// instruction to launch RuneLite.jar
-		if (path == "/launch-hdos-jar") {
-			return this->LaunchHdosJar(request, query);
-		}
-
-		// instruction to save user config file to disk
-		if (path == "/save-config") {
-			return SaveFileFromPost(request, this->config_path.c_str());
-		}
-
-		// instruction to save user credentials to disk
-		if (path == "/save-credentials") {
-			return SaveFileFromPost(request, this->creds_path.c_str());
-		}
-
-		// instruction to save plugin config to disk
-		if (path == "/save-plugin-config") {
-#if defined(BOLT_PLUGINS)
-			return SaveFileFromPost(request, this->plugin_config_path.c_str());
-#else
-			QSENDNOTSUPPORTED();
-#endif
-		}
-
-		// request for list of connected game clients
-		if (path == "/list-game-clients") {
-#if defined(BOLT_PLUGINS)
-			this->UpdateClientList(true);
-			QSENDOK();
-#else
-			QSENDNOTSUPPORTED();
-#endif
-		}
-
-		// request for the contents of a JSON file - doesn't actually validate the contents
-		if (path == "/read-json-file") {
-#if defined(BOLT_PLUGINS)
-			QSTRING path;
-			bool has_path = false;
-			ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
-				PQSTRING(path)
-			});
-			QREQPARAM(path);
-			std::ifstream file(path, std::ios::in | std::ios::binary);
-			if (!file.fail()) {
-				std::stringstream ss;
-				ss << file.rdbuf();
-				std::string str = ss.str();
-				file.close();
-				return new Browser::ResourceHandler(str, 200, "application/json");
-			} else {
-				QSENDNOTFOUND();
-			}
-#else
-			QSENDNOTSUPPORTED();
-#endif
-		}
-
-		// request to send a message to a game client to start a plugin
-		if (path == "/start-plugin") {
-#if defined(BOLT_PLUGINS)
-			CefString id;
-			bool has_id = false;
-			CefString path;
-			bool has_path  = false;
-			CefString main;
-			bool has_main  = false;
-			uint64_t client;
-			bool has_client  = false;
-			bool client_valid = false;
-			ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
-				PQCEFSTRING(id)
-				PQCEFSTRING(path)
-				PQCEFSTRING(main)
-				PQINT(client)
-			});
-			QREQPARAM(id);
-			QREQPARAM(main);
-			QREQPARAMINT(client);
-			std::string sid = id;
-			std::string spath;
-			if (has_path) {
-				spath = path;
-			} else {
-				std::filesystem::path p = this->data_dir;
-				p.append("plugins");
-				p.append(sid);
-				spath = p.string() + '/';
-			}
-			this->client->StartPlugin(client, sid, spath, std::string(main));
-			QSENDOK();
-#else
-			QSENDNOTSUPPORTED();
-#endif
-		}
-
-		// request to stop a plugin that's currently running for a specific client
-		if (path == "/stop-plugin") {
-#if defined(BOLT_PLUGINS)
-			uint64_t client;
-			bool has_client = false;
-			bool client_valid = false;
-			uint64_t uid;
-			bool has_uid = false;
-			bool uid_valid = false;
-			ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
-				PQINT(client)
-				PQINT(uid)
-			});
-			QREQPARAMINT(client);
-			QREQPARAMINT(uid);
-			this->client->StopPlugin(client, uid);
-			QSENDOK();
-#else
-			QSENDNOTSUPPORTED();
-#endif
-		}
-
-		// request to unpack a file using libarchive and save the contents in a plugin data directory,
-		// creating it if it doesn't exist, or overwriting any prior contents if it does
-		if (path == "/install-plugin") {
-#if defined(HAS_LIBARCHIVE) && defined(BOLT_PLUGINS)
-			CefRefPtr<CefPostData> post_data = request->GetPostData();
-			QSENDBADREQUESTIF(!post_data || post_data->GetElementCount() != 1);
-
-			QSTRING id;
-			bool has_id = false;
-			ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
-				PQSTRING(id)
-			});
-			QREQPARAM(id);
-			std::filesystem::path plugin_dir = this->data_dir;
-			plugin_dir.append("plugins");
-			plugin_dir.append(id);
-			std::error_code err;
-			QSENDSYSTEMERRORIF(std::filesystem::remove_all(plugin_dir, err) == -1);
-			QSENDSYSTEMERRORIF(!std::filesystem::create_directories(plugin_dir, err));
-
-			CefPostData::ElementVector elements;
-			post_data->GetElements(elements);
-			size_t file_length = elements[0]->GetBytesCount();
-			char* archive_file = new char[file_length];
-			elements[0]->GetBytes(file_length, archive_file);
-
-			struct archive* archive = archive_read_new();
-			archive_read_support_format_all(archive);
-			archive_read_support_filter_all(archive);
-			archive_read_open_memory(archive, archive_file, file_length);
-
-			char buf[65536];
-			struct archive_entry* entry;
-			while (true) {
-				const int r = archive_read_next_header(archive, &entry);
-				if (r == ARCHIVE_EOF) break;
-				if (r != ARCHIVE_OK) {
-					archive_read_close(archive);
-					archive_read_free(archive);
-					delete[] archive_file;
-					QSENDSTR("file is malformed", 400);
-				}
-				std::filesystem::path p = plugin_dir;
-				const char* pathname = archive_entry_pathname(entry);
-				if (pathname[0] == '\0' || pathname[strlen(pathname) - 1] == '/') continue;
-				p.append(pathname);
-				std::filesystem::create_directories(p.parent_path(), err);
-				std::ofstream ofs(p, std::ofstream::binary);
-				if (ofs.fail()) {
-					archive_read_close(archive);
-					archive_read_free(archive);
-					delete[] archive_file;
-					QSENDSTR("failed to create files", 500);
-				}
-
-				const la_int64_t entry_size = archive_entry_size(entry);
-				la_int64_t written = 0;
-				while (written < entry_size) {
-					const la_ssize_t w = archive_read_data(archive, buf, sizeof(buf));
-					ofs.write(buf, w);
-					written += w;
-				}
-				ofs.close();
-			}
-
-			archive_read_close(archive);
-			archive_read_free(archive);
-			delete[] archive_file;
-			QSENDOK();
-#else
-			QSENDNOTSUPPORTED();
-#endif
-		}
-
-		// gets the bolt.json from a plugin data directory by id
-		if (path == "/get-plugindir-json") {
-			QSTRING id;
-			bool has_id = false;
-			ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
-				PQSTRING(id)
-			});
-			QREQPARAM(id);
-			std::filesystem::path plugin_dir = this->data_dir;
-			plugin_dir.append("plugins");
-			plugin_dir.append(id);
-			plugin_dir.append("bolt.json");
-			std::ifstream file(plugin_dir, std::ios::in | std::ios::binary);
-			if (!file.fail()) {
-				std::stringstream ss;
-				ss << file.rdbuf();
-				std::string str = ss.str();
-				file.close();
-				return new Browser::ResourceHandler(str, 200, "application/json");
-			} else {
-				QSENDNOTFOUND();
-			}
-		}
-
-		// instruction to try to open an external URL in the user's browser
-		if (path == "/open-external-url") {
-			CefRefPtr<CefPostData> post_data = request->GetPostData();
-			QSENDBADREQUESTIF(!post_data || post_data->GetElementCount() != 1);
-			CefPostData::ElementVector elements;
-			post_data->GetElements(elements);
-			size_t byte_count = elements[0]->GetBytesCount();
-			char* url = new char[byte_count + 1];
-			elements[0]->GetBytes(byte_count, url);
-			url[byte_count] = '\0';
-			this->OpenExternalUrl(url);
-			delete[] url;
-			QSENDOK();
-		}
-
-		// instruction to try to open Bolt's data directory in the user's file explorer
-		if (path == "/browse-data") {
-			if (!this->BrowseData()) {
-				QSENDSTR("Error creating process", 500);
-			}
-			QSENDOK();
-		}
-
-		// instruction to open a file picker for .jar files
-		if (path == "/jar-file-picker") {
-			return new FilePicker(browser, {".jar"});
-		}
-		
-		// instruction to open a file picker for .json files
-		if (path == "/json-file-picker") {
-			return new FilePicker(browser, {".json"});
-		}
-
-		// instruction to close the window which sent this request
-		if (path == "/close") {
-			browser->GetHost()->CloseBrowser(false);
-			QSENDOK();
-		}
+		ROUTE("launch-rs3-deb", LaunchRs3Deb)
+		ROUTE("launch-rs3-exe", LaunchRs3Exe)
+		ROUTE("launch-rs3-app", LaunchRs3App)
+		ROUTE("launch-osrs-exe", LaunchOsrsExe)
+		ROUTE("launch-osrs-app", LaunchOsrsApp)
+		ROUTE("launch-runelite-jar", LaunchRuneliteJarNormal)
+		ROUTE("launch-runelite-jar-configure", LaunchRuneliteJarConfigure)
+		ROUTE("launch-hdos-jar", LaunchHdosJar)
+		ROUTE("save-config", SaveConfig)
+		ROUTE("save-credentials", SaveCredentials)
+		ROUTE("open-external-url", OpenExternalUrl)
+		ROUTE("browse-data", BrowseData)
+		ROUTE("jar-file-picker", JarFilePicker)
+		ROUTE("json-file-picker", JsonFilePicker)
+		ROUTE("close", Close)
+		ROUTEIFPLUGINS("save-plugin-config", SavePluginConfig)
+		ROUTEIFPLUGINS("list-game-clients", ListGameClients)
+		ROUTEIFPLUGINS("read-json-file", ReadJsonFile)
+		ROUTEIFPLUGINS("start-plugin", StartPlugin)
+		ROUTEIFPLUGINS("stop-plugin", StopPlugin)
+		ROUTEIFPLUGINS("install-plugin", InstallPlugin)
+		ROUTEIFPLUGINS("get-plugindir-json", GetPluginDirJson)
 	}
 
 	// internal hashmap of filenames - allowed to fetch these either if the request is from an internal origin,
@@ -641,7 +377,227 @@ CefString Browser::Launcher::BuildURL() const {
 	return url.str();
 }
 
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJarNormal(CefRefPtr<CefRequest> request, std::string_view query) {
+	return this->LaunchRuneliteJar(request, query, false);
+}
+
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJarConfigure(CefRefPtr<CefRequest> request, std::string_view query) {
+	return this->LaunchRuneliteJar(request, query, true);
+}
+
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::SaveConfig(CefRefPtr<CefRequest> request, std::string_view _) {
+	return SaveFileFromPost(request, this->config_path.c_str());
+}
+
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::SaveCredentials(CefRefPtr<CefRequest> request, std::string_view _) {
+	return SaveFileFromPost(request, this->creds_path.c_str());
+}
+
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::OpenExternalUrl(CefRefPtr<CefRequest> request, std::string_view _) {
+	CefRefPtr<CefPostData> post_data = request->GetPostData();
+	QSENDBADREQUESTIF(!post_data || post_data->GetElementCount() != 1);
+	CefPostData::ElementVector elements;
+	post_data->GetElements(elements);
+	size_t byte_count = elements[0]->GetBytesCount();
+	char* url = new char[byte_count + 1];
+	elements[0]->GetBytes(byte_count, url);
+	url[byte_count] = '\0';
+	this->OpenExternalUrl(url);
+	delete[] url;
+	QSENDOK();
+}
+
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::BrowseData(CefRefPtr<CefRequest> request, std::string_view query) {
+	if (BrowseFile(this->data_dir)) {
+		QSENDSTR("Error creating process", 500);
+	}
+	QSENDOK();
+}
+
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::JarFilePicker(CefRefPtr<CefRequest> request, std::string_view query) {
+	return new FilePicker(browser, {".jar"});
+}
+
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::JsonFilePicker(CefRefPtr<CefRequest> request, std::string_view query) {
+	return new FilePicker(browser, {".json"});
+}
+
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::Close(CefRefPtr<CefRequest> request, std::string_view query) {
+	browser->GetHost()->CloseBrowser(false);
+	QSENDOK();
+}
+
+
 #if defined(BOLT_PLUGINS)
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::SavePluginConfig(CefRefPtr<CefRequest> request, std::string_view _) {
+	return SaveFileFromPost(request, this->plugin_config_path.c_str());
+}
+
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::ListGameClients(CefRefPtr<CefRequest> request, std::string_view _) {
+	this->UpdateClientList(true);
+	QSENDOK();
+}
+
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::ReadJsonFile(CefRefPtr<CefRequest> request, std::string_view query) {
+	QSTRING path;
+	bool has_path = false;
+	ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
+		PQSTRING(path)
+	});
+	QREQPARAM(path);
+	std::ifstream file(path, std::ios::in | std::ios::binary);
+	if (!file.fail()) {
+		std::stringstream ss;
+		ss << file.rdbuf();
+		std::string str = ss.str();
+		file.close();
+		return new Browser::ResourceHandler(str, 200, "application/json");
+	} else {
+		QSENDNOTFOUND();
+	}
+}
+
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::StartPlugin(CefRefPtr<CefRequest> request, std::string_view query) {
+	CefString id;
+	bool has_id = false;
+	CefString path;
+	bool has_path  = false;
+	CefString main;
+	bool has_main  = false;
+	uint64_t client;
+	bool has_client  = false;
+	bool client_valid = false;
+	ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
+		PQCEFSTRING(id)
+		PQCEFSTRING(path)
+		PQCEFSTRING(main)
+		PQINT(client)
+	});
+	QREQPARAM(id);
+	QREQPARAM(main);
+	QREQPARAMINT(client);
+	std::string sid = id;
+	std::string spath;
+	if (has_path) {
+		spath = path;
+	} else {
+		std::filesystem::path p = this->data_dir;
+		p.append("plugins");
+		p.append(sid);
+		spath = p.string() + '/';
+	}
+	this->client->StartPlugin(client, sid, spath, std::string(main));
+	QSENDOK();
+}
+
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::StopPlugin(CefRefPtr<CefRequest> request, std::string_view query) {
+	uint64_t client;
+	bool has_client = false;
+	bool client_valid = false;
+	uint64_t uid;
+	bool has_uid = false;
+	bool uid_valid = false;
+	ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
+		PQINT(client)
+		PQINT(uid)
+	});
+	QREQPARAMINT(client);
+	QREQPARAMINT(uid);
+	this->client->StopPlugin(client, uid);
+	QSENDOK();
+}
+
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::InstallPlugin(CefRefPtr<CefRequest> request, std::string_view query) {
+	CefRefPtr<CefPostData> post_data = request->GetPostData();
+	QSENDBADREQUESTIF(!post_data || post_data->GetElementCount() != 1);
+
+	QSTRING id;
+	bool has_id = false;
+	ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
+		PQSTRING(id)
+	});
+	QREQPARAM(id);
+	std::filesystem::path plugin_dir = this->data_dir;
+	plugin_dir.append("plugins");
+	plugin_dir.append(id);
+	std::error_code err;
+	QSENDSYSTEMERRORIF(std::filesystem::remove_all(plugin_dir, err) == -1);
+	QSENDSYSTEMERRORIF(!std::filesystem::create_directories(plugin_dir, err));
+
+	CefPostData::ElementVector elements;
+	post_data->GetElements(elements);
+	size_t file_length = elements[0]->GetBytesCount();
+	char* archive_file = new char[file_length];
+	elements[0]->GetBytes(file_length, archive_file);
+
+	struct archive* archive = archive_read_new();
+	archive_read_support_format_all(archive);
+	archive_read_support_filter_all(archive);
+	archive_read_open_memory(archive, archive_file, file_length);
+
+	char buf[65536];
+	struct archive_entry* entry;
+	while (true) {
+		const int r = archive_read_next_header(archive, &entry);
+		if (r == ARCHIVE_EOF) break;
+		if (r != ARCHIVE_OK) {
+			archive_read_close(archive);
+			archive_read_free(archive);
+			delete[] archive_file;
+			QSENDSTR("file is malformed", 400);
+		}
+		std::filesystem::path p = plugin_dir;
+		const char* pathname = archive_entry_pathname(entry);
+		if (pathname[0] == '\0' || pathname[strlen(pathname) - 1] == '/') continue;
+		p.append(pathname);
+		std::filesystem::create_directories(p.parent_path(), err);
+		std::ofstream ofs(p, std::ofstream::binary);
+		if (ofs.fail()) {
+			archive_read_close(archive);
+			archive_read_free(archive);
+			delete[] archive_file;
+			QSENDSTR("failed to create files", 500);
+		}
+
+		const la_int64_t entry_size = archive_entry_size(entry);
+		la_int64_t written = 0;
+		while (written < entry_size) {
+			const la_ssize_t w = archive_read_data(archive, buf, sizeof(buf));
+			ofs.write(buf, w);
+			written += w;
+		}
+		ofs.close();
+	}
+
+	archive_read_close(archive);
+	archive_read_free(archive);
+	delete[] archive_file;
+	QSENDOK();
+}
+
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetPluginDirJson(CefRefPtr<CefRequest> request, std::string_view query) {
+	QSTRING id;
+	bool has_id = false;
+	ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
+		PQSTRING(id)
+	});
+	QREQPARAM(id);
+	std::filesystem::path plugin_dir = this->data_dir;
+	plugin_dir.append("plugins");
+	plugin_dir.append(id);
+	plugin_dir.append("bolt.json");
+	std::ifstream file(plugin_dir, std::ios::in | std::ios::binary);
+	if (!file.fail()) {
+		std::stringstream ss;
+		ss << file.rdbuf();
+		std::string str = ss.str();
+		file.close();
+		return new Browser::ResourceHandler(str, 200, "application/json");
+	} else {
+		QSENDNOTFOUND();
+	}
+}
+
 void Browser::Launcher::UpdateClientList(bool need_lock_mutex) const {
 	CefRefPtr<CefProcessMessage> message = CefProcessMessage::Create("__bolt_clientlist");
 	CefRefPtr<CefListValue> list = message->GetArgumentList();

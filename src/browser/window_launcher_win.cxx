@@ -541,10 +541,10 @@ void Browser::Launcher::OpenExternalUrl(char* u) const {
 	delete[] buf;
 }
 
-bool Browser::Launcher::BrowseData() const {
+bool Browser::Launcher::BrowseFile(std::filesystem::path& dir) const {
 	// MSDN: "If [ShellExecuteW] succeeds, it returns a value greater than 32."
-	const uintptr_t ret = reinterpret_cast<uintptr_t>(ShellExecuteW(NULL, L"explore", this->data_dir.c_str(), NULL, NULL, SW_SHOW));
+	const uintptr_t ret = reinterpret_cast<uintptr_t>(ShellExecuteW(NULL, L"explore", dir.c_str(), NULL, NULL, SW_SHOW));
 	if (ret > 32) return true;
-	fmt::println(stderr, "BrowseData failed: ShellExecuteW returned {}", ret);
+	fmt::println(stderr, "BrowseFile failed: ShellExecuteW returned {}", ret);
 	return false;
 }

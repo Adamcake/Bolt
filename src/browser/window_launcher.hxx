@@ -27,10 +27,6 @@ namespace Browser {
 		/// Attempts to open the given URL externally in the user's browser
 		void OpenExternalUrl(char* url) const;
 
-		/// Attempts to open Bolt's data directory externally in the user's file explorer.
-		/// Returns true on success, false on failure.
-		bool BrowseData() const;
-
 		/// Builds and returns the URL for the launcher to open, including reading config files and
 		/// inserting their contents into the query params
 		CefString BuildURL() const;
@@ -53,8 +49,28 @@ namespace Browser {
 		CefRefPtr<CefResourceRequestHandler> LaunchRs3App(CefRefPtr<CefRequest>, std::string_view);
 		CefRefPtr<CefResourceRequestHandler> LaunchOsrsExe(CefRefPtr<CefRequest>, std::string_view);
 		CefRefPtr<CefResourceRequestHandler> LaunchOsrsApp(CefRefPtr<CefRequest>, std::string_view);
+		CefRefPtr<CefResourceRequestHandler> LaunchRuneliteJarNormal(CefRefPtr<CefRequest>, std::string_view);
+		CefRefPtr<CefResourceRequestHandler> LaunchRuneliteJarConfigure(CefRefPtr<CefRequest>, std::string_view);
 		CefRefPtr<CefResourceRequestHandler> LaunchRuneliteJar(CefRefPtr<CefRequest>, std::string_view, bool configure);
 		CefRefPtr<CefResourceRequestHandler> LaunchHdosJar(CefRefPtr<CefRequest>, std::string_view);
+
+		CefRefPtr<CefResourceRequestHandler> SaveConfig(CefRefPtr<CefRequest>, std::string_view);
+		CefRefPtr<CefResourceRequestHandler> SaveCredentials(CefRefPtr<CefRequest>, std::string_view);
+		CefRefPtr<CefResourceRequestHandler> OpenExternalUrl(CefRefPtr<CefRequest>, std::string_view);
+		CefRefPtr<CefResourceRequestHandler> BrowseData(CefRefPtr<CefRequest>, std::string_view);
+		CefRefPtr<CefResourceRequestHandler> JarFilePicker(CefRefPtr<CefRequest>, std::string_view);
+		CefRefPtr<CefResourceRequestHandler> JsonFilePicker(CefRefPtr<CefRequest>, std::string_view);
+		CefRefPtr<CefResourceRequestHandler> Close(CefRefPtr<CefRequest>, std::string_view);
+
+#if defined(BOLT_PLUGINS)
+		CefRefPtr<CefResourceRequestHandler> SavePluginConfig(CefRefPtr<CefRequest>, std::string_view);
+		CefRefPtr<CefResourceRequestHandler> ListGameClients(CefRefPtr<CefRequest>, std::string_view);
+		CefRefPtr<CefResourceRequestHandler> ReadJsonFile(CefRefPtr<CefRequest>, std::string_view);
+		CefRefPtr<CefResourceRequestHandler> StartPlugin(CefRefPtr<CefRequest>, std::string_view);
+		CefRefPtr<CefResourceRequestHandler> StopPlugin(CefRefPtr<CefRequest>, std::string_view);
+		CefRefPtr<CefResourceRequestHandler> InstallPlugin(CefRefPtr<CefRequest>, std::string_view);
+		CefRefPtr<CefResourceRequestHandler> GetPluginDirJson(CefRefPtr<CefRequest>, std::string_view);
+#endif
 
 		private:
 			CefRefPtr<FileManager::FileManager> file_manager;
@@ -80,5 +96,8 @@ namespace Browser {
 #endif
 	};
 }
+
+CefRefPtr<CefResourceRequestHandler> SaveFileFromPost(CefRefPtr<CefRequest>, const std::filesystem::path::value_type*);
+bool BrowseFile(std::filesystem::path&);
 
 #endif
