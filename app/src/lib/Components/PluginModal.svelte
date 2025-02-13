@@ -428,8 +428,20 @@
 								managementPluginPromise = null;
 								GlobalState.pluginConfigHasPendingChanges = true;
 								let list = bolt.pluginConfig;
-								delete list[selectedPlugin];
-								bolt.pluginConfig = list;
+								const meta = list[selectedPlugin];
+								if (meta) {
+									fetch(
+										'/uninstall-plugin?'.concat(
+											new URLSearchParams({
+												id: selectedPlugin,
+												delete_data_dir:
+													typeof list[selectedPlugin].updaterURL === 'string' ? '1' : '0'
+											}).toString()
+										)
+									);
+									delete list[selectedPlugin];
+									bolt.pluginConfig = list;
+								}
 							}}
 						>
 							Remove
