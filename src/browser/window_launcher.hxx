@@ -57,6 +57,7 @@ namespace Browser {
 		CefRefPtr<CefResourceRequestHandler> SaveConfig(CefRefPtr<CefRequest>, std::string_view);
 		CefRefPtr<CefResourceRequestHandler> SaveCredentials(CefRefPtr<CefRequest>, std::string_view);
 		CefRefPtr<CefResourceRequestHandler> OpenExternalUrl(CefRefPtr<CefRequest>, std::string_view);
+		CefRefPtr<CefResourceRequestHandler> BrowseDirectory(CefRefPtr<CefRequest>, std::string_view);
 		CefRefPtr<CefResourceRequestHandler> BrowseData(CefRefPtr<CefRequest>, std::string_view);
 		CefRefPtr<CefResourceRequestHandler> JarFilePicker(CefRefPtr<CefRequest>, std::string_view);
 		CefRefPtr<CefResourceRequestHandler> JsonFilePicker(CefRefPtr<CefRequest>, std::string_view);
@@ -103,6 +104,6 @@ namespace Browser {
 }
 
 CefRefPtr<CefResourceRequestHandler> SaveFileFromPost(CefRefPtr<CefRequest>, const std::filesystem::path::value_type*);
-bool BrowseFile(std::filesystem::path&);
+bool BrowseFile(const std::filesystem::path&);
 
 #endif

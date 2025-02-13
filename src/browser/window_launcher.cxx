@@ -256,6 +256,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 		ROUTE("save-config", SaveConfig)
 		ROUTE("save-credentials", SaveCredentials)
 		ROUTE("open-external-url", OpenExternalUrl)
+		ROUTE("browse-directory", BrowseDirectory)
 		ROUTE("browse-data", BrowseData)
 		ROUTE("jar-file-picker", JarFilePicker)
 		ROUTE("json-file-picker", JsonFilePicker)
@@ -413,6 +414,18 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::OpenExternalUrl(CefRefPt
 	url[byte_count] = '\0';
 	this->OpenExternalUrl(url);
 	delete[] url;
+	QSENDOK();
+}
+
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::BrowseDirectory(CefRefPtr<CefRequest> request, std::string_view query) {
+	QSTRING path;
+	bool has_path = false;
+	ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
+		PQSTRING(path)
+	});
+	QREQPARAM(path);
+	const std::filesystem::path p(path);
+	QSENDSYSTEMERRORIF(BrowseFile(p));
 	QSENDOK();
 }
 

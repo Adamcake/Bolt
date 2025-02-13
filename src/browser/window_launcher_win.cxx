@@ -541,7 +541,7 @@ void Browser::Launcher::OpenExternalUrl(char* u) const {
 	delete[] buf;
 }
 
-bool Browser::Launcher::BrowseFile(std::filesystem::path& dir) const {
+bool Browser::Launcher::BrowseFile(const std::filesystem::path& dir) const {
 	// MSDN: "If [ShellExecuteW] succeeds, it returns a value greater than 32."
 	const uintptr_t ret = reinterpret_cast<uintptr_t>(ShellExecuteW(NULL, L"explore", dir.c_str(), NULL, NULL, SW_SHOW));
 	if (ret > 32) return true;

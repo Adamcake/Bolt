@@ -493,7 +493,7 @@ void Browser::Launcher::OpenExternalUrl(char* url) const {
 	if (pid == 0) execv(arg_env, argv);
 }
 
-bool BrowseFile(std::filesystem::path& dir) {
+bool BrowseFile(const std::filesystem::path& dir) {
 	char arg_env[] = "/usr/bin/env";
 	char arg_xdg_open[] = "xdg-open";
 	std::string p = dir;
