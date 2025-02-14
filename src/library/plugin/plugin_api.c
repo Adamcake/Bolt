@@ -542,6 +542,7 @@ static int api_createwindow(lua_State* state) {
     window->metadata.y = luaL_checkinteger(state, 2);
     window->metadata.width = luaL_checkinteger(state, 3);
     window->metadata.height = luaL_checkinteger(state, 4);
+    window->last_user_action_metadata = window->metadata;
     if (window->metadata.width < WINDOW_MIN_SIZE) window->metadata.width = WINDOW_MIN_SIZE;
     if (window->metadata.height < WINDOW_MIN_SIZE) window->metadata.height = WINDOW_MIN_SIZE;
     memset(&window->input, 0, sizeof(window->input));
@@ -664,6 +665,7 @@ static int api_createembeddedbrowser(lua_State* state) {
     window->metadata.y = y;
     window->metadata.width = w;
     window->metadata.height = h;
+    window->last_user_action_metadata = window->metadata;
     if (window->metadata.width < WINDOW_MIN_SIZE) window->metadata.width = WINDOW_MIN_SIZE;
     if (window->metadata.height < WINDOW_MIN_SIZE) window->metadata.height = WINDOW_MIN_SIZE;
     memset(&window->input, 0, sizeof(window->input));

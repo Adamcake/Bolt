@@ -330,6 +330,7 @@ struct EmbeddedWindow {
     struct EmbeddedWindowMetadata metadata;
     RWLock input_lock; // applies to the pending inputs
     struct WindowPendingInput input;
+    struct EmbeddedWindowMetadata last_user_action_metadata;
     int16_t drag_xstart;
     int16_t drag_ystart;
     int16_t repos_target_x;

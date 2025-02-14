@@ -288,6 +288,10 @@ uint8_t _bolt_monotonic_microseconds(uint64_t* microseconds) {
 #endif
 }
 
+static bool embedded_window_meta_eq(const struct EmbeddedWindowMetadata* a, const struct EmbeddedWindowMetadata* b) {
+    return a->x == b->x && a->y == b->y && a->width == b->width && a->height == b->height;
+}
+
 // populates the window->repos_target_... variables, without accessing any of the window's mutex-protected members
 #define WINDOW_REPOSITION_THRESHOLD 6
 static void _bolt_window_calc_repos_target(struct EmbeddedWindow* window, const struct EmbeddedWindowMetadata* meta, int16_t x, int16_t y, uint32_t window_width, uint32_t window_height) {
@@ -380,6 +384,33 @@ static void _bolt_process_plugins(uint8_t* need_capture, uint8_t* capture_ready)
     }
 }
 
+static void snap_window(struct EmbeddedWindowMetadata* metadata, uint32_t window_width, uint32_t window_height, bool* did_move, bool* did_resize) {
+    if (metadata->width > window_width) {
+        metadata->width = window_width;
+        *did_resize = true;
+    }
+    if (metadata->height > window_height) {
+        metadata->height = window_height;
+        *did_resize = true;
+    }
+    if (metadata->x < 0) {
+        metadata->x = 0;
+        *did_move = true;
+    }
+    if (metadata->y < 0) {
+        metadata->y = 0;
+        *did_move = true;
+    }
+    if (metadata->x + metadata->width > window_width) {
+        metadata->x = window_width - metadata->width;
+        *did_move = true;
+    }
+    if (metadata->y + metadata->height > window_height) {
+        metadata->y = window_height - metadata->height;
+        *did_move = true;
+    }
+}
+
 static void _bolt_process_embedded_windows(uint32_t window_width, uint32_t window_height, uint8_t* need_capture, uint8_t* capture_ready) {
     _bolt_rwlock_lock_write(&windows.input_lock);
     struct WindowPendingInput inputs = windows.input;
@@ -442,30 +473,7 @@ static void _bolt_process_embedded_windows(uint32_t window_width, uint32_t windo
         _bolt_rwlock_lock_write(&window->lock);
         bool did_move = false;
         bool did_resize = false;
-        if (window->metadata.width > window_width) {
-            window->metadata.width = window_width;
-            did_resize = true;
-        }
-        if (window->metadata.height > window_height) {
-            window->metadata.height = window_height;
-            did_resize = true;
-        }
-        if (window->metadata.x < 0) {
-            window->metadata.x = 0;
-            did_move = true;
-        }
-        if (window->metadata.y < 0) {
-            window->metadata.y = 0;
-            did_move = true;
-        }
-        if (window->metadata.x + window->metadata.width > window_width) {
-            window->metadata.x = window_width - window->metadata.width;
-            did_move = true;
-        }
-        if (window->metadata.y + window->metadata.height > window_height) {
-            window->metadata.y = window_height - window->metadata.height;
-            did_move = true;
-        }
+        snap_window(&window->metadata, window_width, window_height, &did_move, &did_resize);
         struct EmbeddedWindowMetadata metadata = window->metadata;
         _bolt_rwlock_unlock_write(&window->lock);
 
@@ -500,6 +508,7 @@ static void _bolt_process_embedded_windows(uint32_t window_width, uint32_t windo
                     window->metadata.height = window->repos_target_h;
                     metadata = window->metadata;
                     _bolt_rwlock_unlock_write(&window->lock);
+                    window->last_user_action_metadata = metadata;
 
                     if (did_resize) {
                         struct PluginSurfaceUserdata* ud = window->surface_functions.userdata;
@@ -554,6 +563,21 @@ static void _bolt_process_embedded_windows(uint32_t window_width, uint32_t windo
             if (inputs.mouse_leave) {
                 struct MouseMotionEvent event = {.details = inputs.mouse_motion_event};
                 _bolt_plugin_window_onmouseleave(window, &event);
+            }
+
+            if (!embedded_window_meta_eq(&window->last_user_action_metadata, &metadata)) {
+                // try to fit the window back to how the user last repositioned it, or as close as possible
+                // did_move and did_resize aren't actually used here
+                const struct EmbeddedWindowMetadata old_meta = metadata;
+                metadata = window->last_user_action_metadata;                
+                snap_window(&metadata, window_width, window_height, &did_move, &did_resize);
+                if (!embedded_window_meta_eq(&old_meta, &metadata)) {
+                    _bolt_rwlock_lock_write(&window->lock);
+                    window->metadata = metadata;
+                    _bolt_rwlock_unlock_write(&window->lock);
+                    struct RepositionEvent event = {.x = metadata.x, .y = metadata.y, .width = metadata.width, .height = metadata.height, .did_resize = did_resize};
+                    _bolt_plugin_window_onreposition(window, &event);
+                }
             }
         }
 
