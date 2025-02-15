@@ -14,6 +14,9 @@
 
 	let modal: Modal;
 
+	let messageText: string | null = null;
+	let messageIsError: boolean = false;
+
 	const platformFileSep: string = bolt.platform === 'windows' ? '\\' : '/';
 	const configFileName: string = 'bolt.json';
 	const sepConfigFileName: string = platformFileSep.concat(configFileName);
@@ -23,6 +26,18 @@
 		showURLEntry = false;
 		modal.open();
 	}
+
+	const setMessageInfo = (msg: string) => {
+		console.log(msg);
+		messageText = msg;
+		messageIsError = false;
+	};
+
+	const setMessageError = (msg: string) => {
+		console.error(msg);
+		messageText = msg;
+		messageIsError = true;
+	};
 
 	const getPluginConfigPromiseFromPath = (dirpath: string): Promise<PluginConfig> => {
 		return new Promise((resolve, reject) => {
@@ -85,46 +100,69 @@
 				};
 				GlobalState.pluginConfigHasPendingChanges = true;
 			})
-			.catch((reason) => {
-				console.error(`Config file '${configPath}' couldn't be fetched, reason: ${reason}`);
-			});
+			.catch((reason) =>
+				setMessageError(`config file '${configPath}' couldn't be fetched, reason: ${reason}`)
+			);
 	};
 	const addPluginFromUpdaterURL = (url: string) => {
-		fetch(url).then(async (x) => {
-			if (!x.ok) return;
-			const config: PluginUpdaterConfig = await x.json();
-			if (config.url) {
-				const data = await fetch(config.url).then((x) => x.arrayBuffer());
-				if (config.sha256) {
-					const hash = await crypto.subtle.digest('SHA-256', data);
-					const hashStr = Array.from(new Uint8Array(hash))
-						.map((x) => x.toString(16).padStart(2, '0'))
-						.join('');
-					if (config.sha256 !== hashStr) {
-						console.error(`not installing plugin: incorrect file hash`);
+		setMessageError('downloading...');
+		fetch(url)
+			.then(async (x) => {
+				if (!x.ok) {
+					setMessageError(
+						`can't install plugin: updater URL returned ${x.status}: ${x.statusText}`
+					);
+					return;
+				}
+				const config: PluginUpdaterConfig = await x.json();
+				if (config.url) {
+					const configUrlResponse = await fetch(config.url);
+					if (!configUrlResponse.ok) {
+						setMessageError(
+							`can't install plugin: remote download URL returned ${x.status}: ${x.statusText}`
+						);
 						return;
 					}
-				}
+					const data = await configUrlResponse.arrayBuffer();
+					if (config.sha256) {
+						const hash = await crypto.subtle.digest('SHA-256', data);
+						const hashStr = Array.from(new Uint8Array(hash))
+							.map((x) => x.toString(16).padStart(2, '0'))
+							.join('');
+						if (config.sha256 !== hashStr) {
+							setMessageError(`can't install plugin: incorrect file hash`);
+							return;
+						}
+					}
 
-				const id = getNewPluginID();
-				const r = await fetch('/install-plugin?'.concat(new URLSearchParams({ id }).toString()), {
-					method: 'POST',
-					body: data
-				});
-				if (!r.ok) return;
-				const plugin = await getPluginConfigPromiseFromDataDir(id);
-				if (plugin) {
-					selectedPlugin = id;
-					bolt.pluginConfig[selectedPlugin] = {
-						name: plugin.name ?? unnamedPluginName,
-						version: plugin.version,
-						updaterURL: url,
-						sha256: config.sha256
-					};
-					GlobalState.pluginConfigHasPendingChanges = true;
+					const id = getNewPluginID();
+					const r = await fetch('/install-plugin?'.concat(new URLSearchParams({ id }).toString()), {
+						method: 'POST',
+						body: data
+					});
+					if (!r.ok) {
+						setMessageError(`can't install plugin: ${x.statusText}`);
+						return;
+					}
+					const plugin = await getPluginConfigPromiseFromDataDir(id);
+					if (plugin) {
+						selectedPlugin = id;
+						bolt.pluginConfig[selectedPlugin] = {
+							name: plugin.name ?? unnamedPluginName,
+							version: plugin.version,
+							updaterURL: url,
+							sha256: config.sha256
+						};
+						GlobalState.pluginConfigHasPendingChanges = true;
+						setMessageInfo(`plugin '${plugin.name}' installed`);
+					} else {
+						setMessageError(`can't install plugin: ${configFileName} not found`);
+					}
 				}
-			}
-		});
+			})
+			.catch(() => {
+				setMessageError(`can't install plugin: unhandled exception`);
+			});
 	};
 
 	// json file picker
@@ -144,7 +182,9 @@
 						);
 						addPluginFromPath(subpath, xml.responseText);
 					} else {
-						console.log(`Selection '${xml.responseText}' is not named ${configFileName}; ignored`);
+						setMessageError(
+							`selection '${xml.responseText}' is not named ${configFileName}; ignored`
+						);
 					}
 				}
 			}
@@ -223,7 +263,17 @@
 		// this function can only be called for PluginMetas that have an updaterURL
 		const url: string = <string>meta.updaterURL;
 		fetch(url).then(async (x) => {
+			if (!x.ok) {
+				setMessageError(`can't update plugin: updater URL returned ${x.status}: ${x.statusText}`);
+				return;
+			}
+
 			let config: PluginUpdaterConfig = await x.json();
+			if (!config.url) {
+				setMessageInfo(`can't update plugin '${meta.name}': no remote download URL is configured`);
+				return;
+			}
+
 			let downloadNeeded = false;
 			if (config.sha256) {
 				if (meta.sha256 !== config.sha256) {
@@ -235,9 +285,14 @@
 				}
 			}
 
-			if (downloadNeeded && config.url) {
+			if (downloadNeeded) {
 				const r = await fetch(config.url);
-				if (!r.ok) return null;
+				if (!r.ok) {
+					setMessageError(
+						`can't update plugin: remote download URL returned ${r.status}: ${r.statusText}`
+					);
+					return;
+				}
 				const data = await r.arrayBuffer();
 				if (config.sha256) {
 					const hash = await crypto.subtle.digest('SHA-256', data);
@@ -245,7 +300,7 @@
 						.map((x) => x.toString(16).padStart(2, '0'))
 						.join('');
 					if (config.sha256 !== hashStr) {
-						console.error(`not updating plugin '${meta.name}': incorrect file hash`);
+						setMessageError(`can't update plugin '${meta.name}': incorrect file hash`);
 						return;
 					}
 				}
@@ -259,7 +314,12 @@
 					if (plugin.name) meta.name = plugin.name;
 					if (plugin.version) meta.version = plugin.version;
 					GlobalState.pluginConfigHasPendingChanges = true;
+					setMessageInfo(`plugin '${plugin.name}' updated`);
+				} else {
+					setMessageError(`can't update plugin '${meta.name}': ${configFileName} not found`);
 				}
+			} else {
+				setMessageInfo(`plugin '${meta.name}' is already up-to-date`);
 			}
 		});
 	};
@@ -477,6 +537,7 @@
 											}).toString()
 										)
 									);
+									setMessageInfo(`plugin '${meta.name}' uninstalled`);
 									delete list[selectedPlugin];
 									bolt.pluginConfig = list;
 								}
@@ -544,6 +605,14 @@
 			{/if}
 		{:else}
 			<p>error</p>
+		{/if}
+		{#if messageText}
+			<br /><br />
+			{#if messageIsError}
+				<p class="text-red-500">[error] {messageText}</p>
+			{:else}
+				<p>[info] {messageText}</p>
+			{/if}
 		{/if}
 	</div>
 	<div class="absolute bottom-2 right-4">
