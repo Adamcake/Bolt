@@ -86,12 +86,15 @@ Browser::Launcher::Launcher(
 	CefRefPtr<FileManager::FileManager> file_manager,
 	std::filesystem::path config_dir,
 	std::filesystem::path data_dir
-): Window(client, details, show_devtools), data_dir(data_dir), file_manager(file_manager) {
+): Window(client, details, show_devtools), last_x(details.startx), last_y(details.starty), data_dir(data_dir), file_manager(file_manager) {
 	this->creds_path = data_dir;
 	this->creds_path.append("creds");
 
 	this->config_path = config_dir;
 	this->config_path.append("launcher.json");
+
+	this->launcher_bin_path = config_dir;
+	this->launcher_bin_path.append(LAUNCHER_BIN_FILENAME);
 
 	this->rs3_elf_path = data_dir;
 	this->rs3_elf_path.append("rs3linux");
@@ -302,6 +305,15 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandle
 void Browser::Launcher::OnBrowserDestroyed(CefRefPtr<CefBrowserView> view, CefRefPtr<CefBrowser> browser) {
 	Window::OnBrowserDestroyed(view, browser);
 	this->file_manager = nullptr;
+
+#define INT16CFG(N) static_cast<uint8_t>(static_cast<uint16_t>(N) & 0xFF), static_cast<uint8_t>((static_cast<uint16_t>(N) >> 8) & 0xFF)
+	const uint8_t config_bytes[] = {INT16CFG(1), INT16CFG(this->last_x), INT16CFG(this->last_y)};
+#undef INT16CFG
+	std::ofstream f(this->launcher_bin_path, std::ios::binary | std::ios::out);
+	if (!f.fail()) {
+		f.write(reinterpret_cast<const char*>(config_bytes), sizeof(config_bytes));
+		f.close();
+	}
 }
 
 CefString Browser::Launcher::BuildURL() const {
@@ -683,6 +695,11 @@ void Browser::Launcher::Refresh() const {
 
 void Browser::Launcher::NotifyClosed() {
 	this->client->OnLauncherClosed();
+}
+
+void Browser::Launcher::OnWindowBoundsChanged(CefRefPtr<CefWindow> window, const CefRect& new_bounds) {
+	this->last_x = new_bounds.x;
+	this->last_y = new_bounds.y;
 }
 
 CefRefPtr<CefResourceRequestHandler> SaveFileFromPost(CefRefPtr<CefRequest> request, const std::filesystem::path::value_type* path) {

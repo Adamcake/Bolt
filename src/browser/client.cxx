@@ -31,14 +31,6 @@ constexpr bool SHOW_DEVTOOLS = true;
 constexpr bool SHOW_DEVTOOLS = false;
 #endif
 
-const Browser::Details LAUNCHER_DETAILS = {
-	.preferred_width = 800,
-	.preferred_height = 608,
-	.center_on_open = true,
-	.resizeable = true,
-	.frame = true,
-};
-
 Browser::Client::Client(CefRefPtr<Browser::App> app,std::filesystem::path config_dir, std::filesystem::path data_dir, std::filesystem::path runtime_dir):
 #if defined(BOLT_DEV_LAUNCHER_DIRECTORY)
 	CLIENT_FILEHANDLER(BOLT_DEV_LAUNCHER_DIRECTORY, true),
@@ -65,7 +57,7 @@ void Browser::Client::OpenLauncher() {
 	if (this->launcher) {
 		this->launcher->Focus();
 	} else {
-		this->launcher = new Browser::Launcher(this, LAUNCHER_DETAILS, this->show_devtools, this, this->config_dir, this->data_dir);
+		this->launcher = new Browser::Launcher(this, this->LauncherDetails(), this->show_devtools, this, this->config_dir, this->data_dir);
 	}
 }
 
@@ -162,7 +154,7 @@ void Browser::Client::OnContextInitialized() {
 	CefWindow::CreateTopLevelWindow(this);
 #else
 	this->launcher_lock.lock();
-	this->launcher = new Browser::Launcher(this, LAUNCHER_DETAILS, this->show_devtools, this, this->config_dir, this->data_dir);
+	this->launcher = new Browser::Launcher(this, this->LauncherDetails(), this->show_devtools, this, this->config_dir, this->data_dir);
 	this->launcher_lock.unlock();
 #endif
 }
@@ -175,7 +167,7 @@ void Browser::Client::OnAfterCreated(CefRefPtr<CefBrowser> browser) {
 	if (ipc_browser && ipc_browser->IsSame(browser)) {
 		this->ipc_browser = browser;
 		this->launcher_lock.lock();
-		this->launcher = new Browser::Launcher(this, LAUNCHER_DETAILS, this->show_devtools, this, this->config_dir, this->data_dir);
+		this->launcher = new Browser::Launcher(this, this->LauncherDetails(), this->show_devtools, this, this->config_dir, this->data_dir);
 		this->launcher_lock.unlock();
 	}
 #endif
@@ -687,6 +679,44 @@ void Browser::Client::OnWindowCreated(CefRefPtr<CefWindow> window) {
 	// used only for dummy IPC window; real browsers have their own OnWindowCreated override
 	this->ipc_window = window;
 	window->AddChildView(this->ipc_view);
+}
+
+Browser::Details Browser::Client::LauncherDetails() {
+	int startx = 0;
+	int starty = 0;
+	std::filesystem::path p = this->config_dir;
+	p.append(LAUNCHER_BIN_FILENAME);
+	std::ifstream f(p, std::ios::binary | std::ios::in);
+	if (!f.fail()) {
+		int numbers[3];
+		uint8_t buf[2];
+		bool success = true;
+		for (size_t i = 0; i < sizeof(numbers) / sizeof(*numbers); i += 1) {
+			f.read(reinterpret_cast<char*>(buf), sizeof(buf));
+			if (f.fail() || f.eof()) {
+				success = false;
+				break;
+			}
+			numbers[i] = static_cast<int16_t>(static_cast<uint16_t>(buf[0]) + (static_cast<uint16_t>(buf[1]) << 8));
+		}
+		if (success && numbers[0] == 1) {
+			startx = numbers[1];
+			starty = numbers[2];
+		}
+		f.close();
+	}
+
+	return Details {
+		.preferred_width = 800,
+		.preferred_height = 608,
+		.startx = startx,
+		.starty = starty,
+		.center_on_open = true,
+		.resizeable = true,
+		.frame = true,
+		.is_devtools = false,
+		.has_custom_js = false,
+	};
 }
 
 Browser::Client::ActivePlugin::ActivePlugin(uint64_t uid, std::string id, std::filesystem::path path, bool watch): Directory(path, watch), uid(uid), id(id), deleted(false) { }

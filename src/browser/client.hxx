@@ -145,6 +145,7 @@ namespace Browser {
 			IMPLEMENT_REFCOUNTING(Client);
 
 			void Exit();
+			Details LauncherDetails();
 
 			bool show_devtools;
 			std::filesystem::path config_dir;

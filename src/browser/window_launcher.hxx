@@ -39,6 +39,8 @@ namespace Browser {
 
 		void NotifyClosed() override;
 
+		void OnWindowBoundsChanged(CefRefPtr<CefWindow>, const CefRect&) override;
+
 		/* 
 		Functions called by GetResourceRequestHandler. The result will be returned immediately and must not be null.
 		The request and URL query string are provided for parsing.
@@ -77,10 +79,13 @@ namespace Browser {
 #endif
 
 		private:
+			int last_x;
+			int last_y;
 			CefRefPtr<FileManager::FileManager> file_manager;
 			std::filesystem::path data_dir;
 			std::filesystem::path creds_path;
 			std::filesystem::path config_path;
+			std::filesystem::path launcher_bin_path;
 			std::filesystem::path rs3_elf_path;
 			std::filesystem::path rs3_elf_hash_path;
 			std::filesystem::path rs3_exe_path;
@@ -105,5 +110,7 @@ namespace Browser {
 
 CefRefPtr<CefResourceRequestHandler> SaveFileFromPost(CefRefPtr<CefRequest>, const std::filesystem::path::value_type*);
 bool BrowseFile(const std::filesystem::path&);
+
+#define LAUNCHER_BIN_FILENAME "launcher.bin"
 
 #endif
