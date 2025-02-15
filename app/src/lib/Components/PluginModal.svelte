@@ -368,7 +368,7 @@
 		class="left-0 float-left h-full w-[min(180px,_50%)] overflow-hidden border-r-2 border-slate-300 pt-2 dark:border-slate-800"
 	>
 		<button
-			class="mx-auto mb-2 w-[95%] rounded-lg border-2 {isClientSelected
+			class="mx-auto mb-2 w-[95%] select-none rounded-lg border-2 {isClientSelected
 				? 'border-blue-500 text-black dark:text-white'
 				: 'border-black bg-blue-500 text-black'} p-2 font-bold hover:opacity-75"
 			on:click={() => (isClientSelected = false)}
@@ -387,7 +387,7 @@
 						showURLEntry = false;
 						textURLEntry = '';
 					}}
-					class="m-1 h-[28px] w-[95%] rounded-lg border-2 {isClientSelected &&
+					class="m-1 h-[28px] w-[95%] select-none rounded-lg border-2 {isClientSelected &&
 					selectedClientId === client.uid
 						? 'border-black bg-blue-500 text-black'
 						: 'border-blue-500 text-black dark:text-white'} hover:opacity-75"
@@ -411,7 +411,7 @@
 			{#if !isClientSelected}
 				<span class="align-middle">
 					<button
-						class="mx-1 aspect-square w-9 rounded-md bg-blue-500 p-1 text-[20px] font-bold duration-200 enabled:hover:opacity-75 disabled:bg-gray-500"
+						class="mx-1 aspect-square w-9 select-none rounded-md bg-blue-500 p-1 text-[20px] font-bold duration-200 enabled:hover:opacity-75 disabled:bg-gray-500"
 						on:click={() => {
 							showURLEntry = !showURLEntry;
 							textURLEntry = '';
@@ -422,7 +422,7 @@
 						<img src="svgs/download-solid.svg" alt="Install plugin from updater URL" />
 					</button>
 					<button
-						class="aspect-square w-9 rounded-md bg-blue-500 p-1 text-[20px] font-bold duration-200 enabled:hover:opacity-75 disabled:bg-gray-500"
+						class="aspect-square w-9 select-none rounded-md bg-blue-500 p-1 text-[20px] font-bold duration-200 enabled:hover:opacity-75 disabled:bg-gray-500"
 						on:click={jsonFilePicker}
 						disabled={disableButtons}
 						title="Install plugin from local directory"
@@ -446,7 +446,7 @@
 							showURLEntry = false;
 							textURLEntry = '';
 						}}
-						class="rounded-sm bg-emerald-500 hover:opacity-75"
+						class="select-none rounded-sm bg-emerald-500 hover:opacity-75"
 						><img src="svgs/check-solid.svg" class="h-5 w-5" alt="Confirm" /></button
 					>
 					<button
@@ -455,7 +455,7 @@
 							showURLEntry = false;
 							textURLEntry = '';
 						}}
-						class="rounded-sm bg-rose-500 hover:opacity-75"
+						class="select-none rounded-sm bg-rose-500 hover:opacity-75"
 						><img src="svgs/xmark-solid.svg" class="h-5 w-5" alt="Close" /></button
 					>
 					<br /><br />
@@ -483,7 +483,7 @@
 							<br />
 						{/await}
 						<button
-							class="mx-auto mb-1 w-[min(144px,_25%)] rounded-lg bg-blue-500 p-2 font-bold text-black duration-200 hover:opacity-75"
+							class="mx-auto mb-1 w-[min(144px,_25%)] select-none rounded-lg bg-blue-500 p-2 font-bold text-black duration-200 hover:opacity-75"
 							on:click={() => {
 								const path = bolt.pluginConfig[selectedPlugin].path;
 								if (path) {
@@ -501,7 +501,7 @@
 						</button>
 						&nbsp;
 						<button
-							class="mx-auto mb-1 w-[min(144px,_25%)] rounded-lg bg-blue-500 p-2 font-bold text-black duration-200 hover:opacity-75"
+							class="mx-auto mb-1 w-[min(144px,_25%)] select-none rounded-lg bg-blue-500 p-2 font-bold text-black duration-200 hover:opacity-75"
 							on:click={() =>
 								fetch(
 									'/browse-plugin-config?'.concat(
@@ -514,7 +514,7 @@
 						<br />
 						{#if selectedPluginMeta.updaterURL}
 							<button
-								class="m-1 mx-auto w-[min(144px,_25%)] rounded-lg p-2 font-bold text-black duration-200 enabled:bg-blue-500 enabled:hover:opacity-75 disabled:bg-gray-500"
+								class="m-1 mx-auto w-[min(144px,_25%)] select-none rounded-lg p-2 font-bold text-black duration-200 enabled:bg-blue-500 enabled:hover:opacity-75 disabled:bg-gray-500"
 								on:click={() => updatePlugin(selectedPluginMeta, selectedPlugin)}
 							>
 								Check updates
@@ -522,7 +522,7 @@
 							&nbsp;
 						{/if}
 						<button
-							class="m-1 mx-auto w-[min(144px,_25%)] rounded-lg p-2 font-bold text-black duration-200 enabled:bg-rose-500 enabled:hover:opacity-75 disabled:bg-gray-500"
+							class="m-1 mx-auto w-[min(144px,_25%)] select-none rounded-lg p-2 font-bold text-black duration-200 enabled:bg-rose-500 enabled:hover:opacity-75 disabled:bg-gray-500"
 							on:click={() => {
 								managementPluginPromise = null;
 								GlobalState.pluginConfigHasPendingChanges = true;
@@ -559,7 +559,7 @@
 				{:then plugin}
 					{#if plugin && plugin.main && Object.keys(bolt.pluginConfig).includes(selectedPlugin)}
 						<button
-							class="mx-auto mb-1 w-auto rounded-lg bg-emerald-500 p-2 font-bold text-black duration-200 hover:opacity-75"
+							class="mx-auto mb-1 w-auto select-none rounded-lg bg-emerald-500 p-2 font-bold text-black duration-200 hover:opacity-75"
 							on:click={() =>
 								startPlugin(
 									selectedClientId,
@@ -585,7 +585,7 @@
 									<p>
 										{bolt.pluginConfig[activePlugin.id].name ?? activePlugin.id}
 										<button
-											class="rounded-sm bg-rose-500 shadow-lg hover:opacity-75"
+											class="select-none rounded-sm bg-rose-500 shadow-lg hover:opacity-75"
 											on:click={() => {
 												stopPlugin(selectedClientId, activePlugin.uid);
 											}}
@@ -617,7 +617,7 @@
 	</div>
 	<div class="absolute bottom-2 right-4">
 		<button
-			class="m-0 cursor-pointer border-none bg-transparent p-0 text-sm text-gray-500 underline"
+			class="m-0 cursor-pointer select-none border-none bg-transparent p-0 text-sm text-gray-500 underline"
 			on:click={openAboutPlugins}>about plugins</button
 		>
 	</div>
