@@ -189,7 +189,7 @@ jobs:
             BZIP2_INCLUDE_DIR=D:/a/Bolt/Bolt/libarchive/bzip2/builddir/include
             LIBLZMA_LIBRARY=D:/a/Bolt/Bolt/libarchive/xz/builddir/lib/lzma.lib
             LIBLZMA_INCLUDE_DIR=D:/a/Bolt/Bolt/libarchive/xz/builddir/include
-            ZSTD_LIBRARY=D:/a/Bolt/Bolt/libarchive/zstd/builddir/libzstd_static.lib
+            ZSTD_LIBRARY=D:/a/Bolt/Bolt/libarchive/zstd/builddir/zstd_static.lib
             ZSTD_INCLUDE_DIR=D:/a/Bolt/Bolt/libarchive/zstd/builddir/include
           build-args: --config Release
 
