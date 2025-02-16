@@ -86,20 +86,115 @@ jobs:
           repository: libarchive/libarchive
           ref: v${{ env.LIBARCHIVE_VERSION }}
 
+      - name: Checkout zlib
+        uses: actions/checkout@v4.2.0
+        with:
+          path: libarchive\zlib
+          repository: libarchive/zlib
+          ref: v1.3
+
+      - name: Checkout bzip2
+        uses: actions/checkout@v4.2.0
+        with:
+          path: libarchive\bzip2
+          repository: libarchive/bzip2
+          ref: 1ea1ac188ad4b9cb662e3f8314673c63df95a589
+
+      - name: Checkout xz
+        uses: actions/checkout@v4.2.0
+        with:
+          path: libarchive\xz
+          repository: libarchive/xz
+          ref: v5.6.3
+
+      - name: Checkout zstd
+        uses: actions/checkout@v4.2.0
+        with:
+          path: libarchive\zstd
+          repository: facebook/zstd
+          ref: v1.5.5
+      
+      - name: Build zlib
+        uses: threeal/cmake-action@v2.0.0
+        with:
+          source-dir: libarchive\zlib
+          build-dir: libarchive\zlib\builddir
+          generator: Visual Studio 17
+          options: | 
+            CMAKE_BUILD_TYPE=Release
+            CMAKE_INSTALL_PREFIX=libarchive\zlib\builddir
+          build-args: --config Release
+
+      - name: Create zlib release
+        run: cmake --install libarchive/zlib/builddir/
+
+      - name: Build bzip2
+        uses: threeal/cmake-action@v2.0.0
+        with:
+          source-dir: libarchive\bzip2
+          build-dir: libarchive\bzip2\builddir
+          generator: Visual Studio 17
+          options: | 
+            CMAKE_BUILD_TYPE=Release
+            CMAKE_INSTALL_PREFIX=libarchive\bzip2\builddir
+            ENABLE_LIB_ONLY=ON
+            ENABLE_SHARED_LIB=OFF
+            ENABLE_STATIC_LIB=ON
+          build-args: --config Release
+
+      - name: Create bzip2 release
+        run: cmake --install libarchive/bzip2/builddir/
+      
+      - name: Build xz
+        uses: threeal/cmake-action@v2.0.0
+        with:
+          source-dir: libarchive\xz
+          build-dir: libarchive\xz\builddir
+          generator: Visual Studio 17
+          options: | 
+            CMAKE_BUILD_TYPE=Release
+            CMAKE_INSTALL_PREFIX=libarchive\xz\builddir
+          build-args: --config Release
+
+      - name: Create xz release
+        run: cmake --install libarchive/xz/builddir/
+
+      - name: Build zstd
+        uses: threeal/cmake-action@v2.0.0
+        with:
+          source-dir: libarchive\zstd
+          build-dir: libarchive\zstd\builddir
+          generator: Visual Studio 17
+          options: | 
+            CMAKE_BUILD_TYPE=Release
+            CMAKE_INSTALL_PREFIX=libarchive\zstd\builddir
+          build-args: --config Release
+
+      - name: Create zstd release
+        run: cmake --install libarchive/zstd/builddir/
+
       - name: Build libarchive
         uses: threeal/cmake-action@v2.0.0
         with:
           source-dir: libarchive
-          build-dir: builddir
+          build-dir: libarchive\builddir
           generator: Visual Studio 17
           options: | 
             CMAKE_BUILD_TYPE=Release
             CMAKE_INSTALL_PREFIX=libarchive\builddir
             ENABLE_OPENSSL=OFF
-          build-args: --config Release -j 4
+            ZLIB_LIBRARY=D:\a\Bolt\Bolt\libarchive\zlib\builddir\lib\zlibstatic.lib
+            ZLIB_INCLUDE_DIR=D:\a\Bolt\Bolt\libarchive\zlib\builddir\include
+            BZIP2_LIBRARIES=D:\a\Bolt\Bolt\libarchive\bzip2\builddir\lib\bz2_static.lib
+            BZIP2_INCLUDE_DIR=D:\a\Bolt\Bolt\libarchive\bzip2\builddir\include
+            LIBLZMA_LIBRARY=D:\a\Bolt\Bolt\libarchive\xz\builddir\lib\lzma.lib
+            LIBLZMA_INCLUDE_DIR=D:\a\Bolt\Bolt\libarchive\xz\builddir\include
+            ZSTD_LIBRARY=D:\a\Bolt\Bolt\libarchive\zstd\builddir\libzstd_static.lib
+            ZSTD_INCLUDE_DIR=D:\a\Bolt\Bolt\libarchive\zstd\builddir\include
+          build-args: --config Release
 
       - name: Create libarchive release
-        run: cmake --install builddir/
+        run: cmake --install libarchive/builddir/
 
       - name: Restore CEF from Cache
         id: restore-cef-cache
@@ -126,6 +221,10 @@ jobs:
       # D:\a\Bolt\Bolt
       # - libarchive
       #   - <whole libarchive source>
+      #   - bzip2/
+      #   - xz/
+      #   - zlib/
+      #   - zstd/
       # - LuaJIT
       #   - <whole luaJIT source>
       # - Bolt
@@ -138,7 +237,7 @@ jobs:
       # The first two Bolt dirs (D:\a\Bolt\Bolt) are the workspace provided by github.
       # Github always does it this way.
       # Then github normally clones directly in to the workspace with a folder of the repo name. 
-      # However for our usecase we clone multiple repos, so we have D:\a\Bolt\Bolt\{LuaJIT, Bolt}
+      # However for our usecase we clone multiple repos, so we have D:\a\Bolt\Bolt\{libarchive, LuaJIT, Bolt}
       - name: Build Project
         uses: threeal/cmake-action@v2.0.0
         with:
