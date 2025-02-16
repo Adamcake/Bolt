@@ -105,7 +105,7 @@
 			);
 	};
 	const addPluginFromUpdaterURL = (url: string) => {
-		setMessageError('downloading...');
+		setMessageInfo('downloading...');
 		fetch(url)
 			.then(async (x) => {
 				if (!x.ok) {
