@@ -245,6 +245,44 @@ CefRefPtr<CefResourceRequestHandler> Browser::Client::GetResourceRequestHandler(
 	return ret;
 }
 
+Browser::Details Browser::Client::LauncherDetails() {
+	int startx = 0;
+	int starty = 0;
+	std::filesystem::path p = this->config_dir;
+	p.append(LAUNCHER_BIN_FILENAME);
+	std::ifstream f(p, std::ios::binary | std::ios::in);
+	if (!f.fail()) {
+		int numbers[3];
+		uint8_t buf[2];
+		bool success = true;
+		for (size_t i = 0; i < sizeof(numbers) / sizeof(*numbers); i += 1) {
+			f.read(reinterpret_cast<char*>(buf), sizeof(buf));
+			if (f.fail() || f.eof()) {
+				success = false;
+				break;
+			}
+			numbers[i] = static_cast<int16_t>(static_cast<uint16_t>(buf[0]) + (static_cast<uint16_t>(buf[1]) << 8));
+		}
+		if (success && numbers[0] == 1) {
+			startx = numbers[1];
+			starty = numbers[2];
+		}
+		f.close();
+	}
+
+	return Details {
+		.preferred_width = 800,
+		.preferred_height = 608,
+		.startx = startx,
+		.starty = starty,
+		.center_on_open = true,
+		.resizeable = true,
+		.frame = true,
+		.is_devtools = false,
+		.has_custom_js = false,
+	};
+}
+
 #if defined(BOLT_PLUGINS)
 void Browser::Client::IPCHandleNewClient(int fd) {
 	fmt::print("[I] new client fd {}\n", fd);
@@ -679,44 +717,6 @@ void Browser::Client::OnWindowCreated(CefRefPtr<CefWindow> window) {
 	// used only for dummy IPC window; real browsers have their own OnWindowCreated override
 	this->ipc_window = window;
 	window->AddChildView(this->ipc_view);
-}
-
-Browser::Details Browser::Client::LauncherDetails() {
-	int startx = 0;
-	int starty = 0;
-	std::filesystem::path p = this->config_dir;
-	p.append(LAUNCHER_BIN_FILENAME);
-	std::ifstream f(p, std::ios::binary | std::ios::in);
-	if (!f.fail()) {
-		int numbers[3];
-		uint8_t buf[2];
-		bool success = true;
-		for (size_t i = 0; i < sizeof(numbers) / sizeof(*numbers); i += 1) {
-			f.read(reinterpret_cast<char*>(buf), sizeof(buf));
-			if (f.fail() || f.eof()) {
-				success = false;
-				break;
-			}
-			numbers[i] = static_cast<int16_t>(static_cast<uint16_t>(buf[0]) + (static_cast<uint16_t>(buf[1]) << 8));
-		}
-		if (success && numbers[0] == 1) {
-			startx = numbers[1];
-			starty = numbers[2];
-		}
-		f.close();
-	}
-
-	return Details {
-		.preferred_width = 800,
-		.preferred_height = 608,
-		.startx = startx,
-		.starty = starty,
-		.center_on_open = true,
-		.resizeable = true,
-		.frame = true,
-		.is_devtools = false,
-		.has_custom_js = false,
-	};
 }
 
 Browser::Client::ActivePlugin::ActivePlugin(uint64_t uid, std::string id, std::filesystem::path path, bool watch): Directory(path, watch), uid(uid), id(id), deleted(false) { }
