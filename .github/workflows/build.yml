@@ -162,7 +162,7 @@ jobs:
       - name: Build zstd
         uses: threeal/cmake-action@v2.0.0
         with:
-          source-dir: libarchive\zstd
+          source-dir: libarchive\zstd\build\cmake
           build-dir: libarchive\zstd\builddir
           generator: Visual Studio 17
           options: | 
