@@ -386,6 +386,7 @@
 						isClientSelected = true;
 						showURLEntry = false;
 						textURLEntry = '';
+						messageText = null;
 					}}
 					class="m-1 h-[28px] w-[95%] select-none rounded-lg border-2 {isClientSelected &&
 					selectedClientId === client.uid
@@ -403,6 +404,7 @@
 			<select
 				bind:value={selectedPlugin}
 				class="mx-auto mb-4 w-[min(280px,_45%)] cursor-pointer rounded-lg border-2 border-slate-300 bg-inherit p-2 text-inherit duration-200 hover:opacity-75 dark:border-slate-800"
+				on:change={() => messageText = null}
 			>
 				{#each Object.entries(bolt.pluginConfig) as [id, plugin]}
 					<option class="dark:bg-slate-900" value={id}>{plugin.name ?? unnamedPluginName}</option>
