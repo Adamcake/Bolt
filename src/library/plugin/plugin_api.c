@@ -14,6 +14,7 @@
 #if defined(_WIN32)
 #define getpid _getpid
 #else
+#include <limits.h>
 #include <unistd.h>
 #endif
 
