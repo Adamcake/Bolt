@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21) # Minimum CEF requirement, but building with the latest cmake is strongly recommended
-project(Bolt VERSION 0.10 LANGUAGES C CXX)
+project(Bolt VERSION 0.11 LANGUAGES C CXX)
 
 if(NOT WIN32)
     # name of application in metadata, defaulting to "BoltLauncher", but usually overridden to "com.adamcake.Bolt" by flatpak for example
@@ -65,6 +65,20 @@ if(NOT WIN32)
         "    </screenshot>"
         "</screenshots>"
         "<releases>"
+        "    <release version=\"0.11.0\" date=\"2025-02-16\">"
+        "        <url type=\"details\">https://github.com/Adamcake/Bolt/releases/tag/0.11.0</url>"
+        "        <description>"
+        "            <p>Beta plugin API and lots of improvements</p>"
+        "            <ul>"
+        "                <li>First official release of the RS3 plugin API. This is considered beta and unstable until 1.0. See the "about" via the plugin menu.</li>"
+        "                <li>Updated to CEF version 126 (from 114), this is primarily to fix the "white screen"/"blank screen"/"GPUCache" issue (e.g. #108)</li>"
+        "                <li>For multi-monitor setups, the launcher will now try to remember which screen it was last on when re-opened</li>"
+        "                <li>The 'play' button is now disabled until login is complete - fixes an issue where clicking 'play' too early with 'close after launching a game' enabled would log the user out</li>"
+        "                <li>Fixed display names not updating when changed in-game</li>"
+        "                <li>Fixed launcher closing when clicking 'configure runelite' while the 'close after launching a game' setting is enabled</li>"
+        "            </ul>"
+        "        </description>"
+        "    </release>"
         "    <release version=\"0.10.0\" date=\"2024-10-15\">"
         "        <url type=\"details\">https://github.com/Adamcake/Bolt/releases/tag/0.10.0</url>"
         "        <description>"
