@@ -159,11 +159,20 @@ CefRefPtr<CefRequestHandler> Browser::Launcher::GetRequestHandler() {
 }
 
 #define ROUTE(API, FUNC) if (path == "/" API) { return this->FUNC(request, query); }
+#define ROUTEUNSUPPORTED(API) if (path == "/" API) { QSENDNOTSUPPORTED(); }
+
 #if defined(BOLT_PLUGINS)
-#define ROUTEIFPLUGINS(API, FUNC) if (path == "/" API) { return this->FUNC(request, query); }
+#define ROUTEIFPLUGINS(API, FUNC) ROUTE(API, FUNC)
+#if defined(HAS_LIBARCHIVE)
+#define ROUTEIFLIBARCHIVE(API, FUNC) ROUTEIFPLUGINS(API, FUNC)
 #else
-#define ROUTEIFPLUGINS(API, FUNC) if (path == "/" API) { QSENDNOTSUPPORTED(); }
+#define ROUTEIFLIBARCHIVE(API, FUNC) ROUTEUNSUPPORTED(API)
 #endif
+#else
+#define ROUTEIFPLUGINS(API, FUNC) ROUTEUNSUPPORTED(API)
+#define ROUTEIFLIBARCHIVE(API, FUNC) ROUTEUNSUPPORTED(API)
+#endif
+
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetResourceRequestHandler(
 	CefRefPtr<CefBrowser> browser,
 	CefRefPtr<CefFrame> frame,
@@ -539,6 +548,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::StopPlugin(CefRefPtr<Cef
 }
 
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::InstallPlugin(CefRefPtr<CefRequest> request, std::string_view query) {
+#if defined(HAS_LIBARCHIVE)
 	CefRefPtr<CefPostData> post_data = request->GetPostData();
 	QSENDBADREQUESTIF(!post_data || post_data->GetElementCount() != 1);
 
@@ -604,6 +614,9 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::InstallPlugin(CefRefPtr<
 	archive_read_free(archive);
 	delete[] archive_file;
 	QSENDOK();
+#else
+	QSENDNOTSUPPORTED();
+#endif
 }
 
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::UninstallPlugin(CefRefPtr<CefRequest> request, std::string_view query) {
