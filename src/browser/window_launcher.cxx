@@ -158,7 +158,7 @@ CefRefPtr<CefRequestHandler> Browser::Launcher::GetRequestHandler() {
 	return this;
 }
 
-#define ROUTE(API, FUNC) if (path == "/" API) { return this->FUNC(request, query); }
+#define ROUTE(API, FUNC) if (path == "/" API) { return this->FUNC(request, browser, query); }
 #define ROUTEUNSUPPORTED(API) if (path == "/" API) { QSENDNOTSUPPORTED(); }
 
 #if defined(BOLT_PLUGINS)
@@ -408,23 +408,47 @@ CefString Browser::Launcher::BuildURL() const {
 	return url.str();
 }
 
-CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJarNormal(CefRefPtr<CefRequest> request, std::string_view query) {
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<CefRequest> request, CefRefPtr<CefBrowser>, std::string_view query) {
+	return this->LaunchRs3Deb(request, query);
+}
+
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Exe(CefRefPtr<CefRequest> request, CefRefPtr<CefBrowser>, std::string_view query) {
+	return this->LaunchRs3Exe(request, query);
+}
+
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3App(CefRefPtr<CefRequest> request, CefRefPtr<CefBrowser>, std::string_view query) {
+	return this->LaunchRs3App(request, query);
+}
+
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchOsrsExe(CefRefPtr<CefRequest> request, CefRefPtr<CefBrowser>, std::string_view query) {
+	return this->LaunchOsrsExe(request, query);
+}
+
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchOsrsApp(CefRefPtr<CefRequest> request, CefRefPtr<CefBrowser>, std::string_view query) {
+	return this->LaunchOsrsApp(request, query);
+}
+
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<CefRequest> request, CefRefPtr<CefBrowser>, std::string_view query) {
+	return this->LaunchHdosJar(request, query);
+}
+
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJarNormal(CefRefPtr<CefRequest> request, CefRefPtr<CefBrowser> browser, std::string_view query) {
 	return this->LaunchRuneliteJar(request, query, false);
 }
 
-CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJarConfigure(CefRefPtr<CefRequest> request, std::string_view query) {
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJarConfigure(CefRefPtr<CefRequest> request, CefRefPtr<CefBrowser> browser, std::string_view query) {
 	return this->LaunchRuneliteJar(request, query, true);
 }
 
-CefRefPtr<CefResourceRequestHandler> Browser::Launcher::SaveConfig(CefRefPtr<CefRequest> request, std::string_view _) {
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::SaveConfig(CefRefPtr<CefRequest> request, CefRefPtr<CefBrowser> browser, std::string_view _) {
 	return SaveFileFromPost(request, this->config_path.c_str());
 }
 
-CefRefPtr<CefResourceRequestHandler> Browser::Launcher::SaveCredentials(CefRefPtr<CefRequest> request, std::string_view _) {
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::SaveCredentials(CefRefPtr<CefRequest> request, CefRefPtr<CefBrowser> browser, std::string_view _) {
 	return SaveFileFromPost(request, this->creds_path.c_str());
 }
 
-CefRefPtr<CefResourceRequestHandler> Browser::Launcher::OpenExternalUrl(CefRefPtr<CefRequest> request, std::string_view _) {
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::OpenExternalUrl(CefRefPtr<CefRequest> request, CefRefPtr<CefBrowser> browser, std::string_view _) {
 	CefRefPtr<CefPostData> post_data = request->GetPostData();
 	QSENDBADREQUESTIF(!post_data || post_data->GetElementCount() != 1);
 	CefPostData::ElementVector elements;
@@ -438,7 +462,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::OpenExternalUrl(CefRefPt
 	QSENDOK();
 }
 
-CefRefPtr<CefResourceRequestHandler> Browser::Launcher::BrowseDirectory(CefRefPtr<CefRequest> request, std::string_view query) {
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::BrowseDirectory(CefRefPtr<CefRequest> request, CefRefPtr<CefBrowser> browser, std::string_view query) {
 	QSTRING path;
 	bool has_path = false;
 	ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
@@ -450,36 +474,36 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::BrowseDirectory(CefRefPt
 	QSENDOK();
 }
 
-CefRefPtr<CefResourceRequestHandler> Browser::Launcher::BrowseData(CefRefPtr<CefRequest> request, std::string_view query) {
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::BrowseData(CefRefPtr<CefRequest> request, CefRefPtr<CefBrowser> browser, std::string_view query) {
 	QSENDSYSTEMERRORIF(BrowseFile(this->data_dir));
 	QSENDOK();
 }
 
-CefRefPtr<CefResourceRequestHandler> Browser::Launcher::JarFilePicker(CefRefPtr<CefRequest> request, std::string_view query) {
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::JarFilePicker(CefRefPtr<CefRequest> request, CefRefPtr<CefBrowser> browser, std::string_view query) {
 	return new FilePicker(browser, {".jar"});
 }
 
-CefRefPtr<CefResourceRequestHandler> Browser::Launcher::JsonFilePicker(CefRefPtr<CefRequest> request, std::string_view query) {
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::JsonFilePicker(CefRefPtr<CefRequest> request, CefRefPtr<CefBrowser> browser, std::string_view query) {
 	return new FilePicker(browser, {".json"});
 }
 
-CefRefPtr<CefResourceRequestHandler> Browser::Launcher::Close(CefRefPtr<CefRequest> request, std::string_view query) {
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::Close(CefRefPtr<CefRequest> request, CefRefPtr<CefBrowser> browser, std::string_view query) {
 	browser->GetHost()->CloseBrowser(false);
 	QSENDOK();
 }
 
 
 #if defined(BOLT_PLUGINS)
-CefRefPtr<CefResourceRequestHandler> Browser::Launcher::SavePluginConfig(CefRefPtr<CefRequest> request, std::string_view _) {
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::SavePluginConfig(CefRefPtr<CefRequest> request, CefRefPtr<CefBrowser> browser, std::string_view _) {
 	return SaveFileFromPost(request, this->plugin_config_path.c_str());
 }
 
-CefRefPtr<CefResourceRequestHandler> Browser::Launcher::ListGameClients(CefRefPtr<CefRequest> request, std::string_view _) {
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::ListGameClients(CefRefPtr<CefRequest> request, CefRefPtr<CefBrowser> browser, std::string_view _) {
 	this->UpdateClientList(true);
 	QSENDOK();
 }
 
-CefRefPtr<CefResourceRequestHandler> Browser::Launcher::ReadJsonFile(CefRefPtr<CefRequest> request, std::string_view query) {
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::ReadJsonFile(CefRefPtr<CefRequest> request, CefRefPtr<CefBrowser> browser, std::string_view query) {
 	QSTRING path;
 	bool has_path = false;
 	ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
@@ -498,7 +522,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::ReadJsonFile(CefRefPtr<C
 	}
 }
 
-CefRefPtr<CefResourceRequestHandler> Browser::Launcher::StartPlugin(CefRefPtr<CefRequest> request, std::string_view query) {
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::StartPlugin(CefRefPtr<CefRequest> request, CefRefPtr<CefBrowser> browser, std::string_view query) {
 	CefString id;
 	bool has_id = false;
 	CefString path;
@@ -530,7 +554,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::StartPlugin(CefRefPtr<Ce
 	QSENDOK();
 }
 
-CefRefPtr<CefResourceRequestHandler> Browser::Launcher::StopPlugin(CefRefPtr<CefRequest> request, std::string_view query) {
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::StopPlugin(CefRefPtr<CefRequest> request, CefRefPtr<CefBrowser> browser, std::string_view query) {
 	uint64_t client;
 	bool has_client = false;
 	bool client_valid = false;
@@ -547,7 +571,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::StopPlugin(CefRefPtr<Cef
 	QSENDOK();
 }
 
-CefRefPtr<CefResourceRequestHandler> Browser::Launcher::InstallPlugin(CefRefPtr<CefRequest> request, std::string_view query) {
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::InstallPlugin(CefRefPtr<CefRequest> request, CefRefPtr<CefBrowser> browser, std::string_view query) {
 #if defined(HAS_LIBARCHIVE)
 	CefRefPtr<CefPostData> post_data = request->GetPostData();
 	QSENDBADREQUESTIF(!post_data || post_data->GetElementCount() != 1);
@@ -619,7 +643,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::InstallPlugin(CefRefPtr<
 #endif
 }
 
-CefRefPtr<CefResourceRequestHandler> Browser::Launcher::UninstallPlugin(CefRefPtr<CefRequest> request, std::string_view query) {
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::UninstallPlugin(CefRefPtr<CefRequest> request, CefRefPtr<CefBrowser> browser, std::string_view query) {
 	QSTRING id;
 	bool has_id = false;
 	bool delete_data_dir = false;
@@ -641,7 +665,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::UninstallPlugin(CefRefPt
 	QSENDOK();
 }
 
-CefRefPtr<CefResourceRequestHandler> Browser::Launcher::BrowsePluginData(CefRefPtr<CefRequest> request, std::string_view query) {
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::BrowsePluginData(CefRefPtr<CefRequest> request, CefRefPtr<CefBrowser> browser, std::string_view query) {
 	QSTRING id;
 	bool has_id = false;
 	ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
@@ -655,7 +679,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::BrowsePluginData(CefRefP
 	QSENDOK();
 }
 
-CefRefPtr<CefResourceRequestHandler> Browser::Launcher::BrowsePluginConfig(CefRefPtr<CefRequest> request, std::string_view query) {
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::BrowsePluginConfig(CefRefPtr<CefRequest> request, CefRefPtr<CefBrowser> browser, std::string_view query) {
 	QSTRING id;
 	bool has_id = false;
 	ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
@@ -669,7 +693,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::BrowsePluginConfig(CefRe
 	QSENDOK();
 }
 
-CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetPluginDirJson(CefRefPtr<CefRequest> request, std::string_view query) {
+CefRefPtr<CefResourceRequestHandler> Browser::Launcher::GetPluginDirJson(CefRefPtr<CefRequest> request, CefRefPtr<CefBrowser> browser, std::string_view query) {
 	QSTRING id;
 	bool has_id = false;
 	ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
