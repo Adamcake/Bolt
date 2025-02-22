@@ -219,6 +219,17 @@ void _bolt_plugin_window_on##APINAME(struct EmbeddedWindow* window, const struct
     } \
 }
 
+static void delete_windows_by_uid(uint64_t uid) {
+    size_t iter = 0;
+    void* item;
+    lock_windows_for_reading();
+    while (hashmap_iter(windows.map, &iter, &item)) {
+        struct EmbeddedWindow* window = *(struct EmbeddedWindow**)item;
+        if (window->plugin_id == uid) window->is_deleted = true;
+    }
+    unlock_windows_for_reading();
+}
+
 void _bolt_plugin_on_startup() {
     windows.map = hashmap_new(sizeof(struct EmbeddedWindow*), 8, 0, 0, _bolt_window_map_hash, _bolt_window_map_compare, NULL, NULL);
     _bolt_rwlock_init(&windows.lock);
@@ -1310,15 +1321,7 @@ lua_settable(plugin->state, LUA_REGISTRYINDEX);
 
     // attempt to run the function
     if (lua_pcall(plugin->state, 0, 0, 0)) {
-        lock_windows_for_reading();
-        size_t iter = 0;
-        void* item;
-        while (hashmap_iter(windows.map, &iter, &item)) {
-            struct EmbeddedWindow* window = *(struct EmbeddedWindow**)item;
-            window->is_deleted = true;
-        }
-        unlock_windows_for_reading();
-
+        delete_windows_by_uid(plugin->id);
         const char* e = lua_tolstring(plugin->state, -1, 0);
         printf("plugin startup error: %s\n", e);
         lua_pop(plugin->state, 1);
@@ -1330,15 +1333,7 @@ lua_settable(plugin->state, LUA_REGISTRYINDEX);
 }
 
 void _bolt_plugin_stop(uint64_t uid) {
-    size_t iter = 0;
-    void* item;
-    lock_windows_for_reading();
-    while (hashmap_iter(windows.map, &iter, &item)) {
-        struct EmbeddedWindow* window = *(struct EmbeddedWindow**)item;
-        if (window->plugin_id == uid) window->is_deleted = true;
-    }
-    unlock_windows_for_reading();
-
+    delete_windows_by_uid(uid);
     struct Plugin p = {.id = uid};
     struct Plugin* pp = &p;
     struct Plugin* const* plugin = hashmap_get(plugins, &pp);
