@@ -52,6 +52,7 @@ static uint64_t grabbed_window_id = 0;
 
 static char character_hash[SHA256_BLOCK_SIZE * 2] = {0};
 
+// called mainly from the input thread - see comment in header for thread-safety observations
 uint64_t _bolt_plugin_get_last_mouseevent_windowid() { return last_mouseevent_window_id; }
 
 static void _bolt_plugin_ipc_init(BoltSocketType*);
@@ -1085,9 +1086,12 @@ static uint8_t point_in_rect(int x, int y, int rx, int ry, int rw, int rh) {
 }
 
 uint8_t _bolt_plugin_handle_mouse_event(struct MouseEvent* event, ptrdiff_t bool_offset, ptrdiff_t event_offset, uint8_t grab_type, uint8_t* mousein_fake, uint8_t* mousein_real) {
+    // IMPORTANT: this function is called from the input thread, unlike everything else in this file
+    // which is called from the "main"/graphics thread, so any global variable access or function calls
+    //must be done with caution. In particular, this function must not use lock_windows_for_reading().
     if (mousein_real) *mousein_real = true;
     uint8_t ret = true;
-    lock_windows_for_reading();
+    _bolt_rwlock_lock_read(&windows.lock);
 
     // if the left mouse button is being held, try to route this event to the window that was clicked on
     if (event->mb_left || grab_type == GRAB_TYPE_STOP) {
@@ -1123,7 +1127,7 @@ uint8_t _bolt_plugin_handle_mouse_event(struct MouseEvent* event, ptrdiff_t bool
 
             // save this window as the most recent one to receive an event, unlock the windows mutex
             // before returning, then return 0 to indicate that this event shouldn't be forwarded to the game
-            unlock_windows_for_reading();
+            _bolt_rwlock_unlock_read(&windows.lock);
             last_mouseevent_window_id = (*window)->id;
             return false;
         }
@@ -1173,7 +1177,7 @@ uint8_t _bolt_plugin_handle_mouse_event(struct MouseEvent* event, ptrdiff_t bool
         (*mouseleave_window)->input.mouse_leave_event = *event;
         _bolt_rwlock_unlock_write(&(*mouseleave_window)->input_lock);
     }
-    unlock_windows_for_reading();
+    _bolt_rwlock_unlock_read(&windows.lock);
 
     // if `ret` is false, this event was consumed by an embedded window, so return 0 immediately to indicate that.
     // otherwise, set relevant events and variables for the game window, and return 1.

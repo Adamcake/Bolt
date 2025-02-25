@@ -494,6 +494,10 @@ uint8_t _bolt_plugin_add(const char* path, struct Plugin* plugin);
 uint8_t _bolt_plugin_handle_mouse_event(struct MouseEvent* event, ptrdiff_t bool_offset, ptrdiff_t event_offset, uint8_t grab_type, uint8_t* mousein_fake, uint8_t* mousein_real);
 
 /// Returns the ID of the last window to receive an event, or 0 for the game window.
+///
+/// If calling this from a thread other than the one that calls `_bolt_plugin_handle_mouse_event`,
+/// then mutex locking will be necessary, since that function overwrites the variable that's read
+/// by this function.
 uint64_t _bolt_plugin_get_last_mouseevent_windowid();
 
 /// Create an inbound SHM handle with a tag and ID. This pairing of tag and ID must not have been
