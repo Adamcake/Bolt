@@ -26,6 +26,7 @@ For Linux/Steamdeck users, Bolt is available on the following package managers:
 - flatpak: `com.adamcake.Bolt`
 - AUR: `bolt-launcher`
 
+Instructions on installing flatpak can be found [here](https://flatpak.org/setup/)
 Others should see the "releases" section on the right.
 
 ## Building
