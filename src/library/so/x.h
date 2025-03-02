@@ -10,6 +10,10 @@
 // (causes a client crash), I have no choice but to do the same thing.
 #define XINPUTEXTENSION 131
 
+#define XCB_NONE 0L
+#define XCB_PROP_MODE_REPLACE 0
+#define XCB_ATOM_WM_HINTS 35
+
 #define XCB_KEY_PRESS 2
 #define XCB_KEY_RELEASE 3
 #define XCB_BUTTON_PRESS 4
@@ -41,7 +45,9 @@
 #define XCB_INPUT_RAW_MOTION 17
 
 typedef struct xcb_connection_t xcb_connection_t;
+typedef uint32_t xcb_atom_t;
 typedef uint32_t xcb_window_t;
+typedef uint32_t xcb_pixmap_t;
 typedef uint32_t xcb_visualid_t;
 typedef uint32_t xcb_colormap_t;
 typedef uint32_t xcb_drawable_t;
@@ -79,15 +85,38 @@ typedef struct {
 } XWindowAttributes;
 
 typedef struct {
-	long flags;
-	int input;
-	int initial_state;
-	unsigned long icon_pixmap;
-	XWindow icon_window;
-	int icon_x, icon_y;
-	unsigned long icon_mask;
-	unsigned long window_group;
+	uint32_t flags;
+	uint32_t input;
+	uint32_t initial_state;
+	xcb_pixmap_t icon_pixmap;
+	xcb_window_t icon_window;
+	int32_t icon_x;
+    int32_t icon_y;
+	xcb_pixmap_t icon_mask;
+    uint32_t _; // ICCCM only specifies 8 fields but xlib and everyone else seem to use structs with 9 fields.
 } XWMHints;
+
+typedef struct {
+    unsigned int sequence;
+} xcb_void_cookie_t;
+
+typedef enum xcb_cw_t {
+    XCB_CW_BACK_PIXMAP = 1,
+    XCB_CW_BACK_PIXEL = 2,
+    XCB_CW_BORDER_PIXMAP = 4,
+    XCB_CW_BORDER_PIXEL = 8,
+    XCB_CW_BIT_GRAVITY = 16,
+    XCB_CW_WIN_GRAVITY = 32,
+    XCB_CW_BACKING_STORE = 64,
+    XCB_CW_BACKING_PLANES = 128,
+    XCB_CW_BACKING_PIXEL = 256,
+    XCB_CW_OVERRIDE_REDIRECT = 512,
+    XCB_CW_SAVE_UNDER = 1024,
+    XCB_CW_EVENT_MASK = 2048,
+    XCB_CW_DONT_PROPAGATE = 4096,
+    XCB_CW_COLORMAP = 8192,
+    XCB_CW_CURSOR = 16384
+} xcb_cw_t;
 
 typedef struct {
     uint8_t  response_type;
@@ -109,27 +138,9 @@ typedef struct {
     uint32_t full_sequence;
 } xcb_generic_error_t;
 
-typedef struct {
-    unsigned int sequence;
-} xcb_get_geometry_cookie_t;
-
 typedef struct xcb_query_extension_cookie_t {
     unsigned int sequence;
 } xcb_query_extension_cookie_t;
-
-typedef struct xcb_get_geometry_reply_t {
-    uint8_t      response_type;
-    uint8_t      depth;
-    uint16_t     sequence;
-    uint32_t     length;
-    xcb_window_t root;
-    int16_t      x;
-    int16_t      y;
-    uint16_t     width;
-    uint16_t     height;
-    uint16_t     border_width;
-    uint8_t      pad0[2];
-} xcb_get_geometry_reply_t;
 
 typedef struct xcb_button_press_event_t {
     uint8_t         response_type;
@@ -188,6 +199,17 @@ typedef struct xcb_query_extension_reply_t {
     uint8_t  first_event;
     uint8_t  first_error;
 } xcb_query_extension_reply_t;
+
+typedef struct xcb_get_property_reply_t {
+    uint8_t    response_type;
+    uint8_t    format;
+    uint16_t   sequence;
+    uint32_t   length;
+    xcb_atom_t type;
+    uint32_t   bytes_after;
+    uint32_t   value_len;
+    uint8_t    pad0[12];
+} xcb_get_property_reply_t;
 
 typedef struct xcb_motion_notify_event_t {
     uint8_t         response_type;

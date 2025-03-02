@@ -72,19 +72,21 @@ static unsigned int (*real_eglTerminate)(void*) = NULL;
 static xcb_generic_event_t* (*real_xcb_poll_for_event)(xcb_connection_t*) = NULL;
 static xcb_generic_event_t* (*real_xcb_poll_for_queued_event)(xcb_connection_t*) = NULL;
 static xcb_generic_event_t* (*real_xcb_wait_for_event)(xcb_connection_t*) = NULL;
+static xcb_void_cookie_t (*real_xcb_get_property)(xcb_connection_t*, uint8_t, xcb_window_t, xcb_atom_t, xcb_atom_t, uint32_t, uint32_t) = NULL;
+static xcb_get_property_reply_t* (*real_xcb_get_property_reply)(xcb_connection_t*, xcb_void_cookie_t, xcb_generic_event_t**) = NULL;
+static int (*real_xcb_get_property_value_length)(const xcb_get_property_reply_t*) = NULL;
+static void* (*real_xcb_get_property_value)(const xcb_get_property_reply_t*) = NULL;
+static xcb_void_cookie_t (*real_xcb_change_property)(xcb_connection_t*, uint8_t, xcb_window_t, xcb_atom_t, xcb_atom_t, uint8_t, uint32_t, const void*) = NULL;
+static xcb_void_cookie_t (*real_xcb_change_window_attributes)(xcb_connection_t*, xcb_window_t, uint32_t, const uint32_t*) = NULL;
 static int (*real_xcb_flush)(xcb_connection_t*) = NULL;
 
 static int (*real_XDefineCursor)(void*, XWindow, XCursor) = NULL;
 static int (*real_XUndefineCursor)(void*, XWindow) = NULL;
 static int (*real_XFreeCursor)(void*, XCursor) = NULL;
-static XWMHints* (*real_XGetWMHints)(void*, XWindow) = NULL;
-static int (*real_XSetWMHints)(void*, XWindow, XWMHints*) = NULL;
-static int (*real_XFree)(void*) = NULL;
 
 static struct GLLibFunctions libgl = {0};
 
-static void* xcursor_display = NULL;
-static XCursor xcursor_cursor;
+static uint32_t xcursor_cursor;
 static uint8_t xcursor_defined = false;
 static uint8_t xcursor_change_pending = 0;
 static pthread_mutex_t xcursor_lock;
@@ -254,6 +256,18 @@ static void _bolt_init_libxcb(unsigned long addr, const Elf32_Word* gnu_hash_tab
     if (sym) real_xcb_poll_for_queued_event = sym->st_value + libxcb_addr;
     sym = _bolt_lookup_symbol("xcb_wait_for_event", gnu_hash_table, hash_table, string_table, symbol_table);
     if (sym) real_xcb_wait_for_event = sym->st_value + libxcb_addr;
+    sym = _bolt_lookup_symbol("xcb_get_property", gnu_hash_table, hash_table, string_table, symbol_table);
+    if (sym) real_xcb_get_property = sym->st_value + libxcb_addr;
+    sym = _bolt_lookup_symbol("xcb_get_property_reply", gnu_hash_table, hash_table, string_table, symbol_table);
+    if (sym) real_xcb_get_property_reply = sym->st_value + libxcb_addr;
+    sym = _bolt_lookup_symbol("xcb_get_property_value_length", gnu_hash_table, hash_table, string_table, symbol_table);
+    if (sym) real_xcb_get_property_value_length = sym->st_value + libxcb_addr;
+    sym = _bolt_lookup_symbol("xcb_get_property_value", gnu_hash_table, hash_table, string_table, symbol_table);
+    if (sym) real_xcb_get_property_value = sym->st_value + libxcb_addr;
+    sym = _bolt_lookup_symbol("xcb_change_property", gnu_hash_table, hash_table, string_table, symbol_table);
+    if (sym) real_xcb_change_property = sym->st_value + libxcb_addr;
+    sym = _bolt_lookup_symbol("xcb_change_window_attributes", gnu_hash_table, hash_table, string_table, symbol_table);
+    if (sym) real_xcb_change_window_attributes = sym->st_value + libxcb_addr;
     sym = _bolt_lookup_symbol("xcb_flush", gnu_hash_table, hash_table, string_table, symbol_table);
     if (sym) real_xcb_flush = sym->st_value + libxcb_addr;
 }
@@ -266,12 +280,6 @@ static void _bolt_init_libx11(unsigned long addr, const Elf32_Word* gnu_hash_tab
     if (sym) real_XUndefineCursor = sym->st_value + libx11_addr;
     sym = _bolt_lookup_symbol("XFreeCursor", gnu_hash_table, hash_table, string_table, symbol_table);
     if (sym) real_XFreeCursor = sym->st_value + libx11_addr;
-    sym = _bolt_lookup_symbol("XGetWMHints", gnu_hash_table, hash_table, string_table, symbol_table);
-    if (sym) real_XGetWMHints = sym->st_value + libx11_addr;
-    sym = _bolt_lookup_symbol("XSetWMHints", gnu_hash_table, hash_table, string_table, symbol_table);
-    if (sym) real_XSetWMHints = sym->st_value + libx11_addr;
-    sym = _bolt_lookup_symbol("XFree", gnu_hash_table, hash_table, string_table, symbol_table);
-    if (sym) real_XFree = sym->st_value + libx11_addr;
 }
 
 static int _bolt_dl_iterate_callback(struct dl_phdr_info* info, size_t size, void* args) {
@@ -333,6 +341,7 @@ static void _bolt_init_functions() {
     pthread_mutex_init(&egl_lock, NULL);
     pthread_mutex_init(&window_size_lock, NULL);
     pthread_mutex_init(&focus_lock, NULL);
+    pthread_mutex_init(&xcursor_lock, NULL);
     dl_iterate_phdr(_bolt_dl_iterate_callback, NULL);
 #if defined(VERBOSE)
     _bolt_gl_set_logfile(stdout);
@@ -769,100 +778,106 @@ xcb_generic_event_t* xcb_wait_for_event(xcb_connection_t* c) {
 }
 
 int xcb_flush(xcb_connection_t* c) {
-    const int ret = real_xcb_flush(c);
     pthread_mutex_lock(&xcursor_lock);
-    if (xcursor_display) {
-        const uint8_t change_pending = flash_change_pending;
-        const uint8_t do_flash = pending_flash;
-        void* display = xcursor_display;
+    const uint8_t change_pending = flash_change_pending;
+    uint8_t do_flash = pending_flash;
+    flash_change_pending = false;
 
-        switch (xcursor_change_pending) {
-            case 1:
-                if (xcursor_defined) {
-                    xcursor_change_pending = 0;
-                    pthread_mutex_unlock(&xcursor_lock);
-                    real_XDefineCursor(xcursor_display, main_window_xcb, xcursor_cursor);
-                } else {
-                    pthread_mutex_unlock(&xcursor_lock);
-                }
-                break;
-            case 2:
+    switch (xcursor_change_pending) {
+        case 1:
+            if (xcursor_defined) {
                 xcursor_change_pending = 0;
+                const uint32_t cursor = xcursor_cursor;
                 pthread_mutex_unlock(&xcursor_lock);
-                real_XUndefineCursor(xcursor_display, main_window_xcb);
-                break;
-            default:
+                real_xcb_change_window_attributes(c, main_window_xcb, XCB_CW_CURSOR, &cursor);
+            } else {
                 pthread_mutex_unlock(&xcursor_lock);
+            }
+            break;
+        case 2:
+            xcursor_change_pending = 0;
+            pthread_mutex_unlock(&xcursor_lock);
+            const uint32_t value = XCB_NONE;
+            real_xcb_change_window_attributes(c, main_window_xcb, XCB_CW_CURSOR, &value);
+            break;
+        default:
+            pthread_mutex_unlock(&xcursor_lock);
+    }
+
+    if (change_pending) {
+        bool do_change = true;
+        if (do_flash) {
+            pthread_mutex_lock(&focus_lock);
+            const uint8_t focus = window_focus;
+            pthread_mutex_unlock(&focus_lock);
+            if (focus) c = false;
         }
 
-        if (change_pending) {
-            if (do_flash) {
-                pthread_mutex_lock(&focus_lock);
-                const uint8_t focus = window_focus;
-                pthread_mutex_unlock(&focus_lock);
-                if (focus) return ret;
-            }
-
+        if (do_change) {
             XWMHints hints;
-            XWMHints* ptr_hints;
-            if (display) {
-                ptr_hints = real_XGetWMHints(display, main_window_xcb);
-                const uint8_t is_static = !ptr_hints;
-                if (is_static) {
-                    memset(&hints, 0, sizeof hints);
-                    if (do_flash) hints.flags = (1 << 8);
-                    ptr_hints = &hints;
-                } else {
+            XWMHints* ptr_hints = NULL;
+            uint32_t hints_length_dwords = sizeof(XWMHints) >> 2;
+            const xcb_void_cookie_t cookie = real_xcb_get_property(c, false, main_window_xcb, XCB_ATOM_WM_HINTS, XCB_ATOM_WM_HINTS, 0, hints_length_dwords);
+            xcb_get_property_reply_t* const reply = real_xcb_get_property_reply(c, cookie, NULL);
+
+            if (reply) {
+                const int length = real_xcb_get_property_value_length(reply);
+                if (length > 0) {
+                    hints_length_dwords = length;
+                    ptr_hints = real_xcb_get_property_value(reply);
                     if (do_flash) {
                         ptr_hints->flags |= (1 << 8);
                     } else {
                         ptr_hints->flags &= ~(1 << 8);
                     }
                 }
-                real_XSetWMHints(display, main_window_xcb, ptr_hints);
-                if (!is_static) real_XFree(ptr_hints);
             }
+
+            if (!ptr_hints) {
+                memset(&hints, 0, sizeof hints);
+                if (do_flash) hints.flags = (1 << 8);
+                ptr_hints = &hints;
+            }
+
+            real_xcb_change_property(c, XCB_PROP_MODE_REPLACE, main_window_xcb, XCB_ATOM_WM_HINTS, XCB_ATOM_WM_HINTS, 32, hints_length_dwords, ptr_hints);
+            free(reply);
         }
-    } else {
-        pthread_mutex_unlock(&xcursor_lock);
     }
 
-    return ret;
+    return real_xcb_flush(c);
 }
 
 int XDefineCursor(void* display, XWindow w, XCursor cursor) {
-    if (!xcursor_display) {
-        pthread_mutex_init(&xcursor_lock, NULL);
-        xcursor_display = display;
-    }
     if (w != main_window_xcb) return real_XDefineCursor(display, w, cursor);
     if (mousein_fake) {
         const int ret = real_XDefineCursor(display, w, cursor);
         if (!ret) return ret;
     }
+    pthread_mutex_lock(&xcursor_lock);
     xcursor_cursor = cursor;
     xcursor_defined = true;
+    pthread_mutex_unlock(&xcursor_lock);
     return 1;
 }
 
 int XUndefineCursor(void* display, XWindow w) {
-    if (!xcursor_display) {
-        pthread_mutex_init(&xcursor_lock, NULL);
-        xcursor_display = display;
-    }
     int ret = real_XUndefineCursor(display, w);
     if (!ret) return ret;
     if (w != main_window_xcb) return ret;
+    pthread_mutex_lock(&xcursor_lock);
     xcursor_defined = false;
+    pthread_mutex_unlock(&xcursor_lock);
     return ret;
 }
 
 int XFreeCursor(void* display, XCursor cursor) {
     int ret = real_XFreeCursor(display, cursor);
     if (!ret) return ret;
+    pthread_mutex_lock(&xcursor_lock);
     if (cursor == xcursor_cursor) {
         xcursor_defined = false;
     }
+    pthread_mutex_unlock(&xcursor_lock);
     return ret;
 }
 
