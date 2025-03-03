@@ -70,19 +70,9 @@ struct GLProgram {
     GLint loc_aMaterialSettingsSlotXY_Rotation;
     GLint loc_aParticleUVAnimationData;
     GLint loc_uProjectionMatrix;
-    GLint loc_uInvViewMatrix;
-    GLint loc_uParticleEmitterTransforms[8];
-    GLint loc_uParticleEmitterTransformRanges[14];
     GLint loc_uDiffuseMap;
     GLint loc_uTextureAtlas;
     GLint loc_uTextureAtlasSettings;
-    GLint loc_uAtlasMeta;
-    GLint loc_uModelMatrix;
-    GLint loc_uBoneTransforms;
-    GLint loc_uGridSize;
-    GLint loc_uVertexScale;
-    GLint loc_uSmoothSkinning;
-    GLint loc_uTextureAnimationTime;
     GLint loc_sSceneHDRTex;
     GLint loc_sSourceTex;
     GLint loc_sBlurFarTex;
@@ -92,6 +82,21 @@ struct GLProgram {
     GLint offset_uViewMatrix;
     GLint offset_uProjectionMatrix;
     GLint offset_uViewProjMatrix;
+    GLint offset_uInvViewMatrix;
+    GLuint block_index_BatchConsts;
+    GLint offset_uTextureAnimationTime;
+    GLint offset_uAtlasMeta;
+    GLint offset_uVertexScale;
+    GLuint block_index_ModelConsts;
+    GLint offset_uModelMatrix;
+    GLuint block_index_VertexTransformData;
+    GLint offset_uBoneTransforms;
+    GLint offset_uSmoothSkinning;
+    GLuint block_index_ParticleConsts;
+    GLint offset_uParticleEmitterTransforms;
+    GLint offset_uParticleEmitterTransformRanges;
+    GLuint block_index_TerrainConsts;
+    GLint offset_uGridSize;
     uint8_t is_minimap;
     uint8_t is_2d;
     uint8_t is_3d;
@@ -364,6 +369,7 @@ struct GLPluginDrawElementsVertex3DUserData {
     struct GLAttrBinding* colour;
     struct GLAttrBinding* skin_bones;
     struct GLAttrBinding* skin_weights;
+    struct GLArrayBuffer* transforms_ubo;
 };
 
 struct GLPluginDrawElementsVertexParticlesUserData {
@@ -382,22 +388,19 @@ struct GLPluginDrawElementsVertexParticlesUserData {
     const float* camera_position;
 
     GLint ranges[14];
-    GLfloat transform[16];
+    const GLfloat* transform[8];
     GLfloat animation_time;
-    uint8_t transform_index;
-    uint8_t ranges_known;
-    uint8_t animation_time_known;
 };
 
 struct GLPluginDrawElementsMatrixParticlesUserData {
-    float inv_view_matrix[16];
+    const GLfloat* inv_view_matrix;
     const struct GLProgram* program;
     const float* view_matrix;
     const float* proj_matrix;
 };
 
 struct GLPlugin3DMatrixUserData {
-    float model_matrix[16];
+    GLfloat* model_matrix;
     const struct GLProgram* program;
     const float* view_matrix;
     const float* proj_matrix;
@@ -472,22 +475,12 @@ static void cross(float* x, float* y, float* out) {
     out[2] = (x[0] * y[1]) - (y[0] * x[1]);
 }
 
-static void _bolt_gl_vertexparticlesuserdata_set_transform(unsigned short vertex, const struct GLProgram* program, struct GLPluginDrawElementsVertexParticlesUserData* userdata) {
-    if (!userdata->ranges_known) {
-        for (size_t i = 0; i < 14; i += 1) {
-            gl.GetUniformiv(program->id, program->loc_uParticleEmitterTransformRanges[i], &userdata->ranges[i]);
-        }
-        userdata->ranges_known = true;
-    }
+static const GLfloat* _bolt_gl_vertexparticlesuserdata_get_transform(unsigned short vertex, const struct GLProgram* program, struct GLPluginDrawElementsVertexParticlesUserData* userdata) {
     size_t i;
     for (i = 0; i < 7; i += 1) {
-        const size_t n = i * 2;
-        if (vertex >= userdata->ranges[n] && vertex < userdata->ranges[n + 1]) break;
+        if (vertex >= userdata->ranges[i * 2] && vertex < userdata->ranges[i * 2 + 1]) break;
     }
-    if (userdata->transform_index != i) {
-        gl.GetUniformfv(program->id, program->loc_uParticleEmitterTransforms[i], userdata->transform);
-        userdata->transform_index = i;
-    }
+    return userdata->transform[i];
 }
 
 static int uniform_compare(const void* a, const void* b, void* udata) {
@@ -836,27 +829,30 @@ static struct GLVertexArray* _bolt_context_get_vao(struct GLContext* c, GLuint i
     return ret;
 }
 
-static void bone_index_transform(const struct GLContext* c, uint8_t bone_id, struct Transform3D* out) {
-    const GLint uniform_loc = c->bound_program->loc_uBoneTransforms + (bone_id * 3);
-    GLfloat f[4];
-    gl.GetUniformfv(c->bound_program->id, uniform_loc, f);
-    out->matrix[0] = (double)f[0];
-    out->matrix[1] = (double)f[1];
-    out->matrix[2] = (double)f[2];
+static void bone_index_transform(struct GLContext* c, struct GLArrayBuffer** transforms_ubo, uint8_t bone_id, struct Transform3D* out) {
+    if (!*transforms_ubo) {
+        GLint ubo_binding, ubo_index;
+        gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_VertexTransformData, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
+        gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_index);
+        *transforms_ubo = _bolt_context_get_buffer(c, ubo_index);
+    }
+    const uint8_t* ubo_transforms_buf = (uint8_t*)((*transforms_ubo)->data);
+    const float* values = (float*)(ubo_transforms_buf + c->bound_program->offset_uBoneTransforms) + (bone_id * 12);
+    out->matrix[0] = (double)values[0];
+    out->matrix[1] = (double)values[1];
+    out->matrix[2] = (double)values[2];
     out->matrix[3] = 0.0;
-    out->matrix[4] = (double)f[3];
-    gl.GetUniformfv(c->bound_program->id, uniform_loc + 1, f);
-    out->matrix[5] = (double)f[0];
-    out->matrix[6] = (double)f[1];
+    out->matrix[4] = (double)values[3];
+    out->matrix[5] = (double)values[4];
+    out->matrix[6] = (double)values[5];
     out->matrix[7] = 0.0;
-    out->matrix[8] = (double)f[2];
-    out->matrix[9] = (double)f[3];
-    gl.GetUniformfv(c->bound_program->id, uniform_loc + 2, f);
-    out->matrix[10] = (double)f[0];
+    out->matrix[8] = (double)values[6];
+    out->matrix[9] = (double)values[7];
+    out->matrix[10] = (double)values[8];
     out->matrix[11] = 0.0;
-    out->matrix[12] = (double)f[1];
-    out->matrix[13] = (double)f[2];
-    out->matrix[14] = (double)f[3];
+    out->matrix[12] = (double)values[9];
+    out->matrix[13] = (double)values[10];
+    out->matrix[14] = (double)values[11];
     out->matrix[15] = 1.0;
 }
 
@@ -1115,17 +1111,9 @@ static GLuint _bolt_glCreateProgram() {
     program->loc_aMaterialSettingsSlotXY_Rotation = -1;
     program->loc_aParticleUVAnimationData = -1;
     program->loc_uProjectionMatrix = -1;
-    program->loc_uInvViewMatrix = -1;
     program->loc_uDiffuseMap = -1;
     program->loc_uTextureAtlas = -1;
     program->loc_uTextureAtlasSettings = -1;
-    program->loc_uAtlasMeta = -1;
-    program->loc_uModelMatrix = -1;
-    program->loc_uBoneTransforms = -1;
-    program->loc_uGridSize = -1;
-    program->loc_uVertexScale = -1;
-    program->loc_uSmoothSkinning = -1;
-    program->loc_uTextureAnimationTime = -1;
     program->loc_sSceneHDRTex = -1;
     program->loc_sTexture = -1;
     program->block_index_ViewTransforms = -1;
@@ -1133,6 +1121,21 @@ static GLuint _bolt_glCreateProgram() {
     program->offset_uViewMatrix = -1;
     program->offset_uProjectionMatrix = -1;
     program->offset_uViewProjMatrix = -1;
+    program->offset_uInvViewMatrix = -1;
+    program->block_index_BatchConsts = -1;
+    program->offset_uTextureAnimationTime = -1;
+    program->offset_uAtlasMeta = -1;
+    program->offset_uVertexScale = -1;
+    program->block_index_ModelConsts = -1;
+    program->offset_uModelMatrix = -1;
+    program->block_index_VertexTransformData = -1;
+    program->offset_uBoneTransforms = -1;
+    program->offset_uSmoothSkinning = -1;
+    program->block_index_ParticleConsts = -1;
+    program->offset_uParticleEmitterTransforms = -1;
+    program->offset_uParticleEmitterTransformRanges = -1;
+    program->block_index_TerrainConsts = -1;
+    program->offset_uGridSize = -1;
     program->is_2d = 0;
     program->is_3d = 0;
     program->is_minimap = 0;
@@ -1188,41 +1191,67 @@ static void _bolt_glLinkProgram(GLuint program) {
     struct GLProgram* p = _bolt_context_get_program(c, program);
     const GLint uDiffuseMap = gl.GetUniformLocation(program, "uDiffuseMap");
     const GLint uProjectionMatrix = gl.GetUniformLocation(program, "uProjectionMatrix");
-    const GLint uInvViewMatrix = gl.GetUniformLocation(program, "uInvViewMatrix");
     const GLint uTextureAtlas = gl.GetUniformLocation(program, "uTextureAtlas");
     const GLint uTextureAtlasSettings = gl.GetUniformLocation(program, "uTextureAtlasSettings");
-    const GLint uAtlasMeta = gl.GetUniformLocation(program, "uAtlasMeta");
-    const GLint uParticleEmitterTransforms0 = gl.GetUniformLocation(program, "uParticleEmitterTransforms[0]");
-    const GLint uParticleEmitterTransformRanges0 = gl.GetUniformLocation(program, "uParticleEmitterTransformRanges[0]");
-    const GLint loc_uModelMatrix = gl.GetUniformLocation(program, "uModelMatrix");
-    const GLint loc_uGridSize = gl.GetUniformLocation(program, "uGridSize");
-    const GLint loc_uVertexScale = gl.GetUniformLocation(program, "uVertexScale");
     p->loc_sSceneHDRTex = gl.GetUniformLocation(program, "sSceneHDRTex");
     p->loc_sSourceTex = gl.GetUniformLocation(program, "sSourceTex");
     p->loc_sBlurFarTex = gl.GetUniformLocation(program, "sBlurFarTex");
     p->loc_sTexture = gl.GetUniformLocation(program, "sTexture");
-    p->loc_uBoneTransforms = gl.GetUniformLocation(program, "uBoneTransforms");
-    p->loc_uSmoothSkinning = gl.GetUniformLocation(program, "uSmoothSkinning");
-    p->loc_uTextureAnimationTime = gl.GetUniformLocation(program, "uTextureAnimationTime");
 
-    const GLchar* view_var_names[] = {"uCameraPosition", "uViewMatrix", "uProjectionMatrix", "uViewProjMatrix"};
+    GLuint ubo_indices[5];
+    const GLchar* view_var_names[] = {"uCameraPosition", "uViewMatrix", "uProjectionMatrix", "uViewProjMatrix", "uInvViewMatrix"};
+    const GLchar* batch_var_names[] = {"uTextureAnimationTime", "uAtlasMeta", "uVertexScale"};
+    const GLchar* transform_var_names[] = {"uBoneTransforms", "uSmoothSkinning"};
+    const GLchar* model_var_names[] = {"uModelMatrix"};
+    const GLchar* particle_var_names[] = {"uParticleEmitterTransforms", "uParticleEmitterTransformRanges", "uTextureAnimationTime", "uAtlasMeta"};
+    const GLchar* terrain_var_names[] = {"uGridSize", "uModelMatrix"};
     const GLuint block_index_ViewTransforms = gl.GetUniformBlockIndex(program, "ViewTransforms");
-    GLuint ubo_indices[4];
-    GLint view_offsets[4];
-    GLint viewport_offset;
+    const GLuint block_index_BatchConsts = gl.GetUniformBlockIndex(program, "BatchConsts");
+    const GLuint block_index_VertexTransformData = gl.GetUniformBlockIndex(program, "VertexTransformData");
+    const GLuint block_index_ModelConsts = gl.GetUniformBlockIndex(program, "ModelConsts");
+    const GLuint block_index_ParticleConsts = gl.GetUniformBlockIndex(program, "ParticleConsts");
+    const GLuint block_index_TerrainConsts = gl.GetUniformBlockIndex(program, "TerrainConsts");
+    GLint view_offsets[5];
+    GLint batch_offsets[3];
+    GLint transform_offsets[2];
+    GLint model_offsets[1];
+    GLint particle_offsets[4];
+    GLint terrain_offsets[2];
     if ((GLint)block_index_ViewTransforms != -1) {
-        gl.GetUniformIndices(program, 4, view_var_names, ubo_indices);
-        gl.GetActiveUniformsiv(program, 4, ubo_indices, GL_UNIFORM_OFFSET, view_offsets);
+        gl.GetUniformIndices(program, 5, view_var_names, ubo_indices);
+        gl.GetActiveUniformsiv(program, 5, ubo_indices, GL_UNIFORM_OFFSET, view_offsets);
+    }
+    if ((GLint)block_index_BatchConsts != -1) {
+        gl.GetUniformIndices(program, 3, batch_var_names, ubo_indices);
+        gl.GetActiveUniformsiv(program, 3, ubo_indices, GL_UNIFORM_OFFSET, batch_offsets);
+    }
+    if ((GLint)block_index_VertexTransformData != -1) {
+        gl.GetUniformIndices(program, 2, transform_var_names, ubo_indices);
+        gl.GetActiveUniformsiv(program, 2, ubo_indices, GL_UNIFORM_OFFSET, transform_offsets);
+    }
+    if ((GLint)block_index_ModelConsts != -1) {
+        gl.GetUniformIndices(program, 1, model_var_names, ubo_indices);
+        gl.GetActiveUniformsiv(program, 1, ubo_indices, GL_UNIFORM_OFFSET, model_offsets);
+    }
+    if ((GLint)block_index_ParticleConsts != -1) {
+        gl.GetUniformIndices(program, 4, particle_var_names, ubo_indices);
+        gl.GetActiveUniformsiv(program, 4, ubo_indices, GL_UNIFORM_OFFSET, particle_offsets);
+    }
+    if ((GLint)block_index_TerrainConsts != -1) {
+        gl.GetUniformIndices(program, 4, terrain_var_names, ubo_indices);
+        gl.GetActiveUniformsiv(program, 4, ubo_indices, GL_UNIFORM_OFFSET, terrain_offsets);
     }
 
-    if (loc_uModelMatrix != -1 && loc_uGridSize != -1 && block_index_ViewTransforms != -1) {
-        p->loc_uModelMatrix = loc_uModelMatrix;
-        p->loc_uGridSize = loc_uGridSize;
+    if (block_index_ViewTransforms != -1 && block_index_TerrainConsts != -1) {
         p->block_index_ViewTransforms = block_index_ViewTransforms;
         p->offset_uCameraPosition = view_offsets[0];
         p->offset_uViewMatrix = view_offsets[1];
         p->offset_uProjectionMatrix = view_offsets[2];
         p->offset_uViewProjMatrix = view_offsets[3];
+        p->offset_uInvViewMatrix = view_offsets[4];
+        p->block_index_ModelConsts = block_index_TerrainConsts;
+        p->offset_uGridSize = terrain_offsets[0];
+        p->offset_uModelMatrix = terrain_offsets[1];
         p->is_minimap = 1;
     }
     if (p && p->loc_aVertexPosition2D != -1 && p->loc_aVertexColour != -1 && p->loc_aTextureUV != -1 && p->loc_aTextureUVAtlasMin != -1 && p->loc_aTextureUVAtlasExtents != -1 && uDiffuseMap != -1 && uProjectionMatrix != -1) {
@@ -1230,51 +1259,39 @@ static void _bolt_glLinkProgram(GLuint program) {
         p->loc_uProjectionMatrix = uProjectionMatrix;
         p->is_2d = 1;
     }
-    if (p && p->loc_aTextureUV != -1 && p->loc_aVertexColour != -1 && p->loc_aVertexPosition_BoneLabel != -1 && p->loc_aMaterialSettingsSlotXY_TilePositionXZ != -1 && uTextureAtlas != -1 && uAtlasMeta != -1 && uTextureAtlasSettings != -1 && loc_uModelMatrix != -1 && loc_uVertexScale != -1 && block_index_ViewTransforms != -1) {
+    if (p && p->loc_aTextureUV != -1 && p->loc_aVertexColour != -1 && p->loc_aVertexPosition_BoneLabel != -1 && p->loc_aMaterialSettingsSlotXY_TilePositionXZ != -1 && uTextureAtlas != -1 && uTextureAtlasSettings != -1 && block_index_ViewTransforms != -1 && block_index_ModelConsts != -1 && block_index_BatchConsts != -1) {
         p->loc_uTextureAtlas = uTextureAtlas;
         p->loc_uTextureAtlasSettings = uTextureAtlasSettings;
-        p->loc_uAtlasMeta = uAtlasMeta;
-        p->loc_uModelMatrix = loc_uModelMatrix;
-        p->loc_uVertexScale = loc_uVertexScale;
         p->block_index_ViewTransforms = block_index_ViewTransforms;
         p->offset_uCameraPosition = view_offsets[0];
         p->offset_uViewMatrix = view_offsets[1];
         p->offset_uProjectionMatrix = view_offsets[2];
         p->offset_uViewProjMatrix = view_offsets[3];
+        p->block_index_BatchConsts = block_index_BatchConsts;
+        p->offset_uTextureAnimationTime = batch_offsets[0];
+        p->offset_uAtlasMeta = batch_offsets[1];
+        p->offset_uVertexScale = batch_offsets[2];
+        p->block_index_ModelConsts = block_index_ModelConsts;
+        p->offset_uModelMatrix = model_offsets[0];
+        p->block_index_VertexTransformData = block_index_VertexTransformData;
+        p->offset_uBoneTransforms = transform_offsets[0];
+        p->offset_uSmoothSkinning = transform_offsets[1];
         p->is_3d = 1;
     }
-    if (p && p->loc_aParticleOrigin_CreationTime != -1 && p->loc_aParticleOffset != -1 && p->loc_aParticleVelocity != -1 && p->loc_aParticleEmitterUpAxis != -1 && p->loc_aMaterialSettingsSlotXY_Rotation != -1 && p->loc_aVertexColour != -1 && p->loc_aParticleUVAnimationData != -1 && uTextureAtlas != -1 && uAtlasMeta != -1 && uInvViewMatrix != -1 && uTextureAtlasSettings != -1 && uParticleEmitterTransforms0 != -1 && uParticleEmitterTransformRanges0 != -1 && block_index_ViewTransforms != -1) {
+    if (p && p->loc_aParticleOrigin_CreationTime != -1 && p->loc_aParticleOffset != -1 && p->loc_aParticleVelocity != -1 && p->loc_aParticleEmitterUpAxis != -1 && p->loc_aMaterialSettingsSlotXY_Rotation != -1 && p->loc_aVertexColour != -1 && p->loc_aParticleUVAnimationData != -1 && uTextureAtlas != -1 && uTextureAtlasSettings != -1 && block_index_ViewTransforms != -1 && block_index_ParticleConsts != -1) {
         p->loc_uTextureAtlas = uTextureAtlas;
         p->loc_uTextureAtlasSettings = uTextureAtlasSettings;
-        p->loc_uAtlasMeta = uAtlasMeta;
-        p->loc_uInvViewMatrix = uInvViewMatrix;
-        p->loc_uParticleEmitterTransforms[0] = uParticleEmitterTransforms0;
-        p->loc_uParticleEmitterTransforms[1] = gl.GetUniformLocation(program, "uParticleEmitterTransforms[1]");
-        p->loc_uParticleEmitterTransforms[2] = gl.GetUniformLocation(program, "uParticleEmitterTransforms[2]");
-        p->loc_uParticleEmitterTransforms[3] = gl.GetUniformLocation(program, "uParticleEmitterTransforms[3]");
-        p->loc_uParticleEmitterTransforms[4] = gl.GetUniformLocation(program, "uParticleEmitterTransforms[4]");
-        p->loc_uParticleEmitterTransforms[5] = gl.GetUniformLocation(program, "uParticleEmitterTransforms[5]");
-        p->loc_uParticleEmitterTransforms[6] = gl.GetUniformLocation(program, "uParticleEmitterTransforms[6]");
-        p->loc_uParticleEmitterTransforms[7] = gl.GetUniformLocation(program, "uParticleEmitterTransforms[7]");
-        p->loc_uParticleEmitterTransformRanges[0] = uParticleEmitterTransformRanges0;
-        p->loc_uParticleEmitterTransformRanges[1] = gl.GetUniformLocation(program, "uParticleEmitterTransformRanges[1]");
-        p->loc_uParticleEmitterTransformRanges[2] = gl.GetUniformLocation(program, "uParticleEmitterTransformRanges[2]");
-        p->loc_uParticleEmitterTransformRanges[3] = gl.GetUniformLocation(program, "uParticleEmitterTransformRanges[3]");
-        p->loc_uParticleEmitterTransformRanges[4] = gl.GetUniformLocation(program, "uParticleEmitterTransformRanges[4]");
-        p->loc_uParticleEmitterTransformRanges[5] = gl.GetUniformLocation(program, "uParticleEmitterTransformRanges[5]");
-        p->loc_uParticleEmitterTransformRanges[6] = gl.GetUniformLocation(program, "uParticleEmitterTransformRanges[6]");
-        p->loc_uParticleEmitterTransformRanges[7] = gl.GetUniformLocation(program, "uParticleEmitterTransformRanges[7]");
-        p->loc_uParticleEmitterTransformRanges[8] = gl.GetUniformLocation(program, "uParticleEmitterTransformRanges[8]");
-        p->loc_uParticleEmitterTransformRanges[9] = gl.GetUniformLocation(program, "uParticleEmitterTransformRanges[9]");
-        p->loc_uParticleEmitterTransformRanges[10] = gl.GetUniformLocation(program, "uParticleEmitterTransformRanges[10]");
-        p->loc_uParticleEmitterTransformRanges[11] = gl.GetUniformLocation(program, "uParticleEmitterTransformRanges[11]");
-        p->loc_uParticleEmitterTransformRanges[12] = gl.GetUniformLocation(program, "uParticleEmitterTransformRanges[12]");
-        p->loc_uParticleEmitterTransformRanges[13] = gl.GetUniformLocation(program, "uParticleEmitterTransformRanges[13]");
+        p->block_index_ParticleConsts = block_index_ParticleConsts;
+        p->offset_uParticleEmitterTransforms = particle_offsets[0];
+        p->offset_uParticleEmitterTransformRanges = particle_offsets[1];
+        p->offset_uTextureAnimationTime = particle_offsets[2];
+        p->offset_uAtlasMeta = particle_offsets[3];
         p->block_index_ViewTransforms = block_index_ViewTransforms;
         p->offset_uCameraPosition = view_offsets[0];
         p->offset_uViewMatrix = view_offsets[1];
         p->offset_uProjectionMatrix = view_offsets[2];
         p->offset_uViewProjMatrix = view_offsets[3];
+        p->offset_uInvViewMatrix = view_offsets[4];
         p->is_particle = 1;
     }
     LOG("glLinkProgram end\n");
@@ -1761,6 +1778,20 @@ static void _bolt_glBlendFuncSeparate(GLenum srcRGB, GLenum dstRGB, GLenum srcAl
     c->blend_alpha_d = dstAlpha;
 }
 
+static void _bolt_glBufferSubData(GLenum target, GLintptr offset, GLsizeiptr size, const void* data) {
+    LOG("glBufferSubData\n");
+    gl.BufferSubData(target, offset, size, data);
+    struct GLContext* c = _bolt_context();
+    GLenum binding_type = _bolt_binding_for_buffer(target);
+    if (binding_type != -1) {
+        GLint buffer_id;
+        lgl->GetIntegerv(binding_type, &buffer_id);
+        struct GLArrayBuffer* buffer = _bolt_context_get_buffer(c, buffer_id);
+        memcpy((uint8_t*)buffer->data + offset, data, size);
+    }
+    LOG("glBufferSubData end\n");
+}
+
 void* _bolt_gl_GetProcAddress(const char* name) {
 #define PROC_ADDRESS_MAP(FUNC) if (!strcmp(name, "gl"#FUNC)) { return gl.FUNC ? _bolt_gl##FUNC : NULL; }
     PROC_ADDRESS_MAP(CreateProgram)
@@ -1790,6 +1821,7 @@ void* _bolt_gl_GetProcAddress(const char* name) {
     PROC_ADDRESS_MAP(BindVertexArray)
     PROC_ADDRESS_MAP(BlitFramebuffer)
     PROC_ADDRESS_MAP(BlendFuncSeparate)
+    PROC_ADDRESS_MAP(BufferSubData)
 #undef PROC_ADDRESS_MAP
     return NULL;
 }
@@ -2119,26 +2151,29 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
         }
 
         if (c->current_draw_framebuffer && draw_tex == c->player_model_tex) {
-            GLfloat model_matrix[16];
-            gl.GetUniformfv(c->bound_program->id, c->bound_program->loc_uModelMatrix, model_matrix);
+            GLint ubo_binding, ubo_index;
+            gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ModelConsts, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
+            gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_index);
+            const GLfloat* model_matrix = (GLfloat*)(((uint8_t*)_bolt_context_get_buffer(c, ubo_index)->data) + c->bound_program->offset_uModelMatrix);
             c->player_model_x = (int32_t)roundf(model_matrix[12]);
             c->player_model_y = (int32_t)roundf(model_matrix[13]);
             c->player_model_z = (int32_t)roundf(model_matrix[14]);
         } else if (draw_tex == c->target_3d_tex) {
-            GLint atlas, settings_atlas, ubo_binding, ubo_view_index, ubo_viewport_index;
-            GLfloat atlas_meta[4];
+            GLint atlas, settings_atlas, ubo_binding, ubo_view_index, ubo_batch_index;
             gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uTextureAtlas, &atlas);
             gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uTextureAtlasSettings, &settings_atlas);
-            gl.GetUniformfv(c->bound_program->id, c->bound_program->loc_uAtlasMeta, atlas_meta);
             struct GLTexture2D* tex = c->texture_units[atlas].texture_2d;
             struct GLTexture2D* tex_settings = c->texture_units[settings_atlas].texture_2d;
             gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ViewTransforms, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
             gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_view_index);
+            gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_BatchConsts, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
+            gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_batch_index);
+            const GLfloat atlas_scale = *((GLfloat*)(((uint8_t*)_bolt_context_get_buffer(c, ubo_batch_index)->data) + c->bound_program->offset_uAtlasMeta) + 1);
 
             struct GLPluginDrawElementsVertex3DUserData vertex_userdata;
             vertex_userdata.c = c;
             vertex_userdata.indices = indices;
-            vertex_userdata.atlas_scale = roundf(atlas_meta[1]);
+            vertex_userdata.atlas_scale = roundf(atlas_scale);
             vertex_userdata.atlas = tex;
             vertex_userdata.settings_atlas = tex_settings;
             vertex_userdata.xy_xz = &attributes[c->bound_program->loc_aMaterialSettingsSlotXY_TilePositionXZ];
@@ -2147,20 +2182,22 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
             vertex_userdata.colour = &attributes[c->bound_program->loc_aVertexColour];
             vertex_userdata.skin_bones = &attributes[c->bound_program->loc_aVertexSkinBones];
             vertex_userdata.skin_weights = &attributes[c->bound_program->loc_aVertexSkinWeights];
+            vertex_userdata.transforms_ubo = NULL;
 
             struct GLPluginTextureUserData tex_userdata;
             tex_userdata.tex = tex;
 
             struct GLPlugin3DMatrixUserData matrix_userdata;
             matrix_userdata.program = c->bound_program;
-            const uint8_t* ubo_view_buf = (uint8_t*)_bolt_context_get_buffer(c, ubo_view_index)->data;
+            const uint8_t* ubo_view_buf = (uint8_t*)(_bolt_context_get_buffer(c, ubo_view_index)->data);
+
             matrix_userdata.view_matrix = (float*)(ubo_view_buf + c->bound_program->offset_uViewMatrix);
             matrix_userdata.proj_matrix = (float*)(ubo_view_buf + c->bound_program->offset_uProjectionMatrix);
             matrix_userdata.viewproj_matrix = (float*)(ubo_view_buf + c->bound_program->offset_uViewProjMatrix);
 
             struct Render3D render;
             render.vertex_count = count;
-            render.is_animated = c->bound_program->loc_uBoneTransforms != -1;
+            render.is_animated = c->bound_program->block_index_VertexTransformData != -1;
             render.vertex_functions.userdata = &vertex_userdata;
             render.vertex_functions.xyz = _bolt_gl_plugin_drawelements_vertex3d_xyz;
             render.vertex_functions.atlas_meta = _bolt_gl_plugin_drawelements_vertex3d_atlas_meta;
@@ -2188,12 +2225,13 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
                 struct IconModel* model = &tex->icon.models[tex->icon.model_count];
                 tex->icon.model_count += 1;
                 tex->icon.is_big_icon = is_big_icon;
-                GLfloat model_matrix[16];
-                gl.GetUniformfv(c->bound_program->id, c->bound_program->loc_uModelMatrix, model_matrix);
+                GLint ubo_binding, ubo_model_index, ubo_view_index;
+                gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ModelConsts, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
+                gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_model_index);
+                const GLfloat* model_matrix = (GLfloat*)(((uint8_t*)_bolt_context_get_buffer(c, ubo_model_index)->data) + c->bound_program->offset_uModelMatrix);
                 for (size_t i = 0; i < 16; i += 1) {
                     model->model_matrix.matrix[i] = (double)model_matrix[i];
                 }
-                GLint ubo_binding, ubo_view_index;
                 gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ViewTransforms, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
                 gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_view_index);
                 const uint8_t* ubo_view_buf = (uint8_t*)_bolt_context_get_buffer(c, ubo_view_index)->data;
@@ -2222,21 +2260,26 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
         }
 
         if (draw_tex == c->target_3d_tex) {
-            GLint atlas, settings_atlas, ubo_binding, ubo_view_index, ubo_viewport_index;
-            GLfloat atlas_meta[4];
+            GLint atlas, settings_atlas, ubo_binding, ubo_view_index, ubo_particle_index;
             gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uTextureAtlas, &atlas);
             gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uTextureAtlasSettings, &settings_atlas);
-            gl.GetUniformfv(c->bound_program->id, c->bound_program->loc_uAtlasMeta, atlas_meta);
             struct GLTexture2D* tex = c->texture_units[atlas].texture_2d;
             struct GLTexture2D* tex_settings = c->texture_units[settings_atlas].texture_2d;
             gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ViewTransforms, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
             gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_view_index);
             const uint8_t* ubo_view_buf = (uint8_t*)_bolt_context_get_buffer(c, ubo_view_index)->data;
+            gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ParticleConsts, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
+            gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_particle_index);
+            const uint8_t* particle_buf_data = (uint8_t*)_bolt_context_get_buffer(c, ubo_particle_index)->data;
+            const GLfloat* transforms = (GLfloat*)(particle_buf_data + c->bound_program->offset_uParticleEmitterTransforms);
+            const uint32_t* ranges = (uint32_t*)(particle_buf_data + c->bound_program->offset_uParticleEmitterTransformRanges);
+            const GLfloat atlas_scale = *((GLfloat*)(particle_buf_data + c->bound_program->offset_uAtlasMeta) + 1);
+            const GLfloat animation_time = *(GLfloat*)(particle_buf_data + c->bound_program->offset_uTextureAnimationTime);
 
             struct GLPluginDrawElementsVertexParticlesUserData vertex_userdata;
             vertex_userdata.c = c;
             vertex_userdata.indices = indices;
-            vertex_userdata.atlas_scale = roundf(atlas_meta[1]);
+            vertex_userdata.atlas_scale = roundf(atlas_scale);
             vertex_userdata.atlas = tex;
             vertex_userdata.settings_atlas = tex_settings;
             vertex_userdata.origin = &attributes[c->bound_program->loc_aParticleOrigin_CreationTime];
@@ -2247,9 +2290,15 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
             vertex_userdata.colour = &attributes[c->bound_program->loc_aVertexColour];
             vertex_userdata.uv_animation_data = &attributes[c->bound_program->loc_aParticleUVAnimationData];
             vertex_userdata.camera_position = (float*)(ubo_view_buf + c->bound_program->offset_uCameraPosition);
-            vertex_userdata.transform_index = -1;
-            vertex_userdata.ranges_known = false;
-            vertex_userdata.animation_time_known = false;
+            vertex_userdata.animation_time = animation_time;
+            for (size_t i = 0; i < 8; i += 1) {
+                // the last range isn't actually used for anything, so no point copying it or having space for it
+                if (i < 7) {
+                    vertex_userdata.ranges[i * 2] = ranges[i * 4];
+                    vertex_userdata.ranges[i * 2 + 1] = ranges[i * 4 + 1];
+                }
+                vertex_userdata.transform[i] = &transforms[i * (4 * 4)];
+            }
 
             struct GLPluginDrawElementsMatrixParticlesUserData matrix_userdata;
             matrix_userdata.program = c->bound_program;
@@ -2612,11 +2661,10 @@ static void _bolt_gl_plugin_drawelements_vertex3d_transform(size_t vertex, void*
         _bolt_get_attr_binding(data->c, data->xyz_bone, data->indices[vertex], 4, xyzbone_floats);
         bone_id = (uint8_t)(uint32_t)(int32_t)roundf(xyzbone_floats[3]);
     }
-    bone_index_transform(data->c, bone_id, out);
+    if (data->c->bound_program->block_index_VertexTransformData == -1) return;
+    bone_index_transform(data->c, &data->transforms_ubo, bone_id, out);
     
-    if (data->c->bound_program->loc_uSmoothSkinning == -1) return;
-    GLfloat smooth_skinning;
-    gl.GetUniformfv(data->c->bound_program->id, data->c->bound_program->loc_uSmoothSkinning, &smooth_skinning);
+    GLfloat smooth_skinning = *(GLfloat*)(((uint8_t*)data->transforms_ubo->data) + data->c->bound_program->offset_uSmoothSkinning);
     if (smooth_skinning < 0.0) return;
 
     int32_t skin_bones[4];
@@ -2634,7 +2682,7 @@ static void _bolt_gl_plugin_drawelements_vertex3d_transform(size_t vertex, void*
         _bolt_get_attr_binding(data->c, data->skin_weights, data->indices[vertex], 4, skin_weights);
         struct Transform3D weighted_modifiers[4];
         for (size_t i = 0; i < 4; i += 1) {
-            bone_index_transform(data->c, skin_bones[i], &weighted_modifiers[i]);
+            bone_index_transform(data->c, &data->transforms_ubo, skin_bones[i], &weighted_modifiers[i]);
         }
         for (size_t i = 0; i < 16; i += 1) {
             modifier.matrix[i] =
@@ -2644,7 +2692,7 @@ static void _bolt_gl_plugin_drawelements_vertex3d_transform(size_t vertex, void*
                 weighted_modifiers[3].matrix[i] * skin_weights[3];
         }
     } else {
-        bone_index_transform(data->c, skin_bones[0], &modifier);
+        bone_index_transform(data->c, &data->transforms_ubo, skin_bones[0], &modifier);
     }
 
     struct Transform3D ret;
@@ -2661,8 +2709,7 @@ static void _bolt_gl_plugin_drawelements_vertexparticles_xyz(size_t index, void*
     _bolt_get_attr_binding_int(data->c, data->uv_animation_data, vertex, 4, uv_animation_data);
 
     if (uv_animation_data[2] & (1 << 7)) {
-        _bolt_gl_vertexparticlesuserdata_set_transform(vertex, data->c->bound_program, data);
-        const GLfloat* transform = data->transform;
+        const GLfloat* transform = _bolt_gl_vertexparticlesuserdata_get_transform(vertex, data->c->bound_program, data);
         out->xyzh.floats[0] = (xyz[0] * transform[0]) + (xyz[1] * transform[4]) + (xyz[2] * transform[8]) + transform[12];
         out->xyzh.floats[1] = (xyz[0] * transform[1]) + (xyz[1] * transform[5]) + (xyz[2] * transform[9]) + transform[13];
         out->xyzh.floats[2] = (xyz[0] * transform[2]) + (xyz[1] * transform[6]) + (xyz[2] * transform[10]) + transform[14];
@@ -2711,8 +2758,7 @@ static void _bolt_gl_plugin_drawelements_vertexparticles_world_offset(size_t ind
 
     // I don't know how most of this works, it's just copied from a GLSL shader from the engine
     if (uv_animation_data[2] & (1 << 7)) {
-        _bolt_gl_vertexparticlesuserdata_set_transform(vertex, data->c->bound_program, data);
-        const GLfloat* transform = data->transform;
+        const GLfloat* transform = _bolt_gl_vertexparticlesuserdata_get_transform(vertex, data->c->bound_program, data);
         const float vx = (velocity[0] * transform[0]) + (velocity[1] * transform[4]) + (velocity[2] * transform[8]);
         const float vy = (velocity[0] * transform[1]) + (velocity[1] * transform[5]) + (velocity[2] * transform[9]);
         const float vz = (velocity[0] * transform[2]) + (velocity[1] * transform[6]) + (velocity[2] * transform[10]);
@@ -2771,6 +2817,7 @@ static void _bolt_gl_plugin_drawelements_vertexparticles_eye_offset(size_t index
 
 // I ported this function from a vertex shader through great suffering. Don't try to understand it. Seriously.
 static void _bolt_gl_plugin_drawelements_vertexparticles_uv(size_t index, void* userdata, double* out) {
+    struct GLContext* c = _bolt_context();
     struct GLPluginDrawElementsVertexParticlesUserData* data = userdata;
     const unsigned short vertex = data->indices[index];
     int32_t uv_animation_data[4];
@@ -2783,11 +2830,6 @@ static void _bolt_gl_plugin_drawelements_vertexparticles_uv(size_t index, void* 
         const double ts = offset[0] <= 0.0 ? (1.0 / (double)s) : 0.0;
         const double tt = offset[1] <= 0.0 ? (1.0 / (double)o) : 0.0;
         if (uv_animation_data[2] & (1 << 2)) {
-            if (!data->animation_time_known) {
-                const struct GLProgram* program = data->c->bound_program;
-                gl.GetUniformfv(program->id, program->loc_uTextureAnimationTime, &data->animation_time);
-                data->animation_time_known = true;
-            }
             float origin[4];
             _bolt_get_attr_binding(data->c, data->origin, vertex, 4, origin);
             const int32_t A = uv_animation_data[1];
@@ -2862,9 +2904,13 @@ static void _bolt_gl_plugin_matrixparticles_projectionmatrix(void* userdata, str
 }
 
 static void _bolt_gl_plugin_matrixparticles_invviewmatrix(void* userdata, struct Transform3D* out) {
+    struct GLContext* c = _bolt_context();
     struct GLPluginDrawElementsMatrixParticlesUserData* data = userdata;
     if (data->program) {
-        gl.GetUniformfv(data->program->id, data->program->loc_uModelMatrix, data->inv_view_matrix);
+        GLint ubo_binding, ubo_index;
+        gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ParticleConsts, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
+        gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_index);
+        data->inv_view_matrix = (GLfloat*)(((uint8_t*)_bolt_context_get_buffer(c, ubo_index)->data) + c->bound_program->offset_uInvViewMatrix);
         data->program = NULL;
     }
     for (size_t i = 0; i < 16; i += 1) {
@@ -2873,9 +2919,13 @@ static void _bolt_gl_plugin_matrixparticles_invviewmatrix(void* userdata, struct
 }
 
 static void _bolt_gl_plugin_matrix3d_model(void* userdata, struct Transform3D* out) {
+    struct GLContext* c = _bolt_context();
     struct GLPlugin3DMatrixUserData* data = userdata;
     if (data->program) {
-        gl.GetUniformfv(data->program->id, data->program->loc_uModelMatrix, data->model_matrix);
+        GLint ubo_binding, ubo_index;
+        gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ModelConsts, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
+        gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_index);
+        data->model_matrix = (GLfloat*)(((uint8_t*)_bolt_context_get_buffer(c, ubo_index)->data) + c->bound_program->offset_uModelMatrix);
         data->program = NULL;
     }
     for (size_t i = 0; i < 16; i += 1) {
