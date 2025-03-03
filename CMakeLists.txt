@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21) # Minimum CEF requirement, but building with the latest cmake is strongly recommended
-project(Bolt VERSION 0.12 LANGUAGES C CXX)
+project(Bolt VERSION 0.13 LANGUAGES C CXX)
 
 if(NOT WIN32)
     # name of application in metadata, defaulting to "BoltLauncher", but usually overridden to "com.adamcake.Bolt" by flatpak for example
@@ -65,6 +65,15 @@ if(NOT WIN32)
         "    </screenshot>"
         "</screenshots>"
         "<releases>"
+        "    <release version=\"0.13.0\" date=\"2025-03-03\">"
+        "        <url type=\"details\">https://github.com/Adamcake/Bolt/releases/tag/0.12.0</url>"
+        "        <description>"
+        "            <p>Engine update</p>"
+        "            <ul>"
+        "                <li>This version updates the plugin loader to be able to work with today's changes to the game engine's OpenGL code.</li>"
+        "            </ul>"
+        "        </description>"
+        "    </release>"
         "    <release version=\"0.12.0\" date=\"2025-03-02\">"
         "        <url type=\"details\">https://github.com/Adamcake/Bolt/releases/tag/0.12.0</url>"
         "        <description>"
