@@ -1238,8 +1238,8 @@ static void _bolt_glLinkProgram(GLuint program) {
         gl.GetActiveUniformsiv(program, 4, ubo_indices, GL_UNIFORM_OFFSET, particle_offsets);
     }
     if ((GLint)block_index_TerrainConsts != -1) {
-        gl.GetUniformIndices(program, 4, terrain_var_names, ubo_indices);
-        gl.GetActiveUniformsiv(program, 4, ubo_indices, GL_UNIFORM_OFFSET, terrain_offsets);
+        gl.GetUniformIndices(program, 2, terrain_var_names, ubo_indices);
+        gl.GetActiveUniformsiv(program, 2, ubo_indices, GL_UNIFORM_OFFSET, terrain_offsets);
     }
 
     if (block_index_ViewTransforms != -1 && block_index_TerrainConsts != -1) {
