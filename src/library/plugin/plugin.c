@@ -244,6 +244,15 @@ void _bolt_plugin_on_startup() {
 #endif
 }
 
+// assumes only the bottom 4 bits are used
+char u4_to_char(uint8_t u4) {
+    if (u4 < 10) {
+        return '0' + (char)u4;
+    } else {
+        return 'a' + (char)(u4 - 10);
+    }
+}
+
 void _bolt_plugin_init(const struct PluginManagedFunctions* functions) {
     _bolt_plugin_ipc_init(&fd);
 
@@ -264,7 +273,8 @@ void _bolt_plugin_init(const struct PluginManagedFunctions* functions) {
     sha256_update(&ctx, (const unsigned char*)character_id, character_id ? strlen(character_id) : 0);
     sha256_final(&ctx, hash);
     for (size_t i = 0; i < SHA256_BLOCK_SIZE; i += 1) {
-        sprintf(&character_hash[i * 2], "%02x", hash[i]);
+        character_hash[i * 2] = u4_to_char((hash[i] >> 4) & 0b1111);
+        character_hash[(i * 2) + 1] = u4_to_char(hash[i] & 0b1111);
     }
 
     managed_functions = *functions;
