@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21) # Minimum CEF requirement, but building with the latest cmake is strongly recommended
-project(Bolt VERSION 0.13 LANGUAGES C CXX)
+project(Bolt VERSION 0.14 LANGUAGES C CXX)
 
 if(NOT WIN32)
     # name of application in metadata, defaulting to "BoltLauncher", but usually overridden to "com.adamcake.Bolt" by flatpak for example
@@ -65,6 +65,17 @@ if(NOT WIN32)
         "    </screenshot>"
         "</screenshots>"
         "<releases>"
+        "    <release version=\"0.14.0\" date=\"2025-03-07\">"
+        "        <url type=\"details\">https://github.com/Adamcake/Bolt/releases/tag/0.12.0</url>"
+        "        <description>"
+        "            <p>Engine update (again)</p>"
+        "            <ul>"
+        "                <li>The engine update released four days ago, which was the subject of version 0.13, has been completely reverted. Bolt has been reverted to match. This change will be re-applied when the new engine version is re-released.</li>"
+        "                <li>Also fixed a plugin loader crash seen by some AUR users.</li>"
+        "                <li>The almost-daily updates recently have been due to an unfortunate set of circumstances - the plugin loader has been stable for over a year up until the 2025-03-03 engine changes, so it's simply unfortunate timing. HOPEFULLY this will be the last such update to Bolt.</li>"
+        "            </ul>"
+        "        </description>"
+        "    </release>"
         "    <release version=\"0.13.0\" date=\"2025-03-03\">"
         "        <url type=\"details\">https://github.com/Adamcake/Bolt/releases/tag/0.12.0</url>"
         "        <description>"
