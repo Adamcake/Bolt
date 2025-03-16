@@ -4,10 +4,13 @@
 
 #include <archive.h>
 #include <archive_entry.h>
+#include <cstring>
 #include <fcntl.h>
 #include <filesystem>
 #include <fmt/core.h>
 #include <spawn.h>
+
+#define MAXARGCOUNT 256
 
 // see #34 for why this function exists and why it can't be run between fork-exec or just run `env`.
 // true on success, false on failure, out is undefined on failure, you know the drill.
@@ -37,6 +40,43 @@ bool FindJava(const char* java_home, std::string& out) {
 		path = next_colon + 1;
 	}
 	return false;
+}
+
+// takes a custom launch command string, splits it into individual args, replaces "%command%" with
+// the args in original_command, and writes the resulting argument list to buf.
+// returns true on success, false on error.
+// original_command must be a null-terminated list, and output will be null-terminated (as long as
+// the function returns true).
+bool ResolveLaunchCommand(char* launch_command, char** original_command, char** buf) {
+	size_t out_index = 0;
+	char* arg_ptr = launch_command;
+
+	while (true) {
+		while (*arg_ptr == ' ') arg_ptr += 1;
+		if (*arg_ptr == '\0') break;
+		char* next_space = strchr(arg_ptr, ' ');
+		if (next_space) *next_space = '\0';
+		
+		if (!strcmp(arg_ptr, "%command%")) {
+			char** command_arg_ptr = original_command;
+			while (*command_arg_ptr) {
+				buf[out_index] = *command_arg_ptr;
+				out_index += 1;
+				if (out_index >= MAXARGCOUNT) return false;
+				command_arg_ptr += 1;
+			}
+		} else {
+			buf[out_index] = arg_ptr;
+			out_index += 1;
+			if (out_index >= MAXARGCOUNT) return false;
+		}
+
+		if (!next_space) break;
+		arg_ptr = next_space + 1;
+	}
+
+	buf[out_index] = nullptr;
+	return true;
 }
 
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<CefRequest> request, std::string_view query) {
@@ -75,6 +115,8 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<C
 	bool has_jx_character_id = false;
 	std::string jx_display_name;
 	bool has_jx_display_name = false;
+	std::string launch_command;
+	bool has_launch_command = false;
 #if defined(BOLT_PLUGINS)
 	bool plugin_loader = false;
 #endif
@@ -84,6 +126,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<C
 		PQSTRING(jx_session_id)
 		PQSTRING(jx_character_id)
 		PQSTRING(jx_display_name)
+		PQSTRING(launch_command)
 #if defined(BOLT_PLUGINS)
 		PQBOOL(plugin_loader)
 #endif
@@ -224,12 +267,18 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<C
 	// setup argv for the new process
 	std::string path_str(this->rs3_elf_path.c_str());
 	char arg_configuri[] = "--configURI";
-	char* argv[] = {
+	char* args[] = {
 		path_str.data(),
 		has_config_uri ? arg_configuri : nullptr,
 		has_config_uri ? config_uri.data() : nullptr,
 		nullptr,
 	};
+	char** argv = args;
+	char* arg_buffer[MAXARGCOUNT];
+	if (has_launch_command) {
+		QSENDSYSTEMERRORIF(!ResolveLaunchCommand(launch_command.data(), args, arg_buffer));
+		argv = arg_buffer;
+	}
 
 	pid_t pid = fork();
 	if (pid == 0) {
@@ -300,12 +349,15 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 	bool has_jx_character_id = false;
 	std::string jx_display_name;
 	bool has_jx_display_name = false;
+	std::string launch_command;
+	bool has_launch_command = false;
 	ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
 		PQSTRING(jar_path)
 		PQSTRING(id)
 		PQSTRING(jx_session_id)
 		PQSTRING(jx_character_id)
 		PQSTRING(jx_display_name)
+		PQSTRING(launch_command)
 	});
 
 	// path to runelite.jar will either be a user-provided one or one in our data folder,
@@ -349,7 +401,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 	std::string path_str = rl_path.string();
 	char arg_jar[] = "-jar";
 	char arg_configure[] = "--configure";
-	char* argv[] = {
+	char* args[] = {
 		java.data(),
 		arg_home.data(),
 		arg_jar,
@@ -358,6 +410,12 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 		configure ? arg_configure : nullptr,
 		nullptr,
 	};
+	char** argv = args;
+	char* arg_buffer[MAXARGCOUNT];
+	if (has_launch_command) {
+		QSENDSYSTEMERRORIF(!ResolveLaunchCommand(launch_command.data(), args, arg_buffer));
+		argv = arg_buffer;
+	}
 
 	pid_t pid = fork();
 	if (pid == 0) {
@@ -412,11 +470,14 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<
 	bool has_jx_character_id = false;
 	std::string jx_display_name;
 	bool has_jx_display_name = false;
+	std::string launch_command;
+	bool has_launch_command = false;
 	ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
 		PQSTRING(version)
 		PQSTRING(jx_session_id)
 		PQSTRING(jx_character_id)
 		PQSTRING(jx_display_name)
+		PQSTRING(launch_command)
 	});
 
 	// if there was a "version" in the query string, we need to save the new jar and hash
@@ -445,7 +506,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<
 	// set up argv for the new process
 	std::string path_str = this->hdos_path.string();
 	char arg_jar[] = "-jar";
-	char* argv[] = {
+	char* args[] = {
 		java.data(),
 		arg_user_home.data(),
 		arg_app_user_home.data(),
@@ -453,6 +514,12 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<
 		path_str.data(),
 		nullptr,
 	};
+	char** argv = args;
+	char* arg_buffer[MAXARGCOUNT];
+	if (has_launch_command) {
+		QSENDSYSTEMERRORIF(!ResolveLaunchCommand(launch_command.data(), args, arg_buffer));
+		argv = arg_buffer;
+	}
 
 	pid_t pid = fork();
 	if (pid == 0) {
