@@ -22,6 +22,8 @@ export function launchRS3Linux(
 		if (jx_session_id) params.jx_session_id = jx_session_id;
 		if (jx_character_id) params.jx_character_id = jx_character_id;
 		if (jx_display_name) params.jx_display_name = jx_display_name;
+		if (config.rs_launch_command && config.rs_launch_command !== '')
+			params.launch_command = config.rs_launch_command;
 		if (config.rs_plugin_loader) params.plugin_loader = '1';
 		if (config.use_custom_rs_config_uri && config.rs_config_uri) {
 			params.config_uri = config.rs_config_uri;
@@ -112,6 +114,8 @@ export function launchRuneLite(
 		if (jx_session_id) params.jx_session_id = jx_session_id;
 		if (jx_character_id) params.jx_character_id = jx_character_id;
 		if (jx_display_name) params.jx_display_name = jx_display_name;
+		if (config.runelite_launch_command && config.runelite_launch_command !== '')
+			params.launch_command = config.runelite_launch_command;
 		if (config.flatpak_rich_presence) params.flatpak_rich_presence = '';
 		xml.open(jar ? 'POST' : 'GET', launchPath.concat(new URLSearchParams(params).toString()), true);
 		xml.onreadystatechange = () => {
@@ -203,6 +207,8 @@ export function launchHdos(
 		if (jx_session_id) params.jx_session_id = jx_session_id;
 		if (jx_character_id) params.jx_character_id = jx_character_id;
 		if (jx_display_name) params.jx_display_name = jx_display_name;
+		if (config.hdos_launch_command && config.hdos_launch_command !== '')
+			params.launch_command = config.hdos_launch_command;
 		xml.open('POST', '/launch-hdos-jar?'.concat(new URLSearchParams(params).toString()), true);
 		xml.onreadystatechange = () => {
 			if (xml.readyState == 4) {
@@ -306,10 +312,12 @@ export async function launchOfficialClient(
 	const launch = async (hash?: string, exe?: Promise<ArrayBuffer>) => {
 		const params: Record<string, string> = {};
 		const config = get(GlobalState.config);
+		const launchCommand = osrs ? config.osrs_launch_command : config.rs_launch_command;
 		if (hash) params.hash = hash;
 		if (jx_session_id) params.jx_session_id = jx_session_id;
 		if (jx_character_id) params.jx_character_id = jx_character_id;
 		if (jx_display_name) params.jx_display_name = jx_display_name;
+		if (launchCommand && launchCommand !== '') params.launch_command = launchCommand;
 		if (!osrs) {
 			if (config.rs_plugin_loader) params.plugin_loader = '1';
 			params.config_uri =

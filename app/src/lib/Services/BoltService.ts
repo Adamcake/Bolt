@@ -87,6 +87,10 @@ export class BoltService {
 		if (checkForPendingChanges && !GlobalState.configHasPendingChanges) return;
 		saveInProgress = true;
 		const config = get(GlobalState.config);
+		if (config.rs_launch_command === '') config.rs_launch_command = null;
+		if (config.osrs_launch_command === '') config.osrs_launch_command = null;
+		if (config.runelite_launch_command === '') config.runelite_launch_command = null;
+		if (config.hdos_launch_command === '') config.hdos_launch_command = null;
 		this.postJSON('/save-config', config, () => (saveInProgress = false));
 		return config;
 	}

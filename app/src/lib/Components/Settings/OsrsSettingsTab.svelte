@@ -69,12 +69,48 @@
 	></textarea>
 	<br />
 	<button
-		class="mt-1 rounded-lg border-2 border-blue-500 p-1 duration-200 hover:opacity-75"
-		disabled={currentlyPickingFile}
+		class="mt-1 rounded-lg border-2 border-blue-500 p-1 duration-200 enabled:hover:opacity-75"
+		disabled={currentlyPickingFile || !$config.runelite_use_custom_jar}
 		on:click={() => {
 			openFilePicker();
 		}}
 	>
 		Select File</button
 	>
+</div>
+<div class="p-2">
+	<label for="osrs_custom_launch_command">OSRS launch command:</label>
+	<br />
+	<textarea
+		id="osrs_custom_launch_command"
+		class="resize-x rounded border-2 border-slate-300 bg-slate-100 text-slate-950 disabled:opacity-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50"
+		rows="1"
+		cols="35"
+		placeholder={'%command%'}
+		bind:value={$config.osrs_launch_command}
+	/>
+</div>
+<div class="p-2">
+	<label for="runelite_custom_launch_command">RuneLite launch command:</label>
+	<br />
+	<textarea
+		id="runelite_custom_launch_command"
+		class="resize-x rounded border-2 border-slate-300 bg-slate-100 text-slate-950 disabled:opacity-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50"
+		rows="1"
+		cols="35"
+		placeholder={'%command%'}
+		bind:value={$config.runelite_launch_command}
+	/>
+</div>
+<div class="p-2">
+	<label for="hdos_custom_launch_command">HDOS launch command:</label>
+	<br />
+	<textarea
+		id="hdos_custom_launch_command"
+		class="resize-x rounded border-2 border-slate-300 bg-slate-100 text-slate-950 disabled:opacity-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50"
+		rows="1"
+		cols="35"
+		placeholder={'%command%'}
+		bind:value={$config.hdos_launch_command}
+	/>
 </div>

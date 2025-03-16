@@ -16,7 +16,11 @@ export interface Config {
 	runelite_use_custom_jar: boolean;
 	use_custom_rs_config_uri: boolean;
 	rs_config_uri?: string;
-	runelite_custom_jar?: string;
+	rs_launch_command: string | null;
+	osrs_launch_command: string | null;
+	runelite_custom_jar: string | null;
+	runelite_launch_command: string | null;
+	hdos_launch_command: string | null;
 	selected: {
 		game: Game;
 		client: Client;
@@ -36,6 +40,11 @@ export const defaultConfig: Config = {
 	flatpak_rich_presence: false,
 	runelite_use_custom_jar: false,
 	use_custom_rs_config_uri: false,
+	rs_launch_command: null,
+	osrs_launch_command: null,
+	runelite_custom_jar: null,
+	runelite_launch_command: null,
+	hdos_launch_command: null,
 	selected: {
 		game: Game.osrs,
 		client: Client.runelite,
