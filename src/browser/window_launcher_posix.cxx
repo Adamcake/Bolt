@@ -12,6 +12,25 @@
 
 #define MAXARGCOUNT 256
 
+// true on success, false on failure, out is undefined on failure
+bool FindInPath(const char* filename, std::string& out) {
+	const char* path = getenv("PATH");
+	while (true) {
+		const char* next_colon = strchr(path, ':');
+		const bool is_last = next_colon == nullptr;
+		std::string_view path_item = is_last ? std::string_view(path) : std::string_view(path, (size_t)(next_colon - path));
+		std::filesystem::path target(path_item);
+		target.append(filename);
+		if (std::filesystem::exists(target)) {
+			out = target.string();
+			return true;
+		}
+		if (is_last) break;
+		path = next_colon + 1;
+	}
+	return false;
+}
+
 // see #34 for why this function exists and why it can't be run between fork-exec or just run `env`.
 // true on success, false on failure, out is undefined on failure, you know the drill.
 // java_home should be the result of getenv("JAVA_HOME") and therefore is allowed to be null
@@ -25,21 +44,14 @@ bool FindJava(const char* java_home, std::string& out) {
 			return true;
 		}
 	}
-	const char* path = getenv("PATH");
-	while (true) {
-		const char* next_colon = strchr(path, ':');
-		const bool is_last = next_colon == nullptr;
-		std::string_view path_item = is_last ? std::string_view(path) : std::string_view(path, (size_t)(next_colon - path));
-		std::filesystem::path java(path_item);
-		java.append("java");
-		if (std::filesystem::exists(java)) {
-			out = java.string();
-			return true;
-		}
-		if (is_last) break;
-		path = next_colon + 1;
-	}
-	return false;
+	return FindInPath("java", out);
+}
+
+// similar to FindJava but for wine/proton.
+// true on success, false on failure, out is undefined on failure
+bool FindWine(std::string& out) {
+	if (FindInPath("proton", out)) return true;
+	return FindInPath("wine", out);
 }
 
 // takes a custom launch command string, splits it into individual args, replaces "%command%" with
@@ -325,7 +337,92 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3App(CefRefPtr<C
 }
 
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchOsrsExe(CefRefPtr<CefRequest> request, std::string_view query) {
-	QSENDSTR(".exe is not supported on this platform", 400);
+	const CefRefPtr<CefPostData> post_data = request->GetPostData();
+
+	// try to find proton or wine
+	std::string wine;
+	if (!FindWine(wine)) {
+		QSENDSTR("Couldn't find proton or wine in PATH", 500);
+	}
+
+	// parse query
+	std::string hash;
+	bool has_hash = false;
+	std::string jx_session_id;
+	bool has_jx_session_id = false;
+	std::string jx_character_id;
+	bool has_jx_character_id = false;
+	std::string jx_display_name;
+	bool has_jx_display_name = false;
+	std::string launch_command;
+	bool has_launch_command = false;
+	ParseQuery(query, [&](const std::string_view& key, const std::string_view& val) {
+		PQSTRING(hash)
+		PQSTRING(jx_session_id)
+		PQSTRING(jx_character_id)
+		PQSTRING(jx_display_name)
+		PQSTRING(launch_command)
+	});
+
+	// if there was a "hash" in the query string, we need to save the new game exe and the new hash
+	if (has_hash) {
+		QSENDBADREQUESTIF(post_data == nullptr || post_data->GetElementCount() != 1);
+		CefPostData::ElementVector vec;
+		post_data->GetElements(vec);
+		size_t exe_size = vec[0]->GetBytesCount();
+		unsigned char* exe = new unsigned char[exe_size];
+		vec[0]->GetBytes(exe_size, exe);
+		
+		size_t written = 0;
+		int file = open(this->osrs_exe_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0755);
+		if (file == -1) {
+			// failed to open game binary file on disk - probably in use or a permissions issue
+			delete[] exe;
+			QSENDSTR("Failed to save exe; if the game is already running, close it and try again", 500);
+		}
+		while (written < exe_size) {
+			written += write(file, exe + written, exe_size - written);
+		}
+		close(file);
+		delete[] exe;
+	}
+
+	std::string exe_path = this->osrs_exe_path.string();
+	char* args[] = {
+		wine.data(),
+		exe_path.data(),
+		nullptr,
+	};
+	char** argv = args;
+	char* arg_buffer[MAXARGCOUNT];
+	if (has_launch_command) {
+		QSENDSYSTEMERRORIF(!ResolveLaunchCommand(launch_command.data(), args, arg_buffer));
+		argv = arg_buffer;
+	}
+
+	pid_t pid = fork();
+	if (pid == 0) {
+		setpgrp();
+		if (has_jx_session_id) setenv("JX_SESSION_ID", jx_session_id.data(), true);
+		if (has_jx_character_id) setenv("JX_CHARACTER_ID", jx_character_id.data(), true);
+		if (has_jx_display_name) setenv("JX_DISPLAY_NAME", jx_display_name.data(), true);
+		execv(*argv, argv);
+	}
+
+	fmt::print("[B] Successfully spawned game process with pid {}\n", pid);
+	if (has_hash) {
+		size_t written = 0;
+		int file = open(this->osrs_exe_hash_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+		if (file == -1) {
+			QSENDSTR("OK, but unable to save id file", 200);
+			const char* data = "OK, but unable to save id file\n";
+		}
+		while (written < hash.size()) {
+			written += write(file, hash.c_str() + written, hash.size() - written);
+		}
+		close(file);
+	}
+	QSENDOK();
 }
 
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchOsrsApp(CefRefPtr<CefRequest> request, std::string_view query) {
