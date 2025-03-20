@@ -60,7 +60,9 @@
 			case Game.osrs:
 				switch (client) {
 					case Client.official:
-						launchOfficialClient(isWindows, true, session_id, accountId, displayName);
+						// when launching official osrs client on linux, set windows=true so that it will download the
+						// windows exe instead of the mac app, as the exe is what we want to run through wine/proton
+						launchOfficialClient(isWindows || isLinux, true, session_id, accountId, displayName);
 						break;
 					case Client.runelite:
 						launchRuneLite(session_id, accountId, displayName, false);
@@ -134,11 +136,7 @@
 					bind:value={$config.selected.client}
 				>
 					{#each clientMap[$config.selected.game] as client}
-						<option
-							class="dark:bg-slate-900"
-							disabled={client === Client.official && bolt.platform == Platform.Linux}
-							value={client}>{client}</option
-						>
+						<option class="dark:bg-slate-900" value={client}>{client}</option>
 					{/each}
 				</select>
 			</label>
