@@ -26,12 +26,13 @@
 	let gameEnabled: Writable<boolean> = writable(true);
 	$: {
 		if ($config.check_announcements) {
-			const url: string = `${bolt.env.psa_url}${$config.selected.game == Game.osrs ? 'osrs' : bolt.env.provider}.json`;
+			const gameName = $config.selected.game == Game.osrs ? 'osrs' : bolt.env.provider;
+			const url: string = `${bolt.env.psa_url}${gameName}/${gameName}.json`;
 			fetch(url, { method: 'GET' })
 				.then((response) => response.json())
 				.then((response) => {
-					$psa = response.psa && response.psa.length > 0 ? response.psa : null;
-					$gameEnabled = !(response.isDisabled ?? false);
+					$psa = response.psaEnabled && response.psaMessage ? response.psaMessage : null;
+					$gameEnabled = !(response.playDisabled ?? false);
 				});
 		} else {
 			$psa = null;
