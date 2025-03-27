@@ -47,7 +47,7 @@ bool FindJava(const char* java_home, std::string& out) {
 	return FindInPath("java", out);
 }
 
-// similar to FindJava but for wine/proton.
+// similar to FindJava but for wine/umu-run.
 // true on success, false on failure, out is undefined on failure
 bool FindWine(std::string& out) {
 	if (FindInPath("umu-run", out)) return true;
@@ -410,6 +410,13 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchOsrsExe(CefRefPtr<
 		setenv("GAMEID", "1343370", true);
 		// tell umu to use the latest GE Proton it can find, which will perform better in most cases
 		setenv("PROTONPATH", "GE-Proton", true);
+
+		// This is needed due to proton's pressure vessel changing the mount point of /app to /run/parent/app inside of pressure vessel.
+		// It tries to chdir back to /app/opt/bolt-launcher which will no longer exist. Chdir to data_dir works to work around this.
+		if (chdir(this->data_dir.c_str())) {
+			fmt::print("[B] new process was unable to chdir: {}\n", errno);
+			exit(1);
+		}
 
 		execv(*argv, argv);
 	}
