@@ -126,6 +126,11 @@ When doing the initial cmake setup step, the following options exist which you m
   - This is solved by setting the JAVA_HOME environment variable.
   - This is usually located in /usr/lib/jvm, so, it might look like this:  
     `export JAVA_HOME="/usr/lib/jvm/java-17-openjdk-17.0.9.0.9-3.fc39.x86_64"`
+- umu-launcher/wine
+  - Another issue you may see in the console when trying to launch the OSRS Official Client.
+  - This can be solved by installing a package with your package manager.  
+    Something similar to `umu-launcher`. If not available in your package manager, see https://github.com/Open-Wine-Components/umu-launcher.
+  - Bolt will also utilize your system wine if umu-run is not available. This will generally yield worse performance results.
 
 ## Contributing
 

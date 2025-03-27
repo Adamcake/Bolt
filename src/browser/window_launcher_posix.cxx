@@ -47,10 +47,10 @@ bool FindJava(const char* java_home, std::string& out) {
 	return FindInPath("java", out);
 }
 
-// similar to FindJava but for wine/proton.
+// similar to FindJava but for wine/umu-run.
 // true on success, false on failure, out is undefined on failure
 bool FindWine(std::string& out) {
-	if (FindInPath("proton", out)) return true;
+	if (FindInPath("umu-run", out)) return true;
 	return FindInPath("wine", out);
 }
 
@@ -339,10 +339,10 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3App(CefRefPtr<C
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchOsrsExe(CefRefPtr<CefRequest> request, std::string_view query) {
 	const CefRefPtr<CefPostData> post_data = request->GetPostData();
 
-	// try to find proton or wine
+	// try to find umu-run or wine
 	std::string wine;
 	if (!FindWine(wine)) {
-		QSENDSTR("Couldn't find proton or wine in PATH", 500);
+		QSENDSTR("Couldn't find umu-run or wine in PATH", 500);
 	}
 
 	// parse query
@@ -406,6 +406,18 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchOsrsExe(CefRefPtr<
 		if (has_jx_session_id) setenv("JX_SESSION_ID", jx_session_id.data(), true);
 		if (has_jx_character_id) setenv("JX_CHARACTER_ID", jx_character_id.data(), true);
 		if (has_jx_display_name) setenv("JX_DISPLAY_NAME", jx_display_name.data(), true);
+		// game id from steam for OSRS. This allows umu to apply any necessary protonfixes
+		setenv("GAMEID", "1343370", true);
+		// tell umu to use the latest GE Proton it can find, which will perform better in most cases
+		setenv("PROTONPATH", "GE-Proton", true);
+
+		// This is needed due to proton's pressure vessel changing the mount point of /app to /run/parent/app inside of pressure vessel.
+		// It tries to chdir back to /app/opt/bolt-launcher which will no longer exist. Chdir to data_dir works to work around this.
+		if (chdir(this->data_dir.c_str())) {
+			fmt::print("[B] new process was unable to chdir: {}\n", errno);
+			exit(1);
+		}
+
 		execv(*argv, argv);
 	}
 
