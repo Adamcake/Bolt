@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21) # Minimum CEF requirement, but building with the latest cmake is strongly recommended
-project(Bolt VERSION 0.14 LANGUAGES C CXX)
+project(Bolt VERSION 0.15 LANGUAGES C CXX)
 
 if(NOT WIN32)
     # name of application in metadata, defaulting to "BoltLauncher", but usually overridden to "com.adamcake.Bolt" by flatpak for example
@@ -65,8 +65,21 @@ if(NOT WIN32)
         "    </screenshot>"
         "</screenshots>"
         "<releases>"
+        "    <release version=\"0.15.0\" date=\"2025-03-31\">"
+        "        <url type=\"details\">https://github.com/Adamcake/Bolt/releases/tag/0.15.0</url>"
+        "        <description>"
+        "            <p>Custom launch commands and official OSRS client</p>"
+        "            <ul>"
+        "                <li>Bolt now supports custom launch commands for each game. These can be set in the settings menu.</li>"
+        "                <li>The official OSRS client can now be played on Linux using system installations of umu-launcher or wine. For Flatpak users, the package for version 0.15 will include builds of umu-launcher and proton-ge.</li>"
+        "                <li>Launcher UI now uses the new system for \"PSAs\", the system messages appearing at the top of the UI, so these should once again be in sync with the official launcher.</li>"
+        "                <li>The RS3 engine update from 2025-03-03 has been re-deployed, having originally been reverted a few days afterwards due to graphical issues, so the plugin loader has once again been updated to match.</li>"
+        "                <li>Fixed a plugin loader crash when viewing a bigicon with more than 8 models in it (notably, the preview of the \"sands of time\" outfit)</li>"
+        "            </ul>"
+        "        </description>"
+        "    </release>"
         "    <release version=\"0.14.0\" date=\"2025-03-07\">"
-        "        <url type=\"details\">https://github.com/Adamcake/Bolt/releases/tag/0.12.0</url>"
+        "        <url type=\"details\">https://github.com/Adamcake/Bolt/releases/tag/0.14.0</url>"
         "        <description>"
         "            <p>Engine update (again)</p>"
         "            <ul>"
@@ -77,7 +90,7 @@ if(NOT WIN32)
         "        </description>"
         "    </release>"
         "    <release version=\"0.13.0\" date=\"2025-03-03\">"
-        "        <url type=\"details\">https://github.com/Adamcake/Bolt/releases/tag/0.12.0</url>"
+        "        <url type=\"details\">https://github.com/Adamcake/Bolt/releases/tag/0.13.0</url>"
         "        <description>"
         "            <p>Engine update</p>"
         "            <ul>"
