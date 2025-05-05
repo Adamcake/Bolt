@@ -10,6 +10,7 @@
 #include <unistd.h>
 
 #include "x.h"
+#include "sdl.h"
 #include "../gl.h"
 #include "../plugin/plugin.h"
 #include "../../../modules/hashmap/hashmap.h"
@@ -48,13 +49,13 @@ static const char* libc_name = "libc.so.6";
 static const char* libegl_name = "libEGL.so.1";
 static const char* libgl_name = "libGL.so.1";
 static const char* libxcb_name = "libxcb.so.1";
-static const char* libx11_name = "libX11.so.6";
+static const char* libsdl_name = "libSDL2-2.0.so.0";
 
 static void* libc_addr = 0;
 static void* libegl_addr = 0;
 static void* libgl_addr = 0;
 static void* libxcb_addr = 0;
-static void* libx11_addr = 0;
+static void* libsdl_addr = 0;
 
 static void* (*real_dlopen)(const char*, int) = NULL;
 static void* (*real_dlsym)(void*, const char*) = NULL;
@@ -80,22 +81,20 @@ static xcb_void_cookie_t (*real_xcb_change_property)(xcb_connection_t*, uint8_t,
 static xcb_void_cookie_t (*real_xcb_change_window_attributes)(xcb_connection_t*, xcb_window_t, uint32_t, const uint32_t*) = NULL;
 static int (*real_xcb_flush)(xcb_connection_t*) = NULL;
 
-static int (*real_XDefineCursor)(void*, XWindow, XCursor) = NULL;
-static int (*real_XUndefineCursor)(void*, XWindow) = NULL;
-static int (*real_XFreeCursor)(void*, XCursor) = NULL;
+static void* (*real_SDL_CreateSystemCursor)(SDL_SystemCursor) = NULL;
+static unsigned char (*real_SDL_SetCursor)(void*) = NULL;
 
 static struct GLLibFunctions libgl = {0};
 
-static uint32_t xcursor_cursor;
-static uint8_t xcursor_defined = false;
-static uint8_t xcursor_change_pending = 0;
-static pthread_mutex_t xcursor_lock;
+static void* sdl_cursor = NULL;
+static void* sdl_system_cursor = NULL;
+static uint8_t cursor_change_pending = 0;
+static uint8_t flash_change_pending = false;
+static uint8_t pending_flash;
+static pthread_mutex_t cursor_lock;
 
 static pthread_mutex_t focus_lock;
 static uint8_t window_focus = false;
-
-static uint8_t flash_change_pending = false;
-static uint8_t pending_flash;
 
 static ElfW(Word) _bolt_hash_elf(const char* name) {
 	ElfW(Word) tmp, hash = 0;
@@ -272,14 +271,12 @@ static void _bolt_init_libxcb(unsigned long addr, const Elf32_Word* gnu_hash_tab
     if (sym) real_xcb_flush = sym->st_value + libxcb_addr;
 }
 
-static void _bolt_init_libx11(unsigned long addr, const Elf32_Word* gnu_hash_table, const ElfW(Word)* hash_table, const char* string_table, const ElfW(Sym)* symbol_table) {
-    libx11_addr = (void*)addr;
-    const ElfW(Sym)* sym = _bolt_lookup_symbol("XDefineCursor", gnu_hash_table, hash_table, string_table, symbol_table);
-    if (sym) real_XDefineCursor = sym->st_value + libx11_addr;
-    sym = _bolt_lookup_symbol("XUndefineCursor", gnu_hash_table, hash_table, string_table, symbol_table);
-    if (sym) real_XUndefineCursor = sym->st_value + libx11_addr;
-    sym = _bolt_lookup_symbol("XFreeCursor", gnu_hash_table, hash_table, string_table, symbol_table);
-    if (sym) real_XFreeCursor = sym->st_value + libx11_addr;
+static void _bolt_init_libsdl(unsigned long addr, const Elf32_Word* gnu_hash_table, const ElfW(Word)* hash_table, const char* string_table, const ElfW(Sym)* symbol_table) {
+    libsdl_addr = (void*)addr;
+    const ElfW(Sym)* sym = _bolt_lookup_symbol("SDL_SetCursor", gnu_hash_table, hash_table, string_table, symbol_table);
+    if (sym) real_SDL_SetCursor = sym->st_value + libsdl_addr;
+    sym = _bolt_lookup_symbol("SDL_CreateSystemCursor", gnu_hash_table, hash_table, string_table, symbol_table);
+    if (sym) real_SDL_CreateSystemCursor = sym->st_value + libsdl_addr;
 }
 
 static int _bolt_dl_iterate_callback(struct dl_phdr_info* info, size_t size, void* args) {
@@ -288,7 +285,6 @@ static int _bolt_dl_iterate_callback(struct dl_phdr_info* info, size_t size, voi
     const size_t libegl_name_len = strlen(libegl_name);
     const size_t libgl_name_len = strlen(libgl_name);
     const size_t libxcb_name_len = strlen(libxcb_name);
-    const size_t libx11_name_len = strlen(libx11_name);
 
     const Elf32_Word* gnu_hash_table = NULL;
     const ElfW(Word)* hash_table = NULL;
@@ -330,7 +326,7 @@ static int _bolt_dl_iterate_callback(struct dl_phdr_info* info, size_t size, voi
     FILENAME_EQ_INIT(libegl);
     FILENAME_EQ_INIT(libxcb);
     FILENAME_EQ_INIT(libgl);
-    FILENAME_EQ_INIT(libx11);
+    FILENAME_EQ_INIT(libsdl);
 #undef FILENAME_EQ_INIT
 
 	return 0;
@@ -341,7 +337,7 @@ static void _bolt_init_functions() {
     pthread_mutex_init(&egl_lock, NULL);
     pthread_mutex_init(&window_size_lock, NULL);
     pthread_mutex_init(&focus_lock, NULL);
-    pthread_mutex_init(&xcursor_lock, NULL);
+    pthread_mutex_init(&cursor_lock, NULL);
     dl_iterate_phdr(_bolt_dl_iterate_callback, NULL);
 #if defined(VERBOSE)
     _bolt_gl_set_logfile(stdout);
@@ -354,10 +350,10 @@ void _bolt_flash_window(void) {
     const uint8_t focus = window_focus;
     pthread_mutex_unlock(&focus_lock);
     if (focus) return;
-    pthread_mutex_lock(&xcursor_lock);
+    pthread_mutex_lock(&cursor_lock);
     flash_change_pending = true;
     pending_flash = true;
-    pthread_mutex_unlock(&xcursor_lock);
+    pthread_mutex_unlock(&cursor_lock);
 }
 
 uint8_t _bolt_window_has_focus(void) {
@@ -535,9 +531,9 @@ static uint8_t handle_mouse_event(int16_t x, int16_t y, uint32_t state, ptrdiff_
     const uint8_t mousein_fake_old = mousein_fake;
     const uint8_t ret = _bolt_plugin_handle_mouse_event(&event, bool_offset, event_offset, grab_type, &mousein_fake, &mousein_real);
     if (mousein_fake_old != mousein_fake) {
-        pthread_mutex_lock(&xcursor_lock);
-        xcursor_change_pending = ret ? 1 : 2;
-        pthread_mutex_unlock(&xcursor_lock);
+        pthread_mutex_lock(&cursor_lock);
+        cursor_change_pending = ret ? 1 : 2;
+        pthread_mutex_unlock(&cursor_lock);
     }
     return ret;
 }
@@ -710,10 +706,10 @@ static uint8_t _bolt_handle_xcb_event(xcb_connection_t* c, xcb_generic_event_t* 
             pthread_mutex_lock(&focus_lock);
             window_focus = true;
             pthread_mutex_unlock(&focus_lock);
-            pthread_mutex_lock(&xcursor_lock);
+            pthread_mutex_lock(&cursor_lock);
             flash_change_pending = true;
             pending_flash = false;
-            pthread_mutex_unlock(&xcursor_lock);
+            pthread_mutex_unlock(&cursor_lock);
             break;
         }
         case XCB_FOCUS_OUT: {// when the game window loses focus
@@ -778,30 +774,32 @@ xcb_generic_event_t* xcb_wait_for_event(xcb_connection_t* c) {
 }
 
 int xcb_flush(xcb_connection_t* c) {
-    pthread_mutex_lock(&xcursor_lock);
+    pthread_mutex_lock(&cursor_lock);
     const uint8_t change_pending = flash_change_pending;
     uint8_t do_flash = pending_flash;
     flash_change_pending = false;
 
-    switch (xcursor_change_pending) {
+    switch (cursor_change_pending) {
         case 1:
-            if (xcursor_defined) {
-                xcursor_change_pending = 0;
-                const uint32_t cursor = xcursor_cursor;
-                pthread_mutex_unlock(&xcursor_lock);
-                real_xcb_change_window_attributes(c, main_window_xcb, XCB_CW_CURSOR, &cursor);
+            if (sdl_cursor) {
+                cursor_change_pending = 0;
+                pthread_mutex_unlock(&cursor_lock);
+                real_SDL_SetCursor(sdl_cursor);
             } else {
-                pthread_mutex_unlock(&xcursor_lock);
+                pthread_mutex_unlock(&cursor_lock);
             }
             break;
         case 2:
-            xcursor_change_pending = 0;
-            pthread_mutex_unlock(&xcursor_lock);
-            const uint32_t value = XCB_NONE;
-            real_xcb_change_window_attributes(c, main_window_xcb, XCB_CW_CURSOR, &value);
+            cursor_change_pending = 0;
+            pthread_mutex_unlock(&cursor_lock);
+            if (!sdl_system_cursor) {
+                sdl_system_cursor = real_SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_DEFAULT);
+                if (!sdl_system_cursor) break;
+            }
+            real_SDL_SetCursor(sdl_system_cursor);
             break;
         default:
-            pthread_mutex_unlock(&xcursor_lock);
+            pthread_mutex_unlock(&cursor_lock);
     }
 
     if (change_pending) {
@@ -847,37 +845,13 @@ int xcb_flush(xcb_connection_t* c) {
     return real_xcb_flush(c);
 }
 
-int XDefineCursor(void* display, XWindow w, XCursor cursor) {
-    if (w != main_window_xcb) return real_XDefineCursor(display, w, cursor);
-    if (mousein_fake) {
-        const int ret = real_XDefineCursor(display, w, cursor);
-        if (!ret) return ret;
+unsigned char SDL_SetCursor(void* cursor) {
+    // the documentation claims this returns "true on success, false on failure", but that's wrong.
+    // in reality it returns 0 on success.
+    const bool ret = real_SDL_SetCursor(cursor);
+    if (!ret && cursor) {
+        sdl_cursor = cursor;
     }
-    pthread_mutex_lock(&xcursor_lock);
-    xcursor_cursor = cursor;
-    xcursor_defined = true;
-    pthread_mutex_unlock(&xcursor_lock);
-    return 1;
-}
-
-int XUndefineCursor(void* display, XWindow w) {
-    int ret = real_XUndefineCursor(display, w);
-    if (!ret) return ret;
-    if (w != main_window_xcb) return ret;
-    pthread_mutex_lock(&xcursor_lock);
-    xcursor_defined = false;
-    pthread_mutex_unlock(&xcursor_lock);
-    return ret;
-}
-
-int XFreeCursor(void* display, XCursor cursor) {
-    int ret = real_XFreeCursor(display, cursor);
-    if (!ret) return ret;
-    pthread_mutex_lock(&xcursor_lock);
-    if (cursor == xcursor_cursor) {
-        xcursor_defined = false;
-    }
-    pthread_mutex_unlock(&xcursor_lock);
     return ret;
 }
 
@@ -917,10 +891,8 @@ static void* _bolt_dl_lookup(void* handle, const char* symbol) {
         if (strcmp(symbol, "xcb_poll_for_queued_event") == 0) return xcb_poll_for_queued_event;
         if (strcmp(symbol, "xcb_wait_for_event") == 0) return xcb_wait_for_event;
         if (strcmp(symbol, "xcb_flush") == 0) return xcb_flush;
-    } else if (handle == libx11_addr) {
-        if (strcmp(symbol, "XDefineCursor") == 0) return XDefineCursor;
-        if (strcmp(symbol, "XUndefineCursor") == 0) return XUndefineCursor;
-        if (strcmp(symbol, "XFreeCursor") == 0) return XFreeCursor;
+    } else if (handle == libsdl_addr) {
+        if (strcmp(symbol, "SDL_SetCursor") == 0) return SDL_SetCursor;
     }
     return NULL;
 }
@@ -956,6 +928,6 @@ int dlclose(void* handle) {
     if (handle == libegl_addr) libegl_addr = NULL;
     if (handle == libgl_addr) libgl_addr = NULL;
     if (handle == libxcb_addr) libxcb_addr = NULL;
-    if (handle == libx11_addr) libx11_addr = NULL;
+    if (handle == libsdl_addr) libsdl_addr = NULL;
     return real_dlclose(handle);
 }
