@@ -1,5 +1,7 @@
 // stuff lifted from SDL headers
 
+#include <stdint.h>
+
 typedef enum SDL_SystemCursor {
     SDL_SYSTEM_CURSOR_DEFAULT,      /**< Default cursor. Usually an arrow. */
     SDL_SYSTEM_CURSOR_TEXT,         /**< Text selection. Usually an I-beam. */
@@ -23,3 +25,11 @@ typedef enum SDL_SystemCursor {
     SDL_SYSTEM_CURSOR_W_RESIZE,     /**< Window resize left. May be EW_RESIZE. */
     SDL_SYSTEM_CURSOR_COUNT
 } SDL_SystemCursor;
+
+typedef enum SDL_FlashOperation {
+    SDL_FLASH_CANCEL,                   /**< Cancel any window flash state */
+    SDL_FLASH_BRIEFLY,                  /**< Flash the window briefly to get attention */
+    SDL_FLASH_UNTIL_FOCUSED             /**< Flash the window until it gets focus */
+} SDL_FlashOperation;
+
+typedef uint64_t SDL_WindowFlags;

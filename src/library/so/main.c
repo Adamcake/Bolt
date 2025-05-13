@@ -42,6 +42,8 @@ static xcb_window_t main_window_xcb = 0;
 static uint32_t main_window_width = 0;
 static uint32_t main_window_height = 0;
 
+static void* main_window_sdl = NULL;
+
 static uint8_t mousein_real = 0;
 static uint8_t mousein_fake = 0;
 
@@ -73,24 +75,19 @@ static unsigned int (*real_eglTerminate)(void*) = NULL;
 static xcb_generic_event_t* (*real_xcb_poll_for_event)(xcb_connection_t*) = NULL;
 static xcb_generic_event_t* (*real_xcb_poll_for_queued_event)(xcb_connection_t*) = NULL;
 static xcb_generic_event_t* (*real_xcb_wait_for_event)(xcb_connection_t*) = NULL;
-static xcb_void_cookie_t (*real_xcb_get_property)(xcb_connection_t*, uint8_t, xcb_window_t, xcb_atom_t, xcb_atom_t, uint32_t, uint32_t) = NULL;
-static xcb_get_property_reply_t* (*real_xcb_get_property_reply)(xcb_connection_t*, xcb_void_cookie_t, xcb_generic_event_t**) = NULL;
-static int (*real_xcb_get_property_value_length)(const xcb_get_property_reply_t*) = NULL;
-static void* (*real_xcb_get_property_value)(const xcb_get_property_reply_t*) = NULL;
-static xcb_void_cookie_t (*real_xcb_change_property)(xcb_connection_t*, uint8_t, xcb_window_t, xcb_atom_t, xcb_atom_t, uint8_t, uint32_t, const void*) = NULL;
-static xcb_void_cookie_t (*real_xcb_change_window_attributes)(xcb_connection_t*, xcb_window_t, uint32_t, const uint32_t*) = NULL;
 static int (*real_xcb_flush)(xcb_connection_t*) = NULL;
 
+static void* (*real_SDL_CreateWindow)(const char*, int, int, SDL_WindowFlags) = NULL;
 static void* (*real_SDL_CreateSystemCursor)(SDL_SystemCursor) = NULL;
 static unsigned char (*real_SDL_SetCursor)(void*) = NULL;
+static bool (*real_SDL_FlashWindow)(void*, SDL_FlashOperation) = NULL;
 
 static struct GLLibFunctions libgl = {0};
 
 static void* sdl_cursor = NULL;
 static void* sdl_system_cursor = NULL;
 static uint8_t cursor_change_pending = 0;
-static uint8_t flash_change_pending = false;
-static uint8_t pending_flash;
+static uint8_t pending_flash = false;
 static pthread_mutex_t cursor_lock;
 
 static pthread_mutex_t focus_lock;
@@ -255,28 +252,20 @@ static void _bolt_init_libxcb(unsigned long addr, const Elf32_Word* gnu_hash_tab
     if (sym) real_xcb_poll_for_queued_event = sym->st_value + libxcb_addr;
     sym = _bolt_lookup_symbol("xcb_wait_for_event", gnu_hash_table, hash_table, string_table, symbol_table);
     if (sym) real_xcb_wait_for_event = sym->st_value + libxcb_addr;
-    sym = _bolt_lookup_symbol("xcb_get_property", gnu_hash_table, hash_table, string_table, symbol_table);
-    if (sym) real_xcb_get_property = sym->st_value + libxcb_addr;
-    sym = _bolt_lookup_symbol("xcb_get_property_reply", gnu_hash_table, hash_table, string_table, symbol_table);
-    if (sym) real_xcb_get_property_reply = sym->st_value + libxcb_addr;
-    sym = _bolt_lookup_symbol("xcb_get_property_value_length", gnu_hash_table, hash_table, string_table, symbol_table);
-    if (sym) real_xcb_get_property_value_length = sym->st_value + libxcb_addr;
-    sym = _bolt_lookup_symbol("xcb_get_property_value", gnu_hash_table, hash_table, string_table, symbol_table);
-    if (sym) real_xcb_get_property_value = sym->st_value + libxcb_addr;
-    sym = _bolt_lookup_symbol("xcb_change_property", gnu_hash_table, hash_table, string_table, symbol_table);
-    if (sym) real_xcb_change_property = sym->st_value + libxcb_addr;
-    sym = _bolt_lookup_symbol("xcb_change_window_attributes", gnu_hash_table, hash_table, string_table, symbol_table);
-    if (sym) real_xcb_change_window_attributes = sym->st_value + libxcb_addr;
     sym = _bolt_lookup_symbol("xcb_flush", gnu_hash_table, hash_table, string_table, symbol_table);
     if (sym) real_xcb_flush = sym->st_value + libxcb_addr;
 }
 
 static void _bolt_init_libsdl(unsigned long addr, const Elf32_Word* gnu_hash_table, const ElfW(Word)* hash_table, const char* string_table, const ElfW(Sym)* symbol_table) {
     libsdl_addr = (void*)addr;
-    const ElfW(Sym)* sym = _bolt_lookup_symbol("SDL_SetCursor", gnu_hash_table, hash_table, string_table, symbol_table);
+    const ElfW(Sym)* sym = _bolt_lookup_symbol("SDL_CreateWindow", gnu_hash_table, hash_table, string_table, symbol_table);
+    if (sym) real_SDL_CreateWindow = sym->st_value + libsdl_addr;
+    sym = _bolt_lookup_symbol("SDL_SetCursor", gnu_hash_table, hash_table, string_table, symbol_table);
     if (sym) real_SDL_SetCursor = sym->st_value + libsdl_addr;
     sym = _bolt_lookup_symbol("SDL_CreateSystemCursor", gnu_hash_table, hash_table, string_table, symbol_table);
     if (sym) real_SDL_CreateSystemCursor = sym->st_value + libsdl_addr;
+    sym = _bolt_lookup_symbol("SDL_FlashWindow", gnu_hash_table, hash_table, string_table, symbol_table);
+    if (sym) real_SDL_FlashWindow = sym->st_value + libsdl_addr;
 }
 
 static int _bolt_dl_iterate_callback(struct dl_phdr_info* info, size_t size, void* args) {
@@ -346,12 +335,7 @@ static void _bolt_init_functions() {
 }
 
 void _bolt_flash_window(void) {
-    pthread_mutex_lock(&focus_lock);
-    const uint8_t focus = window_focus;
-    pthread_mutex_unlock(&focus_lock);
-    if (focus) return;
     pthread_mutex_lock(&cursor_lock);
-    flash_change_pending = true;
     pending_flash = true;
     pthread_mutex_unlock(&cursor_lock);
 }
@@ -706,10 +690,6 @@ static uint8_t _bolt_handle_xcb_event(xcb_connection_t* c, xcb_generic_event_t* 
             pthread_mutex_lock(&focus_lock);
             window_focus = true;
             pthread_mutex_unlock(&focus_lock);
-            pthread_mutex_lock(&cursor_lock);
-            flash_change_pending = true;
-            pending_flash = false;
-            pthread_mutex_unlock(&cursor_lock);
             break;
         }
         case XCB_FOCUS_OUT: {// when the game window loses focus
@@ -775,10 +755,12 @@ xcb_generic_event_t* xcb_wait_for_event(xcb_connection_t* c) {
 
 int xcb_flush(xcb_connection_t* c) {
     pthread_mutex_lock(&cursor_lock);
-    const uint8_t change_pending = flash_change_pending;
-    uint8_t do_flash = pending_flash;
-    flash_change_pending = false;
+    const uint8_t do_flash = pending_flash && main_window_sdl;
 
+    // call SDL_SetCursor if there's a pending request to do so.
+    // this is carefully built to make sure the mutex is released before calling any functions that
+    // might cause a re-entry and a double-lock on the mutex, while also making sure that it'll
+    // always be released, exactly once.
     switch (cursor_change_pending) {
         case 1:
             if (sdl_cursor) {
@@ -802,44 +784,8 @@ int xcb_flush(xcb_connection_t* c) {
             pthread_mutex_unlock(&cursor_lock);
     }
 
-    if (change_pending) {
-        bool do_change = true;
-        if (do_flash) {
-            pthread_mutex_lock(&focus_lock);
-            const uint8_t focus = window_focus;
-            pthread_mutex_unlock(&focus_lock);
-            if (focus) c = false;
-        }
-
-        if (do_change) {
-            XWMHints hints;
-            XWMHints* ptr_hints = NULL;
-            uint32_t hints_length_dwords = sizeof(XWMHints) >> 2;
-            const xcb_void_cookie_t cookie = real_xcb_get_property(c, false, main_window_xcb, XCB_ATOM_WM_HINTS, XCB_ATOM_WM_HINTS, 0, hints_length_dwords);
-            xcb_get_property_reply_t* const reply = real_xcb_get_property_reply(c, cookie, NULL);
-
-            if (reply) {
-                const int length = real_xcb_get_property_value_length(reply);
-                if (length > 0) {
-                    hints_length_dwords = length;
-                    ptr_hints = real_xcb_get_property_value(reply);
-                    if (do_flash) {
-                        ptr_hints->flags |= (1 << 8);
-                    } else {
-                        ptr_hints->flags &= ~(1 << 8);
-                    }
-                }
-            }
-
-            if (!ptr_hints) {
-                memset(&hints, 0, sizeof hints);
-                if (do_flash) hints.flags = (1 << 8);
-                ptr_hints = &hints;
-            }
-
-            real_xcb_change_property(c, XCB_PROP_MODE_REPLACE, main_window_xcb, XCB_ATOM_WM_HINTS, XCB_ATOM_WM_HINTS, 32, hints_length_dwords, ptr_hints);
-            free(reply);
-        }
+    if (do_flash) {
+        real_SDL_FlashWindow(main_window_sdl, SDL_FLASH_UNTIL_FOCUSED);
     }
 
     return real_xcb_flush(c);
@@ -852,6 +798,12 @@ unsigned char SDL_SetCursor(void* cursor) {
     if (!ret && cursor) {
         sdl_cursor = cursor;
     }
+    return ret;
+}
+
+void* SDL_CreateWindow(const char* window, int w, int h, SDL_WindowFlags flags) {
+    void* ret = real_SDL_CreateWindow(window, w, h, flags);
+    if (!main_window_sdl) main_window_sdl = ret;
     return ret;
 }
 
@@ -893,6 +845,7 @@ static void* _bolt_dl_lookup(void* handle, const char* symbol) {
         if (strcmp(symbol, "xcb_flush") == 0) return xcb_flush;
     } else if (handle == libsdl_addr) {
         if (strcmp(symbol, "SDL_SetCursor") == 0) return SDL_SetCursor;
+        if (strcmp(symbol, "SDL_CreateWindow") == 0) return SDL_CreateWindow;
     }
     return NULL;
 }
