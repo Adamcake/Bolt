@@ -2627,7 +2627,7 @@ Bolt API, this is relative to the top-left pixel of the screen.
 @subsection vertexatlasdetails
 
 Given an index of a vertex in a batch, returns six values describing the
-vertex's image in the dexture atlas. The first four values are the x, y,
+vertex's image in the texture atlas. The first four values are the x, y,
 width and height, in pixels. The fifth and six values are booleans which
 relate to U and V coordinates respectively: if the value is true, U or V
 coordinates which fall outside the sub-image should wrap around within
