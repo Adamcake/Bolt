@@ -756,6 +756,7 @@ xcb_generic_event_t* xcb_wait_for_event(xcb_connection_t* c) {
 int xcb_flush(xcb_connection_t* c) {
     pthread_mutex_lock(&cursor_lock);
     const uint8_t do_flash = pending_flash && main_window_sdl;
+    pending_flash = false;
 
     // call SDL_SetCursor if there's a pending request to do so.
     // this is carefully built to make sure the mutex is released before calling any functions that
