@@ -96,7 +96,7 @@ struct GLProgram {
     GLint offset_uParticleEmitterTransformRanges;
     GLuint block_index_TerrainConsts;
     GLint offset_uGridSize;
-    GLint block_index_GuiConsts;
+    GLint block_index_GUIConsts;
     uint8_t is_minimap;
     uint8_t is_2d;
     uint8_t is_3d;
@@ -1135,7 +1135,7 @@ static GLuint _bolt_glCreateProgram() {
     program->offset_uParticleEmitterTransformRanges = -1;
     program->block_index_TerrainConsts = -1;
     program->offset_uGridSize = -1;
-    program->block_index_GuiConsts = -1;
+    program->block_index_GUIConsts = -1;
     program->is_2d = 0;
     program->is_3d = 0;
     program->is_minimap = 0;
@@ -1189,117 +1189,87 @@ static void _bolt_glLinkProgram(GLuint program) {
     gl.LinkProgram(program);
     struct GLContext* c = _bolt_context();
     struct GLProgram* p = _bolt_context_get_program(c, program);
-    const GLint uDiffuseMap = gl.GetUniformLocation(program, "uDiffuseMap");
-    const GLint uTextureAtlas = gl.GetUniformLocation(program, "uTextureAtlas");
-    const GLint uTextureAtlasSettings = gl.GetUniformLocation(program, "uTextureAtlasSettings");
-    const GLint uSecondsSinceStart = gl.GetUniformLocation(program, "uSecondsSinceStart");
-    p->loc_sSceneHDRTex = gl.GetUniformLocation(program, "sSceneHDRTex");
-    p->loc_sSourceTex = gl.GetUniformLocation(program, "sSourceTex");
-    p->loc_sBlurFarTex = gl.GetUniformLocation(program, "sBlurFarTex");
-    p->loc_sTexture = gl.GetUniformLocation(program, "sTexture");
 
-    GLuint ubo_indices[5];
-    const GLchar* view_var_names[] = {"uCameraPosition", "uViewMatrix", "uProjectionMatrix", "uViewProjMatrix", "uInvViewMatrix"};
-    const GLchar* batch_var_names[] = {"uAtlasMeta", "uVertexScale"};
-    const GLchar* transform_var_names[] = {"uBoneTransforms", "uSmoothSkinning"};
-    const GLchar* model_var_names[] = {"uModelMatrix"};
-    const GLchar* particle_var_names[] = {"uParticleEmitterTransforms", "uParticleEmitterTransformRanges", "uAtlasMeta"};
-    const GLchar* terrain_var_names[] = {"uGridSize", "uModelMatrix"};
-    const GLchar* gui_var_names[] = {"uProjectionMatrix"};
-    const GLuint block_index_ViewTransforms = gl.GetUniformBlockIndex(program, "ViewTransforms");
-    const GLuint block_index_BatchConsts = gl.GetUniformBlockIndex(program, "BatchConsts");
-    const GLuint block_index_VertexTransformData = gl.GetUniformBlockIndex(program, "VertexTransformData");
-    const GLuint block_index_ModelConsts = gl.GetUniformBlockIndex(program, "ModelConsts");
-    const GLuint block_index_ParticleConsts = gl.GetUniformBlockIndex(program, "ParticleConsts");
-    const GLuint block_index_TerrainConsts = gl.GetUniformBlockIndex(program, "TerrainConsts");
-    const GLuint block_index_GuiConsts = gl.GetUniformBlockIndex(program, "GUIConsts");
-    GLint view_offsets[5];
-    GLint batch_offsets[2];
-    GLint transform_offsets[2];
-    GLint model_offsets[1];
-    GLint particle_offsets[3];
-    GLint terrain_offsets[2];
-    GLint gui_offsets[1];
-    if ((GLint)block_index_ViewTransforms != -1) {
-        gl.GetUniformIndices(program, 5, view_var_names, ubo_indices);
-        gl.GetActiveUniformsiv(program, 5, ubo_indices, GL_UNIFORM_OFFSET, view_offsets);
-    }
-    if ((GLint)block_index_BatchConsts != -1) {
-        gl.GetUniformIndices(program, 2, batch_var_names, ubo_indices);
-        gl.GetActiveUniformsiv(program, 2, ubo_indices, GL_UNIFORM_OFFSET, batch_offsets);
-    }
-    if ((GLint)block_index_VertexTransformData != -1) {
-        gl.GetUniformIndices(program, 2, transform_var_names, ubo_indices);
-        gl.GetActiveUniformsiv(program, 2, ubo_indices, GL_UNIFORM_OFFSET, transform_offsets);
-    }
-    if ((GLint)block_index_ModelConsts != -1) {
-        gl.GetUniformIndices(program, 1, model_var_names, ubo_indices);
-        gl.GetActiveUniformsiv(program, 1, ubo_indices, GL_UNIFORM_OFFSET, model_offsets);
-    }
-    if ((GLint)block_index_ParticleConsts != -1) {
-        gl.GetUniformIndices(program, 3, particle_var_names, ubo_indices);
-        gl.GetActiveUniformsiv(program, 3, ubo_indices, GL_UNIFORM_OFFSET, particle_offsets);
-    }
-    if ((GLint)block_index_TerrainConsts != -1) {
-        gl.GetUniformIndices(program, 2, terrain_var_names, ubo_indices);
-        gl.GetActiveUniformsiv(program, 2, ubo_indices, GL_UNIFORM_OFFSET, terrain_offsets);
-    }
-    if ((GLint)block_index_GuiConsts != -1) {
-        gl.GetUniformIndices(program, 1, gui_var_names, ubo_indices);
-        gl.GetActiveUniformsiv(program, 1, ubo_indices, GL_UNIFORM_OFFSET, gui_offsets);
-    }
+    const GLchar* ViewTransforms_var_names[] = {"uCameraPosition", "uViewMatrix", "uProjectionMatrix", "uViewProjMatrix", "uInvViewMatrix"};
+    const GLchar* BatchConsts_var_names[] = {"uAtlasMeta", "uVertexScale"};
+    const GLchar* VertexTransformData_var_names[] = {"uBoneTransforms", "uSmoothSkinning"};
+    const GLchar* ModelConsts_var_names[] = {"uModelMatrix"};
+    const GLchar* ParticleConsts_var_names[] = {"uParticleEmitterTransforms", "uParticleEmitterTransformRanges", "uAtlasMeta"};
+    const GLchar* TerrainConsts_var_names[] = {"uGridSize", "uModelMatrix"};
+    const GLchar* GUIConsts_var_names[] = {"uProjectionMatrix"};
 
-    if (block_index_ViewTransforms != -1 && block_index_TerrainConsts != -1) {
-        p->block_index_ViewTransforms = block_index_ViewTransforms;
-        p->offset_uCameraPosition = view_offsets[0];
-        p->offset_uViewMatrix = view_offsets[1];
-        p->offset_uProjectionMatrix = view_offsets[2];
-        p->offset_uViewProjMatrix = view_offsets[3];
-        p->offset_uInvViewMatrix = view_offsets[4];
-        p->block_index_ModelConsts = block_index_TerrainConsts;
-        p->offset_uGridSize = terrain_offsets[0];
-        p->offset_uModelMatrix = terrain_offsets[1];
-        p->is_minimap = 1;
+#define DEFINEUBO(NAME) \
+    const GLuint block_index_##NAME = gl.GetUniformBlockIndex(program, #NAME); \
+    GLuint ubo_indices_##NAME[sizeof(NAME##_var_names) / sizeof(*NAME##_var_names)]; \
+    GLint NAME##_offsets[sizeof(NAME##_var_names) / sizeof(*NAME##_var_names)]; \
+    if ((GLint)block_index_##NAME != -1) { \
+        gl.GetUniformIndices(program, sizeof(NAME##_var_names) / sizeof(*NAME##_var_names), NAME##_var_names, ubo_indices_##NAME); \
+        gl.GetActiveUniformsiv(program, sizeof(NAME##_var_names) / sizeof(*NAME##_var_names), ubo_indices_##NAME, GL_UNIFORM_OFFSET, NAME##_offsets); \
     }
-    if (p && p->loc_aVertexPosition2D != -1 && p->loc_aVertexColour != -1 && p->loc_aTextureUV != -1 && p->loc_aTextureUVAtlasMin != -1 && p->loc_aTextureUVAtlasExtents != -1 && uDiffuseMap != -1 && block_index_GuiConsts != -1) {
-        p->loc_uDiffuseMap = uDiffuseMap;
-        p->block_index_GuiConsts = block_index_GuiConsts;
-        p->offset_uProjectionMatrix = gui_offsets[0];
-        p->is_2d = 1;
-    }
-    if (p && p->loc_aTextureUV != -1 && p->loc_aVertexColour != -1 && p->loc_aVertexPosition_BoneLabel != -1 && p->loc_aMaterialSettingsSlotXY_TilePositionXZ != -1 && uTextureAtlas != -1 && uTextureAtlasSettings != -1 && block_index_ViewTransforms != -1 && block_index_ModelConsts != -1 && block_index_BatchConsts != -1) {
-        p->loc_uTextureAtlas = uTextureAtlas;
-        p->loc_uTextureAtlasSettings = uTextureAtlasSettings;
-        p->block_index_ViewTransforms = block_index_ViewTransforms;
-        p->offset_uCameraPosition = view_offsets[0];
-        p->offset_uViewMatrix = view_offsets[1];
-        p->offset_uProjectionMatrix = view_offsets[2];
-        p->offset_uViewProjMatrix = view_offsets[3];
-        p->block_index_BatchConsts = block_index_BatchConsts;
-        p->offset_uAtlasMeta = batch_offsets[0];
-        p->offset_uVertexScale = batch_offsets[1];
-        p->block_index_ModelConsts = block_index_ModelConsts;
-        p->offset_uModelMatrix = model_offsets[0];
-        p->block_index_VertexTransformData = block_index_VertexTransformData;
-        p->offset_uBoneTransforms = transform_offsets[0];
-        p->offset_uSmoothSkinning = transform_offsets[1];
-        p->is_3d = 1;
-    }
-    if (p && p->loc_aParticleOrigin_CreationTime != -1 && p->loc_aParticleOffset != -1 && p->loc_aParticleVelocity != -1 && p->loc_aParticleEmitterUpAxis != -1 && p->loc_aMaterialSettingsSlotXY_Rotation != -1 && p->loc_aVertexColour != -1 && p->loc_aParticleUVAnimationData != -1 && uTextureAtlas != -1 && uTextureAtlasSettings != -1 && uSecondsSinceStart != -1 && block_index_ViewTransforms != -1 && block_index_ParticleConsts != -1) {
-        p->loc_uTextureAtlas = uTextureAtlas;
-        p->loc_uTextureAtlasSettings = uTextureAtlasSettings;
-        p->loc_uSecondsSinceStart = uSecondsSinceStart;
-        p->block_index_ParticleConsts = block_index_ParticleConsts;
-        p->offset_uParticleEmitterTransforms = particle_offsets[0];
-        p->offset_uParticleEmitterTransformRanges = particle_offsets[1];
-        p->offset_uAtlasMeta = particle_offsets[2];
-        p->block_index_ViewTransforms = block_index_ViewTransforms;
-        p->offset_uCameraPosition = view_offsets[0];
-        p->offset_uViewMatrix = view_offsets[1];
-        p->offset_uProjectionMatrix = view_offsets[2];
-        p->offset_uViewProjMatrix = view_offsets[3];
-        p->offset_uInvViewMatrix = view_offsets[4];
-        p->is_particle = 1;
+    DEFINEUBO(ViewTransforms)
+    DEFINEUBO(BatchConsts)
+    DEFINEUBO(VertexTransformData)
+    DEFINEUBO(ModelConsts)
+    DEFINEUBO(ParticleConsts)
+    DEFINEUBO(TerrainConsts)
+    DEFINEUBO(GUIConsts)
+#undef DEFINEUBO
+
+    if (p) {
+        p->loc_uDiffuseMap = gl.GetUniformLocation(program, "uDiffuseMap");
+        p->loc_uTextureAtlas = gl.GetUniformLocation(program, "uTextureAtlas");
+        p->loc_uTextureAtlasSettings = gl.GetUniformLocation(program, "uTextureAtlasSettings");
+        p->loc_uSecondsSinceStart = gl.GetUniformLocation(program, "uSecondsSinceStart");
+        p->loc_sSceneHDRTex = gl.GetUniformLocation(program, "sSceneHDRTex");
+        p->loc_sSourceTex = gl.GetUniformLocation(program, "sSourceTex");
+        p->loc_sBlurFarTex = gl.GetUniformLocation(program, "sBlurFarTex");
+        p->loc_sTexture = gl.GetUniformLocation(program, "sTexture");
+        if (block_index_ViewTransforms != -1 && block_index_TerrainConsts != -1) {
+            p->block_index_ViewTransforms = block_index_ViewTransforms;
+            p->offset_uCameraPosition = ViewTransforms_offsets[0];
+            p->offset_uViewMatrix = ViewTransforms_offsets[1];
+            p->offset_uProjectionMatrix = ViewTransforms_offsets[2];
+            p->offset_uViewProjMatrix = ViewTransforms_offsets[3];
+            p->offset_uInvViewMatrix = ViewTransforms_offsets[4];
+            p->block_index_ModelConsts = block_index_TerrainConsts;
+            p->offset_uGridSize = TerrainConsts_offsets[0];
+            p->offset_uModelMatrix = TerrainConsts_offsets[1];
+            p->is_minimap = 1;
+        }
+        if (p->loc_aVertexPosition2D != -1 && p->loc_aVertexColour != -1 && p->loc_aTextureUV != -1 && p->loc_aTextureUVAtlasMin != -1 && p->loc_aTextureUVAtlasExtents != -1 && p->loc_uDiffuseMap != -1 && block_index_GUIConsts != -1) {
+            p->block_index_GUIConsts = block_index_GUIConsts;
+            p->offset_uProjectionMatrix = GUIConsts_offsets[0];
+            p->is_2d = 1;
+        }
+        if (p->loc_aTextureUV != -1 && p->loc_aVertexColour != -1 && p->loc_aVertexPosition_BoneLabel != -1 && p->loc_aMaterialSettingsSlotXY_TilePositionXZ != -1 && p->loc_uTextureAtlas != -1 && p->loc_uTextureAtlasSettings != -1 && block_index_ViewTransforms != -1 && block_index_ModelConsts != -1 && block_index_BatchConsts != -1) {
+            p->block_index_ViewTransforms = block_index_ViewTransforms;
+            p->offset_uCameraPosition = ViewTransforms_offsets[0];
+            p->offset_uViewMatrix = ViewTransforms_offsets[1];
+            p->offset_uProjectionMatrix = ViewTransforms_offsets[2];
+            p->offset_uViewProjMatrix = ViewTransforms_offsets[3];
+            p->block_index_BatchConsts = block_index_BatchConsts;
+            p->offset_uAtlasMeta = BatchConsts_offsets[0];
+            p->offset_uVertexScale = BatchConsts_offsets[1];
+            p->block_index_ModelConsts = block_index_ModelConsts;
+            p->offset_uModelMatrix = ModelConsts_offsets[0];
+            p->block_index_VertexTransformData = block_index_VertexTransformData;
+            p->offset_uBoneTransforms = VertexTransformData_offsets[0];
+            p->offset_uSmoothSkinning = VertexTransformData_offsets[1];
+            p->is_3d = 1;
+        }
+        if (p->loc_aParticleOrigin_CreationTime != -1 && p->loc_aParticleOffset != -1 && p->loc_aParticleVelocity != -1 && p->loc_aParticleEmitterUpAxis != -1 && p->loc_aMaterialSettingsSlotXY_Rotation != -1 && p->loc_aVertexColour != -1 && p->loc_aParticleUVAnimationData != -1 && p->loc_uTextureAtlas != -1 && p->loc_uTextureAtlasSettings != -1 && p->loc_uSecondsSinceStart != -1 && block_index_ViewTransforms != -1 && block_index_ParticleConsts != -1) {
+            p->block_index_ParticleConsts = block_index_ParticleConsts;
+            p->offset_uParticleEmitterTransforms = ParticleConsts_offsets[0];
+            p->offset_uParticleEmitterTransformRanges = ParticleConsts_offsets[1];
+            p->offset_uAtlasMeta = ParticleConsts_offsets[2];
+            p->block_index_ViewTransforms = block_index_ViewTransforms;
+            p->offset_uCameraPosition = ViewTransforms_offsets[0];
+            p->offset_uViewMatrix = ViewTransforms_offsets[1];
+            p->offset_uProjectionMatrix = ViewTransforms_offsets[2];
+            p->offset_uViewProjMatrix = ViewTransforms_offsets[3];
+            p->offset_uInvViewMatrix = ViewTransforms_offsets[4];
+            p->is_particle = 1;
+        }
     }
     LOG("glLinkProgram end\n");
 }
@@ -1940,7 +1910,7 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
         GLint diffuse_map, ubo_gui_index;
         gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uDiffuseMap, &diffuse_map);
         GLint ubo_binding;
-        gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_GuiConsts, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
+        gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_GUIConsts, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
         gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_gui_index);
         const uint8_t* gui_consts_buf = (uint8_t*)_bolt_context_get_buffer(c, ubo_gui_index)->data;
         const GLfloat* projection_matrix = (float*)(gui_consts_buf + c->bound_program->offset_uProjectionMatrix);
