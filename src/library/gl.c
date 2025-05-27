@@ -69,7 +69,6 @@ struct GLProgram {
     GLint loc_aParticleEmitterUpAxis;
     GLint loc_aMaterialSettingsSlotXY_Rotation;
     GLint loc_aParticleUVAnimationData;
-    GLint loc_uProjectionMatrix;
     GLint loc_uDiffuseMap;
     GLint loc_uTextureAtlas;
     GLint loc_uTextureAtlasSettings;
@@ -97,6 +96,7 @@ struct GLProgram {
     GLint offset_uParticleEmitterTransformRanges;
     GLuint block_index_TerrainConsts;
     GLint offset_uGridSize;
+    GLint block_index_GuiConsts;
     uint8_t is_minimap;
     uint8_t is_2d;
     uint8_t is_3d;
@@ -1110,7 +1110,6 @@ static GLuint _bolt_glCreateProgram() {
     program->loc_aParticleEmitterUpAxis = -1;
     program->loc_aMaterialSettingsSlotXY_Rotation = -1;
     program->loc_aParticleUVAnimationData = -1;
-    program->loc_uProjectionMatrix = -1;
     program->loc_uDiffuseMap = -1;
     program->loc_uTextureAtlas = -1;
     program->loc_uTextureAtlasSettings = -1;
@@ -1190,7 +1189,6 @@ static void _bolt_glLinkProgram(GLuint program) {
     struct GLContext* c = _bolt_context();
     struct GLProgram* p = _bolt_context_get_program(c, program);
     const GLint uDiffuseMap = gl.GetUniformLocation(program, "uDiffuseMap");
-    const GLint uProjectionMatrix = gl.GetUniformLocation(program, "uProjectionMatrix");
     const GLint uTextureAtlas = gl.GetUniformLocation(program, "uTextureAtlas");
     const GLint uTextureAtlasSettings = gl.GetUniformLocation(program, "uTextureAtlasSettings");
     p->loc_sSceneHDRTex = gl.GetUniformLocation(program, "sSceneHDRTex");
@@ -1205,18 +1203,21 @@ static void _bolt_glLinkProgram(GLuint program) {
     const GLchar* model_var_names[] = {"uModelMatrix"};
     const GLchar* particle_var_names[] = {"uParticleEmitterTransforms", "uParticleEmitterTransformRanges", "uTextureAnimationTime", "uAtlasMeta"};
     const GLchar* terrain_var_names[] = {"uGridSize", "uModelMatrix"};
+    const GLchar* gui_var_names[] = {"uProjectionMatrix"};
     const GLuint block_index_ViewTransforms = gl.GetUniformBlockIndex(program, "ViewTransforms");
     const GLuint block_index_BatchConsts = gl.GetUniformBlockIndex(program, "BatchConsts");
     const GLuint block_index_VertexTransformData = gl.GetUniformBlockIndex(program, "VertexTransformData");
     const GLuint block_index_ModelConsts = gl.GetUniformBlockIndex(program, "ModelConsts");
     const GLuint block_index_ParticleConsts = gl.GetUniformBlockIndex(program, "ParticleConsts");
     const GLuint block_index_TerrainConsts = gl.GetUniformBlockIndex(program, "TerrainConsts");
+    const GLuint block_index_GuiConsts = gl.GetUniformBlockIndex(program, "GUIConsts");
     GLint view_offsets[5];
     GLint batch_offsets[3];
     GLint transform_offsets[2];
     GLint model_offsets[1];
     GLint particle_offsets[4];
     GLint terrain_offsets[2];
+    GLint gui_offsets[1];
     if ((GLint)block_index_ViewTransforms != -1) {
         gl.GetUniformIndices(program, 5, view_var_names, ubo_indices);
         gl.GetActiveUniformsiv(program, 5, ubo_indices, GL_UNIFORM_OFFSET, view_offsets);
@@ -1241,6 +1242,10 @@ static void _bolt_glLinkProgram(GLuint program) {
         gl.GetUniformIndices(program, 2, terrain_var_names, ubo_indices);
         gl.GetActiveUniformsiv(program, 2, ubo_indices, GL_UNIFORM_OFFSET, terrain_offsets);
     }
+    if ((GLint)block_index_GuiConsts != -1) {
+        gl.GetUniformIndices(program, 1, gui_var_names, ubo_indices);
+        gl.GetActiveUniformsiv(program, 1, ubo_indices, GL_UNIFORM_OFFSET, gui_offsets);
+    }
 
     if (block_index_ViewTransforms != -1 && block_index_TerrainConsts != -1) {
         p->block_index_ViewTransforms = block_index_ViewTransforms;
@@ -1254,9 +1259,10 @@ static void _bolt_glLinkProgram(GLuint program) {
         p->offset_uModelMatrix = terrain_offsets[1];
         p->is_minimap = 1;
     }
-    if (p && p->loc_aVertexPosition2D != -1 && p->loc_aVertexColour != -1 && p->loc_aTextureUV != -1 && p->loc_aTextureUVAtlasMin != -1 && p->loc_aTextureUVAtlasExtents != -1 && uDiffuseMap != -1 && uProjectionMatrix != -1) {
+    if (p && p->loc_aVertexPosition2D != -1 && p->loc_aVertexColour != -1 && p->loc_aTextureUV != -1 && p->loc_aTextureUVAtlasMin != -1 && p->loc_aTextureUVAtlasExtents != -1 && uDiffuseMap != -1 && block_index_GuiConsts != -1) {
         p->loc_uDiffuseMap = uDiffuseMap;
-        p->loc_uProjectionMatrix = uProjectionMatrix;
+        p->block_index_GuiConsts = block_index_GuiConsts;
+        p->offset_uProjectionMatrix = gui_offsets[0];
         p->is_2d = 1;
     }
     if (p && p->loc_aTextureUV != -1 && p->loc_aVertexColour != -1 && p->loc_aVertexPosition_BoneLabel != -1 && p->loc_aMaterialSettingsSlotXY_TilePositionXZ != -1 && uTextureAtlas != -1 && uTextureAtlasSettings != -1 && block_index_ViewTransforms != -1 && block_index_ModelConsts != -1 && block_index_BatchConsts != -1) {
@@ -1930,10 +1936,13 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
     struct GLArrayBuffer* element_buffer = _bolt_context_get_buffer(c, element_binding);
     const unsigned short* indices = (unsigned short*)((uint8_t*)element_buffer->data + (uintptr_t)indices_offset);
     if (type == GL_UNSIGNED_SHORT && mode == GL_TRIANGLES && count > 0 && c->bound_program->is_2d && !c->bound_program->is_minimap) {
-        GLint diffuse_map;
+        GLint diffuse_map, ubo_gui_index;
         gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uDiffuseMap, &diffuse_map);
-        GLfloat projection_matrix[16];
-        gl.GetUniformfv(c->bound_program->id, c->bound_program->loc_uProjectionMatrix, projection_matrix);
+        GLint ubo_binding;
+        gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_GuiConsts, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
+        gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_gui_index);
+        const uint8_t* gui_consts_buf = (uint8_t*)_bolt_context_get_buffer(c, ubo_gui_index)->data;
+        const GLfloat* projection_matrix = (float*)(gui_consts_buf + c->bound_program->offset_uProjectionMatrix);
         GLint draw_tex = 0;
         if (c->current_draw_framebuffer) {
             gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
