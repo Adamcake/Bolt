@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21) # Minimum CEF requirement, but building with the latest cmake is strongly recommended
-project(Bolt VERSION 0.16 LANGUAGES C CXX)
+project(Bolt VERSION 0.17 LANGUAGES C CXX)
 
 if(NOT WIN32)
     # name of application in metadata, defaulting to "BoltLauncher", but usually overridden to "com.adamcake.Bolt" by flatpak for example
@@ -65,6 +65,16 @@ if(NOT WIN32)
         "    </screenshot>"
         "</screenshots>"
         "<releases>"
+        "    <release version=\"0.17.0\" date=\"2025-05-30\">"
+        "        <url type=\"details\">https://github.com/Adamcake/Bolt/releases/tag/0.16.0</url>"
+        "        <description>"
+        "            <p>Engine update</p>"
+        "            <ul>"
+        "                <li>The engine update released four days ago, which was the subject of version 0.16, has been completely reverted. Bolt has been reverted to match. This change will be re-applied when the new engine version is re-released.</li>"
+        "                <li>If you're reading this - PLEASE stop putting out broken engine updates and then rolling them back in the same week. It's very inconvenient.</li>"
+        "            </ul>"
+        "        </description>"
+        "    </release>"
         "    <release version=\"0.16.0\" date=\"2025-05-27\">"
         "        <url type=\"details\">https://github.com/Adamcake/Bolt/releases/tag/0.16.0</url>"
         "        <description>"
