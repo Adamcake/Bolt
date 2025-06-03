@@ -28,7 +28,9 @@
 		if ($config.check_announcements) {
 			const gameName = $config.selected.game == Game.osrs ? 'osrs' : bolt.env.provider;
 			const url: string = `${bolt.env.psa_url}${gameName}/${gameName}.json`;
-			fetch(url, { method: 'GET' })
+			// added no-store due to an issue where new messages are not shown until cache is cleared.
+			// remote server appears to be using etags incorrectly?
+			fetch(url, { method: 'GET', cache: 'no-store' })
 				.then((response) => response.json())
 				.then((response) => {
 					$psa = response.psaEnabled && response.psaMessage ? response.psaMessage : null;
