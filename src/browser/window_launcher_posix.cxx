@@ -12,6 +12,38 @@
 
 #define MAXARGCOUNT 256
 
+#define SETUPCHILD() \
+setpgrp(); \
+if (chdir(this->data_dir.c_str())) { \
+	fmt::print("[B] new process was unable to chdir: {}\n", errno); \
+	exit(1); \
+} \
+if (has_jx_session_id) setenv("JX_SESSION_ID", jx_session_id.data(), true); \
+if (has_jx_character_id) setenv("JX_CHARACTER_ID", jx_character_id.data(), true); \
+if (has_jx_display_name) setenv("JX_DISPLAY_NAME", jx_display_name.data(), true);
+
+#define SAVEANDRETURN(VAR, PATH) \
+if (has_##VAR) { \
+	size_t written = 0; \
+	const int file = open(this->PATH.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644); \
+	if (file == -1) { \
+		QSENDSTR("Launched successfully but unable to save " #VAR " file", 500); \
+	} \
+	while (written < VAR.size()) { \
+		written += write(file, VAR.c_str() + written, VAR.size() - written); \
+	} \
+	close(file); \
+} \
+QSENDOK();
+
+void BoltExec(char** argv) {
+	// note: execv never returns on success
+	if (execv(*argv, argv)) {
+		printf("[B] [%i] exec failed, errno %i, target: %s\n", getpid(), errno, *argv);
+		exit(1);
+	}
+}
+
 // true on success, false on failure, out is undefined on failure
 bool FindInPath(const char* filename, std::string& out) {
 	const char* path = getenv("PATH");
@@ -294,38 +326,20 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<C
 
 	pid_t pid = fork();
 	if (pid == 0) {
-		setpgrp();
-		if (chdir(this->data_dir.c_str())) {
-			fmt::print("[B] new process was unable to chdir: {}\n", errno);
-			exit(1);
-		}
+		SETUPCHILD()
 		close(STDIN_FILENO);
 		setenv("HOME", env_home.data(), true);
 		setenv("PULSE_PROP_OVERRIDE", env_pulse_prop_override, false);
 		setenv("SDL_VIDEO_X11_WMCLASS", env_wmclass, false);
-		if (has_jx_session_id) setenv("JX_SESSION_ID", jx_session_id.data(), true);
-		if (has_jx_character_id) setenv("JX_CHARACTER_ID", jx_character_id.data(), true);
-		if (has_jx_display_name) setenv("JX_DISPLAY_NAME", jx_display_name.data(), true);
 #if defined(BOLT_PLUGINS)
 		if (plugin_loader) {
 			setenv("LD_PRELOAD", "lib" BOLT_LIB_NAME ".so", true);
 		}
 #endif
-		execv(*argv, argv);
+		BoltExec(argv);
 	}
 	fmt::print("[B] Successfully spawned game process with pid {}\n", pid);
-	if (has_hash) {
-		size_t written = 0;
-		int file = open(this->rs3_elf_hash_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
-		if (file == -1) {
-			QSENDSTR("OK, but unable to save hash file", 200);
-		}
-		while (written < hash.size()) {
-			written += write(file, hash.c_str() + written, hash.size() - written);
-		}
-		close(file);
-	}
-	QSENDOK();
+	SAVEANDRETURN(hash, rs3_elf_hash_path)
 }
 
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Exe(CefRefPtr<CefRequest> request, std::string_view query) {
@@ -402,39 +416,16 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchOsrsExe(CefRefPtr<
 
 	pid_t pid = fork();
 	if (pid == 0) {
-		setpgrp();
-		if (has_jx_session_id) setenv("JX_SESSION_ID", jx_session_id.data(), true);
-		if (has_jx_character_id) setenv("JX_CHARACTER_ID", jx_character_id.data(), true);
-		if (has_jx_display_name) setenv("JX_DISPLAY_NAME", jx_display_name.data(), true);
+		SETUPCHILD()
 		// game id from steam for OSRS. This allows umu to apply any necessary protonfixes
 		setenv("GAMEID", "1343370", true);
 		// tell umu to use the latest GE Proton it can find, which will perform better in most cases
 		setenv("PROTONPATH", "GE-Proton", true);
-
-		// This is needed due to proton's pressure vessel changing the mount point of /app to /run/parent/app inside of pressure vessel.
-		// It tries to chdir back to /app/opt/bolt-launcher which will no longer exist. Chdir to data_dir works to work around this.
-		if (chdir(this->data_dir.c_str())) {
-			fmt::print("[B] new process was unable to chdir: {}\n", errno);
-			exit(1);
-		}
-
-		execv(*argv, argv);
+		BoltExec(argv);
 	}
 
 	fmt::print("[B] Successfully spawned game process with pid {}\n", pid);
-	if (has_hash) {
-		size_t written = 0;
-		int file = open(this->osrs_exe_hash_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
-		if (file == -1) {
-			QSENDSTR("OK, but unable to save id file", 200);
-			const char* data = "OK, but unable to save id file\n";
-		}
-		while (written < hash.size()) {
-			written += write(file, hash.c_str() + written, hash.size() - written);
-		}
-		close(file);
-	}
-	QSENDOK();
+	SAVEANDRETURN(hash, osrs_exe_hash_path)
 }
 
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchOsrsApp(CefRefPtr<CefRequest> request, std::string_view query) {
@@ -528,33 +519,14 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRuneliteJar(CefRef
 
 	pid_t pid = fork();
 	if (pid == 0) {
-		setpgrp();
-		if (chdir(this->data_dir.c_str())) {
-			fmt::print("[B] new process was unable to chdir: {}\n", errno);
-			exit(1);
-		}
+		SETUPCHILD()
 		close(STDIN_FILENO);
 		setenv("HOME", user_home.data(), true);
-		if (has_jx_session_id) setenv("JX_SESSION_ID", jx_session_id.data(), true);
-		if (has_jx_character_id) setenv("JX_CHARACTER_ID", jx_character_id.data(), true);
-		if (has_jx_display_name) setenv("JX_DISPLAY_NAME", jx_display_name.data(), true);
-		execv(*argv, argv);
+		BoltExec(argv);
 	}
 
 	fmt::print("[B] Successfully spawned game process with pid {}\n", pid);
-	if (has_id) {
-		size_t written = 0;
-		int file = open(this->runelite_id_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
-		if (file == -1) {
-			QSENDSTR("OK, but unable to save id file", 200);
-			const char* data = "OK, but unable to save id file\n";
-		}
-		while (written < id.size()) {
-			written += write(file, id.c_str() + written, id.size() - written);
-		}
-		close(file);
-	}
-	QSENDOK();
+	SAVEANDRETURN(id, runelite_id_path)
 }
 
 CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<CefRequest> request, std::string_view query) {
@@ -632,33 +604,14 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchHdosJar(CefRefPtr<
 
 	pid_t pid = fork();
 	if (pid == 0) {
-		setpgrp();
-		if (chdir(this->data_dir.c_str())) {
-			fmt::print("[B] new process was unable to chdir: {}\n", errno);
-			exit(1);
-		}
+		SETUPCHILD()
 		close(STDIN_FILENO);
 		setenv("HOME", user_home.data(), true);
-		setenv("BOLT_JAVA_PATH", java.data(), true);
-		if (has_jx_session_id) setenv("JX_SESSION_ID", jx_session_id.data(), true);
-		if (has_jx_character_id) setenv("JX_CHARACTER_ID", jx_character_id.data(), true);
-		if (has_jx_display_name) setenv("JX_DISPLAY_NAME", jx_display_name.data(), true);
-		execv(*argv, argv);
+		BoltExec(argv);
 	}
 
 	fmt::print("[B] Successfully spawned game process with pid {}\n", pid);
-	if (has_version) {
-		size_t written = 0;
-		int file = open(this->hdos_version_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
-		if (file == -1) {
-			QSENDSTR("OK, but unable to save version file", 200);
-		}
-		while (written < version.size()) {
-			written += write(file, version.c_str() + written, version.size() - written);
-		}
-		close(file);
-	}
-	QSENDOK();
+	SAVEANDRETURN(version, hdos_version_path)
 }
 
 void Browser::Launcher::OpenExternalUrl(char* url) const {
@@ -666,7 +619,7 @@ void Browser::Launcher::OpenExternalUrl(char* url) const {
 	char arg_xdg_open[] = "xdg-open";
 	char* argv[] { arg_env, arg_xdg_open, url, nullptr };
 	pid_t pid = fork();
-	if (pid == 0) execv(arg_env, argv);
+	if (pid == 0) BoltExec(argv);
 }
 
 bool BrowseFile(const std::filesystem::path& dir) {
@@ -675,6 +628,6 @@ bool BrowseFile(const std::filesystem::path& dir) {
 	std::string p = dir;
 	char* argv[] { arg_env, arg_xdg_open, p.data(), nullptr };
 	pid_t pid = fork();
-	if (pid == 0) execv(arg_env, argv);
+	if (pid == 0) BoltExec(argv);
 	return pid > 0;
 }
