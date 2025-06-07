@@ -3105,7 +3105,7 @@ static void _bolt_gl_plugin_surface_drawtosurface(void* _userdata, void* _target
     lgl->Disable(GL_DEPTH_TEST);
     lgl->Disable(GL_SCISSOR_TEST);
     lgl->Disable(GL_CULL_FACE);
-    lgl->BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    gl.BlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     lgl->DrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
     gl.BlendFuncSeparate(c->blend_rgb_s, c->blend_rgb_d, c->blend_alpha_s, c->blend_alpha_d);
