@@ -497,7 +497,6 @@ static int api_createsurfacefrompng(lua_State* state) {
         printf("createsurfacefrompng: error reading file '%s'", (char*)full_path);
         return 0;
     }
-    fclose(f);
 
 #define CALL_SPNG(FUNC, ...) err = FUNC(__VA_ARGS__); if(err){free(rgba);printf("createsurfacefrompng: error decoding file '%s': " #FUNC " returned %i",(char*)full_path,err);return 0;}
     void* rgba = NULL;
