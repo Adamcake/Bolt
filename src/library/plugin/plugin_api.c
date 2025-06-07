@@ -1680,7 +1680,7 @@ static int api_mousebutton_button(lua_State* state) {
 
 static int api_scroll_direction(lua_State* state) {
     const struct MouseScrollEvent* event = require_self_userdata(state, "direction");
-    lua_pushinteger(state, event->direction);
+    lua_pushboolean(state, event->direction);
     return 1;
 }
 
