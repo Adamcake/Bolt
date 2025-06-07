@@ -484,21 +484,22 @@ static int api_createsurfacefrompng(lua_State* state) {
     memcpy(full_path + plugin->path_length + path_length, extension, sizeof(extension));
     FILE* f = fopen(full_path, "rb");
     if (!f) {
-        lua_pushfstring(state, "createsurfacefrompng: error opening file '%s'", (char*)full_path);
-        lua_error(state);
+        printf("createsurfacefrompng: error opening file '%s'", (char*)full_path);
+        return 0;
     }
     fseek(f, 0, SEEK_END);
     const long png_size = ftell(f);
     fseek(f, 0, SEEK_SET);
     void* png = lua_newuserdata(state, png_size);
-    if (fread(png, 1, png_size, f) < png_size) {
-        fclose(f);
-        lua_pushfstring(state, "createsurfacefrompng: error reading file '%s'", (char*)full_path);
-        lua_error(state);
+    const size_t read_count = fread(png, 1, png_size, f);
+    fclose(f);
+    if (read_count < png_size) {
+        printf("createsurfacefrompng: error reading file '%s'", (char*)full_path);
+        return 0;
     }
     fclose(f);
 
-#define CALL_SPNG(FUNC, ...) err = FUNC(__VA_ARGS__); if(err){free(rgba);lua_pushfstring(state,"createsurfacefrompng: error decoding file '%s': " #FUNC " returned %i",(char*)full_path,err);lua_error(state);}
+#define CALL_SPNG(FUNC, ...) err = FUNC(__VA_ARGS__); if(err){free(rgba);printf("createsurfacefrompng: error decoding file '%s': " #FUNC " returned %i",(char*)full_path,err);return 0;}
     void* rgba = NULL;
     int err;
     spng_ctx* spng = spng_ctx_new(0);

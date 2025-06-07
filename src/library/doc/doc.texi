@@ -592,8 +592,9 @@ respectively.
 The path will be interpreted similarly to require(), i.e. relative to
 the plugin directory, using '.' as file separators, and must not include
 the ".png" extension (this is appended automatically). This function
-will call `error()` if the file does not exist or is inaccessible for
-any reason.
+will return nil if the file does not exist, is inaccessible or
+unreadable, or is not a valid PNG file. A detailed error message will be
+printed to stdout.
 
 The surface will have the same width and height as the image. As with
 @ref{functions-createsurface}, the width and height of your PNG file
