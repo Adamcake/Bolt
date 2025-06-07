@@ -29,6 +29,7 @@ static uint64_t next_window_id;
 static struct WindowInfo windows;
 
 static struct SurfaceFunctions overlay;
+static struct SurfaceFunctions overlay_windows;
 static uint32_t overlay_width;
 static uint32_t overlay_height;
 static uint8_t overlay_inited;
@@ -609,12 +610,12 @@ static void _bolt_process_embedded_windows(uint32_t window_width, uint32_t windo
             continue;
         }
 
-        window->surface_functions.draw_to_surface(window->surface_functions.userdata, overlay.userdata, 0, 0, metadata.width, metadata.height, metadata.x, metadata.y, metadata.width, metadata.height);
+        window->surface_functions.draw_to_surface(window->surface_functions.userdata, overlay_windows.userdata, 0, 0, metadata.width, metadata.height, metadata.x, metadata.y, metadata.width, metadata.height);
         if (window->popup_shown && window->popup_initialised) {
-            window->popup_surface_functions.draw_to_surface(window->popup_surface_functions.userdata, overlay.userdata, 0, 0, window->popup_meta.width, window->popup_meta.height, metadata.x + window->popup_meta.x, metadata.y + window->popup_meta.y, window->popup_meta.width, window->popup_meta.height);
+            window->popup_surface_functions.draw_to_surface(window->popup_surface_functions.userdata, overlay_windows.userdata, 0, 0, window->popup_meta.width, window->popup_meta.height, metadata.x + window->popup_meta.x, metadata.y + window->popup_meta.y, window->popup_meta.width, window->popup_meta.height);
         }
         if (window->reposition_mode && window->reposition_threshold) {
-            managed_functions.draw_region_outline(overlay.userdata, window->repos_target_x, window->repos_target_y, window->repos_target_w, window->repos_target_h);
+            managed_functions.draw_region_outline(overlay_windows.userdata, window->repos_target_x, window->repos_target_y, window->repos_target_w, window->repos_target_h);
         }
     }
     unlock_windows_for_reading();
@@ -731,12 +732,15 @@ void _bolt_plugin_end_frame(uint32_t window_width, uint32_t window_height) {
         if (overlay_inited) {
             if (wh_valid) {
                 managed_functions.surface_resize_and_clear(overlay.userdata, window_width, window_height);
+                managed_functions.surface_resize_and_clear(overlay_windows.userdata, window_width, window_height);
             } else {
                 managed_functions.surface_destroy(overlay.userdata);
+                managed_functions.surface_destroy(overlay_windows.userdata);
                 overlay_inited = false;
             }
         } else if (wh_valid) {
             managed_functions.surface_init(&overlay, window_width, window_height, NULL);
+            managed_functions.surface_init(&overlay_windows, window_width, window_height, NULL);
             overlay_inited = true;
         }
         overlay_width = window_width;
@@ -765,7 +769,9 @@ void _bolt_plugin_end_frame(uint32_t window_width, uint32_t window_height) {
     struct SwapBuffersEvent event;
     _bolt_plugin_handle_swapbuffers(&event);
     overlay.draw_to_screen(overlay.userdata, 0, 0, window_width, window_height, 0, 0, window_width, window_height);
+    overlay.draw_to_screen(overlay_windows.userdata, 0, 0, window_width, window_height, 0, 0, window_width, window_height);
     overlay.clear(overlay.userdata, 0.0, 0.0, 0.0, 0.0);
+    overlay.clear(overlay_windows.userdata, 0.0, 0.0, 0.0, 0.0);
 }
 
 void _bolt_plugin_close() {
