@@ -3686,7 +3686,7 @@ middle.
 
 @example lua
 @verbatim
-local lmb, rmb, mmb = event:buttons()
+local lmb, rmb, mmb = event:mousebuttons()
 @end verbatim
 @end example
 
@@ -3800,7 +3800,7 @@ middle.
 
 @example lua
 @verbatim
-local lmb, rmb, mmb = event:buttons()
+local lmb, rmb, mmb = event:mousebuttons()
 @end verbatim
 @end example
 
@@ -3915,7 +3915,7 @@ middle.
 
 @example lua
 @verbatim
-local lmb, rmb, mmb = event:buttons()
+local lmb, rmb, mmb = event:mousebuttons()
 @end verbatim
 @end example
 
@@ -4035,7 +4035,7 @@ middle.
 
 @example lua
 @verbatim
-local lmb, rmb, mmb = event:buttons()
+local lmb, rmb, mmb = event:mousebuttons()
 @end verbatim
 @end example
 
