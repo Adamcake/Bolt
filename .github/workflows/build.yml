@@ -123,7 +123,7 @@ jobs:
           options: | 
             CMAKE_BUILD_TYPE=Release
             CMAKE_INSTALL_PREFIX=libarchive\zlib\builddir
-          build-args: --config Release -j $NUMBER_OF_PROCESSORS
+          build-args: --config Release -j ${{ env.NUMBER_OF_PROCESSORS }}
 
       - name: Create zlib release
         run: cmake --install libarchive/zlib/builddir/
@@ -140,7 +140,7 @@ jobs:
             ENABLE_LIB_ONLY=ON
             ENABLE_SHARED_LIB=OFF
             ENABLE_STATIC_LIB=ON
-          build-args: --config Release -j $NUMBER_OF_PROCESSORS
+          build-args: --config Release -j ${{ env.NUMBER_OF_PROCESSORS }}
 
       - name: Create bzip2 release
         run: cmake --install libarchive/bzip2/builddir/
@@ -154,7 +154,7 @@ jobs:
           options: | 
             CMAKE_BUILD_TYPE=Release
             CMAKE_INSTALL_PREFIX=libarchive\xz\builddir
-          build-args: --config Release -j $NUMBER_OF_PROCESSORS
+          build-args: --config Release -j ${{ env.NUMBER_OF_PROCESSORS }}
 
       - name: Create xz release
         run: cmake --install libarchive/xz/builddir/
@@ -168,7 +168,7 @@ jobs:
           options: | 
             CMAKE_BUILD_TYPE=Release
             CMAKE_INSTALL_PREFIX=libarchive\zstd\builddir
-          build-args: --config Release -j $NUMBER_OF_PROCESSORS
+          build-args: --config Release -j ${{ env.NUMBER_OF_PROCESSORS }}
 
       - name: Create zstd release
         run: cmake --install libarchive/zstd/builddir/
@@ -192,7 +192,7 @@ jobs:
             LIBLZMA_INCLUDE_DIR=C:/a/Bolt/Bolt/libarchive/xz/builddir/include
             ZSTD_LIBRARY=C:/a/Bolt/Bolt/libarchive/zstd/builddir/lib/zstd_static.lib
             ZSTD_INCLUDE_DIR=C:/a/Bolt/Bolt/libarchive/zstd/builddir/include
-          build-args: --config Release -j $NUMBER_OF_PROCESSORS
+          build-args: --config Release -j ${{ env.NUMBER_OF_PROCESSORS }}
 
       - name: Create libarchive release
         run: cmake --install libarchive/builddir/
@@ -250,7 +250,7 @@ jobs:
             BOLT_LUAJIT_DIR=C:\a\Bolt\Bolt\LuaJIT\src
             CMAKE_BUILD_TYPE=Release
             BOLT_CEF_INSTALLDIR=C:\a\Bolt\Bolt\install-location
-          build-args: --config Release -j $NUMBER_OF_PROCESSORS
+          build-args: --config Release -j ${{ env.NUMBER_OF_PROCESSORS }}
       
       # Installs to C:\a\Bolt\Bolt\install-location\bolt-launcher\*
       - name: Create Release
@@ -326,7 +326,7 @@ jobs:
           options: | 
             BOLT_LUAJIT_INCLUDE_DIR=/usr/include/luajit-2.1
             CMAKE_BUILD_TYPE=Release
-          build-args: --config Release -j $NUMBER_OF_PROCESSORS
+          build-args: --config Release -j 4
       
       - name: Create Release
         run: |
