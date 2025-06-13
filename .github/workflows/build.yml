@@ -123,7 +123,7 @@ jobs:
           options: | 
             CMAKE_BUILD_TYPE=Release
             CMAKE_INSTALL_PREFIX=libarchive\zlib\builddir
-          build-args: --config Release -j 4
+          build-args: --config Release -j $NUMBER_OF_PROCESSORS
 
       - name: Create zlib release
         run: cmake --install libarchive/zlib/builddir/
@@ -140,7 +140,7 @@ jobs:
             ENABLE_LIB_ONLY=ON
             ENABLE_SHARED_LIB=OFF
             ENABLE_STATIC_LIB=ON
-          build-args: --config Release -j 4
+          build-args: --config Release -j $NUMBER_OF_PROCESSORS
 
       - name: Create bzip2 release
         run: cmake --install libarchive/bzip2/builddir/
@@ -154,7 +154,7 @@ jobs:
           options: | 
             CMAKE_BUILD_TYPE=Release
             CMAKE_INSTALL_PREFIX=libarchive\xz\builddir
-          build-args: --config Release -j 4
+          build-args: --config Release -j $NUMBER_OF_PROCESSORS
 
       - name: Create xz release
         run: cmake --install libarchive/xz/builddir/
@@ -168,7 +168,7 @@ jobs:
           options: | 
             CMAKE_BUILD_TYPE=Release
             CMAKE_INSTALL_PREFIX=libarchive\zstd\builddir
-          build-args: --config Release -j 4
+          build-args: --config Release -j $NUMBER_OF_PROCESSORS
 
       - name: Create zstd release
         run: cmake --install libarchive/zstd/builddir/
@@ -184,15 +184,15 @@ jobs:
             CMAKE_BUILD_TYPE=Release
             CMAKE_INSTALL_PREFIX=libarchive\builddir
             ENABLE_OPENSSL=OFF
-            ZLIB_LIBRARY=D:/a/Bolt/Bolt/libarchive/zlib/builddir/lib/zlibstatic.lib
-            ZLIB_INCLUDE_DIR=D:/a/Bolt/Bolt/libarchive/zlib/builddir/include
-            BZIP2_LIBRARIES=D:/a/Bolt/Bolt/libarchive/bzip2/builddir/lib/bz2_static.lib
-            BZIP2_INCLUDE_DIR=D:/a/Bolt/Bolt/libarchive/bzip2/builddir/include
-            LIBLZMA_LIBRARY=D:/a/Bolt/Bolt/libarchive/xz/builddir/lib/lzma.lib
-            LIBLZMA_INCLUDE_DIR=D:/a/Bolt/Bolt/libarchive/xz/builddir/include
-            ZSTD_LIBRARY=D:/a/Bolt/Bolt/libarchive/zstd/builddir/lib/zstd_static.lib
-            ZSTD_INCLUDE_DIR=D:/a/Bolt/Bolt/libarchive/zstd/builddir/include
-          build-args: --config Release -j 4
+            ZLIB_LIBRARY=C:/a/Bolt/Bolt/libarchive/zlib/builddir/lib/zlibstatic.lib
+            ZLIB_INCLUDE_DIR=C:/a/Bolt/Bolt/libarchive/zlib/builddir/include
+            BZIP2_LIBRARIES=C:/a/Bolt/Bolt/libarchive/bzip2/builddir/lib/bz2_static.lib
+            BZIP2_INCLUDE_DIR=C:/a/Bolt/Bolt/libarchive/bzip2/builddir/include
+            LIBLZMA_LIBRARY=C:/a/Bolt/Bolt/libarchive/xz/builddir/lib/lzma.lib
+            LIBLZMA_INCLUDE_DIR=C:/a/Bolt/Bolt/libarchive/xz/builddir/include
+            ZSTD_LIBRARY=C:/a/Bolt/Bolt/libarchive/zstd/builddir/lib/zstd_static.lib
+            ZSTD_INCLUDE_DIR=C:/a/Bolt/Bolt/libarchive/zstd/builddir/include
+          build-args: --config Release -j $NUMBER_OF_PROCESSORS
 
       - name: Create libarchive release
         run: cmake --install libarchive/builddir/
@@ -219,7 +219,7 @@ jobs:
           key: 'windows-cef-${{ env.WINDOWS_CEF_VERSION }}'
       
       # At this point the file tree looks like
-      # D:\a\Bolt\Bolt
+      # C:\a\Bolt\Bolt
       # - libarchive
       #   - <whole libarchive source>
       #   - bzip2/
@@ -235,10 +235,10 @@ jobs:
       #       - <CEF release distribution>
       #
       # The tree has many nested Bolt dirs because of how GHA works.
-      # The first two Bolt dirs (D:\a\Bolt\Bolt) are the workspace provided by github.
+      # The first two Bolt dirs (C:\a\Bolt\Bolt) are the workspace provided by github.
       # Github always does it this way.
       # Then github normally clones directly in to the workspace with a folder of the repo name. 
-      # However for our usecase we clone multiple repos, so we have D:\a\Bolt\Bolt\{libarchive, LuaJIT, Bolt}
+      # However for our usecase we clone multiple repos, so we have C:\a\Bolt\Bolt\{libarchive, LuaJIT, Bolt}
       - name: Build Project
         uses: threeal/cmake-action@v2.0.0
         with:
@@ -246,23 +246,23 @@ jobs:
           build-dir: build # Makes it so that the build directory is set to Bolt/build
           generator: Visual Studio 17
           options: | 
-            BOLT_LIBARCHIVE_DIR=D:\a\Bolt\Bolt\libarchive\builddir
-            BOLT_LUAJIT_DIR=D:\a\Bolt\Bolt\LuaJIT\src
+            BOLT_LIBARCHIVE_DIR=C:\a\Bolt\Bolt\libarchive\builddir
+            BOLT_LUAJIT_DIR=C:\a\Bolt\Bolt\LuaJIT\src
             CMAKE_BUILD_TYPE=Release
-            BOLT_CEF_INSTALLDIR=D:\a\Bolt\Bolt\install-location
-          build-args: --config Release -j 4
+            BOLT_CEF_INSTALLDIR=C:\a\Bolt\Bolt\install-location
+          build-args: --config Release -j $NUMBER_OF_PROCESSORS
       
-      # Installs to D:\a\Bolt\Bolt\install-location\bolt-launcher\*
+      # Installs to C:\a\Bolt\Bolt\install-location\bolt-launcher\*
       - name: Create Release
         run: cmake --install build/
       
-      # Uploads D:\a\Bolt\Bolt\install-location as a zip
+      # Uploads C:\a\Bolt\Bolt\install-location as a zip
       # With `bolt-launcher` as the root directory of the zip file
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Bolt-Windows-${{ github.sha }}
-          path: D:\a\Bolt\Bolt\install-location
+          path: C:\a\Bolt\Bolt\install-location
   
       # Uploads the zip file to the release matching the format of the above step
       # Such that build artifacts and release artifacts are the same
@@ -273,8 +273,8 @@ jobs:
         # In the script below we cd in to Bolt first, because otherwise the gh command will fail.
         run: |
           cd Bolt
-          Compress-Archive -Path D:\a\Bolt\Bolt\install-location\bolt-launcher -DestinationPath D:\a\Bolt\Bolt\Bolt-Windows.zip
-          gh release upload ${{ github.event.release.tag_name }} D:\a\Bolt\Bolt\Bolt-Windows.zip
+          Compress-Archive -Path C:\a\Bolt\Bolt\install-location\bolt-launcher -DestinationPath C:\a\Bolt\Bolt\Bolt-Windows.zip
+          gh release upload ${{ github.event.release.tag_name }} C:\a\Bolt\Bolt\Bolt-Windows.zip
 
   build-linux-project:          
     name: Build Linux
@@ -326,7 +326,7 @@ jobs:
           options: | 
             BOLT_LUAJIT_INCLUDE_DIR=/usr/include/luajit-2.1
             CMAKE_BUILD_TYPE=Release
-          build-args: --config Release -j 4
+          build-args: --config Release -j $NUMBER_OF_PROCESSORS
       
       - name: Create Release
         run: |
