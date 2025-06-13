@@ -180,6 +180,7 @@ jobs:
           build-dir: libarchive\builddir
           generator: Visual Studio 17
           options: | 
+            CMAKE_VERBOSE_MAKEFILE=1
             CMAKE_BUILD_TYPE=Release
             CMAKE_INSTALL_PREFIX=libarchive\builddir
             ENABLE_OPENSSL=OFF
