@@ -77,7 +77,7 @@ static xcb_generic_event_t* (*real_xcb_poll_for_queued_event)(xcb_connection_t*)
 static xcb_generic_event_t* (*real_xcb_wait_for_event)(xcb_connection_t*) = NULL;
 static int (*real_xcb_flush)(xcb_connection_t*) = NULL;
 
-static void* (*real_SDL_CreateWindow)(const char*, int, int, SDL_WindowFlags) = NULL;
+static void* (*real_SDL_CreateWindow)(const char*, int, int, int, int, SDL_WindowFlags) = NULL;
 static void* (*real_SDL_CreateSystemCursor)(SDL_SystemCursor) = NULL;
 static unsigned char (*real_SDL_SetCursor)(void*) = NULL;
 static bool (*real_SDL_FlashWindow)(void*, SDL_FlashOperation) = NULL;
@@ -802,9 +802,11 @@ unsigned char SDL_SetCursor(void* cursor) {
     return ret;
 }
 
-void* SDL_CreateWindow(const char* window, int w, int h, SDL_WindowFlags flags) {
-    void* ret = real_SDL_CreateWindow(window, w, h, flags);
+void* SDL_CreateWindow(const char* title, int x, int y, int w, int h, SDL_WindowFlags flags) {
+    LOGF("SDL_CreateWindow(%s, %i, %i, %lu)\n", title, w, h, flags);
+    void* ret = real_SDL_CreateWindow(title, x, y, w, h, flags);
     if (!main_window_sdl) main_window_sdl = ret;
+    LOGF("SDL_CreateWindow end -> %lu\n", (uintptr_t)ret);
     return ret;
 }
 
