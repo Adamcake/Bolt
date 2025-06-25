@@ -27,6 +27,8 @@ jobs:
     name: Build Windows
     runs-on: windows-2022
     steps:
+      - name: Set WORKSPACE_NAME_NON_DOS
+        run: $WORKSPACE_NAME_NON_DOS=${{ github.workspace }}.replace('\\','/')
       - name: Checkout Project
         uses: actions/checkout@v4.2.0
         with:
@@ -184,14 +186,14 @@ jobs:
             CMAKE_BUILD_TYPE=Release
             CMAKE_INSTALL_PREFIX=libarchive\builddir
             ENABLE_OPENSSL=OFF
-            ZLIB_LIBRARY=C:/a/Bolt/Bolt/libarchive/zlib/builddir/lib/zlibstatic.lib
-            ZLIB_INCLUDE_DIR=C:/a/Bolt/Bolt/libarchive/zlib/builddir/include
-            BZIP2_LIBRARIES=C:/a/Bolt/Bolt/libarchive/bzip2/builddir/lib/bz2_static.lib
-            BZIP2_INCLUDE_DIR=C:/a/Bolt/Bolt/libarchive/bzip2/builddir/include
-            LIBLZMA_LIBRARY=C:/a/Bolt/Bolt/libarchive/xz/builddir/lib/lzma.lib
-            LIBLZMA_INCLUDE_DIR=C:/a/Bolt/Bolt/libarchive/xz/builddir/include
-            ZSTD_LIBRARY=C:/a/Bolt/Bolt/libarchive/zstd/builddir/lib/zstd_static.lib
-            ZSTD_INCLUDE_DIR=C:/a/Bolt/Bolt/libarchive/zstd/builddir/include
+            ZLIB_LIBRARY=$WORKSPACE_NAME_NON_DOS/libarchive/zlib/builddir/lib/zlibstatic.lib
+            ZLIB_INCLUDE_DIR=$WORKSPACE_NAME_NON_DOS/libarchive/zlib/builddir/include
+            BZIP2_LIBRARIES=$WORKSPACE_NAME_NON_DOS/libarchive/bzip2/builddir/lib/bz2_static.lib
+            BZIP2_INCLUDE_DIR=$WORKSPACE_NAME_NON_DOS/libarchive/bzip2/builddir/include
+            LIBLZMA_LIBRARY=$WORKSPACE_NAME_NON_DOS/libarchive/xz/builddir/lib/lzma.lib
+            LIBLZMA_INCLUDE_DIR=$WORKSPACE_NAME_NON_DOS/libarchive/xz/builddir/include
+            ZSTD_LIBRARY=$WORKSPACE_NAME_NON_DOS/libarchive/zstd/builddir/lib/zstd_static.lib
+            ZSTD_INCLUDE_DIR=$WORKSPACE_NAME_NON_DOS/libarchive/zstd/builddir/include
           build-args: --config Release -j ${{ env.NUMBER_OF_PROCESSORS }}
 
       - name: Create libarchive release
