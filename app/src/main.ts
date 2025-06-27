@@ -159,8 +159,14 @@ async function refreshStoredSessions() {
 
 	if (sessions.length > 0) logger.info(`Logging in...`);
 
-	for (const session of sessions) {
-		const tokensResult = await AuthService.refreshOAuthToken(session.tokens);
+	const sessionResults = sessions.map((x) => {
+		return { promise: AuthService.refreshOAuthToken(x.tokens), session: x };
+	});
+	const loginResults = [];
+
+	for (const result of sessionResults) {
+		const session = result.session;
+		const tokensResult = await result.promise;
 		if (!tokensResult.ok) {
 			if (tokensResult.error === 0) {
 				logger.error(
@@ -177,8 +183,12 @@ async function refreshStoredSessions() {
 
 		const tokens = tokensResult.value;
 		session.tokens = tokens;
+		loginResults.push({ promise: BoltService.login(tokens, session.session_id), session: session });
+	}
 
-		const loginResult = await BoltService.login(tokens, session.session_id);
+	for (const result of loginResults) {
+		const session = result.session;
+		const loginResult = await result.promise;
 		if (!loginResult.ok) {
 			logger.error(
 				`Unable to sign into saved user '${session.user.displayName}' - please sign in again. ${loginResult.error}`
@@ -189,9 +199,10 @@ async function refreshStoredSessions() {
 		}
 	}
 
-	expiredTokens.forEach(async (sub) => {
-		await BoltService.logout(sub);
-	});
+	const expiredResults = expiredTokens.map(BoltService.logout);
+	for (const result of expiredResults) {
+		await result;
+	}
 
 	GlobalState.sessions.set(sessions);
 	await BoltService.saveCredentials();
