@@ -15,6 +15,7 @@ export interface Config {
 	flatpak_rich_presence: boolean;
 	runelite_use_custom_jar: boolean;
 	use_custom_rs_config_uri: boolean;
+	discard_expired_sessions: boolean;
 	rs_config_uri?: string;
 	rs_launch_command: string | null;
 	osrs_launch_command: string | null;
@@ -40,6 +41,7 @@ export const defaultConfig: Config = {
 	flatpak_rich_presence: false,
 	runelite_use_custom_jar: false,
 	use_custom_rs_config_uri: false,
+	discard_expired_sessions: true,
 	rs_launch_command: null,
 	osrs_launch_command: null,
 	runelite_custom_jar: null,
@@ -85,6 +87,10 @@ export function initConfig() {
 			}
 			if (typeof parsedConfig.close_after_launch === 'undefined') {
 				parsedConfig.close_after_launch = false;
+				GlobalState.configHasPendingChanges = true;
+			}
+			if (typeof parsedConfig.discard_expired_sessions === 'undefined') {
+				parsedConfig.discard_expired_sessions = true;
 				GlobalState.configHasPendingChanges = true;
 			}
 			if (isConfigValid(parsedConfig)) {

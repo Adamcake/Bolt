@@ -52,3 +52,12 @@
 		class="ml-2"
 	/>
 </div>
+<div class="mx-auto p-2">
+	<label for="discard_expired_logins">Discard expired login sessions: </label>
+	<input
+		id="discard_expired_logins"
+		type="checkbox"
+		bind:checked={$config.discard_expired_sessions}
+		class="ml-2"
+	/>
+</div>

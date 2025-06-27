@@ -172,11 +172,13 @@ async function refreshStoredSessions() {
 				logger.error(
 					`Unable to verify saved login, status: ${tokensResult.error}. Do you have an internet connection? Please relaunch Bolt to try again.`
 				);
-			} else {
+			} else if (tokensResult.error >= 400 && tokensResult.error < 500) {
 				logger.error(
 					`Discarding expired login, status: ${tokensResult.error}. Please sign in again.`
 				);
 				expiredTokens.push(session.tokens.sub);
+			} else {
+				logger.error(`Unable to verify saved login due to HTTP error ${tokensResult.error}`);
 			}
 			continue;
 		}
@@ -191,7 +193,7 @@ async function refreshStoredSessions() {
 		const loginResult = await result.promise;
 		if (!loginResult.ok) {
 			logger.error(
-				`Unable to sign into saved user '${session.user.displayName}' - please sign in again. ${loginResult.error}`
+				`Unable to sign into saved user '${session.user.displayName}' due to an error: ${loginResult.error}`
 			);
 			expiredTokens.push(session.tokens.sub);
 		} else {
@@ -199,9 +201,11 @@ async function refreshStoredSessions() {
 		}
 	}
 
-	const expiredResults = expiredTokens.map(BoltService.logout);
-	for (const result of expiredResults) {
-		await result;
+	if (expiredTokens.length > 0 && get(GlobalState.config).discard_expired_sessions) {
+		const expiredResults = expiredTokens.map(BoltService.logout);
+		for (const result of expiredResults) {
+			await result;
+		}
 	}
 
 	GlobalState.sessions.set(sessions);
