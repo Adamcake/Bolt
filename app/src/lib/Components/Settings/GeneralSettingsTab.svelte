@@ -15,6 +15,12 @@
 	}
 
 	const { config } = GlobalState;
+
+	const checkAnnouncementsDesc =
+		"Allow checking for official announcements about game status. These will be displayed above the 'play' button. Disabling will reduce the number of web requests made when opening the launcher.";
+	const closeAfterLaunchDesc = 'Close the launcher immediately after launching a game';
+	const discardExpiredLoginsDesc =
+		"Discard login sessions if they're no longer valid, prompting the player to sign-in again. If unchecked, the only way to discard a login will be by manually pressing the 'log out' button, even if your login no longer works.";
 </script>
 
 <button
@@ -34,7 +40,7 @@
 	</div>
 </button>
 
-<div class="mx-auto p-2">
+<div class="mx-auto p-2" title={checkAnnouncementsDesc}>
 	<label for="check_announcements">Check game announcements: </label>
 	<input
 		id="check_announcements"
@@ -43,7 +49,7 @@
 		class="ml-2"
 	/>
 </div>
-<div class="mx-auto p-2">
+<div class="mx-auto p-2" title={closeAfterLaunchDesc}>
 	<label for="close_after_launch">Close Bolt after launching a game: </label>
 	<input
 		id="close_after_launch"
@@ -52,7 +58,7 @@
 		class="ml-2"
 	/>
 </div>
-<div class="mx-auto p-2">
+<div class="mx-auto p-2" title={discardExpiredLoginsDesc}>
 	<label for="discard_expired_logins">Discard expired login sessions: </label>
 	<input
 		id="discard_expired_logins"
