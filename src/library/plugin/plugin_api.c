@@ -1839,6 +1839,43 @@ static int api_buffer_setbuffer(lua_State* state) {
     return 0;
 }
 
+static int api_swapbuffers_readpixels(lua_State* state) {
+    const struct SwapBuffersEvent* event = require_self_userdata(state, "readpixels");
+    const int16_t x = luaL_checkinteger(state, 2);
+    const int16_t y = luaL_checkinteger(state, 3);
+    const uint16_t w = luaL_checkinteger(state, 4);
+    const uint16_t h = luaL_checkinteger(state, 5);
+    const size_t size = w * h * 3;
+
+    const struct PluginManagedFunctions* managed_functions = _bolt_plugin_managed_functions();
+    struct FixedBuffer* buffer = lua_newuserdata(state, sizeof(struct FixedBuffer));
+    buffer->data = malloc(size);
+    if (!buffer->data) {
+        lua_pushfstring(state, "readpixels: heap error, failed to allocate %i bytes", size);
+        lua_error(state);
+    }
+    buffer->size = size;
+    SETMETATABLE(buffer)
+    managed_functions->read_screen_pixels(x, y, w, h, buffer->data);
+    return 1;
+}
+
+static int api_swapbuffers_copytosurface(lua_State* state) {
+    const struct SwapBuffersEvent* event = require_self_userdata(state, "copytosurface");
+    const struct SurfaceFunctions* target = require_userdata(state, 2, "copytosurface");
+    const int sx = luaL_checkinteger(state, 3);
+    const int sy = luaL_checkinteger(state, 4);
+    const int sw = luaL_checkinteger(state, 5);
+    const int sh = luaL_checkinteger(state, 6);
+    const int dx = luaL_checkinteger(state, 7);
+    const int dy = luaL_checkinteger(state, 8);
+    const int dw = luaL_checkinteger(state, 9);
+    const int dh = luaL_checkinteger(state, 10);
+    const struct PluginManagedFunctions* managed_functions = _bolt_plugin_managed_functions();
+    managed_functions->copy_screen(target->userdata, sx, sy, sw, sh, dx, dy, dw, dh);
+    return 0;
+}
+
 static int api_shaderprogram_setattribute(lua_State* state) {
     struct ShaderProgramFunctions* program = require_self_userdata(state, "setattribute");
     const lua_Integer attribute = luaL_checkinteger(state, 2);
@@ -2137,6 +2174,11 @@ static struct ApiFuncTemplate buffer_functions[] = {
     BOLTFUNC(setbuffer, buffer),
 };
 
+static struct ApiFuncTemplate swapbuffers_functions[] = {
+    BOLTFUNC(readpixels, swapbuffers),
+    BOLTFUNC(copytosurface, swapbuffers),
+};
+
 static struct ApiFuncTemplate shaderprogram_functions[] = {
     BOLTFUNC(setattribute, shaderprogram),
     BOLTFUNC(setuniform1i, shaderprogram),
@@ -2295,7 +2337,7 @@ DEFPUSHMETA(renderminimap)
 DEFPUSHMETA(point)
 DEFPUSHMETA(transform)
 DEFPUSHMETAGC(buffer)
-DEFPUSHEMPTYMETA(swapbuffers)
+DEFPUSHMETA(swapbuffers)
 DEFPUSHMETAGC(surface)
 DEFPUSHEMPTYMETAGC(shader)
 DEFPUSHMETAGC(shaderprogram)

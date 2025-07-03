@@ -912,8 +912,13 @@ end)
 
 @eventhandler{swapbuffers events, @ref{objects-swapbuffers}}
 
-This event is commonly used as a "sync point", i.e. to ensure that some
-Lua code will run at regular intervals.
+This event is named after the "SwapBuffers" function in OpenGL, and as
+such, it runs every time a new "frame" is about to be shown on the
+player's computer screen. How often the event fires will depend on the
+user's current FPS. The event is very useful as a "sync point", i.e. to
+ensure that some Lua code will run at regular intervals. The event
+object itself can be used to refer to the finished screen contents as it
+will appear to the user, such as by reading pixel data from the screen.
 
 @example lua
 @verbatim
@@ -3536,9 +3541,61 @@ functions.
 Unlike other events in the Bolt API, which fire immediately after the
 event in question has happened, SwapBuffers events fire immediately
 before the buffers are actually swapped. This means any rendering done
-in a SwapBuffers event will be immediately visible on the current frame.
+in a SwapBuffers event will be immediately visible on the frame that the
+player is about to see.
 
 @eventobjectwarning{}
+
+@node swapbuffers-readpixels
+@subsection readpixels
+
+Reads pixel data from a portion of the screen, defined by the given X,
+Y, width and height. The bounds are not allowed to exceed the size of
+the game window (given by @ref{functions-gamewindowsize}) and width and
+height are not allowed to be negative.
+
+The function will return a @ref{objects-buffer} with size (width *
+height * 3) containing RGB pixel data. The first row of data will be the
+one that's nearest the bottom of the user's screen, then continuing
+upwards.
+
+The length of time this function takes will be proportional to the
+number of pixels being read, but an expected time to read a 1920x1080
+rectangle would be around 5 milliseconds, so use with care.
+
+Any windows, embedded browsers, or overlay contents drawn by any plugins
+will not be included in the image data.
+
+@example lua
+@verbatim
+local gamewidth, gameheight = bolt.gamewindowsize()
+local buffer = event:readpixels(0, 0, gamewidth, gameheight)
+@end verbatim
+@end example
+
+@node swapbuffers-copytosurface
+@subsection copytosurface
+
+Copies some data from the user's screen to a surface. Parameters are the
+X, Y, width and height of the region of the user's screen, followed by
+the X, Y, width and height of the target area of the surface. Any
+previous contents of the surface in the destination area will be
+overwritten with a fully opaque image.
+
+This function is preferable over @ref{swapbuffers-readpixels} as the
+contents of the image never need to be retrieved from the GPU, which is
+slow.
+
+Any windows, embedded browsers, or overlay contents drawn by any plugins
+will not be included in the image.
+
+@example lua
+@verbatim
+local gamewidth, gameheight = bolt.gamewindowsize()
+local mysurface = bolt.createsurface(gamewidth, gameheight)
+local buffer = event:copytosurface(mysurface, 0, 0, gamewidth, gameheight, 0, 0, gamewidth, gameheight)
+@end verbatim
+@end example
 
 @node objects-reposition
 @section Reposition Event

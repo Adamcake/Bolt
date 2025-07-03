@@ -306,7 +306,8 @@ static void _bolt_gl_plugin_surface_drawtosurface(void* userdata, void* target, 
 static void _bolt_gl_plugin_surface_set_tint(void* userdata, double r, double g, double b);
 static void _bolt_gl_plugin_surface_set_alpha(void* userdata, double alpha);
 static void _bolt_gl_plugin_draw_region_outline(void* userdata, int16_t x, int16_t y, uint16_t width, uint16_t height);
-static void _bolt_gl_plugin_read_screen_pixels(uint32_t width, uint32_t height, void* data);
+static void _bolt_gl_plugin_read_screen_pixels(int16_t x, int16_t y, uint32_t width, uint32_t height, void* data);
+static void _bolt_gl_plugin_copy_screen(void* userdata, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh);
 static void _bolt_gl_plugin_game_view_rect(int* x, int* y, int* w, int* h);
 static void _bolt_gl_plugin_player_position(int32_t* x, int32_t* y, int32_t* z);
 static uint8_t _bolt_gl_plugin_vertex_shader_init(struct ShaderFunctions* out, const char* source, int len, char* output, int output_len);
@@ -1877,6 +1878,7 @@ void _bolt_gl_onMakeCurrent(void* context) {
             .surface_resize_and_clear = _bolt_gl_plugin_surface_resize,
             .draw_region_outline = _bolt_gl_plugin_draw_region_outline,
             .read_screen_pixels = _bolt_gl_plugin_read_screen_pixels,
+            .copy_screen = _bolt_gl_plugin_copy_screen,
             .game_view_rect = _bolt_gl_plugin_game_view_rect,
             .player_position = _bolt_gl_plugin_player_position,
             .vertex_shader_init = _bolt_gl_plugin_vertex_shader_init,
@@ -3160,8 +3162,21 @@ static void _bolt_gl_plugin_draw_region_outline(void* userdata, int16_t x, int16
     gl.UseProgram(c->bound_program ? c->bound_program->id : 0);
 }
 
-static void _bolt_gl_plugin_read_screen_pixels(uint32_t width, uint32_t height, void* data) {
-    lgl->ReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, data);
+static void _bolt_gl_plugin_read_screen_pixels(int16_t x, int16_t y, uint32_t width, uint32_t height, void* data) {
+    struct GLContext* c = _bolt_context();
+    gl.BindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+    lgl->ReadPixels(x, gl_height - (y + height), width, height, GL_RGB, GL_UNSIGNED_BYTE, data);
+    gl.BindFramebuffer(GL_READ_FRAMEBUFFER, c->current_read_framebuffer);
+}
+
+static void _bolt_gl_plugin_copy_screen(void* userdata, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh) {
+    struct GLContext* c = _bolt_context();
+    struct PluginSurfaceUserdata* surface = userdata;
+    gl.BindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+    gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, surface->framebuffer);
+    gl.BlitFramebuffer(sx, gl_height - sy, sx + sw, gl_height - (sy + sh), dx, dy, dx + dw, dy + dh, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+    gl.BindFramebuffer(GL_READ_FRAMEBUFFER, c->current_read_framebuffer);
+    gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, c->current_draw_framebuffer);
 }
 
 static void _bolt_gl_plugin_game_view_rect(int* x, int* y, int* w, int* h) {

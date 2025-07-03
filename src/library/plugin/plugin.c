@@ -671,7 +671,7 @@ static void _bolt_process_captures(uint32_t window_width, uint32_t window_height
         capture_height = window_height;
         need_remap = true;
     }
-    managed_functions.read_screen_pixels(window_width, window_height, capture_shm.file);
+    managed_functions.read_screen_pixels(0, 0, window_width, window_height, capture_shm.file);
     
     lock_windows_for_reading();
     size_t iter = 0;
@@ -769,9 +769,9 @@ void _bolt_plugin_end_frame(uint32_t window_width, uint32_t window_height) {
     struct SwapBuffersEvent event;
     _bolt_plugin_handle_swapbuffers(&event);
     overlay.draw_to_screen(overlay.userdata, 0, 0, window_width, window_height, 0, 0, window_width, window_height);
-    overlay.draw_to_screen(overlay_windows.userdata, 0, 0, window_width, window_height, 0, 0, window_width, window_height);
+    overlay_windows.draw_to_screen(overlay_windows.userdata, 0, 0, window_width, window_height, 0, 0, window_width, window_height);
     overlay.clear(overlay.userdata, 0.0, 0.0, 0.0, 0.0);
-    overlay.clear(overlay_windows.userdata, 0.0, 0.0, 0.0, 0.0);
+    overlay_windows.clear(overlay_windows.userdata, 0.0, 0.0, 0.0, 0.0);
 }
 
 void _bolt_plugin_close() {

@@ -264,7 +264,8 @@ struct PluginManagedFunctions {
     void (*surface_destroy)(void*);
     void (*surface_resize_and_clear)(void*, unsigned int, unsigned int);
     void (*draw_region_outline)(void* target, int16_t x, int16_t y, uint16_t width, uint16_t height);
-    void (*read_screen_pixels)(uint32_t width, uint32_t height, void* data);
+    void (*read_screen_pixels)(int16_t x, int16_t y, uint32_t width, uint32_t height, void* data);
+    void (*copy_screen)(void*, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh);
     void (*game_view_rect)(int* x, int* y, int* w, int* h);
     void (*player_position)(int32_t* x, int32_t* y, int32_t* z);
 
@@ -445,10 +446,8 @@ struct RenderMinimapEvent {
 };
 
 struct SwapBuffersEvent {
-#if defined(_MSC_VER)
-    // MSVC doesn't allow empty structs
+    // empty structs cause ICEs and problems with lua when allocating 0 bytes
     void* _;
-#endif
 };
 
 /// Setup the plugin library. Must be called (and return) before using any other plugin library functions,
