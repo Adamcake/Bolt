@@ -61,6 +61,17 @@ This \t\ is part of the @ref{appendix-custom-shaders}, which requires
 some understanding of shader programming to be able to use.
 @end macro
 
+@macro swapbuffersdef {}
+This event is named after the "SwapBuffers" function in OpenGL, and as
+such, it runs every time a new frame is about to be shown on the
+player's computer screen. How often the event fires will therefore
+depend on the user's current FPS. The event is very useful as a "sync
+point", i.e. to ensure that some Lua code will run at regular intervals.
+The event object itself can be used to refer to the finished screen
+contents as it will appear to the user, such as by reading pixel data
+from the screen.
+@end macro
+
 @node Top
 @top Bolt Plugin API Reference
 
@@ -912,13 +923,7 @@ end)
 
 @eventhandler{swapbuffers events, @ref{objects-swapbuffers}}
 
-This event is named after the "SwapBuffers" function in OpenGL, and as
-such, it runs every time a new "frame" is about to be shown on the
-player's computer screen. How often the event fires will depend on the
-user's current FPS. The event is very useful as a "sync point", i.e. to
-ensure that some Lua code will run at regular intervals. The event
-object itself can be used to refer to the finished screen contents as it
-will appear to the user, such as by reading pixel data from the screen.
+@swapbuffersdef{}
 
 @example lua
 @verbatim
@@ -3531,12 +3536,8 @@ local width, height = event:targetsize()
 @node objects-swapbuffers
 @section SwapBuffers event
 
-A SwapBuffers event comes from @ref{functions-onswapbuffers}. It occurs
-at the end of a frame (and the beginning of a new frame), so anywhere
-from 5 to 200+ times per second depending on the user's FPS. It's
-commonly used as a "sync point", i.e. to ensure that some Lua code will
-run at regular intervals. The event object is a userdata but has no
-functions.
+A SwapBuffers event comes from @ref{functions-onswapbuffers}.
+@swapbuffersdef{}
 
 Unlike other events in the Bolt API, which fire immediately after the
 event in question has happened, SwapBuffers events fire immediately
