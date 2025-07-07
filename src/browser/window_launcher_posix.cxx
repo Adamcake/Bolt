@@ -330,6 +330,7 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchRs3Deb(CefRefPtr<C
 		close(STDIN_FILENO);
 		setenv("HOME", env_home.data(), true);
 		setenv("PULSE_PROP_OVERRIDE", env_pulse_prop_override, false);
+		setenv("SDL_VIDEODRIVER", "x11", true);
 		setenv("SDL_VIDEO_X11_WMCLASS", env_wmclass, false);
 #if defined(BOLT_PLUGINS)
 		if (plugin_loader) {
