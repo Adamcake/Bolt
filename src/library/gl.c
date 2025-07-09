@@ -69,6 +69,9 @@ struct GLProgram {
     GLint loc_aParticleAlignmentUpAxis;
     GLint loc_aMaterialSettingsSlotXY_Rotation;
     GLint loc_aParticleUVAnimationData;
+    GLint loc_aVertexPositionDepthOffset;
+    GLint loc_aBillboardSize;
+    GLint loc_aMaterialSettingsSlotXY_UV;
     GLint loc_uDiffuseMap;
     GLint loc_uTextureAtlas;
     GLint loc_uTextureAtlasSettings;
@@ -97,10 +100,12 @@ struct GLProgram {
     GLuint block_index_TerrainConsts;
     GLint offset_uGridSize;
     GLint block_index_GUIConsts;
+    GLint block_index_BilloardConsts; // not a mistake, the game engine spells it like that
     uint8_t is_minimap;
     uint8_t is_2d;
     uint8_t is_3d;
     uint8_t is_particle;
+    uint8_t is_billboard;
 };
 
 struct GLAttrBinding {
@@ -324,6 +329,19 @@ static void _bolt_gl_plugin_shaderprogram_drawtosurface(void* userdata, void* su
 static void _bolt_gl_plugin_shaderbuffer_init(struct ShaderBufferFunctions* out, const void* data, uint32_t len);
 static void _bolt_gl_plugin_shaderbuffer_destroy(void* userdata);
 
+/* forward-declared functions to be called from DrawElements */
+static void drawelements_handle_2d(GLsizei count, const unsigned short* indices, struct GLContext* c, const struct GLAttrBinding* attributes);
+static void drawelements_handle_3d(GLsizei count, const unsigned short* indices, struct GLContext* c, const struct GLAttrBinding* attributes);
+static void drawelements_handle_particles(GLsizei count, const unsigned short* indices, struct GLContext* c, const struct GLAttrBinding* attributes);
+static void drawelements_handle_billboard(GLsizei count, const unsigned short* indices, struct GLContext* c, const struct GLAttrBinding* attributes);
+static void drawelements_handle_2d_renderminimap(const struct GLTexture2D* tex, const GLfloat* projection_matrix, struct GLContext* c, const struct GLAttrBinding* attributes);
+static void drawelements_handle_2d_minimapterrain(const unsigned short* indices, const struct GLTexture2D* tex, const GLfloat* projection_matrix, struct GLContext* c, const struct GLAttrBinding* attributes);
+static void drawelements_handle_2d_bigicon(const unsigned short* indices, struct GLTexture2D* tex, const GLfloat* projection_matrix, struct GLContext* c, const struct GLAttrBinding* attributes);
+static void drawelements_handle_2d_normal(GLsizei count, const unsigned short* indices, struct GLTexture2D* tex, const GLfloat* projection_matrix, struct GLContext* c, const struct GLAttrBinding* attributes, void (*handler_2d)(const struct RenderBatch2D*), void (*handler_icon)(const struct RenderIconEvent*));
+static void drawelements_handle_3d_silhouette(struct GLContext* c);
+static void drawelements_handle_3d_normal(GLsizei count, const unsigned short* indices, struct GLContext* c, const struct GLAttrBinding* attributes);
+static void drawelements_handle_3d_iconrender(GLsizei count, const unsigned short* indices, struct GLContext* c, const struct GLAttrBinding* attributes, GLint draw_tex);
+
 #define MAX_TEXTURE_UNITS 4096 // would be nice if there was a way to query this at runtime, but it would be awkward to set up
 #define BUFFER_LIST_CAPACITY 256 * 256
 #define TEXTURE_LIST_CAPACITY 256
@@ -349,12 +367,12 @@ static pthread_key_t current_context_tls;
 struct GLPluginDrawElementsVertex2DUserData {
     struct GLContext* c;
     const unsigned short* indices;
-    struct GLTexture2D* atlas;
-    struct GLAttrBinding* position;
-    struct GLAttrBinding* atlas_min;
-    struct GLAttrBinding* atlas_size;
-    struct GLAttrBinding* tex_uv;
-    struct GLAttrBinding* colour;
+    const struct GLTexture2D* atlas;
+    const struct GLAttrBinding* position;
+    const struct GLAttrBinding* atlas_min;
+    const struct GLAttrBinding* atlas_size;
+    const struct GLAttrBinding* tex_uv;
+    const struct GLAttrBinding* colour;
     uint32_t screen_height;
 };
 
@@ -362,30 +380,30 @@ struct GLPluginDrawElementsVertex3DUserData {
     struct GLContext* c;
     const unsigned short* indices;
     int atlas_scale;
-    struct GLTexture2D* atlas;
-    struct GLTexture2D* settings_atlas;
-    struct GLAttrBinding* xy_xz;
-    struct GLAttrBinding* xyz_bone;
-    struct GLAttrBinding* tex_uv;
-    struct GLAttrBinding* colour;
-    struct GLAttrBinding* skin_bones;
-    struct GLAttrBinding* skin_weights;
-    struct GLArrayBuffer* transforms_ubo;
+    const struct GLTexture2D* atlas;
+    const struct GLTexture2D* settings_atlas;
+    const struct GLAttrBinding* xy_xz;
+    const struct GLAttrBinding* xyz_bone;
+    const struct GLAttrBinding* tex_uv;
+    const struct GLAttrBinding* colour;
+    const struct GLAttrBinding* skin_bones;
+    const struct GLAttrBinding* skin_weights;
+    const struct GLArrayBuffer* transforms_ubo;
 };
 
 struct GLPluginDrawElementsVertexParticlesUserData {
     struct GLContext* c;
     const unsigned short* indices;
     int atlas_scale;
-    struct GLTexture2D* atlas;
-    struct GLTexture2D* settings_atlas;
-    struct GLAttrBinding* origin;
-    struct GLAttrBinding* offset;
-    struct GLAttrBinding* velocity;
-    struct GLAttrBinding* up_axis;
-    struct GLAttrBinding* xy_rotation;
-    struct GLAttrBinding* colour;
-    struct GLAttrBinding* uv_animation_data;
+    const struct GLTexture2D* atlas;
+    const struct GLTexture2D* settings_atlas;
+    const struct GLAttrBinding* origin;
+    const struct GLAttrBinding* offset;
+    const struct GLAttrBinding* velocity;
+    const struct GLAttrBinding* up_axis;
+    const struct GLAttrBinding* xy_rotation;
+    const struct GLAttrBinding* colour;
+    const struct GLAttrBinding* uv_animation_data;
     const float* camera_position;
 
     GLint ranges[14];
@@ -830,7 +848,7 @@ static struct GLVertexArray* _bolt_context_get_vao(struct GLContext* c, GLuint i
     return ret;
 }
 
-static void bone_index_transform(struct GLContext* c, struct GLArrayBuffer** transforms_ubo, uint8_t bone_id, struct Transform3D* out) {
+static void bone_index_transform(struct GLContext* c, const struct GLArrayBuffer** transforms_ubo, uint8_t bone_id, struct Transform3D* out) {
     if (!*transforms_ubo) {
         GLint ubo_binding, ubo_index;
         gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_VertexTransformData, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
@@ -1111,6 +1129,9 @@ static GLuint _bolt_glCreateProgram() {
     program->loc_aParticleAlignmentUpAxis = -1;
     program->loc_aMaterialSettingsSlotXY_Rotation = -1;
     program->loc_aParticleUVAnimationData = -1;
+    program->loc_aVertexPositionDepthOffset = -1;
+    program->loc_aBillboardSize = -1;
+    program->loc_aMaterialSettingsSlotXY_UV = -1;
     program->loc_uDiffuseMap = -1;
     program->loc_uTextureAtlas = -1;
     program->loc_uTextureAtlasSettings = -1;
@@ -1141,6 +1162,7 @@ static GLuint _bolt_glCreateProgram() {
     program->is_3d = 0;
     program->is_minimap = 0;
     program->is_particle = 0;
+    program->is_billboard = 0;
     _bolt_rwlock_lock_write(&c->programs->rwlock);
     hashmap_set(c->programs->map, &program);
     _bolt_rwlock_unlock_write(&c->programs->rwlock);
@@ -1181,6 +1203,9 @@ static void _bolt_glBindAttribLocation(GLuint program, GLuint index, const GLcha
     ATTRIB_MAP(aParticleAlignmentUpAxis)
     ATTRIB_MAP(aMaterialSettingsSlotXY_Rotation)
     ATTRIB_MAP(aParticleUVAnimationData)
+    ATTRIB_MAP(aVertexPositionDepthOffset)
+    ATTRIB_MAP(aBillboardSize)
+    ATTRIB_MAP(aMaterialSettingsSlotXY_UV)
 #undef ATTRIB_MAP
     LOG("glBindAttribLocation end\n");
 }
@@ -1198,6 +1223,7 @@ static void _bolt_glLinkProgram(GLuint program) {
     const GLchar* ParticleConsts_var_names[] = {"uParticleEmitterTransforms", "uParticleEmitterTransformRanges", "uAtlasMeta"};
     const GLchar* TerrainConsts_var_names[] = {"uGridSize", "uModelMatrix"};
     const GLchar* GUIConsts_var_names[] = {"uProjectionMatrix"};
+    const GLchar* BilloardConsts_var_names[] = {"uModelMatrix", "uAtlasMeta"};
 
 #define DEFINEUBO(NAME) \
     const GLuint block_index_##NAME = gl.GetUniformBlockIndex(program, #NAME); \
@@ -1214,6 +1240,7 @@ static void _bolt_glLinkProgram(GLuint program) {
     DEFINEUBO(ParticleConsts)
     DEFINEUBO(TerrainConsts)
     DEFINEUBO(GUIConsts)
+    DEFINEUBO(BilloardConsts) // not a mistake, the game engine spells it like that
 #undef DEFINEUBO
 
     if (p) {
@@ -1270,6 +1297,18 @@ static void _bolt_glLinkProgram(GLuint program) {
             p->offset_uViewProjMatrix = ViewTransforms_offsets[3];
             p->offset_uInvViewMatrix = ViewTransforms_offsets[4];
             p->is_particle = 1;
+        }
+        if (p->loc_aVertexPositionDepthOffset != -1 && p->loc_aVertexColour != -1 && p->loc_aBillboardSize != -1 && p->loc_aMaterialSettingsSlotXY_UV != -1 && block_index_ViewTransforms != -1 && block_index_BilloardConsts != -1) {
+            p->block_index_BilloardConsts = block_index_BilloardConsts;
+            p->offset_uModelMatrix = BilloardConsts_offsets[0];
+            p->offset_uAtlasMeta = BilloardConsts_offsets[1];
+            p->block_index_ViewTransforms = block_index_ViewTransforms;
+            p->offset_uCameraPosition = ViewTransforms_offsets[0];
+            p->offset_uViewMatrix = ViewTransforms_offsets[1];
+            p->offset_uProjectionMatrix = ViewTransforms_offsets[2];
+            p->offset_uViewProjMatrix = ViewTransforms_offsets[3];
+            p->offset_uInvViewMatrix = ViewTransforms_offsets[4];
+            p->is_billboard = 1;
         }
     }
     LOG("glLinkProgram end\n");
@@ -1908,409 +1947,24 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
     lgl->GetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &element_binding);
     struct GLArrayBuffer* element_buffer = _bolt_context_get_buffer(c, element_binding);
     const unsigned short* indices = (unsigned short*)((uint8_t*)element_buffer->data + (uintptr_t)indices_offset);
-    if (type == GL_UNSIGNED_SHORT && mode == GL_TRIANGLES && count > 0 && c->bound_program->is_2d && !c->bound_program->is_minimap) {
-        GLint diffuse_map, ubo_gui_index;
-        gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uDiffuseMap, &diffuse_map);
-        GLint ubo_binding;
-        gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_GUIConsts, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
-        gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_gui_index);
-        const uint8_t* gui_consts_buf = (uint8_t*)_bolt_context_get_buffer(c, ubo_gui_index)->data;
-        const GLfloat* projection_matrix = (float*)(gui_consts_buf + c->bound_program->offset_uProjectionMatrix);
-        GLint draw_tex = 0;
-        if (c->current_draw_framebuffer) {
-            gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
+    if (type == GL_UNSIGNED_SHORT && mode == GL_TRIANGLES && count > 0) {
+        if (c->bound_program->is_2d && !c->bound_program->is_minimap) {
+            return drawelements_handle_2d(count, indices, c, attributes);
         }
-        struct GLTexture2D* tex = c->texture_units[diffuse_map].texture_2d;
-        struct GLTexture2D* tex_target = _bolt_context_get_texture(c, draw_tex);
-        const uint8_t is_minimap2d_target = tex_target && tex_target->is_minimap_tex_small;
-
-        if (tex->is_minimap_tex_small && count == 6) {
-            const struct GLAttrBinding* position = &attributes[c->bound_program->loc_aVertexPosition2D];
-            const struct GLAttrBinding* uv = &attributes[c->bound_program->loc_aTextureUV];
-            int32_t xy0[2];
-            int32_t xy2[2];
-            float uv0[2];
-            float uv2[2];
-            if (!_bolt_get_attr_binding_int(c, position, 0, 2, xy0)) return;
-            if (!_bolt_get_attr_binding_int(c, position, 2, 2, xy2)) return;
-            _bolt_get_attr_binding(c, uv, 0, 2, uv0);
-            _bolt_get_attr_binding(c, uv, 2, 2, uv2);
-            const int16_t x1 = (int16_t)roundf(uv0[0] * tex->width);
-            const int16_t x2 = (int16_t)roundf(uv2[0] * tex->width);
-            const int16_t y1 = (int16_t)roundf(uv2[1] * tex->height);
-            const int16_t y2 = (int16_t)roundf(uv0[1] * tex->height);
-            const float screen_height_float = roundf(2.0 / projection_matrix[5]);
-            const struct RenderMinimapEvent event = {
-                .screen_width = roundf(2.0 / projection_matrix[0]),
-                .screen_height = screen_height_float,
-                .source_x = x1,
-                .source_y = y1,
-                .source_w = x2 - x1,
-                .source_h = y2 - y1,
-                .target_x = (int16_t)xy0[0],
-                .target_y = (int16_t)(screen_height_float - xy0[1]),
-                .target_w = (uint16_t)(xy2[0] - xy0[0]),
-                .target_h = (uint16_t)(xy0[1] - xy2[1]),
-            };
-            _bolt_plugin_handle_renderminimap(&event);
-        } else if (tex->is_minimap_tex_big) {
-            tex_target->is_minimap_tex_small = 1;
-            if (count == 6) {
-                // get XY and UV of first two vertices
-                const struct GLAttrBinding* tex_uv = &attributes[c->bound_program->loc_aTextureUV];
-                const struct GLAttrBinding* position_2d = &attributes[c->bound_program->loc_aVertexPosition2D];
-                int32_t pos0[2];
-                int32_t pos1[2];
-                float uv0[2];
-                float uv1[2];
-                _bolt_get_attr_binding_int(c, position_2d, indices[0], 2, pos0);
-                _bolt_get_attr_binding_int(c, position_2d, indices[1], 2, pos1);
-                _bolt_get_attr_binding(c, tex_uv, indices[0], 2, uv0);
-                _bolt_get_attr_binding(c, tex_uv, indices[1], 2, uv1);
-                const double x0 = (double)pos0[0];
-                const double y0 = (double)pos0[1];
-                const double x1 = (double)pos1[0];
-                const double y1 = (double)pos1[1];
-                const double u0 = (double)uv0[0];
-                const double v0 = (double)uv0[1];
-                const double u1 = (double)uv1[0];
-                const double v1 = (double)uv1[1];
-
-                // find out angle of the map, by comparing atan2 of XYs to atan2 of UVs
-                double pos_angle_rads = atan2(y1 - y0, x1 - x0);
-                double uv_angle_rads = atan2(v1 - v0, u1 - u0);
-                if (pos_angle_rads < uv_angle_rads) pos_angle_rads += M_PI * 2.0;
-                const double map_angle_rads = pos_angle_rads - uv_angle_rads;
-
-                // find out scaling of the map, by comparing distance between XYs to distance between UVs
-                const double pos_a = x0 - x1;
-                const double pos_b = y0 - y1;
-                const double uv_a = u0 - u1;
-                const double uv_b = v0 - v1;
-                const double pos_dist = sqrt(fabs((pos_a * pos_a) + (pos_b * pos_b)));
-                const double uv_dist = sqrt(fabs((uv_a * uv_a) + (uv_b * uv_b))) * tex->width;
-                // sometimes it renders the same UV coordinate for the first two vertices, we can't
-                // work with that. seems to happen only once immediately after logging into a world.
-                if (uv_dist >= 1.0) {
-                    const double dist_ratio = pos_dist / uv_dist;
-
-                    // by unrotating the big tex's vertices around any point, and rotating small-tex-relative
-                    // points by the same method, we can estimate what section of the big tex will be drawn.
-                    // note: `>> 1` is the same as `/ 2` except that it doesn't cause an erroneous gcc warning
-                    const double scaled_x = tex->width * dist_ratio;
-                    const double scaled_y = tex->height * dist_ratio;
-                    const double angle_sin = sin(-map_angle_rads);
-                    const double angle_cos = cos(-map_angle_rads);
-                    const double unrotated_x0 = (x0 * angle_cos) - (y0 * angle_sin);
-                    const double unrotated_y0 = (x0 * angle_sin) + (y0 * angle_cos);
-                    const double scaled_xoffset = (u0 * scaled_x) - unrotated_x0;
-                    const double scaled_yoffset = (v0 * scaled_y) - unrotated_y0;
-                    const double small_tex_cx = 1.0 / projection_matrix[0];
-                    const double small_tex_cy = 1.0 / projection_matrix[5];
-                    const double cx = (scaled_xoffset + (small_tex_cx * angle_cos) - (small_tex_cy * angle_sin)) / dist_ratio;
-                    const double cy = (scaled_yoffset + (small_tex_cx * angle_sin) + (small_tex_cy * angle_cos)) / dist_ratio;
-
-                    struct MinimapTerrainEvent render;
-                    render.angle = map_angle_rads;
-                    render.scale = dist_ratio;
-                    render.x = tex->minimap_center_x + (64.0 * (cx - (double)(tex->width >> 1)));
-                    render.y = tex->minimap_center_y + (64.0 * (cy - (double)(tex->height >> 1)));
-                    _bolt_plugin_handle_minimapterrain(&render);
-                }
+        if (c->bound_program->is_3d) {
+            return drawelements_handle_3d(count, indices, c, attributes);
+        }
+        if (c->bound_program->is_particle) {
+            GLint draw_tex = 0;
+            if (c->current_draw_framebuffer) {
+                gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
             }
-        } else if (tex->icon.model_count && tex->icon.is_big_icon && count == 6) {
-            int32_t xy0[2];
-            int32_t xy2[2];
-            float abgr[4];
-            const struct GLAttrBinding* binding = &attributes[c->bound_program->loc_aVertexPosition2D];
-            _bolt_get_attr_binding_int(c, binding, indices[0], 2, xy0);
-            _bolt_get_attr_binding_int(c, binding, indices[2], 2, xy2);
-            struct RenderIconEvent event;
-            event.icon = &tex->icon;
-            event.screen_width = roundf(2.0 / projection_matrix[0]);
-            event.screen_height = roundf(2.0 / projection_matrix[5]);
-            event.target_x = (int16_t)xy2[0];
-            event.target_y = (int16_t)((int32_t)event.screen_height - xy2[1]);
-            event.target_w = (uint16_t)(xy0[0] - xy2[0]);
-            event.target_h = (uint16_t)(xy2[1] - xy0[1]);
-            _bolt_get_attr_binding(c, &attributes[c->bound_program->loc_aVertexColour], indices[0], 4, abgr);
-            for (size_t i = 0; i < 4; i += 1) {
-                event.rgba[i] = abgr[3 - i];
-            }
-            _bolt_plugin_handle_renderbigicon(&event);
-            for (size_t i = 0; i < tex->icon.model_count; i += 1) {
-                free(tex->icon.models[i].vertices);
-            }
-            tex->icon.model_count = 0;
-        } else {
-            struct GLPluginDrawElementsVertex2DUserData vertex_userdata;
-            vertex_userdata.c = c;
-            vertex_userdata.indices = indices;
-            vertex_userdata.atlas = tex;
-            vertex_userdata.position = &attributes[c->bound_program->loc_aVertexPosition2D];
-            vertex_userdata.atlas_min = &attributes[c->bound_program->loc_aTextureUVAtlasMin];
-            vertex_userdata.atlas_size = &attributes[c->bound_program->loc_aTextureUVAtlasExtents];
-            vertex_userdata.tex_uv = &attributes[c->bound_program->loc_aTextureUV];
-            vertex_userdata.colour = &attributes[c->bound_program->loc_aVertexColour];
-            vertex_userdata.screen_height = roundf(2.0 / projection_matrix[5]);
-
-            struct GLPluginTextureUserData tex_userdata;
-            tex_userdata.tex = tex;
-
-            struct RenderBatch2D batch;
-            batch.screen_width = roundf(2.0 / projection_matrix[0]);
-            batch.screen_height = vertex_userdata.screen_height;
-            batch.index_count = count;
-            batch.vertices_per_icon = 6;
-            batch.vertex_functions.userdata = &vertex_userdata;
-            batch.vertex_functions.xy = _bolt_gl_plugin_drawelements_vertex2d_xy;
-            batch.vertex_functions.atlas_details = _bolt_gl_plugin_drawelements_vertex2d_atlas_details;
-            batch.vertex_functions.uv = _bolt_gl_plugin_drawelements_vertex2d_uv;
-            batch.vertex_functions.colour = _bolt_gl_plugin_drawelements_vertex2d_colour;
-            batch.texture_functions.userdata = &tex_userdata;
-            batch.texture_functions.id = _bolt_gl_plugin_texture_id;
-            batch.texture_functions.size = _bolt_gl_plugin_texture_size;
-            batch.texture_functions.compare = _bolt_gl_plugin_texture_compare;
-            batch.texture_functions.data = _bolt_gl_plugin_texture_data;
-
-            void (*handler)(const struct RenderBatch2D*) = is_minimap2d_target ? _bolt_plugin_handle_minimaprender2d : _bolt_plugin_handle_render2d;
-
-            if (tex->icons) {
-                size_t batch_start = 0;
-                for (size_t i = 0; i < count; i += batch.vertices_per_icon) {
-                    float xy[2];
-                    float wh[2];
-                    _bolt_get_attr_binding(c, vertex_userdata.atlas_min, indices[i], 2, xy);
-                    _bolt_get_attr_binding(c, vertex_userdata.atlas_size, indices[i], 2, wh);
-                    const struct Icon dummy_icon = {
-                        .x = (uint16_t)roundf(xy[0] * tex->width),
-                        .y = (uint16_t)roundf(xy[1] * tex->height),
-                        .w = (uint16_t)roundf(fabs(wh[0]) * tex->width),
-                        .h = (uint16_t)roundf(fabs(wh[1]) * tex->height),
-                    };
-                    const struct Icon* icon = hashmap_get(tex->icons, &dummy_icon);
-                    if (icon) {
-                        batch.index_count = i - batch_start;
-                        if (batch.index_count) {
-                            vertex_userdata.indices = indices + batch_start;
-                            handler(&batch);
-                        }
-                        int32_t xy0[2];
-                        int32_t xy2[2];
-                        float abgr[4];
-                        _bolt_get_attr_binding_int(c, vertex_userdata.position, indices[i], 2, xy0);
-                        _bolt_get_attr_binding_int(c, vertex_userdata.position, indices[i + 2], 2, xy2);
-                        struct RenderIconEvent event;
-                        event.icon = icon;
-                        event.screen_width = batch.screen_width;
-                        event.screen_height = batch.screen_height;
-                        event.target_x = (int16_t)xy2[0];
-                        event.target_y = (int16_t)((int32_t)batch.screen_height - xy2[1]);
-                        event.target_w = (uint16_t)(xy0[0] - xy2[0]);
-                        event.target_h = (uint16_t)(xy2[1] - xy0[1]);
-                        _bolt_get_attr_binding(c, vertex_userdata.colour, indices[i], 4, abgr);
-                        for (size_t i = 0; i < 4; i += 1) {
-                            event.rgba[i] = abgr[3 - i];
-                        }
-                        _bolt_plugin_handle_rendericon(&event);
-                        batch_start = i + batch.vertices_per_icon;
-                    }
-                }
-                if (batch_start < count) {
-                    batch.index_count = count - batch_start;
-                    vertex_userdata.indices = indices + batch_start;
-                    handler(&batch);
-                }
-            } else {
-                handler(&batch);
+            if (draw_tex == c->target_3d_tex) {
+                return drawelements_handle_particles(count, indices, c, attributes);
             }
         }
-    }
-    if (type == GL_UNSIGNED_SHORT && mode == GL_TRIANGLES && c->bound_program->is_3d) {
-        GLint draw_tex = 0;
-        if (c->current_draw_framebuffer) {
-            gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
-        }
-
-        if (c->current_draw_framebuffer && draw_tex == c->player_model_tex) {
-            GLint ubo_binding, ubo_index;
-            gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ModelConsts, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
-            gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_index);
-            const GLfloat* model_matrix = (GLfloat*)(((uint8_t*)_bolt_context_get_buffer(c, ubo_index)->data) + c->bound_program->offset_uModelMatrix);
-            c->player_model_x = (int32_t)roundf(model_matrix[12]);
-            c->player_model_y = (int32_t)roundf(model_matrix[13]);
-            c->player_model_z = (int32_t)roundf(model_matrix[14]);
-        } else if (draw_tex == c->target_3d_tex) {
-            GLint atlas, settings_atlas, ubo_binding, ubo_view_index, ubo_batch_index;
-            gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uTextureAtlas, &atlas);
-            gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uTextureAtlasSettings, &settings_atlas);
-            struct GLTexture2D* tex = c->texture_units[atlas].texture_2d;
-            struct GLTexture2D* tex_settings = c->texture_units[settings_atlas].texture_2d;
-            gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ViewTransforms, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
-            gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_view_index);
-            gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_BatchConsts, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
-            gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_batch_index);
-            const GLfloat atlas_scale = *((GLfloat*)(((uint8_t*)_bolt_context_get_buffer(c, ubo_batch_index)->data) + c->bound_program->offset_uAtlasMeta) + 1);
-
-            struct GLPluginDrawElementsVertex3DUserData vertex_userdata;
-            vertex_userdata.c = c;
-            vertex_userdata.indices = indices;
-            vertex_userdata.atlas_scale = roundf(atlas_scale);
-            vertex_userdata.atlas = tex;
-            vertex_userdata.settings_atlas = tex_settings;
-            vertex_userdata.xy_xz = &attributes[c->bound_program->loc_aMaterialSettingsSlotXY_TilePositionXZ];
-            vertex_userdata.xyz_bone = &attributes[c->bound_program->loc_aVertexPosition_BoneLabel];
-            vertex_userdata.tex_uv = &attributes[c->bound_program->loc_aTextureUV];
-            vertex_userdata.colour = &attributes[c->bound_program->loc_aVertexColour];
-            vertex_userdata.skin_bones = &attributes[c->bound_program->loc_aVertexSkinBones];
-            vertex_userdata.skin_weights = &attributes[c->bound_program->loc_aVertexSkinWeights];
-            vertex_userdata.transforms_ubo = NULL;
-
-            struct GLPluginTextureUserData tex_userdata;
-            tex_userdata.tex = tex;
-
-            struct GLPlugin3DMatrixUserData matrix_userdata;
-            matrix_userdata.program = c->bound_program;
-            const uint8_t* ubo_view_buf = (uint8_t*)(_bolt_context_get_buffer(c, ubo_view_index)->data);
-
-            matrix_userdata.view_matrix = (float*)(ubo_view_buf + c->bound_program->offset_uViewMatrix);
-            matrix_userdata.proj_matrix = (float*)(ubo_view_buf + c->bound_program->offset_uProjectionMatrix);
-            matrix_userdata.viewproj_matrix = (float*)(ubo_view_buf + c->bound_program->offset_uViewProjMatrix);
-
-            struct Render3D render;
-            render.vertex_count = count;
-            render.is_animated = c->bound_program->block_index_VertexTransformData != -1;
-            render.vertex_functions.userdata = &vertex_userdata;
-            render.vertex_functions.xyz = _bolt_gl_plugin_drawelements_vertex3d_xyz;
-            render.vertex_functions.atlas_meta = _bolt_gl_plugin_drawelements_vertex3d_atlas_meta;
-            render.vertex_functions.atlas_xywh = _bolt_gl_plugin_drawelements_vertex3d_meta_xywh;
-            render.vertex_functions.uv = _bolt_gl_plugin_drawelements_vertex3d_uv;
-            render.vertex_functions.colour = _bolt_gl_plugin_drawelements_vertex3d_colour;
-            render.vertex_functions.bone_transform = _bolt_gl_plugin_drawelements_vertex3d_transform;
-            render.texture_functions.userdata = &tex_userdata;
-            render.texture_functions.id = _bolt_gl_plugin_texture_id;
-            render.texture_functions.size = _bolt_gl_plugin_texture_size;
-            render.texture_functions.compare = _bolt_gl_plugin_texture_compare;
-            render.texture_functions.data = _bolt_gl_plugin_texture_data;
-            render.matrix_functions.userdata = &matrix_userdata;
-            render.matrix_functions.model_matrix = _bolt_gl_plugin_matrix3d_model;
-            render.matrix_functions.view_matrix = _bolt_gl_plugin_matrix3d_view;
-            render.matrix_functions.proj_matrix = _bolt_gl_plugin_matrix3d_proj;
-            render.matrix_functions.viewproj_matrix = _bolt_gl_plugin_matrix3d_viewproj;
-
-            _bolt_plugin_handle_render3d(&render);
-        } else {
-            struct GLTexture2D* tex = _bolt_context_get_texture(c, draw_tex);
-            const uint8_t is_icon = tex && tex->compare_mode == GL_NONE && tex->internalformat == GL_RGBA8 && tex->width == GAME_ITEM_ICON_SIZE && tex->height == GAME_ITEM_ICON_SIZE;
-            const uint8_t is_big_icon = tex && tex->internalformat == GL_RGBA8 && tex->width == GAME_ITEM_BIGICON_SIZE && tex->height == GAME_ITEM_BIGICON_SIZE;
-            if ((is_icon || is_big_icon) && tex->icon.model_count < MAX_MODELS_PER_ICON) {
-                struct IconModel* model = &tex->icon.models[tex->icon.model_count];
-                tex->icon.model_count += 1;
-                tex->icon.is_big_icon = is_big_icon;
-                GLint ubo_binding, ubo_model_index, ubo_view_index;
-                gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ModelConsts, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
-                gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_model_index);
-                const GLfloat* model_matrix = (GLfloat*)(((uint8_t*)_bolt_context_get_buffer(c, ubo_model_index)->data) + c->bound_program->offset_uModelMatrix);
-                for (size_t i = 0; i < 16; i += 1) {
-                    model->model_matrix.matrix[i] = (double)model_matrix[i];
-                }
-                gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ViewTransforms, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
-                gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_view_index);
-                const uint8_t* ubo_view_buf = (uint8_t*)_bolt_context_get_buffer(c, ubo_view_index)->data;
-                const float* viewmatrix = (float*)(ubo_view_buf + c->bound_program->offset_uViewMatrix);
-                const float* projmatrix = (float*)(ubo_view_buf + c->bound_program->offset_uProjectionMatrix);
-                const float* viewprojmatrix = (float*)(ubo_view_buf + c->bound_program->offset_uViewProjMatrix);
-                for (size_t i = 0; i < 16; i += 1) {
-                    model->view_matrix.matrix[i] = (double)viewmatrix[i];
-                    model->projection_matrix.matrix[i] = (double)projmatrix[i];
-                    model->viewproj_matrix.matrix[i] = (double)viewprojmatrix[i];
-                }
-                model->vertex_count = count;
-                model->vertices = malloc(sizeof(*model->vertices) * count);
-                for (size_t i = 0; i < count; i += 1) {
-                    _bolt_get_attr_binding_int(c, &attributes[c->bound_program->loc_aVertexPosition_BoneLabel], indices[i], 4, model->vertices[i].point.xyzh.ints);
-                    _bolt_get_attr_binding(c, &attributes[c->bound_program->loc_aVertexColour], indices[i], 4, model->vertices[i].rgba);
-                    model->vertices[i].point.integer = true;
-                }
-            }
-        }
-    }
-    if (type == GL_UNSIGNED_SHORT && mode == GL_TRIANGLES && c->bound_program->is_particle) {
-        GLint draw_tex = 0;
-        if (c->current_draw_framebuffer) {
-            gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
-        }
-
-        if (draw_tex == c->target_3d_tex) {
-            GLint atlas, settings_atlas, seconds, ubo_binding, ubo_view_index, ubo_particle_index;
-            gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uTextureAtlas, &atlas);
-            gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uTextureAtlasSettings, &settings_atlas);
-            gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uSecondsSinceStart, &seconds);
-            struct GLTexture2D* tex = c->texture_units[atlas].texture_2d;
-            struct GLTexture2D* tex_settings = c->texture_units[settings_atlas].texture_2d;
-            gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ViewTransforms, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
-            gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_view_index);
-            const uint8_t* ubo_view_buf = (uint8_t*)_bolt_context_get_buffer(c, ubo_view_index)->data;
-            gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ParticleConsts, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
-            gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_particle_index);
-            const uint8_t* particle_buf_data = (uint8_t*)_bolt_context_get_buffer(c, ubo_particle_index)->data;
-            const GLfloat* transforms = (GLfloat*)(particle_buf_data + c->bound_program->offset_uParticleEmitterTransforms);
-            const uint32_t* ranges = (uint32_t*)(particle_buf_data + c->bound_program->offset_uParticleEmitterTransformRanges);
-            const GLfloat atlas_scale = *((GLfloat*)(particle_buf_data + c->bound_program->offset_uAtlasMeta) + 1);
-
-            struct GLPluginDrawElementsVertexParticlesUserData vertex_userdata;
-            vertex_userdata.c = c;
-            vertex_userdata.indices = indices;
-            vertex_userdata.atlas_scale = roundf(atlas_scale);
-            vertex_userdata.atlas = tex;
-            vertex_userdata.settings_atlas = tex_settings;
-            vertex_userdata.origin = &attributes[c->bound_program->loc_aParticleOrigin_CreationTime];
-            vertex_userdata.offset = &attributes[c->bound_program->loc_aParticleOffset];
-            vertex_userdata.velocity = &attributes[c->bound_program->loc_aParticleVelocityAndUVScrollOffset];
-            vertex_userdata.up_axis = &attributes[c->bound_program->loc_aParticleAlignmentUpAxis];
-            vertex_userdata.xy_rotation = &attributes[c->bound_program->loc_aMaterialSettingsSlotXY_Rotation];
-            vertex_userdata.colour = &attributes[c->bound_program->loc_aVertexColour];
-            vertex_userdata.uv_animation_data = &attributes[c->bound_program->loc_aParticleUVAnimationData];
-            vertex_userdata.camera_position = (float*)(ubo_view_buf + c->bound_program->offset_uCameraPosition);
-            vertex_userdata.animation_time = seconds;
-            for (size_t i = 0; i < 8; i += 1) {
-                // the last range isn't actually used for anything, so no point copying it or having space for it
-                if (i < 7) {
-                    vertex_userdata.ranges[i * 2] = ranges[i * 4];
-                    vertex_userdata.ranges[i * 2 + 1] = ranges[i * 4 + 1];
-                }
-                vertex_userdata.transform[i] = &transforms[i * (4 * 4)];
-            }
-
-            struct GLPluginDrawElementsMatrixParticlesUserData matrix_userdata;
-            matrix_userdata.program = c->bound_program;
-            matrix_userdata.view_matrix = (float*)(ubo_view_buf + c->bound_program->offset_uViewMatrix);
-            matrix_userdata.proj_matrix = (float*)(ubo_view_buf + c->bound_program->offset_uProjectionMatrix);
-
-            struct GLPluginTextureUserData tex_userdata;
-            tex_userdata.tex = tex;
-
-            struct RenderParticles render;
-            render.vertex_count = count;
-            render.vertex_functions.userdata = &vertex_userdata;
-            render.vertex_functions.xyz = _bolt_gl_plugin_drawelements_vertexparticles_xyz;
-            render.vertex_functions.world_offset = _bolt_gl_plugin_drawelements_vertexparticles_world_offset;
-            render.vertex_functions.eye_offset = _bolt_gl_plugin_drawelements_vertexparticles_eye_offset;
-            render.vertex_functions.uv = _bolt_gl_plugin_drawelements_vertexparticles_uv;
-            render.vertex_functions.atlas_meta = _bolt_gl_plugin_drawelements_vertexparticles_atlas_meta;
-            render.vertex_functions.atlas_xywh = _bolt_gl_plugin_drawelements_vertexparticles_meta_xywh;
-            render.vertex_functions.colour = _bolt_gl_plugin_drawelements_vertexparticles_colour;
-            render.matrix_functions.userdata = &matrix_userdata;
-            render.matrix_functions.view_matrix = _bolt_gl_plugin_matrixparticles_viewmatrix;
-            render.matrix_functions.proj_matrix = _bolt_gl_plugin_matrixparticles_projectionmatrix;
-            render.matrix_functions.inverse_view_matrix = _bolt_gl_plugin_matrixparticles_invviewmatrix;
-            render.texture_functions.userdata = &tex_userdata;
-            render.texture_functions.id = _bolt_gl_plugin_texture_id;
-            render.texture_functions.size = _bolt_gl_plugin_texture_size;
-            render.texture_functions.compare = _bolt_gl_plugin_texture_compare;
-            render.texture_functions.data = _bolt_gl_plugin_texture_data;
-
-            _bolt_plugin_handle_renderparticles(&render);
+        if (c->bound_program->is_billboard) {
+            return drawelements_handle_billboard(count, indices, c, attributes);
         }
     }
 }
@@ -2516,6 +2170,446 @@ void _bolt_gl_onBlendFunc(GLenum sfactor, GLenum dfactor) {
     c->blend_alpha_d = dfactor;
 }
 
+/* DrawElements sub-functions */
+
+static void drawelements_handle_2d(GLsizei count, const unsigned short* indices, struct GLContext* c, const struct GLAttrBinding* attributes) {
+    GLint diffuse_map, ubo_gui_index;
+    gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uDiffuseMap, &diffuse_map);
+    GLint ubo_binding;
+    gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_GUIConsts, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
+    gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_gui_index);
+    const uint8_t* gui_consts_buf = (uint8_t*)_bolt_context_get_buffer(c, ubo_gui_index)->data;
+    const GLfloat* projection_matrix = (float*)(gui_consts_buf + c->bound_program->offset_uProjectionMatrix);
+    GLint draw_tex = 0;
+    if (c->current_draw_framebuffer) {
+        gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
+    }
+    struct GLTexture2D* tex = c->texture_units[diffuse_map].texture_2d;
+    struct GLTexture2D* tex_target = _bolt_context_get_texture(c, draw_tex);
+    const uint8_t is_minimap2d_target = tex_target && tex_target->is_minimap_tex_small;
+
+    if (tex->is_minimap_tex_small && count == 6) {
+        drawelements_handle_2d_renderminimap(tex, projection_matrix, c, attributes);
+    } else if (tex->is_minimap_tex_big) {
+        tex_target->is_minimap_tex_small = 1;
+        if (count == 6) {
+            drawelements_handle_2d_minimapterrain(indices, tex, projection_matrix, c, attributes);
+        }
+    } else if (tex->icon.model_count && tex->icon.is_big_icon && count == 6) {
+        drawelements_handle_2d_bigicon(indices, tex, projection_matrix, c, attributes);
+    } else {
+        void (*handler_2d)(const struct RenderBatch2D*) = is_minimap2d_target ? _bolt_plugin_handle_minimaprender2d : _bolt_plugin_handle_render2d;
+        void (*handler_icon)(const struct RenderIconEvent*) = _bolt_plugin_handle_rendericon;
+        drawelements_handle_2d_normal(count, indices, tex, projection_matrix, c, attributes, handler_2d, handler_icon);
+    }
+}
+
+static void drawelements_handle_3d(GLsizei count, const unsigned short* indices, struct GLContext* c, const struct GLAttrBinding* attributes) {
+    GLint draw_tex = 0;
+    if (c->current_draw_framebuffer) {
+        gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
+    }
+
+    if (c->current_draw_framebuffer && draw_tex == c->player_model_tex) {
+        drawelements_handle_3d_silhouette(c);
+    } else if (draw_tex == c->target_3d_tex) {
+        drawelements_handle_3d_normal(count, indices, c, attributes);
+    } else {
+        drawelements_handle_3d_iconrender(count, indices, c, attributes, draw_tex);
+    }
+}
+
+static void drawelements_handle_particles(GLsizei count, const unsigned short* indices, struct GLContext* c, const struct GLAttrBinding* attributes) {
+    GLint atlas, settings_atlas, seconds, ubo_binding, ubo_view_index, ubo_particle_index;
+    gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uTextureAtlas, &atlas);
+    gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uTextureAtlasSettings, &settings_atlas);
+    gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uSecondsSinceStart, &seconds);
+    struct GLTexture2D* tex = c->texture_units[atlas].texture_2d;
+    struct GLTexture2D* tex_settings = c->texture_units[settings_atlas].texture_2d;
+    gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ViewTransforms, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
+    gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_view_index);
+    const uint8_t* ubo_view_buf = (uint8_t*)_bolt_context_get_buffer(c, ubo_view_index)->data;
+    gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ParticleConsts, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
+    gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_particle_index);
+    const uint8_t* particle_buf_data = (uint8_t*)_bolt_context_get_buffer(c, ubo_particle_index)->data;
+    const GLfloat* transforms = (GLfloat*)(particle_buf_data + c->bound_program->offset_uParticleEmitterTransforms);
+    const uint32_t* ranges = (uint32_t*)(particle_buf_data + c->bound_program->offset_uParticleEmitterTransformRanges);
+    const GLfloat atlas_scale = *((GLfloat*)(particle_buf_data + c->bound_program->offset_uAtlasMeta) + 1);
+
+    struct GLPluginDrawElementsVertexParticlesUserData vertex_userdata;
+    vertex_userdata.c = c;
+    vertex_userdata.indices = indices;
+    vertex_userdata.atlas_scale = roundf(atlas_scale);
+    vertex_userdata.atlas = tex;
+    vertex_userdata.settings_atlas = tex_settings;
+    vertex_userdata.origin = &attributes[c->bound_program->loc_aParticleOrigin_CreationTime];
+    vertex_userdata.offset = &attributes[c->bound_program->loc_aParticleOffset];
+    vertex_userdata.velocity = &attributes[c->bound_program->loc_aParticleVelocityAndUVScrollOffset];
+    vertex_userdata.up_axis = &attributes[c->bound_program->loc_aParticleAlignmentUpAxis];
+    vertex_userdata.xy_rotation = &attributes[c->bound_program->loc_aMaterialSettingsSlotXY_Rotation];
+    vertex_userdata.colour = &attributes[c->bound_program->loc_aVertexColour];
+    vertex_userdata.uv_animation_data = &attributes[c->bound_program->loc_aParticleUVAnimationData];
+    vertex_userdata.camera_position = (float*)(ubo_view_buf + c->bound_program->offset_uCameraPosition);
+    vertex_userdata.animation_time = seconds;
+    for (size_t i = 0; i < 8; i += 1) {
+        // the last range isn't actually used for anything, so no point copying it or having space for it
+        if (i < 7) {
+            vertex_userdata.ranges[i * 2] = ranges[i * 4];
+            vertex_userdata.ranges[i * 2 + 1] = ranges[i * 4 + 1];
+        }
+        vertex_userdata.transform[i] = &transforms[i * (4 * 4)];
+    }
+
+    struct GLPluginDrawElementsMatrixParticlesUserData matrix_userdata;
+    matrix_userdata.program = c->bound_program;
+    matrix_userdata.view_matrix = (float*)(ubo_view_buf + c->bound_program->offset_uViewMatrix);
+    matrix_userdata.proj_matrix = (float*)(ubo_view_buf + c->bound_program->offset_uProjectionMatrix);
+
+    struct GLPluginTextureUserData tex_userdata;
+    tex_userdata.tex = tex;
+
+    struct RenderParticles render;
+    render.vertex_count = count;
+    render.vertex_functions.userdata = &vertex_userdata;
+    render.vertex_functions.xyz = _bolt_gl_plugin_drawelements_vertexparticles_xyz;
+    render.vertex_functions.world_offset = _bolt_gl_plugin_drawelements_vertexparticles_world_offset;
+    render.vertex_functions.eye_offset = _bolt_gl_plugin_drawelements_vertexparticles_eye_offset;
+    render.vertex_functions.uv = _bolt_gl_plugin_drawelements_vertexparticles_uv;
+    render.vertex_functions.atlas_meta = _bolt_gl_plugin_drawelements_vertexparticles_atlas_meta;
+    render.vertex_functions.atlas_xywh = _bolt_gl_plugin_drawelements_vertexparticles_meta_xywh;
+    render.vertex_functions.colour = _bolt_gl_plugin_drawelements_vertexparticles_colour;
+    render.matrix_functions.userdata = &matrix_userdata;
+    render.matrix_functions.view_matrix = _bolt_gl_plugin_matrixparticles_viewmatrix;
+    render.matrix_functions.proj_matrix = _bolt_gl_plugin_matrixparticles_projectionmatrix;
+    render.matrix_functions.inverse_view_matrix = _bolt_gl_plugin_matrixparticles_invviewmatrix;
+    render.texture_functions.userdata = &tex_userdata;
+    render.texture_functions.id = _bolt_gl_plugin_texture_id;
+    render.texture_functions.size = _bolt_gl_plugin_texture_size;
+    render.texture_functions.compare = _bolt_gl_plugin_texture_compare;
+    render.texture_functions.data = _bolt_gl_plugin_texture_data;
+
+    _bolt_plugin_handle_renderparticles(&render);
+}
+
+static void drawelements_handle_billboard(GLsizei count, const unsigned short* indices, struct GLContext* c, const struct GLAttrBinding* attributes) {
+    // todo
+}
+
+static void drawelements_handle_2d_renderminimap(const struct GLTexture2D* tex, const GLfloat* projection_matrix, struct GLContext* c, const struct GLAttrBinding* attributes) {
+    const struct GLAttrBinding* position = &attributes[c->bound_program->loc_aVertexPosition2D];
+    const struct GLAttrBinding* uv = &attributes[c->bound_program->loc_aTextureUV];
+    int32_t xy0[2];
+    int32_t xy2[2];
+    float uv0[2];
+    float uv2[2];
+    if (!_bolt_get_attr_binding_int(c, position, 0, 2, xy0)) return;
+    if (!_bolt_get_attr_binding_int(c, position, 2, 2, xy2)) return;
+    _bolt_get_attr_binding(c, uv, 0, 2, uv0);
+    _bolt_get_attr_binding(c, uv, 2, 2, uv2);
+    const int16_t x1 = (int16_t)roundf(uv0[0] * tex->width);
+    const int16_t x2 = (int16_t)roundf(uv2[0] * tex->width);
+    const int16_t y1 = (int16_t)roundf(uv2[1] * tex->height);
+    const int16_t y2 = (int16_t)roundf(uv0[1] * tex->height);
+    const float screen_height_float = roundf(2.0 / projection_matrix[5]);
+    const struct RenderMinimapEvent event = {
+        .screen_width = roundf(2.0 / projection_matrix[0]),
+        .screen_height = screen_height_float,
+        .source_x = x1,
+        .source_y = y1,
+        .source_w = x2 - x1,
+        .source_h = y2 - y1,
+        .target_x = (int16_t)xy0[0],
+        .target_y = (int16_t)(screen_height_float - xy0[1]),
+        .target_w = (uint16_t)(xy2[0] - xy0[0]),
+        .target_h = (uint16_t)(xy0[1] - xy2[1]),
+    };
+    _bolt_plugin_handle_renderminimap(&event);
+}
+
+// assumes count is 6
+static void drawelements_handle_2d_minimapterrain(const unsigned short* indices, const struct GLTexture2D* tex, const GLfloat* projection_matrix, struct GLContext* c, const struct GLAttrBinding* attributes) {
+    // get XY and UV of first two vertices
+    const struct GLAttrBinding* tex_uv = &attributes[c->bound_program->loc_aTextureUV];
+    const struct GLAttrBinding* position_2d = &attributes[c->bound_program->loc_aVertexPosition2D];
+    int32_t pos0[2];
+    int32_t pos1[2];
+    float uv0[2];
+    float uv1[2];
+    _bolt_get_attr_binding_int(c, position_2d, indices[0], 2, pos0);
+    _bolt_get_attr_binding_int(c, position_2d, indices[1], 2, pos1);
+    _bolt_get_attr_binding(c, tex_uv, indices[0], 2, uv0);
+    _bolt_get_attr_binding(c, tex_uv, indices[1], 2, uv1);
+    const double x0 = (double)pos0[0];
+    const double y0 = (double)pos0[1];
+    const double x1 = (double)pos1[0];
+    const double y1 = (double)pos1[1];
+    const double u0 = (double)uv0[0];
+    const double v0 = (double)uv0[1];
+    const double u1 = (double)uv1[0];
+    const double v1 = (double)uv1[1];
+
+    // find out angle of the map, by comparing atan2 of XYs to atan2 of UVs
+    double pos_angle_rads = atan2(y1 - y0, x1 - x0);
+    double uv_angle_rads = atan2(v1 - v0, u1 - u0);
+    if (pos_angle_rads < uv_angle_rads) pos_angle_rads += M_PI * 2.0;
+    const double map_angle_rads = pos_angle_rads - uv_angle_rads;
+
+    // find out scaling of the map, by comparing distance between XYs to distance between UVs
+    const double pos_a = x0 - x1;
+    const double pos_b = y0 - y1;
+    const double uv_a = u0 - u1;
+    const double uv_b = v0 - v1;
+    const double pos_dist = sqrt(fabs((pos_a * pos_a) + (pos_b * pos_b)));
+    const double uv_dist = sqrt(fabs((uv_a * uv_a) + (uv_b * uv_b))) * tex->width;
+    // sometimes it renders the same UV coordinate for the first two vertices, we can't
+    // work with that. seems to happen only once immediately after logging into a world.
+    if (uv_dist >= 1.0) {
+        const double dist_ratio = pos_dist / uv_dist;
+
+        // by unrotating the big tex's vertices around any point, and rotating small-tex-relative
+        // points by the same method, we can estimate what section of the big tex will be drawn.
+        // note: `>> 1` is the same as `/ 2` except that it doesn't cause an erroneous gcc warning
+        const double scaled_x = tex->width * dist_ratio;
+        const double scaled_y = tex->height * dist_ratio;
+        const double angle_sin = sin(-map_angle_rads);
+        const double angle_cos = cos(-map_angle_rads);
+        const double unrotated_x0 = (x0 * angle_cos) - (y0 * angle_sin);
+        const double unrotated_y0 = (x0 * angle_sin) + (y0 * angle_cos);
+        const double scaled_xoffset = (u0 * scaled_x) - unrotated_x0;
+        const double scaled_yoffset = (v0 * scaled_y) - unrotated_y0;
+        const double small_tex_cx = 1.0 / projection_matrix[0];
+        const double small_tex_cy = 1.0 / projection_matrix[5];
+        const double cx = (scaled_xoffset + (small_tex_cx * angle_cos) - (small_tex_cy * angle_sin)) / dist_ratio;
+        const double cy = (scaled_yoffset + (small_tex_cx * angle_sin) + (small_tex_cy * angle_cos)) / dist_ratio;
+
+        struct MinimapTerrainEvent render;
+        render.angle = map_angle_rads;
+        render.scale = dist_ratio;
+        render.x = tex->minimap_center_x + (64.0 * (cx - (double)(tex->width >> 1)));
+        render.y = tex->minimap_center_y + (64.0 * (cy - (double)(tex->height >> 1)));
+        _bolt_plugin_handle_minimapterrain(&render);
+    }
+}
+
+// assumes count is 6
+static void drawelements_handle_2d_bigicon(const unsigned short* indices, struct GLTexture2D* tex, const GLfloat* projection_matrix, struct GLContext* c, const struct GLAttrBinding* attributes) {
+    int32_t xy0[2];
+    int32_t xy2[2];
+    float abgr[4];
+    const struct GLAttrBinding* binding = &attributes[c->bound_program->loc_aVertexPosition2D];
+    _bolt_get_attr_binding_int(c, binding, indices[0], 2, xy0);
+    _bolt_get_attr_binding_int(c, binding, indices[2], 2, xy2);
+    struct RenderIconEvent event;
+    event.icon = &tex->icon;
+    event.screen_width = roundf(2.0 / projection_matrix[0]);
+    event.screen_height = roundf(2.0 / projection_matrix[5]);
+    event.target_x = (int16_t)xy2[0];
+    event.target_y = (int16_t)((int32_t)event.screen_height - xy2[1]);
+    event.target_w = (uint16_t)(xy0[0] - xy2[0]);
+    event.target_h = (uint16_t)(xy2[1] - xy0[1]);
+    _bolt_get_attr_binding(c, &attributes[c->bound_program->loc_aVertexColour], indices[0], 4, abgr);
+    for (size_t i = 0; i < 4; i += 1) {
+        event.rgba[i] = abgr[3 - i];
+    }
+    _bolt_plugin_handle_renderbigicon(&event);
+    for (size_t i = 0; i < tex->icon.model_count; i += 1) {
+        free(tex->icon.models[i].vertices);
+    }
+    tex->icon.model_count = 0;
+}
+
+// takes a plugin-level handler for render2d and a handler for rendericon, and may call each of them one or more times
+static void drawelements_handle_2d_normal(GLsizei count, const unsigned short* indices, struct GLTexture2D* tex, const GLfloat* projection_matrix, struct GLContext* c, const struct GLAttrBinding* attributes, void (*handler_2d)(const struct RenderBatch2D*), void (*handler_icon)(const struct RenderIconEvent*)) {
+    struct GLPluginDrawElementsVertex2DUserData vertex_userdata;
+    vertex_userdata.c = c;
+    vertex_userdata.indices = indices;
+    vertex_userdata.atlas = tex;
+    vertex_userdata.position = &attributes[c->bound_program->loc_aVertexPosition2D];
+    vertex_userdata.atlas_min = &attributes[c->bound_program->loc_aTextureUVAtlasMin];
+    vertex_userdata.atlas_size = &attributes[c->bound_program->loc_aTextureUVAtlasExtents];
+    vertex_userdata.tex_uv = &attributes[c->bound_program->loc_aTextureUV];
+    vertex_userdata.colour = &attributes[c->bound_program->loc_aVertexColour];
+    vertex_userdata.screen_height = roundf(2.0 / projection_matrix[5]);
+
+    struct GLPluginTextureUserData tex_userdata;
+    tex_userdata.tex = tex;
+
+    struct RenderBatch2D batch;
+    batch.screen_width = roundf(2.0 / projection_matrix[0]);
+    batch.screen_height = vertex_userdata.screen_height;
+    batch.index_count = count;
+    batch.vertices_per_icon = 6;
+    batch.vertex_functions.userdata = &vertex_userdata;
+    batch.vertex_functions.xy = _bolt_gl_plugin_drawelements_vertex2d_xy;
+    batch.vertex_functions.atlas_details = _bolt_gl_plugin_drawelements_vertex2d_atlas_details;
+    batch.vertex_functions.uv = _bolt_gl_plugin_drawelements_vertex2d_uv;
+    batch.vertex_functions.colour = _bolt_gl_plugin_drawelements_vertex2d_colour;
+    batch.texture_functions.userdata = &tex_userdata;
+    batch.texture_functions.id = _bolt_gl_plugin_texture_id;
+    batch.texture_functions.size = _bolt_gl_plugin_texture_size;
+    batch.texture_functions.compare = _bolt_gl_plugin_texture_compare;
+    batch.texture_functions.data = _bolt_gl_plugin_texture_data;
+
+    if (tex->icons) {
+        size_t batch_start = 0;
+        for (size_t i = 0; i < count; i += batch.vertices_per_icon) {
+            float xy[2];
+            float wh[2];
+            _bolt_get_attr_binding(c, vertex_userdata.atlas_min, indices[i], 2, xy);
+            _bolt_get_attr_binding(c, vertex_userdata.atlas_size, indices[i], 2, wh);
+            const struct Icon dummy_icon = {
+                .x = (uint16_t)roundf(xy[0] * tex->width),
+                .y = (uint16_t)roundf(xy[1] * tex->height),
+                .w = (uint16_t)roundf(fabs(wh[0]) * tex->width),
+                .h = (uint16_t)roundf(fabs(wh[1]) * tex->height),
+            };
+            const struct Icon* icon = hashmap_get(tex->icons, &dummy_icon);
+            if (icon) {
+                batch.index_count = i - batch_start;
+                if (batch.index_count) {
+                    vertex_userdata.indices = indices + batch_start;
+                    handler_2d(&batch);
+                }
+                int32_t xy0[2];
+                int32_t xy2[2];
+                float abgr[4];
+                _bolt_get_attr_binding_int(c, vertex_userdata.position, indices[i], 2, xy0);
+                _bolt_get_attr_binding_int(c, vertex_userdata.position, indices[i + 2], 2, xy2);
+                struct RenderIconEvent event;
+                event.icon = icon;
+                event.screen_width = batch.screen_width;
+                event.screen_height = batch.screen_height;
+                event.target_x = (int16_t)xy2[0];
+                event.target_y = (int16_t)((int32_t)batch.screen_height - xy2[1]);
+                event.target_w = (uint16_t)(xy0[0] - xy2[0]);
+                event.target_h = (uint16_t)(xy2[1] - xy0[1]);
+                _bolt_get_attr_binding(c, vertex_userdata.colour, indices[i], 4, abgr);
+                for (size_t i = 0; i < 4; i += 1) {
+                    event.rgba[i] = abgr[3 - i];
+                }
+                handler_icon(&event);
+                batch_start = i + batch.vertices_per_icon;
+            }
+        }
+        if (batch_start < count) {
+            batch.index_count = count - batch_start;
+            vertex_userdata.indices = indices + batch_start;
+            handler_2d(&batch);
+        }
+    } else {
+        handler_2d(&batch);
+    }
+}
+
+static void drawelements_handle_3d_silhouette(struct GLContext* c) {
+    GLint ubo_binding, ubo_index;
+    gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ModelConsts, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
+    gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_index);
+    const GLfloat* model_matrix = (GLfloat*)(((uint8_t*)_bolt_context_get_buffer(c, ubo_index)->data) + c->bound_program->offset_uModelMatrix);
+    c->player_model_x = (int32_t)roundf(model_matrix[12]);
+    c->player_model_y = (int32_t)roundf(model_matrix[13]);
+    c->player_model_z = (int32_t)roundf(model_matrix[14]);
+}
+
+static void drawelements_handle_3d_normal(GLsizei count, const unsigned short* indices, struct GLContext* c, const struct GLAttrBinding* attributes) {
+    GLint atlas, settings_atlas, ubo_binding, ubo_view_index, ubo_batch_index;
+    gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uTextureAtlas, &atlas);
+    gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uTextureAtlasSettings, &settings_atlas);
+    struct GLTexture2D* tex = c->texture_units[atlas].texture_2d;
+    struct GLTexture2D* tex_settings = c->texture_units[settings_atlas].texture_2d;
+    gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ViewTransforms, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
+    gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_view_index);
+    gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_BatchConsts, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
+    gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_batch_index);
+    const GLfloat atlas_scale = *((GLfloat*)(((uint8_t*)_bolt_context_get_buffer(c, ubo_batch_index)->data) + c->bound_program->offset_uAtlasMeta) + 1);
+
+    struct GLPluginDrawElementsVertex3DUserData vertex_userdata;
+    vertex_userdata.c = c;
+    vertex_userdata.indices = indices;
+    vertex_userdata.atlas_scale = roundf(atlas_scale);
+    vertex_userdata.atlas = tex;
+    vertex_userdata.settings_atlas = tex_settings;
+    vertex_userdata.xy_xz = &attributes[c->bound_program->loc_aMaterialSettingsSlotXY_TilePositionXZ];
+    vertex_userdata.xyz_bone = &attributes[c->bound_program->loc_aVertexPosition_BoneLabel];
+    vertex_userdata.tex_uv = &attributes[c->bound_program->loc_aTextureUV];
+    vertex_userdata.colour = &attributes[c->bound_program->loc_aVertexColour];
+    vertex_userdata.skin_bones = &attributes[c->bound_program->loc_aVertexSkinBones];
+    vertex_userdata.skin_weights = &attributes[c->bound_program->loc_aVertexSkinWeights];
+    vertex_userdata.transforms_ubo = NULL;
+
+    struct GLPluginTextureUserData tex_userdata;
+    tex_userdata.tex = tex;
+
+    struct GLPlugin3DMatrixUserData matrix_userdata;
+    matrix_userdata.program = c->bound_program;
+    const uint8_t* ubo_view_buf = (uint8_t*)(_bolt_context_get_buffer(c, ubo_view_index)->data);
+
+    matrix_userdata.view_matrix = (float*)(ubo_view_buf + c->bound_program->offset_uViewMatrix);
+    matrix_userdata.proj_matrix = (float*)(ubo_view_buf + c->bound_program->offset_uProjectionMatrix);
+    matrix_userdata.viewproj_matrix = (float*)(ubo_view_buf + c->bound_program->offset_uViewProjMatrix);
+
+    struct Render3D render;
+    render.vertex_count = count;
+    render.is_animated = c->bound_program->block_index_VertexTransformData != -1;
+    render.vertex_functions.userdata = &vertex_userdata;
+    render.vertex_functions.xyz = _bolt_gl_plugin_drawelements_vertex3d_xyz;
+    render.vertex_functions.atlas_meta = _bolt_gl_plugin_drawelements_vertex3d_atlas_meta;
+    render.vertex_functions.atlas_xywh = _bolt_gl_plugin_drawelements_vertex3d_meta_xywh;
+    render.vertex_functions.uv = _bolt_gl_plugin_drawelements_vertex3d_uv;
+    render.vertex_functions.colour = _bolt_gl_plugin_drawelements_vertex3d_colour;
+    render.vertex_functions.bone_transform = _bolt_gl_plugin_drawelements_vertex3d_transform;
+    render.texture_functions.userdata = &tex_userdata;
+    render.texture_functions.id = _bolt_gl_plugin_texture_id;
+    render.texture_functions.size = _bolt_gl_plugin_texture_size;
+    render.texture_functions.compare = _bolt_gl_plugin_texture_compare;
+    render.texture_functions.data = _bolt_gl_plugin_texture_data;
+    render.matrix_functions.userdata = &matrix_userdata;
+    render.matrix_functions.model_matrix = _bolt_gl_plugin_matrix3d_model;
+    render.matrix_functions.view_matrix = _bolt_gl_plugin_matrix3d_view;
+    render.matrix_functions.proj_matrix = _bolt_gl_plugin_matrix3d_proj;
+    render.matrix_functions.viewproj_matrix = _bolt_gl_plugin_matrix3d_viewproj;
+
+    _bolt_plugin_handle_render3d(&render);
+}
+
+static void drawelements_handle_3d_iconrender(GLsizei count, const unsigned short* indices, struct GLContext* c, const struct GLAttrBinding* attributes, GLint draw_tex) {
+    struct GLTexture2D* tex = _bolt_context_get_texture(c, draw_tex);
+    const uint8_t is_icon = tex && tex->compare_mode == GL_NONE && tex->internalformat == GL_RGBA8 && tex->width == GAME_ITEM_ICON_SIZE && tex->height == GAME_ITEM_ICON_SIZE;
+    const uint8_t is_big_icon = tex && tex->internalformat == GL_RGBA8 && tex->width == GAME_ITEM_BIGICON_SIZE && tex->height == GAME_ITEM_BIGICON_SIZE;
+    if ((is_icon || is_big_icon) && tex->icon.model_count < MAX_MODELS_PER_ICON) {
+        struct IconModel* model = &tex->icon.models[tex->icon.model_count];
+        tex->icon.model_count += 1;
+        tex->icon.is_big_icon = is_big_icon;
+        GLint ubo_binding, ubo_model_index, ubo_view_index;
+        gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ModelConsts, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
+        gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_model_index);
+        const GLfloat* model_matrix = (GLfloat*)(((uint8_t*)_bolt_context_get_buffer(c, ubo_model_index)->data) + c->bound_program->offset_uModelMatrix);
+        for (size_t i = 0; i < 16; i += 1) {
+            model->model_matrix.matrix[i] = (double)model_matrix[i];
+        }
+        gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ViewTransforms, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
+        gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_view_index);
+        const uint8_t* ubo_view_buf = (uint8_t*)_bolt_context_get_buffer(c, ubo_view_index)->data;
+        const float* viewmatrix = (float*)(ubo_view_buf + c->bound_program->offset_uViewMatrix);
+        const float* projmatrix = (float*)(ubo_view_buf + c->bound_program->offset_uProjectionMatrix);
+        const float* viewprojmatrix = (float*)(ubo_view_buf + c->bound_program->offset_uViewProjMatrix);
+        for (size_t i = 0; i < 16; i += 1) {
+            model->view_matrix.matrix[i] = (double)viewmatrix[i];
+            model->projection_matrix.matrix[i] = (double)projmatrix[i];
+            model->viewproj_matrix.matrix[i] = (double)viewprojmatrix[i];
+        }
+        model->vertex_count = count;
+        model->vertices = malloc(sizeof(*model->vertices) * count);
+        for (size_t i = 0; i < count; i += 1) {
+            _bolt_get_attr_binding_int(c, &attributes[c->bound_program->loc_aVertexPosition_BoneLabel], indices[i], 4, model->vertices[i].point.xyzh.ints);
+            _bolt_get_attr_binding(c, &attributes[c->bound_program->loc_aVertexColour], indices[i], 4, model->vertices[i].rgba);
+            model->vertices[i].point.integer = true;
+        }
+    }
+}
+
+/* plugin GL function callback helper functions */
+
 static void xywh_from_meta_atlas(const struct GLTexture2D* settings_atlas, size_t slot_x, size_t slot_y, int scale, int32_t* out) {
     // this is pretty wild
     const uint8_t* settings_ptr = settings_atlas->data + (slot_y * settings_atlas->width * 4 * 4) + (slot_x * 3 * 4);
@@ -2525,6 +2619,8 @@ static void xywh_from_meta_atlas(const struct GLTexture2D* settings_atlas, size_
     out[2] = (int32_t)*(settings_ptr + 8) * scale;
     out[3] = out[2];
 }
+
+/* plugin GL function callbacks */
 
 static void _bolt_gl_plugin_drawelements_vertex2d_xy(size_t index, void* userdata, int32_t* out) {
     struct GLPluginDrawElementsVertex2DUserData* data = userdata;
