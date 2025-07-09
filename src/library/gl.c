@@ -2428,10 +2428,10 @@ void _bolt_gl_onBindTexture(GLenum target, GLuint texture) {
     unit->recent = _bolt_context_get_texture(c, texture);
     switch (target) {
         case GL_TEXTURE_2D:
-            c->texture_units[c->active_texture].texture_2d = unit->recent;
+            unit->texture_2d = unit->recent;
             break;
         case GL_TEXTURE_2D_MULTISAMPLE:
-            c->texture_units[c->active_texture].texture_2d_multisample = unit->recent;
+            unit->texture_2d_multisample = unit->recent;
             break;
     }
 }
