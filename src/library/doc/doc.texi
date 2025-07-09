@@ -2874,6 +2874,13 @@ projection matrices, commonly called the "viewproj matrix", of the model
 being rendered. This can be used to transform points from world
 coordinates into screen coordinates.
 
+@node render3d-inverseviewmatrix
+@subsection inverseviewmatrix
+
+Returns a @ref{objects-transform} representing the inverse of the view
+matrix (a.k.a. the camera matrix) for this render. This can be used to
+transform points from eye-space to world-space.
+
 @node render3d-vertexmeta
 @subsection vertexmeta
 
@@ -3240,6 +3247,14 @@ used for this particle render.
 
 Returns a @ref{objects-transform} representing the projection matrix
 being used for this particle render.
+
+@node renderparticles-viewprojmatrix
+@subsection viewprojmatrix
+
+Returns the @ref{objects-transform} representing the combined view and
+projection matrices, commonly called the "viewproj matrix", for this
+particle render. This can be used to transform points from world
+coordinates into screen coordinates.
 
 @node renderparticles-inverseviewmatrix
 @subsection inverseviewmatrix

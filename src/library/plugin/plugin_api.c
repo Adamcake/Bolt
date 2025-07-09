@@ -1272,6 +1272,14 @@ static int api_render3d_viewprojmatrix(lua_State* state) {
     return 1;
 }
 
+static int api_render3d_inverseviewmatrix(lua_State* state) {
+    const struct Render3D* render = require_self_userdata(state, "inverseviewmatrix");
+    struct Transform3D* transform = lua_newuserdata(state, sizeof(struct Transform3D));
+    render->matrix_functions.inverse_view_matrix(render->matrix_functions.userdata, transform);
+    SETMETATABLE(transform)
+    return 1;
+}
+
 static int api_render3d_vertexmeta(lua_State* state) {
     const struct Render3D* render = require_self_userdata(state, "vertexmeta");
     const lua_Integer index = luaL_checkinteger(state, 2);
@@ -1501,6 +1509,14 @@ static int api_renderparticles_projmatrix(lua_State* state) {
     const struct RenderParticles* render = require_self_userdata(state, "projmatrix");
     struct Transform3D* transform = lua_newuserdata(state, sizeof(struct Transform3D));
     render->matrix_functions.proj_matrix(render->matrix_functions.userdata, transform);
+    SETMETATABLE(transform)
+    return 1;
+}
+
+static int api_renderparticles_viewprojmatrix(lua_State* state) {
+    const struct RenderParticles* render = require_self_userdata(state, "viewprojmatrix");
+    struct Transform3D* transform = lua_newuserdata(state, sizeof(struct Transform3D));
+    render->matrix_functions.viewproj_matrix(render->matrix_functions.userdata, transform);
     SETMETATABLE(transform)
     return 1;
 }
@@ -2078,6 +2094,7 @@ static struct ApiFuncTemplate render3d_functions[] = {
     BOLTFUNC(viewmatrix, render3d),
     BOLTFUNC(projectionmatrix, render3d),
     BOLTFUNC(viewprojmatrix, render3d),
+    BOLTFUNC(inverseviewmatrix, render3d),
     BOLTFUNC(vertexmeta, render3d),
     BOLTFUNC(atlasxywh, render3d),
     BOLTFUNC(vertexuv, render3d),
@@ -2106,6 +2123,7 @@ static struct ApiFuncTemplate renderparticles_functions[] = {
     BOLTFUNC(texturedata, renderparticles),
     BOLTFUNC(viewmatrix, renderparticles),
     BOLTFUNC(projmatrix, renderparticles),
+    BOLTFUNC(viewprojmatrix, renderparticles),
     BOLTFUNC(inverseviewmatrix, renderparticles),
     BOLTALIAS(vertexcolour, vertexcolor, renderparticles),
 };

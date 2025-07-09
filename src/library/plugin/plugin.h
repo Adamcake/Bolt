@@ -125,8 +125,8 @@ struct TextureFunctions {
     uint8_t* (*data)(void* userdata, size_t x, size_t y);
 };
 
-/// Struct containing "vtable" callback information for 3D renders' transformation matrices.
-struct Render3DMatrixFunctions {
+/// Struct containing "vtable" callback information for various types of render's transformation matrices.
+struct MatrixFunctions {
     /// Userdata which will be passed to the functions contained in this struct.
     void* userdata;
 
@@ -141,6 +141,9 @@ struct Render3DMatrixFunctions {
 
     /// Gets the combined view-projection matrix for this render.
     void (*viewproj_matrix)(void* userdata, struct Transform3D* out);
+
+    /// Gets the inverse view matrix for this render.
+    void (*inverse_view_matrix)(void* userdata, struct Transform3D* out);
 };
 
 /// Struct containing "vtable" callback information for particle RenderParticles' list of vertices.
@@ -171,21 +174,6 @@ struct VertexParticleFunctions {
 
     /// Returns the RGBA colour of this vertex, each one normalised from 0.0 to 1.0.
     void (*colour)(size_t index, void* userdata, double* out);
-};
-
-/// Struct containing "vtable" callback information for particle RenderParticles' transformation matrices.
-struct MatrixParticleFunctions {
-    /// Userdata which will be passed to the functions contained in this struct.
-    void* userdata;
-
-    /// Gets the view matrix for this render.
-    void (*view_matrix)(void* userdata, struct Transform3D* out);
-    
-    /// Gets the projection matrix for this render.
-    void (*proj_matrix)(void* userdata, struct Transform3D* out);
-
-    /// Gets the inverse view matrix for this render.
-    void (*inverse_view_matrix)(void* userdata, struct Transform3D* out);
 };
 
 /// Struct containing "vtable" callback information for surfaces.
@@ -377,13 +365,18 @@ struct Render3D {
     uint8_t is_animated;
     struct Vertex3DFunctions vertex_functions;
     struct TextureFunctions texture_functions;
-    struct Render3DMatrixFunctions matrix_functions;
+    struct MatrixFunctions matrix_functions;
 };
 
 struct RenderParticles {
     uint32_t vertex_count;
     struct VertexParticleFunctions vertex_functions;
-    struct MatrixParticleFunctions matrix_functions;
+    struct MatrixFunctions matrix_functions;
+    struct TextureFunctions texture_functions;
+};
+
+struct RenderBillboard {
+    uint32_t vertex_count;
     struct TextureFunctions texture_functions;
 };
 
