@@ -1315,6 +1315,7 @@ lua_settable(plugin->state, LUA_REGISTRYINDEX);
     SETMETA(render2d)
     SETMETA(render3d)
     SETMETA(renderparticles)
+    SETMETA(renderbillboard)
     SETMETA(rendericon)
     SETMETA(minimapterrain)
     SETMETA(renderminimap)
