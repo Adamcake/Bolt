@@ -101,52 +101,7 @@ struct Vertex3DFunctions {
     void (*bone_transform)(size_t vertex, void* userdata, struct Transform3D* out);
 };
 
-/// Struct containing "vtable" callback information for textures.
-/// Note that in the context of Bolt plugins, textures are always two-dimensional.
-struct TextureFunctions {
-    /// Userdata which will be passed to the functions contained in this struct.
-    void* userdata;
-
-    /// Returns the ID for the associated texture object.
-    size_t (*id)(void* userdata);
-
-    /// Returns the size of this texture atlas in pixels.
-    void (*size)(void* userdata, size_t* out);
-
-    /// Compares a section of this texture to some RGBA bytes using `memcmp`. Returns true if the
-    /// section matches exactly, otherwise false.
-    ///
-    /// Note that changing the in-game "texture compression" setting will change the contents of
-    /// the texture for some images and therefore change the result of this comparison.
-    uint8_t (*compare)(void* userdata, size_t x, size_t y, size_t len, const unsigned char* data);
-
-    /// Fetches a pointer to the texture's pixel data at coordinates x and y. Doesn't do any checks
-    /// on whether x and y are in-bounds. Data is always RGBA and pixel rows are always contiguous.
-    uint8_t* (*data)(void* userdata, size_t x, size_t y);
-};
-
-/// Struct containing "vtable" callback information for various types of render's transformation matrices.
-struct MatrixFunctions {
-    /// Userdata which will be passed to the functions contained in this struct.
-    void* userdata;
-
-    /// Gets the model matrix for this render.
-    void (*model_matrix)(void* userdata, struct Transform3D* out);
-
-    /// Gets the view matrix for this render.
-    void (*view_matrix)(void* userdata, struct Transform3D* out);
-
-    /// Gets the projection matrix for this render.
-    void (*proj_matrix)(void* userdata, struct Transform3D* out);
-
-    /// Gets the combined view-projection matrix for this render.
-    void (*viewproj_matrix)(void* userdata, struct Transform3D* out);
-
-    /// Gets the inverse view matrix for this render.
-    void (*inverse_view_matrix)(void* userdata, struct Transform3D* out);
-};
-
-/// Struct containing "vtable" callback information for particle RenderParticles' list of vertices.
+/// Struct containing "vtable" callback information for RenderParticles' list of vertices.
 struct VertexParticleFunctions {
     /// Userdata which will be passed to the functions contained in this struct.
     void* userdata;
@@ -174,6 +129,77 @@ struct VertexParticleFunctions {
 
     /// Returns the RGBA colour of this vertex, each one normalised from 0.0 to 1.0.
     void (*colour)(size_t index, void* userdata, double* out);
+};
+
+/// Struct containing "vtable" callback information for RenderBillboard's list of vertices.
+struct VertexBillboardFunctions {
+    /// Userdata which will be passed to the functions contained in this struct.
+    void* userdata;
+
+    /// Returns the X Y and Z, in "model" coordinates, of this vertex in relation to the billboard.
+    void (*xyz)(size_t index, void* userdata, struct Point3D* out);
+
+    /// Returns the X and Y offset which would be applied to this specific vertex from its world
+    /// position while in eye space, to render it in the correct position on screen.
+    void (*eye_offset)(size_t index, void* userdata, double* out);
+
+    /// Returns the U and V of this vertex in pixel coordinates, normalised from 0.0 to 1.0 within
+    /// the sub-image specified by atlas xy and wh.
+    void (*uv)(size_t index, void* userdata, double* out);
+    
+    /// Returns a meta-ID for the texture associated with this vertex.
+    size_t (*atlas_meta)(size_t index, void* userdata);
+
+    /// Returns the XYWH of the texture image referred to by this meta-ID, in pixel coordinates.
+    void (*atlas_xywh)(size_t meta, void* userdata, int32_t* out);
+
+    /// Returns the RGBA colour of this vertex, each one normalised from 0.0 to 1.0.
+    void (*colour)(size_t index, void* userdata, double* out);
+};
+
+/// Struct containing "vtable" callback information for various types of render's transformation matrices.
+struct MatrixFunctions {
+    /// Userdata which will be passed to the functions contained in this struct.
+    void* userdata;
+
+    /// Gets the model matrix for this render.
+    void (*model_matrix)(void* userdata, struct Transform3D* out);
+
+    /// Gets the view matrix for this render.
+    void (*view_matrix)(void* userdata, struct Transform3D* out);
+
+    /// Gets the projection matrix for this render.
+    void (*proj_matrix)(void* userdata, struct Transform3D* out);
+
+    /// Gets the combined view-projection matrix for this render.
+    void (*viewproj_matrix)(void* userdata, struct Transform3D* out);
+
+    /// Gets the inverse view matrix for this render.
+    void (*inverse_view_matrix)(void* userdata, struct Transform3D* out);
+};
+
+/// Struct containing "vtable" callback information for textures.
+/// Note that in the context of Bolt plugins, textures are always two-dimensional.
+struct TextureFunctions {
+    /// Userdata which will be passed to the functions contained in this struct.
+    void* userdata;
+
+    /// Returns the ID for the associated texture object.
+    size_t (*id)(void* userdata);
+
+    /// Returns the size of this texture atlas in pixels.
+    void (*size)(void* userdata, size_t* out);
+
+    /// Compares a section of this texture to some RGBA bytes using `memcmp`. Returns true if the
+    /// section matches exactly, otherwise false.
+    ///
+    /// Note that changing the in-game "texture compression" setting will change the contents of
+    /// the texture for some images and therefore change the result of this comparison.
+    uint8_t (*compare)(void* userdata, size_t x, size_t y, size_t len, const unsigned char* data);
+
+    /// Fetches a pointer to the texture's pixel data at coordinates x and y. Doesn't do any checks
+    /// on whether x and y are in-bounds. Data is always RGBA and pixel rows are always contiguous.
+    uint8_t* (*data)(void* userdata, size_t x, size_t y);
 };
 
 /// Struct containing "vtable" callback information for surfaces.
@@ -377,6 +403,9 @@ struct RenderParticles {
 
 struct RenderBillboard {
     uint32_t vertex_count;
+    uint32_t vertices_per_icon;
+    struct VertexBillboardFunctions vertex_functions;
+    struct MatrixFunctions matrix_functions;
     struct TextureFunctions texture_functions;
 };
 
@@ -526,6 +555,9 @@ void _bolt_plugin_handle_render3d(const struct Render3D*);
 
 /// Sends a RenderParticles to all plugins.
 void _bolt_plugin_handle_renderparticles(const struct RenderParticles*);
+
+/// Sends a RenderBillboard to all plugins.
+void _bolt_plugin_handle_renderbillboard(const struct RenderBillboard*);
 
 /// Sends a RenderIconEvent for the "rendericon" handler to all plugins.
 void _bolt_plugin_handle_rendericon(const struct RenderIconEvent*);

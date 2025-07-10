@@ -205,6 +205,7 @@ DEFINE_CALLBACK(swapbuffers)
 DEFINE_CALLBACK(render2d)
 DEFINE_CALLBACK(render3d)
 DEFINE_CALLBACK(renderparticles)
+DEFINE_CALLBACK(renderbillboard)
 DEFINE_CALLBACK(rendericon)
 DEFINE_CALLBACK(renderbigicon)
 DEFINE_CALLBACK(minimapterrain)
@@ -1256,8 +1257,8 @@ static int api_render3d_viewmatrix(lua_State* state) {
     return 1;
 }
 
-static int api_render3d_projectionmatrix(lua_State* state) {
-    const struct Render3D* render = require_self_userdata(state, "projectionmatrix");
+static int api_render3d_projmatrix(lua_State* state) {
+    const struct Render3D* render = require_self_userdata(state, "projmatrix");
     struct Transform3D* transform = lua_newuserdata(state, sizeof(struct Transform3D));
     render->matrix_functions.proj_matrix(render->matrix_functions.userdata, transform);
     SETMETATABLE(transform)
@@ -1283,7 +1284,7 @@ static int api_render3d_inverseviewmatrix(lua_State* state) {
 static int api_render3d_vertexmeta(lua_State* state) {
     const struct Render3D* render = require_self_userdata(state, "vertexmeta");
     const lua_Integer index = luaL_checkinteger(state, 2);
-    size_t meta = render->vertex_functions.atlas_meta(index - 1, render->vertex_functions.userdata);
+    const size_t meta = render->vertex_functions.atlas_meta(index - 1, render->vertex_functions.userdata);
     lua_pushinteger(state, meta);
     return 1;
 }
@@ -1442,7 +1443,7 @@ static int api_renderparticles_vertexcolour(lua_State* state) {
 static int api_renderparticles_vertexmeta(lua_State* state) {
     const struct RenderParticles* render = require_self_userdata(state, "vertexmeta");
     const lua_Integer index = luaL_checkinteger(state, 2);
-    size_t meta = render->vertex_functions.atlas_meta(index - 1, render->vertex_functions.userdata);
+    const size_t meta = render->vertex_functions.atlas_meta(index - 1, render->vertex_functions.userdata);
     lua_pushinteger(state, meta);
     return 1;
 }
@@ -1529,6 +1530,157 @@ static int api_renderparticles_inverseviewmatrix(lua_State* state) {
     return 1;
 }
 
+static int api_renderbillboard_vertexcount(lua_State* state) {
+    const struct RenderBillboard* render = require_self_userdata(state, "vertexcount");
+    lua_pushinteger(state, render->vertex_count);
+    return 1;
+}
+
+static int api_renderbillboard_verticesperimage(lua_State* state) {
+    const struct RenderBillboard* render = require_self_userdata(state, "verticesperimage");
+    lua_pushinteger(state, render->vertices_per_icon);
+    return 1;
+}
+
+static int api_renderbillboard_vertexpoint(lua_State* state) {
+    const struct RenderBillboard* render = require_self_userdata(state, "vertexpoint");
+    const lua_Integer vertex = luaL_checkinteger(state, 2);
+    struct Point3D* point = lua_newuserdata(state, sizeof(struct Point3D));
+    render->vertex_functions.xyz(vertex - 1, render->vertex_functions.userdata, point);
+    SETMETATABLE(point)
+    return 1;
+}
+
+static int api_renderbillboard_vertexeyeoffset(lua_State* state) {
+    const struct RenderBillboard* render = require_self_userdata(state, "vertexeyeoffset");
+    const lua_Integer vertex = luaL_checkinteger(state, 2);
+    double offset[2];
+    render->vertex_functions.eye_offset(vertex - 1, render->vertex_functions.userdata, offset);
+    lua_pushnumber(state, offset[0]);
+    lua_pushnumber(state, offset[1]);
+    return 2;
+}
+
+static int api_renderbillboard_vertexuv(lua_State* state) {
+    const struct RenderBillboard* render = require_self_userdata(state, "vertexuv");
+    const lua_Integer vertex = luaL_checkinteger(state, 2);
+    double uv[2];
+    render->vertex_functions.uv(vertex - 1, render->vertex_functions.userdata, uv);
+    lua_pushnumber(state, uv[0]);
+    lua_pushnumber(state, uv[1]);
+    return 2;
+}
+
+static int api_renderbillboard_vertexmeta(lua_State* state) {
+    const struct RenderBillboard* render = require_self_userdata(state, "vertexmeta");
+    const lua_Integer index = luaL_checkinteger(state, 2);
+    const size_t meta = render->vertex_functions.atlas_meta(index - 1, render->vertex_functions.userdata);
+    lua_pushinteger(state, meta);
+    return 1;
+}
+
+static int api_renderbillboard_atlasxywh(lua_State* state) {
+    const struct RenderBillboard* render = require_self_userdata(state, "atlasxywh");
+    const lua_Integer meta = luaL_checkinteger(state, 2);
+    int32_t xywh[4];
+    render->vertex_functions.atlas_xywh(meta, render->vertex_functions.userdata, xywh);
+    lua_pushinteger(state, xywh[0]);
+    lua_pushinteger(state, xywh[1]);
+    lua_pushinteger(state, xywh[2]);
+    lua_pushinteger(state, xywh[3]);
+    return 4;
+}
+
+static int api_renderbillboard_textureid(lua_State* state) {
+    const struct RenderBillboard* render = require_self_userdata(state, "textureid");
+    const size_t id = render->texture_functions.id(render->texture_functions.userdata);
+    lua_pushinteger(state, id);
+    return 1;
+}
+
+static int api_renderbillboard_texturesize(lua_State* state) {
+    const struct RenderBillboard* render = require_self_userdata(state, "texturesize");
+    size_t size[2];
+    render->texture_functions.size(render->texture_functions.userdata, size);
+    lua_pushinteger(state, size[0]);
+    lua_pushinteger(state, size[1]);
+    return 2;
+}
+
+static int api_renderbillboard_texturecompare(lua_State* state) {
+    const struct RenderBillboard* render = require_self_userdata(state, "texturecompare");
+    const size_t x = luaL_checkinteger(state, 2);
+    const size_t y = luaL_checkinteger(state, 3);
+    size_t data_len;
+    const void* data;
+    get_binary_data(state, 4, &data, &data_len);
+    const uint8_t match = render->texture_functions.compare(render->texture_functions.userdata, x, y, data_len, (const unsigned char*)data);
+    lua_pushboolean(state, match);
+    return 1;
+}
+
+static int api_renderbillboard_texturedata(lua_State* state) {
+    const struct RenderBillboard* render = require_self_userdata(state, "texturedata");
+    const size_t x = luaL_checkinteger(state, 2);
+    const size_t y = luaL_checkinteger(state, 3);
+    const size_t len = luaL_checkinteger(state, 4);
+    const uint8_t* ret = render->texture_functions.data(render->texture_functions.userdata, x, y);
+    lua_pushlstring(state, (const char*)ret, len);
+    return 1;
+}
+
+static int api_renderbillboard_vertexcolour(lua_State* state) {
+    const struct RenderBillboard* render = require_self_userdata(state, "vertexcolour");
+    const lua_Integer index = luaL_checkinteger(state, 2);
+    double col[4];
+    render->vertex_functions.colour(index - 1, render->vertex_functions.userdata, col);
+    lua_pushnumber(state, col[0]);
+    lua_pushnumber(state, col[1]);
+    lua_pushnumber(state, col[2]);
+    lua_pushnumber(state, col[3]);
+    return 4;
+}
+
+static int api_renderbillboard_modelmatrix(lua_State* state) {
+    const struct RenderBillboard* render = require_self_userdata(state, "modelmatrix");
+    struct Transform3D* transform = lua_newuserdata(state, sizeof(struct Transform3D));
+    render->matrix_functions.model_matrix(render->matrix_functions.userdata, transform);
+    SETMETATABLE(transform)
+    return 1;
+}
+
+static int api_renderbillboard_viewmatrix(lua_State* state) {
+    const struct RenderBillboard* render = require_self_userdata(state, "viewmatrix");
+    struct Transform3D* transform = lua_newuserdata(state, sizeof(struct Transform3D));
+    render->matrix_functions.view_matrix(render->matrix_functions.userdata, transform);
+    SETMETATABLE(transform)
+    return 1;
+}
+
+static int api_renderbillboard_projmatrix(lua_State* state) {
+    const struct RenderBillboard* render = require_self_userdata(state, "projmatrix");
+    struct Transform3D* transform = lua_newuserdata(state, sizeof(struct Transform3D));
+    render->matrix_functions.proj_matrix(render->matrix_functions.userdata, transform);
+    SETMETATABLE(transform)
+    return 1;
+}
+
+static int api_renderbillboard_viewprojmatrix(lua_State* state) {
+    const struct RenderBillboard* render = require_self_userdata(state, "viewprojmatrix");
+    struct Transform3D* transform = lua_newuserdata(state, sizeof(struct Transform3D));
+    render->matrix_functions.viewproj_matrix(render->matrix_functions.userdata, transform);
+    SETMETATABLE(transform)
+    return 1;
+}
+
+static int api_renderbillboard_inverseviewmatrix(lua_State* state) {
+    const struct RenderBillboard* render = require_self_userdata(state, "inverseviewmatrix");
+    struct Transform3D* transform = lua_newuserdata(state, sizeof(struct Transform3D));
+    render->matrix_functions.inverse_view_matrix(render->matrix_functions.userdata, transform);
+    SETMETATABLE(transform)
+    return 1;
+}
+
 static int api_rendericon_xywh(lua_State* state) {
     const struct RenderIconEvent* event = require_self_userdata(state, "xywh");
     lua_pushinteger(state, event->target_x);
@@ -1604,8 +1756,8 @@ static int api_rendericon_modelviewmatrix(lua_State* state) {
     return 1;
 }
 
-static int api_rendericon_modelprojectionmatrix(lua_State* state) {
-    const struct RenderIconEvent* event = require_self_userdata(state, "modelprojectionmatrix");
+static int api_rendericon_modelprojmatrix(lua_State* state) {
+    const struct RenderIconEvent* event = require_self_userdata(state, "modelprojmatrix");
     const size_t model = luaL_checkinteger(state, 2);
     struct Transform3D* transform = lua_newuserdata(state, sizeof(struct Transform3D));
     *transform = event->icon->models[model - 1].projection_matrix;
@@ -2032,6 +2184,7 @@ static struct ApiFuncTemplate bolt_functions[] = {
     BOLTFUNC(onrender2d),
     BOLTFUNC(onrender3d),
     BOLTFUNC(onrenderparticles),
+    BOLTFUNC(onrenderbillboard),
     BOLTFUNC(onrendericon),
     BOLTFUNC(onrenderbigicon),
     BOLTFUNC(onminimapterrain),
@@ -2092,7 +2245,7 @@ static struct ApiFuncTemplate render3d_functions[] = {
     BOLTFUNC(vertexpoint, render3d),
     BOLTFUNC(modelmatrix, render3d),
     BOLTFUNC(viewmatrix, render3d),
-    BOLTFUNC(projectionmatrix, render3d),
+    BOLTFUNC(projmatrix, render3d),
     BOLTFUNC(viewprojmatrix, render3d),
     BOLTFUNC(inverseviewmatrix, render3d),
     BOLTFUNC(vertexmeta, render3d),
@@ -2106,6 +2259,7 @@ static struct ApiFuncTemplate render3d_functions[] = {
     BOLTFUNC(vertexanimation, render3d),
     BOLTFUNC(animated, render3d),
     BOLTALIAS(vertexcolour, vertexcolor, render3d),
+    BOLTALIAS(projmatrix, projectionmatrix, render3d),
 };
 
 static struct ApiFuncTemplate renderparticles_functions[] = {
@@ -2126,6 +2280,28 @@ static struct ApiFuncTemplate renderparticles_functions[] = {
     BOLTFUNC(viewprojmatrix, renderparticles),
     BOLTFUNC(inverseviewmatrix, renderparticles),
     BOLTALIAS(vertexcolour, vertexcolor, renderparticles),
+    BOLTALIAS(projmatrix, projectionmatrix, renderparticles),
+};
+
+static struct ApiFuncTemplate renderbillboard_functions[] = {
+    BOLTFUNC(vertexcount, renderbillboard),
+    BOLTFUNC(verticesperimage, renderbillboard),
+    BOLTFUNC(vertexpoint, renderbillboard),
+    BOLTFUNC(vertexeyeoffset, renderbillboard),
+    BOLTFUNC(vertexuv, renderbillboard),
+    BOLTFUNC(vertexcolour, renderbillboard),
+    BOLTFUNC(vertexmeta, renderbillboard),
+    BOLTFUNC(atlasxywh, renderbillboard),
+    BOLTFUNC(textureid, renderbillboard),
+    BOLTFUNC(texturesize, renderbillboard),
+    BOLTFUNC(texturecompare, renderbillboard),
+    BOLTFUNC(texturedata, renderbillboard),
+    BOLTFUNC(viewmatrix, renderbillboard),
+    BOLTFUNC(projmatrix, renderbillboard),
+    BOLTFUNC(viewprojmatrix, renderbillboard),
+    BOLTFUNC(inverseviewmatrix, renderbillboard),
+    BOLTALIAS(vertexcolour, vertexcolor, renderbillboard),
+    BOLTALIAS(projmatrix, projectionmatrix, renderbillboard),
 };
 
 static struct ApiFuncTemplate rendericon_functions[] = {
@@ -2136,7 +2312,8 @@ static struct ApiFuncTemplate rendericon_functions[] = {
     BOLTFUNC(modelvertexcolour, rendericon),
     BOLTFUNC(modelmodelmatrix, rendericon),
     BOLTFUNC(modelviewmatrix, rendericon),
-    BOLTFUNC(modelprojectionmatrix, rendericon),
+    BOLTFUNC(modelprojmatrix, rendericon),
+    BOLTALIAS(modelprojmatrix, modelprojectionmatrix, rendericon),
     BOLTFUNC(modelviewprojmatrix, rendericon),
     BOLTALIAS(modelvertexcolour, modelvertexcolor, rendericon),
     BOLTFUNC(colour, rendericon),
@@ -2349,6 +2526,7 @@ void _bolt_api_push_metatable_##NAME(lua_State* state) { \
 DEFPUSHMETA(render2d)
 DEFPUSHMETA(render3d)
 DEFPUSHMETA(renderparticles)
+DEFPUSHMETA(renderbillboard)
 DEFPUSHMETA(rendericon)
 DEFPUSHMETA(minimapterrain)
 DEFPUSHMETA(renderminimap)

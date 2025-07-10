@@ -290,15 +290,26 @@ static void _bolt_gl_plugin_drawelements_vertexparticles_uv(size_t index, void* 
 static size_t _bolt_gl_plugin_drawelements_vertexparticles_atlas_meta(size_t index, void* userdata);
 static void _bolt_gl_plugin_drawelements_vertexparticles_meta_xywh(size_t index, void* userdata, int32_t* out);
 static void _bolt_gl_plugin_drawelements_vertexparticles_colour(size_t index, void* userdata, double* out);
+static void _bolt_gl_plugin_drawelements_vertexbillboard_xyz(size_t index, void* userdata, struct Point3D* out);
+static void _bolt_gl_plugin_drawelements_vertexbillboard_eye_offset(size_t index, void* userdata, double* out);
+static void _bolt_gl_plugin_drawelements_vertexbillboard_uv(size_t index, void* userdata, double* out);
+static size_t _bolt_gl_plugin_drawelements_vertexbillboard_atlas_meta(size_t index, void* userdata);
+static void _bolt_gl_plugin_drawelements_vertexbillboard_meta_xywh(size_t index, void* userdata, int32_t* out);
+static void _bolt_gl_plugin_drawelements_vertexbillboard_colour(size_t index, void* userdata, double* out);
 static void _bolt_gl_plugin_matrixparticles_viewmatrix(void* userdata, struct Transform3D* out);
 static void _bolt_gl_plugin_matrixparticles_projectionmatrix(void* userdata, struct Transform3D* out);
 static void _bolt_gl_plugin_matrixparticles_viewprojmatrix(void* userdata, struct Transform3D* out);
-static void _bolt_gl_plugin_matrixparticles_invviewmatrix(void* userdata, struct Transform3D* out);
-static void _bolt_gl_plugin_matrix3d_model(void* userdata, struct Transform3D* out);
-static void _bolt_gl_plugin_matrix3d_view(void* userdata, struct Transform3D* out);
-static void _bolt_gl_plugin_matrix3d_proj(void* userdata, struct Transform3D* out);
-static void _bolt_gl_plugin_matrix3d_viewproj(void* userdata, struct Transform3D* out);
-static void _bolt_gl_plugin_matrix3d_invviewmatrix(void* userdata, struct Transform3D* out);
+static void _bolt_gl_plugin_matrixparticles_inv_viewmatrix(void* userdata, struct Transform3D* out);
+static void _bolt_gl_plugin_matrixbillboard_modelmatrix(void* userdata, struct Transform3D* out);
+static void _bolt_gl_plugin_matrixbillboard_viewmatrix(void* userdata, struct Transform3D* out);
+static void _bolt_gl_plugin_matrixbillboard_projectionmatrix(void* userdata, struct Transform3D* out);
+static void _bolt_gl_plugin_matrixbillboard_viewprojmatrix(void* userdata, struct Transform3D* out);
+static void _bolt_gl_plugin_matrixbillboard_inv_viewmatrix(void* userdata, struct Transform3D* out);
+static void _bolt_gl_plugin_matrix3d_modelmatrix(void* userdata, struct Transform3D* out);
+static void _bolt_gl_plugin_matrix3d_viewmatrix(void* userdata, struct Transform3D* out);
+static void _bolt_gl_plugin_matrix3d_projectionmatrix(void* userdata, struct Transform3D* out);
+static void _bolt_gl_plugin_matrix3d_viewprojmatrix(void* userdata, struct Transform3D* out);
+static void _bolt_gl_plugin_matrix3d_inv_viewmatrix(void* userdata, struct Transform3D* out);
 static size_t _bolt_gl_plugin_texture_id(void* userdata);
 static void _bolt_gl_plugin_texture_size(void* userdata, size_t* out);
 static uint8_t _bolt_gl_plugin_texture_compare(void* userdata, size_t x, size_t y, size_t len, const unsigned char* data);
@@ -413,18 +424,37 @@ struct GLPluginDrawElementsVertexParticlesUserData {
     GLfloat animation_time;
 };
 
+struct GLPluginDrawElementsVertexBillboardUserData {
+    struct GLContext* c;
+    const unsigned short* indices;
+    int atlas_scale;
+    const struct GLTexture2D* atlas;
+    const struct GLTexture2D* settings_atlas;
+    const struct GLAttrBinding* vertex_position;
+    const struct GLAttrBinding* billboard_size;
+    const struct GLAttrBinding* vertex_colour;
+    const struct GLAttrBinding* material_xy_uv;
+};
+
 struct GLPluginDrawElementsMatrixParticlesUserData {
     const GLfloat* view_matrix;
-    const GLfloat* proj_matrix;
+    const GLfloat* projection_matrix;
     const GLfloat* viewproj_matrix;
     const GLfloat* inv_view_matrix;
 };
 
 struct GLPlugin3DMatrixUserData {
-    GLfloat* model_matrix;
-    const struct GLProgram* program;
+    const GLfloat* model_matrix;
     const GLfloat* view_matrix;
-    const GLfloat* proj_matrix;
+    const GLfloat* projection_matrix;
+    const GLfloat* viewproj_matrix;
+    const GLfloat* inv_view_matrix;
+};
+
+struct GLPluginDrawElementsMatrixBillboardUserData {
+    const GLfloat* model_matrix;
+    const GLfloat* view_matrix;
+    const GLfloat* projection_matrix;
     const GLfloat* viewproj_matrix;
     const GLfloat* inv_view_matrix;
 };
@@ -1302,7 +1332,7 @@ static void _bolt_glLinkProgram(GLuint program) {
             p->offset_uInvViewMatrix = ViewTransforms_offsets[4];
             p->is_particle = 1;
         }
-        if (p->loc_aVertexPositionDepthOffset != -1 && p->loc_aVertexColour != -1 && p->loc_aBillboardSize != -1 && p->loc_aMaterialSettingsSlotXY_UV != -1 && block_index_ViewTransforms != -1 && block_index_BilloardConsts != -1) {
+        if (p->loc_aVertexPositionDepthOffset != -1 && p->loc_aVertexColour != -1 && p->loc_aBillboardSize != -1 && p->loc_aMaterialSettingsSlotXY_UV != -1 && p->loc_uTextureAtlas != -1 && p->loc_uTextureAtlasSettings != -1 && block_index_ViewTransforms != -1 && block_index_BilloardConsts != -1) {
             p->block_index_BilloardConsts = block_index_BilloardConsts;
             p->offset_uModelMatrix = BilloardConsts_offsets[0];
             p->offset_uAtlasMeta = BilloardConsts_offsets[1];
@@ -2265,10 +2295,10 @@ static void drawelements_handle_particles(GLsizei count, const unsigned short* i
     }
 
     struct GLPluginDrawElementsMatrixParticlesUserData matrix_userdata;
-    matrix_userdata.view_matrix = (float*)(ubo_view_buf + c->bound_program->offset_uViewMatrix);
-    matrix_userdata.proj_matrix = (float*)(ubo_view_buf + c->bound_program->offset_uProjectionMatrix);
-    matrix_userdata.viewproj_matrix = (float*)(ubo_view_buf + c->bound_program->offset_uViewProjMatrix);
-    matrix_userdata.inv_view_matrix = (float*)(ubo_view_buf + c->bound_program->offset_uInvViewMatrix);
+    matrix_userdata.view_matrix = (GLfloat*)(ubo_view_buf + c->bound_program->offset_uViewMatrix);
+    matrix_userdata.projection_matrix = (GLfloat*)(ubo_view_buf + c->bound_program->offset_uProjectionMatrix);
+    matrix_userdata.viewproj_matrix = (GLfloat*)(ubo_view_buf + c->bound_program->offset_uViewProjMatrix);
+    matrix_userdata.inv_view_matrix = (GLfloat*)(ubo_view_buf + c->bound_program->offset_uInvViewMatrix);
 
     struct GLPluginTextureUserData tex_userdata;
     tex_userdata.tex = tex;
@@ -2288,7 +2318,7 @@ static void drawelements_handle_particles(GLsizei count, const unsigned short* i
     render.matrix_functions.view_matrix = _bolt_gl_plugin_matrixparticles_viewmatrix;
     render.matrix_functions.proj_matrix = _bolt_gl_plugin_matrixparticles_projectionmatrix;
     render.matrix_functions.viewproj_matrix = _bolt_gl_plugin_matrixparticles_viewprojmatrix;
-    render.matrix_functions.inverse_view_matrix = _bolt_gl_plugin_matrixparticles_invviewmatrix;
+    render.matrix_functions.inverse_view_matrix = _bolt_gl_plugin_matrixparticles_inv_viewmatrix;
     render.texture_functions.userdata = &tex_userdata;
     render.texture_functions.id = _bolt_gl_plugin_texture_id;
     render.texture_functions.size = _bolt_gl_plugin_texture_size;
@@ -2299,7 +2329,63 @@ static void drawelements_handle_particles(GLsizei count, const unsigned short* i
 }
 
 static void drawelements_handle_billboard(GLsizei count, const unsigned short* indices, struct GLContext* c, const struct GLAttrBinding* attributes) {
-    // todo
+    GLint atlas, settings_atlas, ubo_binding, ubo_view_index, ubo_billboard_index;
+    gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uTextureAtlas, &atlas);
+    gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uTextureAtlasSettings, &settings_atlas);
+    struct GLTexture2D* tex = c->texture_units[atlas].texture_2d;
+    struct GLTexture2D* tex_settings = c->texture_units[settings_atlas].texture_2d;
+    gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ViewTransforms, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
+    gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_view_index);
+    const uint8_t* ubo_view_buf = (uint8_t*)_bolt_context_get_buffer(c, ubo_view_index)->data;
+    gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_BilloardConsts, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
+    gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_billboard_index);
+    const uint8_t* billboard_buf_data = (uint8_t*)_bolt_context_get_buffer(c, ubo_billboard_index)->data;
+    const GLfloat atlas_scale = *((GLfloat*)(billboard_buf_data + c->bound_program->offset_uAtlasMeta) + 1);
+
+    struct GLPluginDrawElementsVertexBillboardUserData vertex_userdata;
+    vertex_userdata.c = c;
+    vertex_userdata.indices = indices;
+    vertex_userdata.atlas_scale = roundf(atlas_scale);
+    vertex_userdata.atlas = tex;
+    vertex_userdata.settings_atlas = tex_settings;
+    vertex_userdata.vertex_position = &attributes[c->bound_program->loc_aVertexPositionDepthOffset];
+    vertex_userdata.billboard_size = &attributes[c->bound_program->loc_aBillboardSize];
+    vertex_userdata.vertex_colour = &attributes[c->bound_program->loc_aVertexColour];
+    vertex_userdata.material_xy_uv = &attributes[c->bound_program->loc_aMaterialSettingsSlotXY_UV];
+
+    struct GLPluginDrawElementsMatrixBillboardUserData matrix_userdata;
+    matrix_userdata.model_matrix = (GLfloat*)(billboard_buf_data + c->bound_program->offset_uModelMatrix);
+    matrix_userdata.view_matrix = (GLfloat*)(ubo_view_buf + c->bound_program->offset_uViewMatrix);
+    matrix_userdata.projection_matrix = (GLfloat*)(ubo_view_buf + c->bound_program->offset_uProjectionMatrix);
+    matrix_userdata.viewproj_matrix = (GLfloat*)(ubo_view_buf + c->bound_program->offset_uViewProjMatrix);
+    matrix_userdata.inv_view_matrix = (GLfloat*)(ubo_view_buf + c->bound_program->offset_uInvViewMatrix);
+
+    struct GLPluginTextureUserData tex_userdata;
+    tex_userdata.tex = tex;
+
+    struct RenderBillboard render;
+    render.vertex_count = count;
+    render.vertices_per_icon = 6;
+    render.vertex_functions.userdata = &vertex_userdata;
+    render.vertex_functions.xyz = _bolt_gl_plugin_drawelements_vertexbillboard_xyz;
+    render.vertex_functions.eye_offset = _bolt_gl_plugin_drawelements_vertexbillboard_eye_offset;
+    render.vertex_functions.uv = _bolt_gl_plugin_drawelements_vertexbillboard_uv;
+    render.vertex_functions.atlas_meta = _bolt_gl_plugin_drawelements_vertexbillboard_atlas_meta;
+    render.vertex_functions.atlas_xywh = _bolt_gl_plugin_drawelements_vertexbillboard_meta_xywh;
+    render.vertex_functions.colour = _bolt_gl_plugin_drawelements_vertexbillboard_colour;
+    render.matrix_functions.userdata = &matrix_userdata;
+    render.matrix_functions.model_matrix = _bolt_gl_plugin_matrixbillboard_modelmatrix;
+    render.matrix_functions.view_matrix = _bolt_gl_plugin_matrixbillboard_viewmatrix;
+    render.matrix_functions.proj_matrix = _bolt_gl_plugin_matrixbillboard_projectionmatrix;
+    render.matrix_functions.viewproj_matrix = _bolt_gl_plugin_matrixbillboard_viewprojmatrix;
+    render.matrix_functions.inverse_view_matrix = _bolt_gl_plugin_matrixbillboard_inv_viewmatrix;
+    render.texture_functions.userdata = &tex_userdata;
+    render.texture_functions.id = _bolt_gl_plugin_texture_id;
+    render.texture_functions.size = _bolt_gl_plugin_texture_size;
+    render.texture_functions.compare = _bolt_gl_plugin_texture_compare;
+    render.texture_functions.data = _bolt_gl_plugin_texture_data;
+
+    _bolt_plugin_handle_renderbillboard(&render);
 }
 
 static void drawelements_handle_2d_renderminimap(const struct GLTexture2D* tex, const GLfloat* projection_matrix, struct GLContext* c, const struct GLAttrBinding* attributes) {
@@ -2519,7 +2605,7 @@ static void drawelements_handle_3d_silhouette(struct GLContext* c) {
 }
 
 static void drawelements_handle_3d_normal(GLsizei count, const unsigned short* indices, struct GLContext* c, const struct GLAttrBinding* attributes) {
-    GLint atlas, settings_atlas, ubo_binding, ubo_view_index, ubo_batch_index;
+    GLint atlas, settings_atlas, ubo_binding, ubo_view_index, ubo_batch_index, ubo_model_index;
     gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uTextureAtlas, &atlas);
     gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uTextureAtlasSettings, &settings_atlas);
     struct GLTexture2D* tex = c->texture_units[atlas].texture_2d;
@@ -2528,6 +2614,8 @@ static void drawelements_handle_3d_normal(GLsizei count, const unsigned short* i
     gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_view_index);
     gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_BatchConsts, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
     gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_batch_index);
+    gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ModelConsts, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
+    gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_model_index);
     const GLfloat atlas_scale = *((GLfloat*)(((uint8_t*)_bolt_context_get_buffer(c, ubo_batch_index)->data) + c->bound_program->offset_uAtlasMeta) + 1);
 
     struct GLPluginDrawElementsVertex3DUserData vertex_userdata;
@@ -2548,13 +2636,13 @@ static void drawelements_handle_3d_normal(GLsizei count, const unsigned short* i
     tex_userdata.tex = tex;
 
     struct GLPlugin3DMatrixUserData matrix_userdata;
-    matrix_userdata.program = c->bound_program;
     const uint8_t* ubo_view_buf = (uint8_t*)(_bolt_context_get_buffer(c, ubo_view_index)->data);
-
-    matrix_userdata.view_matrix = (float*)(ubo_view_buf + c->bound_program->offset_uViewMatrix);
-    matrix_userdata.proj_matrix = (float*)(ubo_view_buf + c->bound_program->offset_uProjectionMatrix);
-    matrix_userdata.viewproj_matrix = (float*)(ubo_view_buf + c->bound_program->offset_uViewProjMatrix);
-    matrix_userdata.inv_view_matrix = (float*)(ubo_view_buf + c->bound_program->offset_uInvViewMatrix);
+    const uint8_t* ubo_model_buf = (uint8_t*)(_bolt_context_get_buffer(c, ubo_model_index)->data);
+    matrix_userdata.model_matrix = (GLfloat*)(ubo_model_buf + c->bound_program->offset_uModelMatrix);
+    matrix_userdata.view_matrix = (GLfloat*)(ubo_view_buf + c->bound_program->offset_uViewMatrix);
+    matrix_userdata.projection_matrix = (GLfloat*)(ubo_view_buf + c->bound_program->offset_uProjectionMatrix);
+    matrix_userdata.viewproj_matrix = (GLfloat*)(ubo_view_buf + c->bound_program->offset_uViewProjMatrix);
+    matrix_userdata.inv_view_matrix = (GLfloat*)(ubo_view_buf + c->bound_program->offset_uInvViewMatrix);
 
     struct Render3D render;
     render.vertex_count = count;
@@ -2572,11 +2660,11 @@ static void drawelements_handle_3d_normal(GLsizei count, const unsigned short* i
     render.texture_functions.compare = _bolt_gl_plugin_texture_compare;
     render.texture_functions.data = _bolt_gl_plugin_texture_data;
     render.matrix_functions.userdata = &matrix_userdata;
-    render.matrix_functions.model_matrix = _bolt_gl_plugin_matrix3d_model;
-    render.matrix_functions.view_matrix = _bolt_gl_plugin_matrix3d_view;
-    render.matrix_functions.proj_matrix = _bolt_gl_plugin_matrix3d_proj;
-    render.matrix_functions.viewproj_matrix = _bolt_gl_plugin_matrix3d_viewproj;
-    render.matrix_functions.inverse_view_matrix = _bolt_gl_plugin_matrix3d_invviewmatrix;
+    render.matrix_functions.model_matrix = _bolt_gl_plugin_matrix3d_modelmatrix;
+    render.matrix_functions.view_matrix = _bolt_gl_plugin_matrix3d_viewmatrix;
+    render.matrix_functions.proj_matrix = _bolt_gl_plugin_matrix3d_projectionmatrix;
+    render.matrix_functions.viewproj_matrix = _bolt_gl_plugin_matrix3d_viewprojmatrix;
+    render.matrix_functions.inverse_view_matrix = _bolt_gl_plugin_matrix3d_inv_viewmatrix;
 
     _bolt_plugin_handle_render3d(&render);
 }
@@ -2628,6 +2716,27 @@ static void xywh_from_meta_atlas(const struct GLTexture2D* settings_atlas, size_
     out[2] = (int32_t)*(settings_ptr + 8) * scale;
     out[3] = out[2];
 }
+
+// defines a callback for getting a matrix
+#define DEFGETMATRIX(TYPE, MAT, STRUCT) \
+static void _bolt_gl_plugin_##TYPE##_##MAT##matrix(void* userdata, struct Transform3D* out) { \
+    const struct STRUCT* data = userdata; \
+    for (size_t i = 0; i < 16; i += 1) { \
+        out->matrix[i] = (double)data->MAT##_matrix[i]; \
+    } \
+}
+
+// defines all normal matrix getters (i.e. excluding model)
+#define DEFNORMALMATRIXGETTERS(TYPE, STRUCT) \
+DEFGETMATRIX(TYPE, view, STRUCT) \
+DEFGETMATRIX(TYPE, projection, STRUCT) \
+DEFGETMATRIX(TYPE, viewproj, STRUCT) \
+DEFGETMATRIX(TYPE, inv_view, STRUCT)
+
+// defines all matrix getters (including model)
+#define DEFALLMATRIXGETTERS(TYPE, STRUCT) \
+DEFGETMATRIX(TYPE, model, STRUCT) \
+DEFNORMALMATRIXGETTERS(TYPE, STRUCT)
 
 /* plugin GL function callbacks */
 
@@ -2703,8 +2812,8 @@ static size_t _bolt_gl_plugin_drawelements_vertex3d_atlas_meta(size_t index, voi
 
 static void _bolt_gl_plugin_drawelements_vertex3d_meta_xywh(size_t meta, void* userdata, int32_t* out) {
     struct GLPluginDrawElementsVertex3DUserData* data = userdata;
-    size_t slot_x = meta & 0xFF;
-    size_t slot_y = meta >> 16;
+    const size_t slot_x = meta & 0xFF;
+    const size_t slot_y = meta >> 16;
     xywh_from_meta_atlas(data->settings_atlas, slot_x, slot_y, data->atlas_scale, out);
 }
 
@@ -2961,8 +3070,8 @@ static size_t _bolt_gl_plugin_drawelements_vertexparticles_atlas_meta(size_t ind
 
 static void _bolt_gl_plugin_drawelements_vertexparticles_meta_xywh(size_t meta, void* userdata, int32_t* out) {
     const struct GLPluginDrawElementsVertexParticlesUserData* data = userdata;
-    size_t slot_x = meta & 0xFF;
-    size_t slot_y = meta >> 16;
+    const size_t slot_x = meta & 0xFF;
+    const size_t slot_y = meta >> 16;
     xywh_from_meta_atlas(data->settings_atlas, slot_x, slot_y, data->atlas_scale, out);
 }
 
@@ -2976,76 +3085,62 @@ static void _bolt_gl_plugin_drawelements_vertexparticles_colour(size_t index, vo
     out[3] = (double)colour[3];
 }
 
-static void _bolt_gl_plugin_matrixparticles_viewmatrix(void* userdata, struct Transform3D* out) {
-    const struct GLPluginDrawElementsMatrixParticlesUserData* data = userdata;
-    for (size_t i = 0; i < 16; i += 1) {
-        out->matrix[i] = (double)data->view_matrix[i];
+DEFNORMALMATRIXGETTERS(matrixparticles, GLPluginDrawElementsMatrixParticlesUserData)
+DEFALLMATRIXGETTERS(matrixbillboard, GLPluginDrawElementsMatrixBillboardUserData)
+DEFALLMATRIXGETTERS(matrix3d, GLPlugin3DMatrixUserData)
+
+static void _bolt_gl_plugin_drawelements_vertexbillboard_xyz(size_t index, void* userdata, struct Point3D* out) {
+    struct GLPluginDrawElementsVertexBillboardUserData* data = userdata;
+    out->integer = true;
+    if (!_bolt_get_attr_binding_int(data->c, data->vertex_position, data->indices[index], 3, out->xyzh.ints)) {
+        float pos[3];
+        _bolt_get_attr_binding(data->c, data->vertex_position, data->indices[index], 3, pos);
+        out->xyzh.floats[0] = (double)pos[0];
+        out->xyzh.floats[1] = (double)pos[1];
+        out->xyzh.floats[2] = (double)pos[2];
+        out->xyzh.floats[3] = 1.0;
+        out->integer = false;
     }
 }
 
-static void _bolt_gl_plugin_matrixparticles_projectionmatrix(void* userdata, struct Transform3D* out) {
-    const struct GLPluginDrawElementsMatrixParticlesUserData* data = userdata;
-    for (size_t i = 0; i < 16; i += 1) {
-        out->matrix[i] = (double)data->proj_matrix[i];
-    }
+static void _bolt_gl_plugin_drawelements_vertexbillboard_eye_offset(size_t index, void* userdata, double* out) {
+    struct GLPluginDrawElementsVertexBillboardUserData* data = userdata;
+    float xy[2];
+    _bolt_get_attr_binding(data->c, data->billboard_size, data->indices[index], 2, xy);
+    out[0] = (double)xy[0];
+    out[1] = (double)xy[1];
 }
 
-static void _bolt_gl_plugin_matrixparticles_viewprojmatrix(void* userdata, struct Transform3D* out) {
-    const struct GLPluginDrawElementsMatrixParticlesUserData* data = userdata;
-    for (size_t i = 0; i < 16; i += 1) {
-        out->matrix[i] = (double)data->viewproj_matrix[i];
-    }
+static void _bolt_gl_plugin_drawelements_vertexbillboard_uv(size_t index, void* userdata, double* out) {
+    struct GLPluginDrawElementsVertexBillboardUserData* data = userdata;
+    int xyuv[4];
+    _bolt_get_attr_binding_int(data->c, data->material_xy_uv, data->indices[index], 4, xyuv);
+    out[0] = (double)xyuv[2];
+    out[1] = (double)xyuv[3];
 }
 
-static void _bolt_gl_plugin_matrixparticles_invviewmatrix(void* userdata, struct Transform3D* out) {
-    struct GLContext* c = _bolt_context();
-    struct GLPluginDrawElementsMatrixParticlesUserData* data = userdata;
-    for (size_t i = 0; i < 16; i += 1) {
-        out->matrix[i] = (double)data->inv_view_matrix[i];
-    }
+static size_t _bolt_gl_plugin_drawelements_vertexbillboard_atlas_meta(size_t index, void* userdata) {
+    const struct GLPluginDrawElementsVertexBillboardUserData* data = userdata;
+    int material_xy[2];
+    _bolt_get_attr_binding_int(data->c, data->material_xy_uv, data->indices[index], 2, material_xy);
+    return ((size_t)material_xy[1] << 16) | (size_t)material_xy[0];
 }
 
-static void _bolt_gl_plugin_matrix3d_model(void* userdata, struct Transform3D* out) {
-    struct GLContext* c = _bolt_context();
-    struct GLPlugin3DMatrixUserData* data = userdata;
-    if (data->program) {
-        GLint ubo_binding, ubo_index;
-        gl.GetActiveUniformBlockiv(c->bound_program->id, c->bound_program->block_index_ModelConsts, GL_UNIFORM_BLOCK_BINDING, &ubo_binding);
-        gl.GetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, ubo_binding, &ubo_index);
-        data->model_matrix = (GLfloat*)(((uint8_t*)_bolt_context_get_buffer(c, ubo_index)->data) + c->bound_program->offset_uModelMatrix);
-        data->program = NULL;
-    }
-    for (size_t i = 0; i < 16; i += 1) {
-        out->matrix[i] = (double)data->model_matrix[i];
-    }
+static void _bolt_gl_plugin_drawelements_vertexbillboard_meta_xywh(size_t meta, void* userdata, int32_t* out) {
+    const struct GLPluginDrawElementsVertexBillboardUserData* data = userdata;
+    const size_t slot_x = meta & 0xFF;
+    const size_t slot_y = meta >> 16;
+    xywh_from_meta_atlas(data->settings_atlas, slot_x, slot_y, data->atlas_scale, out);
 }
 
-static void _bolt_gl_plugin_matrix3d_view(void* userdata, struct Transform3D* out) {
-    const struct GLPlugin3DMatrixUserData* data = userdata;
-    for (size_t i = 0; i < 16; i += 1) {
-        out->matrix[i] = (double)data->view_matrix[i];
-    }
-}
-
-static void _bolt_gl_plugin_matrix3d_proj(void* userdata, struct Transform3D* out) {
-    const struct GLPlugin3DMatrixUserData* data = userdata;
-    for (size_t i = 0; i < 16; i += 1) {
-        out->matrix[i] = (double)data->proj_matrix[i];
-    }
-}
-
-static void _bolt_gl_plugin_matrix3d_viewproj(void* userdata, struct Transform3D* out) {
-    const struct GLPlugin3DMatrixUserData* data = userdata;
-    for (size_t i = 0; i < 16; i += 1) {
-        out->matrix[i] = (double)data->viewproj_matrix[i];
-    }
-}
-
-static void _bolt_gl_plugin_matrix3d_invviewmatrix(void* userdata, struct Transform3D* out) {
-    const struct GLPlugin3DMatrixUserData* data = userdata;
-    for (size_t i = 0; i < 16; i += 1) {
-        out->matrix[i] = (double)data->inv_view_matrix[i];
-    }
+static void _bolt_gl_plugin_drawelements_vertexbillboard_colour(size_t index, void* userdata, double* out) {
+    struct GLPluginDrawElementsVertexBillboardUserData* data = userdata;
+    float rgba[4];
+    _bolt_get_attr_binding(data->c, data->billboard_size, data->indices[index], 4, rgba);
+    out[0] = (double)rgba[0];
+    out[1] = (double)rgba[1];
+    out[2] = (double)rgba[2];
+    out[3] = (double)rgba[3];
 }
 
 static size_t _bolt_gl_plugin_texture_id(void* userdata) {

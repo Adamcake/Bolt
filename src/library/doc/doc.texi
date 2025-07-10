@@ -834,6 +834,21 @@ end)
 
 @eventobjectwarning{}
 
+@node functions-onrenderbillboard
+@section onrenderbillboard
+
+@eventhandler{billboard rendering events, @ref{objects-renderbillboard}}
+
+@example lua
+@verbatim
+bolt.onrenderbillboard(function (event)
+  -- ...
+end)
+@end verbatim
+@end example
+
+@eventobjectwarning{}
+
 @node functions-onrendericon
 @section onrendericon
 
@@ -3257,6 +3272,232 @@ particle render. This can be used to transform points from world
 coordinates into screen coordinates.
 
 @node renderparticles-inverseviewmatrix
+@subsection inverseviewmatrix
+
+Returns a @ref{objects-transform} representing the inverse of the view
+matrix (a.k.a. the camera matrix) for this particle render. This can be
+used to transform points from eye-space to world-space.
+
+@node objects-renderbillboard
+@section Render Billboard Event
+
+A render-billboard event comes from @ref{functions-onrenderbillboard}.
+It occurs when a billboard is drawn to the game view. A billboard is a
+two-dimensional shape in 3D space by having it directly face the camera.
+
+Billboarding is achieved in a similar way to a Render3D event, except
+that in a Render3D event each vertex would have different model
+coordinates before being transformed. In a RenderBillboard event, each
+set of 6 vertices usually has exactly the same model coordinate, but
+has an offset that must be applied to it in "eye space", which is
+between the view and projection matrices.
+
+The following example shows step-by-step how to translate each vertex to
+its pixel coordinates on the user's screen (the "screenx" and "screeny"
+local variables):
+
+@example lua
+@verbatim
+bolt.onrenderbillboard(function (event)
+  local modelmatrix = event:modelmatrix()
+  local viewmatrix = event:viewmatrix()
+  local projmatrix = event:projmatrix()
+
+  for i = 1, event:vertexcount() do
+    local modelpoint = event:vertexpoint(i)
+    local offsetx, offsety = event:vertexeyeoffset(i)
+    local eyepointx, eyepointy, eyepointz = modelpoint:transform(modelmatrix):transform(viewmatrix):get()
+    local movedpoint = bolt.point(eyepointx + offsetx, eyepointy + offsety, eyepointz)
+    local screenx, screeny, _ = movedpoint:transform(projmatrix):aspixels()
+  end
+end)
+@end verbatim
+@end example
+
+@eventobjectwarning{}
+
+@node renderbillboard-vertexcount
+@subsection vertexcount
+
+Returns the number of vertices being rendered.
+
+@example lua
+@verbatim
+local count = event:vertexcount()
+@end verbatim
+@end example
+
+@node renderbillboard-verticesperimage
+@subsection verticesperimage
+
+Returns the number of vertices per individual image in this batch. At
+time of writing, this will always return 6 (i.e. enough to draw two
+separate triangles). To future-proof against possible engine updates,
+it's recommended to use this function instead of hard-coding the number
+6 into your plugin.
+
+@node renderbillboard-vertexpoint
+@subsection vertexpoint
+
+Given a vertex number, returns a @ref{objects-point} representing the
+vertex's model coordinates.
+
+@example lua
+@verbatim
+local modelpoint = event:vertexpoint(1)
+@end verbatim
+@end example
+
+@node renderbillboard-vertexeyeoffset
+@subsection vertexeyeoffset
+
+Given a vertex number, returns two numbers representing the X and Y
+offset of that vertex from the particle's origin, in eye-space (i.e.
+between the view and projection transforms, as described in
+@ref{objects-renderbillboard}).
+
+@example lua
+@verbatim
+local xoffset, yoffset = event:vertexeyeoffset(i)
+@end verbatim
+@end example
+
+@node renderbillboard-vertexuv
+@subsection vertexuv
+
+Given a vertex number, returns the vertex's associated "UV" coordinates.
+
+The values will be floating-point numbers, usually in the range 0.0 -
+1.0. They are relative to image in the texture atlas.
+
+At time of writing, UV coordinates for renderbillboard are stored as
+integers, meaning each one can only be 0 or 1.
+
+@node renderbillboard-vertexcolour
+@subsection vertexcolour
+
+Given a vertex number, returns the red, green, blue and alpha values for
+that vertex, in that order. All four values will be floating-point
+numbers in the range 0.0 - 1.0.
+
+These values are multiplied with the texture, so values less than 1.0
+will darken the texture (or make it more transparent in the case of the
+alpha channel). A common use for this is to draw differently "tinted"
+versions of the same image using the same texture.
+
+@node renderbillboard-vertexcolor
+@subsection vertexcolor
+
+Alias for @ref{renderbillboard-vertexcolour}
+
+@node renderbillboard-vertexmeta
+@subsection vertexmeta
+
+Given a vertex number, returns a meta-ID (an integer) relating to its
+associated texture image. This can then be passed to
+@ref{renderbillboard-atlasxywh}.
+
+@example lua
+@verbatim
+local meta = event:vertexmeta(1)
+local x, y, w, h = event:atlasxywh(meta)
+@end verbatim
+@end example
+
+@node renderbillboard-atlasxywh
+@subsection atlasxywh
+
+Given a vertex number, returns the X, Y, width and height of its
+associated image in the texture atlas, in pixel coordinates.
+
+@example lua
+@verbatim
+local meta = event:vertexmeta(1)
+local x, y, w, h = event:atlasxywh(meta)
+@end verbatim
+@end example
+
+@node renderbillboard-textureid
+@subsection textureid
+
+Returns the unique ID of the texture associated with this render. There
+will always be one (and only one) texture atlas associated with a
+billboard render.
+
+The plugin API does not have a way to get a texture by its ID; this is
+intentional, as it wouldn't always be safe to do so. The purpose of this
+function is to be able to compare texture IDs together to check if the
+current texture is the same one that was used in a previous render.
+
+@node renderbillboard-texturesize
+@subsection texturesize
+
+Returns the size of the overall texture atlas associated with this
+render, in pixels.
+
+@node renderbillboard-texturecompare
+@subsection texturecompare
+
+Compares a section of the texture atlas for this batch to some RGBA
+pixel data. The data can be a string or a @ref{objects-buffer}. The
+function will return true only if the bytes are an exact match. It
+internally uses memcmp from the C library. This means comparing each set
+of contiguous data is very fast, but, since the data needs to be
+contiguous, it can only be checked one row at a time.
+
+Internally, Bolt compares against data taken from the CPU just before
+being uploaded to the GPU, so there will never be any imprecision issues
+caused by different GPUs/drivers/etc.
+
+The example below checks if the pixels at x,y and (x+1),y are fully
+opaque and red.
+
+@example lua
+@verbatim
+event:texturecompare(x, y, "\xFF\x00\x00\xFF\xFF\x00\x00\xFF")
+@end verbatim
+@end example
+
+@node renderbillboard-texturedata
+@subsection texturedata
+
+Gets the RGBA data starting at a given coordinate of the texture atlas,
+and returns it as a Lua string.
+
+The following example would return an 8-bytes-long string, containing
+the RGBA data for two pixels.
+
+@example lua
+@verbatim
+mybatch:texturedata(x, y, 8)
+@end verbatim
+@end example
+
+Using this function to search for specific textures isn't recommended as
+it would be noticeably slower than using
+@ref{renderparticles-texturecompare}.
+
+@node renderbillboard-viewmatrix
+@subsection viewmatrix
+
+Returns a @ref{objects-transform} representing the view matrix being
+used for this billboard render.
+
+@node renderbillboard-projmatrix
+@subsection projmatrix
+
+Returns a @ref{objects-transform} representing the projection matrix
+being used for this billboard render.
+
+@node renderbillboard-viewprojmatrix
+@subsection viewprojmatrix
+
+Returns the @ref{objects-transform} representing the combined view and
+projection matrices, commonly called the "viewproj matrix", for this
+particle render. This can be used to transform points from world
+coordinates into screen coordinates.
+
+@node renderbillboard-inverseviewmatrix
 @subsection inverseviewmatrix
 
 Returns a @ref{objects-transform} representing the inverse of the view
