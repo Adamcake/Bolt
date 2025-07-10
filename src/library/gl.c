@@ -3141,7 +3141,7 @@ static void _bolt_gl_plugin_drawelements_vertexbillboard_meta_xywh(size_t meta, 
 static void _bolt_gl_plugin_drawelements_vertexbillboard_colour(size_t index, void* userdata, double* out) {
     struct GLPluginDrawElementsVertexBillboardUserData* data = userdata;
     float rgba[4];
-    _bolt_get_attr_binding(data->c, data->billboard_size, data->indices[index], 4, rgba);
+    _bolt_get_attr_binding(data->c, data->vertex_colour, data->indices[index], 4, rgba);
     out[0] = (double)rgba[0];
     out[1] = (double)rgba[1];
     out[2] = (double)rgba[2];
