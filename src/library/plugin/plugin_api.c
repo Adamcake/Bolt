@@ -2296,6 +2296,7 @@ static struct ApiFuncTemplate renderbillboard_functions[] = {
     BOLTFUNC(texturesize, renderbillboard),
     BOLTFUNC(texturecompare, renderbillboard),
     BOLTFUNC(texturedata, renderbillboard),
+    BOLTFUNC(modelmatrix, renderbillboard),
     BOLTFUNC(viewmatrix, renderbillboard),
     BOLTFUNC(projmatrix, renderbillboard),
     BOLTFUNC(viewprojmatrix, renderbillboard),
