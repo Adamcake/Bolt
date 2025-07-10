@@ -2329,6 +2329,11 @@ static void drawelements_handle_particles(GLsizei count, const unsigned short* i
 }
 
 static void drawelements_handle_billboard(GLsizei count, const unsigned short* indices, struct GLContext* c, const struct GLAttrBinding* attributes) {
+    GLint draw_tex = 0;
+    if (!c->current_draw_framebuffer) return;
+    gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
+    if (draw_tex != c->target_3d_tex) return;
+
     GLint atlas, settings_atlas, ubo_binding, ubo_view_index, ubo_billboard_index;
     gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uTextureAtlas, &atlas);
     gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uTextureAtlasSettings, &settings_atlas);
