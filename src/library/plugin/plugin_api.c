@@ -1006,8 +1006,8 @@ static int api_point_get(lua_State* state) {
     return 3;
 }
 
-static int api_point_aspixels(lua_State* state) {
-    const struct Point3D* point = require_self_userdata(state, "aspixels");
+static int api_point_toscreen(lua_State* state) {
+    const struct Point3D* point = require_self_userdata(state, "toscreen");
     int game_view_x, game_view_y, game_view_w, game_view_h;
     const struct PluginManagedFunctions* managed_functions = _bolt_plugin_managed_functions();
     managed_functions->game_view_rect(&game_view_x, &game_view_y, &game_view_w, &game_view_h);
@@ -1027,6 +1027,31 @@ static int api_point_aspixels(lua_State* state) {
     }
     lua_pushnumber(state, ((x  + 1.0) * game_view_w / 2.0) + (double)game_view_x);
     lua_pushnumber(state, ((-y + 1.0) * game_view_h / 2.0) + (double)game_view_y);
+    lua_pushnumber(state, depth);
+    return 3;
+}
+
+static int api_point_togameview(lua_State* state) {
+    const struct Point3D* point = require_self_userdata(state, "togameview");
+    int game_view_x, game_view_y, game_view_w, game_view_h;
+    const struct PluginManagedFunctions* managed_functions = _bolt_plugin_managed_functions();
+    managed_functions->game_view_rect(&game_view_x, &game_view_y, &game_view_w, &game_view_h);
+    double x, y, depth;
+    if (point->integer) {
+        x = (double)point->xyzh.ints[0];
+        y = (double)point->xyzh.ints[1];
+        depth = (double)point->xyzh.ints[2];
+    } else if (!point->homogenous) {
+        x = point->xyzh.floats[0];
+        y = point->xyzh.floats[1];
+        depth = point->xyzh.floats[2];
+    } else {
+        x = point->xyzh.floats[0] / point->xyzh.floats[3];
+        y = point->xyzh.floats[1] / point->xyzh.floats[3];
+        depth = point->xyzh.floats[2] / point->xyzh.floats[3];
+    }
+    lua_pushnumber(state, ((x  + 1.0) * game_view_w / 2.0));
+    lua_pushnumber(state, ((-y + 1.0) * game_view_h / 2.0));
     lua_pushnumber(state, depth);
     return 3;
 }
@@ -2388,7 +2413,9 @@ static struct ApiFuncTemplate rendergameview_functions[] = {
 static struct ApiFuncTemplate point_functions[] = {
     BOLTFUNC(transform, point),
     BOLTFUNC(get, point),
-    BOLTFUNC(aspixels, point),
+    BOLTFUNC(toscreen, point),
+    BOLTALIAS(toscreen, aspixels, point),
+    BOLTFUNC(togameview, point),
 };
 
 static struct ApiFuncTemplate transform_functions[] = {

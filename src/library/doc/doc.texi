@@ -2262,56 +2262,77 @@ original Point object is not modified.
 
 Returns the X, Y and Z values for this point.
 
-@node point-aspixels
-@subsection aspixels
+@node point-toscreen
+@subsection toscreen
 
-For a point that's been transformed into 3D screen space, this function
-returns its X, Y, and depth. X and Y are in pixels with (0, 0) being the
-top-left of the inner area of the game window. The the depth value is
-logarithmic: -1.0 is very near the camera, 0.0 is about one tile away
-from the camera, and +1.0 is the maximum render distance away from the
-camera. Depth values outside that range indicate that the point is
-probably behind the camera.
+Transforms the X component of this point from the range [-1.0, 1.0] to
+the range [0, screen_width], and the Y component from the range [-1.0,
+1.0] to the range [0, screen_height]. This will give the actual pixel
+position of a point in the game view, taking the relative position of
+the game view itself into account. The Z component, depth, is returned
+unmodified.
+
+This is useful for a point that has been transformed from world space
+using a viewproj matrix (or a separate view and projection matrix). For
+any other point, the results will likely not be meaningful.
+
+Points whose depth values are outside the range [-1.0, 1.0] are probably
+behind the camera and should be ignored.
 
 @example lua
 @verbatim
-local xpixel, ypixel, depth = mypoint:aspixels()
+local xpixel, ypixel, depth = mypoint:toscreen()
 if depth >= -1.0 and depth <= 1.0 then
   -- pixel coordinates are valid, do something with them
 end
 @end verbatim
 @end example
 
-This is only useful for a point in world coordinates that has been
-transformed by a @ref{render3d-viewprojmatrix} (or by a view and
-projection matrix separately). In any other case the result will
-probably not be meaningful.
+Functionally, the only difference between this function and
+@ref{point-togameview} is that this adds game_view_x to X and
+game_view_y to Y before returning them. In other words,
+@code{togameview()} is relative to the game view whereas
+@code{toscreen()} is relative to the overall window, bearing in mind
+that the game view won't necessarily fill the whole window depending on
+the player's HUD layout.
 
-To help with understanding everything this function does, here's an
-equivalent Lua function with comments:
+@node point-togameview
+@subsection togameview
+
+Transforms the X component of this point from the range [-1.0, 1.0] to
+the range [0, gameview_width], and the Y component from the range [-1.0,
+1.0] to the range [0, gameview_height]. This will give the actual pixel
+position of a point in the game view. The Z component, depth, is
+returned unmodified.
+
+This is useful for a point that has been transformed from world space
+using a viewproj matrix (or a separate view and projection matrix). For
+any other point, the results will likely not be meaningful.
+
+Points whose depth values are outside the range [-1.0, 1.0] are probably
+behind the camera and should be ignored.
 
 @example lua
 @verbatim
-local function aspixels(point)
-  local x, y, z = point:get()
-
-  -- get the X, Y, width and height of the 3D game view
-  local gx, gy, gw, gh = bolt.gameviewxywh()
-
-  -- x is in the range [-1.0, +1.0], so we need to map that range onto
-  -- the game view, like so:
-  local pixelx = ((x + 1.0) * gw / 2.0) + gx
-
-  -- same as above, but we also need to invert y because GPUs think -1.0
-  -- is the bottom of the screen, and we want points to be relative to
-  -- the top-left, not the bottom-left
-  local pixely = ((-y + 1.0) * gh / 2.0) + gy
-
-  -- leave depth as-is
-  return pixelx, pixely, z
+local xpixel, ypixel, depth = mypoint:togameview()
+if depth >= -1.0 and depth <= 1.0 then
+  -- pixel coordinates are valid, do something with them
 end
 @end verbatim
 @end example
+
+Functionally, the only difference between this function and
+@ref{point-toscreen} is that @code{toscreen()} adds gameview_x to X and
+gameview_y to Y before returning them, while this function doesn't. In
+other words, @code{togameview()} is relative to the game view whereas
+@code{toscreen()} is relative to the overall window, bearing in mind
+that the game view won't necessarily fill the whole window depending on
+the player's HUD layout.
+
+@node point-aspixels
+@subsection aspixels
+
+Deprecated, alias for @ref{point-toscreen}
 
 @node objects-transform
 @section Transform
@@ -2873,7 +2894,7 @@ screen, in pixel coordinates:
 
 @example lua
 @verbatim
-local pixelx, pixely = worldpoint:transform(myevent:viewprojmatrix()):aspixels()
+local pixelx, pixely = worldpoint:transform(myevent:viewprojmatrix()):toscreen()
 @end verbatim
 @end example
 
@@ -3173,7 +3194,7 @@ bolt.onrenderparticles(function (event)
     local eyepoint = bolt.point(x + wx, y + wy, z + wz):transform(viewmatrix)
     local eyex, eyey, eyez = eyepoint:get()
     local screenpoint = bolt.point(eyex + ex, eyey + ey, eyez):transform(projmatrix)
-    local xpixel, ypixel, depth = screenpoint:aspixels()
+    local xpixel, ypixel, depth = screenpoint:toscreen()
   end
 end)
 @end verbatim
@@ -3402,7 +3423,7 @@ bolt.onrenderbillboard(function (event)
     local offsetx, offsety = event:vertexeyeoffset(i)
     local eyepointx, eyepointy, eyepointz = modelpoint:transform(modelmatrix):transform(viewmatrix):get()
     local movedpoint = bolt.point(eyepointx + offsetx, eyepointy + offsety, eyepointz)
-    local screenx, screeny, _ = movedpoint:transform(projmatrix):aspixels()
+    local screenx, screeny, _ = movedpoint:transform(projmatrix):toscreen()
   end
 end)
 @end verbatim
