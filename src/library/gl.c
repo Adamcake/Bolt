@@ -182,8 +182,8 @@ struct GLContext {
     int32_t player_model_z;
 };
 
-static unsigned int gl_width;
-static unsigned int gl_height;
+static unsigned int gl_width = 0;
+static unsigned int gl_height = 0;
 
 static size_t egl_init_count = 0;
 static uintptr_t egl_main_context = 0;
@@ -211,6 +211,13 @@ static GLuint program_direct_vao;
 static GLuint buffer_vertices_square;
 
 static uint8_t player_model_tex_seen = false;
+
+static GLuint pending_gameview_overlay_tex = 0;
+static GLuint gameview_overlay_fb;
+static GLuint gameview_overlay_tex;
+static GLint gameview_overlay_width = 0;
+static GLint gameview_overlay_height = 0;
+static uint8_t gameview_overlay_inited = false;
 
 #define GLSLHEADER "#version 330 core\n"
 #define GLSLPLUGINEXTENSIONHEADER "#extension GL_ARB_explicit_uniform_location : require\n"
@@ -931,6 +938,71 @@ static void unpack_srgb565(uint16_t packed, uint8_t out[3]) {
     //out[0] = lut5[(packed >> 11) & 0b00011111];
     //out[1] = lut6[(packed >> 5) & 0b00111111];
     //out[2] = lut5[packed & 0b00011111];
+}
+
+static void update_gameview_overlay(const struct GLContext* c) {
+    if (gameview_overlay_inited && gameview_overlay_width == c->game_view_w && gameview_overlay_height == c->game_view_h) return;
+    if (gameview_overlay_inited) {
+        gl.DeleteFramebuffers(1, &gameview_overlay_fb);
+        lgl->DeleteTextures(1, &gameview_overlay_tex);
+    } else if (c->game_view_w == 0 || c->game_view_h == 0) {
+        return;
+    }
+    gameview_overlay_width = c->game_view_w;
+    gameview_overlay_height = c->game_view_h;
+    gameview_overlay_inited = true;
+
+    gl.GenFramebuffers(1, &gameview_overlay_fb);
+    lgl->GenTextures(1, &gameview_overlay_tex);
+    gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, gameview_overlay_fb);
+    lgl->BindTexture(GL_TEXTURE_2D, gameview_overlay_tex);
+    gl.TexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, gameview_overlay_width, gameview_overlay_height);
+    lgl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    lgl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    lgl->TexParameteri(GL_TEXTURE_2D,  GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    lgl->TexParameteri(GL_TEXTURE_2D,  GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    gl.FramebufferTexture(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, gameview_overlay_tex, 0);
+
+    const struct TextureUnit* unit = &c->texture_units[c->active_texture];
+    lgl->BindTexture(unit->target, unit->recent->id);
+    gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, c->current_draw_framebuffer);
+}
+
+// draws to the current draw framebuffer without changing it, generally it will be 0 before calling this
+static void draw_gameview_overlay(const struct GLContext* c) {
+    if (gl_width == 0 || gl_height == 0 || gameview_overlay_width == 0 || gameview_overlay_height == 0) return;
+    GLboolean depth_test, scissor_test, cull_face, blend;
+    lgl->GetBooleanv(GL_DEPTH_TEST, &depth_test);
+    lgl->GetBooleanv(GL_SCISSOR_TEST, &scissor_test);
+    lgl->GetBooleanv(GL_CULL_FACE, &cull_face);
+    lgl->GetBooleanv(GL_BLEND, &blend);
+
+    gl.UseProgram(program_direct_screen.id);
+    lgl->BindTexture(GL_TEXTURE_2D, gameview_overlay_tex);
+    gl.BindVertexArray(program_direct_vao);
+    gl.Uniform1i(program_direct_screen.sampler, c->active_texture);
+    gl.Uniform4i(program_direct_screen.d_xywh, c->game_view_x, c->game_view_y, c->game_view_w, c->game_view_h);
+    gl.Uniform4i(program_direct_screen.s_xywh, 0, 0, gameview_overlay_width, gameview_overlay_height);
+    gl.Uniform4i(program_direct_screen.src_wh_dest_wh, gameview_overlay_width, gameview_overlay_height, gl_width, gl_height);
+    gl.Uniform4f(program_direct_screen.rgba, 1.0, 1.0, 1.0, 1.0);
+    lgl->Viewport(0, 0, gl_width, gl_height);
+    lgl->Disable(GL_DEPTH_TEST);
+    lgl->Disable(GL_SCISSOR_TEST);
+    lgl->Disable(GL_CULL_FACE);
+    lgl->Enable(GL_BLEND);
+    gl.BlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+    lgl->DrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+    gl.BlendFuncSeparate(c->blend_rgb_s, c->blend_rgb_d, c->blend_alpha_s, c->blend_alpha_d);
+    if (depth_test) lgl->Enable(GL_DEPTH_TEST);
+    if (scissor_test) lgl->Enable(GL_SCISSOR_TEST);
+    if (cull_face) lgl->Enable(GL_CULL_FACE);
+    if (!blend) lgl->Disable(GL_BLEND);
+    lgl->Viewport(c->viewport_x, c->viewport_y, c->viewport_w, c->viewport_h);
+    const struct TextureUnit* unit = &c->texture_units[c->active_texture];
+    lgl->BindTexture(unit->target, unit->recent ? unit->recent->id : 0);
+    gl.BindVertexArray(c->bound_vao->id);
+    gl.UseProgram(c->bound_program ? c->bound_program->id : 0);
 }
 
 // this function is called at the earliest possible opportunity, and is never undone
@@ -1752,6 +1824,12 @@ static void glBlitFramebuffer(GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1
     LOG("glBlitFramebuffer\n");
     gl.BlitFramebuffer(srcX0, srcY0, srcX1, srcY1, dstX0, dstY0, dstX1, dstY1, mask, filter);
     struct GLContext* c = _bolt_context();
+
+    GLint draw_tex_id = 0;
+    GLint read_tex_id = 0;
+    gl.GetFramebufferAttachmentParameteriv(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &read_tex_id);
+    gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex_id);
+
     if (c->current_draw_framebuffer == 0 && c->game_view_part_framebuffer != c->current_read_framebuffer) {
         c->game_view_part_framebuffer = c->current_read_framebuffer;
         c->recalculate_sSceneHDRTex = true;
@@ -1763,30 +1841,31 @@ static void glBlitFramebuffer(GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1
         c->game_view_y = dstY0;
         printf("new game_view_part_framebuffer %u...\n", c->current_read_framebuffer);
     } else if (srcX0 == 0 && dstX0 == 0 && srcY0 == 0 && dstY0 == 0 && srcX1 == dstX1 && srcY1 == dstY1 && c->current_draw_framebuffer != 0) {
-        GLint tex_id;
-        gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &tex_id);
-        struct GLTexture2D* target_tex = context_get_texture(c, tex_id);
+        struct GLTexture2D* target_tex = context_get_texture(c, draw_tex_id);
         if (!c->does_blit_3d_target && target_tex && target_tex->width == dstX1 && target_tex->height == dstY1) {
             if (!c->depth_of_field_enabled && target_tex->id == c->game_view_sSceneHDRTex) {
                 printf("does blit to sSceneHDRTex from fb %u\n", c->current_read_framebuffer);
                 c->does_blit_3d_target = true;
-                gl.GetFramebufferAttachmentParameteriv(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &tex_id);
-                c->target_3d_tex = tex_id;
+                c->target_3d_tex = read_tex_id;
             } else if (c->depth_of_field_enabled && target_tex->id == c->depth_of_field_sSourceTex) {
                 printf("blit to depth-of-field tex from fb %u\n", c->current_read_framebuffer);
                 c->does_blit_3d_target = true;
-                gl.GetFramebufferAttachmentParameteriv(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &tex_id);
-                c->target_3d_tex = tex_id;
+                c->target_3d_tex = read_tex_id;
             }
         } else if (target_tex) {
-            gl.GetFramebufferAttachmentParameteriv(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &tex_id);
-            struct GLTexture2D* read_tex = context_get_texture(c, tex_id);
+            struct GLTexture2D* read_tex = context_get_texture(c, read_tex_id);
             if (read_tex && read_tex->icon.model_count && read_tex->icon.is_big_icon) {
                 target_tex->icon = read_tex->icon;
                 read_tex->icon.model_count = false;
             }
         }
     }
+
+    if (c->current_draw_framebuffer == 0 && read_tex_id != 0 && pending_gameview_overlay_tex == read_tex_id) {
+        pending_gameview_overlay_tex = 0;
+        draw_gameview_overlay(c);
+    }
+
     LOG("glBlitFramebuffer end\n");
 }
 
@@ -1853,6 +1932,7 @@ void _bolt_gl_onSwapBuffers(uint32_t window_width, uint32_t window_height) {
     gl_width = window_width;
     gl_height = window_height;
     player_model_tex_seen = false;
+    pending_gameview_overlay_tex = 0;
     if (_bolt_plugin_is_inited()) _bolt_plugin_end_frame(window_width, window_height);
 }
 
@@ -2047,8 +2127,14 @@ void _bolt_gl_onDrawArrays(GLenum mode, GLint first, GLsizei count) {
             }
 
             if (c->game_view_sSceneHDRTex == source_tex->id && c->depth_tex > 0 && !c->recalculate_depth_tex) {
+                update_gameview_overlay(c);
+                gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, gameview_overlay_fb);
+                lgl->ClearColor(0.0, 0.0, 0.0, 0.0);
+                lgl->Clear(GL_COLOR_BUFFER_BIT);
+                gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, c->current_draw_framebuffer);
+
                 struct GLPluginRenderGameViewUserData userdata;
-                userdata.target_fb = c->current_draw_framebuffer;
+                userdata.target_fb = gameview_overlay_fb;
                 userdata.depth_tex = c->depth_tex;
                 userdata.width = c->game_view_w;
                 userdata.height = c->game_view_h;
@@ -2057,6 +2143,12 @@ void _bolt_gl_onDrawArrays(GLenum mode, GLint first, GLsizei count) {
                 event.functions.userdata = &userdata;
                 event.functions.size = glplugin_gameview_size;
                 _bolt_plugin_handle_rendergameview(&event);
+
+                if (c->current_draw_framebuffer == 0) {
+                    draw_gameview_overlay(c);
+                } else {
+                    pending_gameview_overlay_tex = target_tex_id;
+                }
 
                 c->recalculate_depth_tex = true;
             }
@@ -2801,10 +2893,11 @@ static void surface_destroy_buffers(struct PluginSurfaceUserdata* userdata) {
 }
 
 static void surface_draw(const struct GLContext* c, const struct PluginSurfaceUserdata* userdata, struct ProgramDirectData* program, GLuint target_fb, int target_width, int target_height, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh) {
-    GLboolean depth_test, scissor_test, cull_face;
+    GLboolean depth_test, scissor_test, cull_face, blend;
     lgl->GetBooleanv(GL_DEPTH_TEST, &depth_test);
     lgl->GetBooleanv(GL_SCISSOR_TEST, &scissor_test);
     lgl->GetBooleanv(GL_CULL_FACE, &cull_face);
+    lgl->GetBooleanv(GL_BLEND, &blend);
 
     gl.UseProgram(program->id);
     lgl->BindTexture(GL_TEXTURE_2D, userdata->renderbuffer);
@@ -2819,6 +2912,7 @@ static void surface_draw(const struct GLContext* c, const struct PluginSurfaceUs
     lgl->Disable(GL_DEPTH_TEST);
     lgl->Disable(GL_SCISSOR_TEST);
     lgl->Disable(GL_CULL_FACE);
+    lgl->Enable(GL_BLEND);
     gl.BlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     lgl->DrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
@@ -2826,9 +2920,10 @@ static void surface_draw(const struct GLContext* c, const struct PluginSurfaceUs
     if (depth_test) lgl->Enable(GL_DEPTH_TEST);
     if (scissor_test) lgl->Enable(GL_SCISSOR_TEST);
     if (cull_face) lgl->Enable(GL_CULL_FACE);
+    if (!blend) lgl->Disable(GL_BLEND);
     lgl->Viewport(c->viewport_x, c->viewport_y, c->viewport_w, c->viewport_h);
     const struct TextureUnit* unit = &c->texture_units[c->active_texture];
-    lgl->BindTexture(unit->target, unit->recent->id);
+    lgl->BindTexture(unit->target, unit->recent ? unit->recent->id : 0);
     gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, c->current_draw_framebuffer);
     gl.BindVertexArray(c->bound_vao->id);
     gl.UseProgram(c->bound_program ? c->bound_program->id : 0);
@@ -2838,10 +2933,11 @@ static void shaderprogram_draw(const struct PluginProgramUserdata* program, cons
     const struct GLContext* c = _bolt_context();
     GLint array_binding;
     lgl->GetIntegerv(GL_ARRAY_BUFFER_BINDING, &array_binding);
-    GLboolean depth_test, scissor_test, cull_face;
+    GLboolean depth_test, scissor_test, cull_face, blend;
     lgl->GetBooleanv(GL_DEPTH_TEST, &depth_test);
     lgl->GetBooleanv(GL_SCISSOR_TEST, &scissor_test);
     lgl->GetBooleanv(GL_CULL_FACE, &cull_face);
+    lgl->GetBooleanv(GL_BLEND, &blend);
 
     gl.UseProgram(program->program);
     gl.BindVertexArray(program->vao);
@@ -2870,6 +2966,7 @@ static void shaderprogram_draw(const struct PluginProgramUserdata* program, cons
     lgl->Disable(GL_DEPTH_TEST);
     lgl->Disable(GL_SCISSOR_TEST);
     lgl->Disable(GL_CULL_FACE);
+    lgl->Enable(GL_BLEND);
     lgl->DrawArrays(GL_TRIANGLES, 0, count);
 
     if (active_texture > 0) {
@@ -2882,6 +2979,7 @@ static void shaderprogram_draw(const struct PluginProgramUserdata* program, cons
     if (depth_test) lgl->Enable(GL_DEPTH_TEST);
     if (scissor_test) lgl->Enable(GL_SCISSOR_TEST);
     if (cull_face) lgl->Enable(GL_CULL_FACE);
+    if (!blend) lgl->Disable(GL_BLEND);
     lgl->Viewport(c->viewport_x, c->viewport_y, c->viewport_w, c->viewport_h);
     gl.BindBuffer(GL_ARRAY_BUFFER, array_binding);
     gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, c->current_draw_framebuffer);
@@ -3415,7 +3513,7 @@ static void glplugin_surface_drawtosurface(void* userdata, void* _target, int sx
 static void glplugin_surface_drawtogameview(void* userdata, void* _gameview, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh) {
     const struct GLPluginRenderGameViewUserData* gameview = _gameview;
     const struct GLContext* c = _bolt_context();
-    surface_draw(c, userdata, &program_direct_screen, gameview->target_fb, gameview->width, gameview->height, sx, sy, sw, sh, dx, dy, dw, dh);
+    surface_draw(c, userdata, &program_direct_surface, gameview->target_fb, gameview->width, gameview->height, sx, sy, sw, sh, dx, dy, dw, dh);
 }
 
 static void glplugin_surface_set_tint(void* userdata, double r, double g, double b) {
