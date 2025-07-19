@@ -344,6 +344,7 @@ static void _bolt_gl_plugin_shaderprogram_set_uniform_floats(void* userdata, int
 static void _bolt_gl_plugin_shaderprogram_set_uniform_ints(void* userdata, int location, uint8_t count, int* values);
 static void _bolt_gl_plugin_shaderprogram_set_uniform_matrix(void* userdata, int location, uint8_t transpose, uint8_t size, double* values);
 static void _bolt_gl_plugin_shaderprogram_set_uniform_surface(void* userdata, int location, void* target);
+static void _bolt_gl_plugin_shaderprogram_set_uniform_depthbuffer(void* userdata, void* event, int location);
 static void _bolt_gl_plugin_shaderprogram_drawtosurface(void* userdata, void* surface_, void* buffer_, uint32_t count);
 static void _bolt_gl_plugin_shaderprogram_drawtogameview(void* userdata, void* gameview_, void* buffer_, uint32_t count);
 static void _bolt_gl_plugin_shaderbuffer_init(struct ShaderBufferFunctions* out, const void* data, uint32_t len);
@@ -3530,6 +3531,7 @@ static uint8_t _bolt_gl_plugin_shaderprogram_init(struct ShaderProgramFunctions*
     out->set_uniform_ints = _bolt_gl_plugin_shaderprogram_set_uniform_ints;
     out->set_uniform_matrix = _bolt_gl_plugin_shaderprogram_set_uniform_matrix;
     out->set_uniform_surface = _bolt_gl_plugin_shaderprogram_set_uniform_surface;
+    out->set_uniform_depthbuffer = _bolt_gl_plugin_shaderprogram_set_uniform_depthbuffer;
     return true;
 }
 
@@ -3642,6 +3644,18 @@ static void _bolt_gl_plugin_shaderprogram_set_uniform_surface(void* userdata, in
         .count = 1,
         .type = 2,
         .sub.sampler = surface->renderbuffer,
+    };
+    hashmap_set(program->uniforms, &uniform);
+}
+
+static void _bolt_gl_plugin_shaderprogram_set_uniform_depthbuffer(void* userdata, void* event, int location) {
+    const struct PluginProgramUserdata* program = userdata;
+    const struct GLPluginRenderGameViewUserData* gameview = event;
+    struct PluginProgramUniform uniform = {
+        .location = location,
+        .count = 1,
+        .type = 2,
+        .sub.sampler = gameview->depth_tex,
     };
     hashmap_set(program->uniforms, &uniform);
 }

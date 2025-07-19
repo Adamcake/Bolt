@@ -2595,6 +2595,57 @@ myprogram:setuniformsurface(location, mysurface)
 @end verbatim
 @end example
 
+@node shaderprogram-setuniformdepthbuffer
+@subsection setuniformdepthbuffer
+
+Sets the depth buffer as a uniform value. This will usually be used for
+sampler2D variables. This function requires a rendergameview event
+object and, as such, it may only be called during a callback for that
+event.
+
+@example lua
+@verbatim
+bolt.onrendergameview(function (event)
+  myprogram:setuniformdepthbuffer(event, location)
+end)
+@end verbatim
+@end example
+
+During rendering of the game view, the game engine maintains an explicit
+depth buffer. The depth buffer is like a normal surface, but not exactly
+the same: a normal surface has internal contents of format GL_RGBA,
+whereas the depth buffer has contents of format GL_DEPTH_COMPONENT32F.
+This means that while it can be sampled in a sampler2D like any other
+surface, the R, G and B components will always be the same value, and
+the alpha component will always be 1.
+
+The depth component of any given pixel represents the Z-value of
+whatever was drawn on that pixel, and is used by the game to ensure that
+something far from the camera won't be drawn in front of something
+nearer, regardless of what order they're drawn in. The primary reason
+why a Bolt plugin may want to sample this data would be to create a
+pseudo-3D effect, where each pixel in an overlay may be drawn or not
+drawn depending on the user's perspective. For example, if a fragment
+shader was set up to draw an overlay where each pixel is either opaque
+or transparent depending on the depth of that pixel, it would appear
+that objects in the game view were obscuring the overlay by being in
+front of it.
+
+Z-values are logarithmic in the range [-1.0, +1.0]. -1.0 is immediately
+in front of the camera, 0.0 is a very short distance away from the
+camera, and 1.0 is the maximum view distance away from the camera.
+
+The width and height of the depth buffer surface, in pixels, can be
+retrieved by calling @code{size()} on the rendergameview event object,
+since the size of the game view and the size of the depth buffer will
+always match.
+
+Uniform bindings in the Bolt API are permanent until overwritten, but
+event objects cannot be used after the even handler has returned. So,
+after calling this function, be careful not to use this program again
+after the rendergameview event handler has returned, until the uniform
+binding has been changed to something else.
+
 @node shaderprogram-drawtosurface
 @subsection drawtosurface
 

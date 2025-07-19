@@ -273,6 +273,11 @@ struct ShaderProgramFunctions {
     /// Associates a surface userdata object with a uniform in this shader program by its location.
     /// Typically this will be used for a sampler2D variable.
     void (*set_uniform_surface)(void* userdata, int location, void* target);
+
+    /// Associates the game's depth buffer with a uniform in this shader program by its location.
+    /// Typically this will be used for a sampler2D variable.
+    /// Requires a rendergameview event userdata, and as such this may only be called during a rendergameview event.
+    void (*set_uniform_depthbuffer)(void* userdata, void* event, int location);
 };
 
 /// Struct containing "vtable" callback information for shader buffers

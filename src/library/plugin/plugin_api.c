@@ -2143,6 +2143,14 @@ static int api_shaderprogram_setuniformsurface(lua_State* state) {
     return 0;
 }
 
+static int api_shaderprogram_setuniformdepthbuffer(lua_State* state) {
+    struct ShaderProgramFunctions* program = require_self_userdata(state, "setuniformsurface");
+    const struct RenderGameViewEvent* event = require_userdata(state, 2, "setuniformsurface");
+    const lua_Integer location = luaL_checkinteger(state, 3);
+    program->set_uniform_depthbuffer(program->userdata, event->functions.userdata, location);
+    return 0;
+}
+
 static int api_shaderprogram_drawtosurface(lua_State* state) {
     const struct ShaderProgramFunctions* program = require_self_userdata(state, "drawtosurface");
     const struct SurfaceFunctions* surface = require_userdata(state, 2, "drawtosurface");
@@ -2432,6 +2440,7 @@ static struct ApiFuncTemplate shaderprogram_functions[] = {
     BOLTFUNC(setuniformmatrix3f, shaderprogram),
     BOLTFUNC(setuniformmatrix4f, shaderprogram),
     BOLTFUNC(setuniformsurface, shaderprogram),
+    BOLTFUNC(setuniformdepthbuffer, shaderprogram),
     BOLTFUNC(drawtosurface, shaderprogram),
     BOLTFUNC(drawtogameview, shaderprogram),
 };
