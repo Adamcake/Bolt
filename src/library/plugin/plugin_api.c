@@ -1432,6 +1432,16 @@ static int api_render3d_animated(lua_State* state) {
     return 1;
 }
 
+static int api_render3d_cameraposition(lua_State* state) {
+    const struct Render3D* render = require_self_userdata(state, "cameraposition");
+    double out[3];
+    render->camera_functions.position(render->camera_functions.userdata, out);
+    lua_pushnumber(state, out[0]);
+    lua_pushnumber(state, out[1]);
+    lua_pushnumber(state, out[2]);
+    return 3;
+}
+
 static int api_renderparticles_vertexcount(lua_State* state) {
     const struct RenderParticles* render = require_self_userdata(state, "vertexcount");
     lua_pushinteger(state, render->vertex_count);
@@ -1578,6 +1588,16 @@ static int api_renderparticles_inverseviewmatrix(lua_State* state) {
     render->matrix_functions.inverse_view_matrix(render->matrix_functions.userdata, transform);
     SETMETATABLE(transform)
     return 1;
+}
+
+static int api_renderparticles_cameraposition(lua_State* state) {
+    const struct RenderParticles* render = require_self_userdata(state, "cameraposition");
+    double out[3];
+    render->camera_functions.position(render->camera_functions.userdata, out);
+    lua_pushnumber(state, out[0]);
+    lua_pushnumber(state, out[1]);
+    lua_pushnumber(state, out[2]);
+    return 3;
 }
 
 static int api_renderbillboard_vertexcount(lua_State* state) {
@@ -1729,6 +1749,16 @@ static int api_renderbillboard_inverseviewmatrix(lua_State* state) {
     render->matrix_functions.inverse_view_matrix(render->matrix_functions.userdata, transform);
     SETMETATABLE(transform)
     return 1;
+}
+
+static int api_renderbillboard_cameraposition(lua_State* state) {
+    const struct RenderBillboard* render = require_self_userdata(state, "cameraposition");
+    double out[3];
+    render->camera_functions.position(render->camera_functions.userdata, out);
+    lua_pushnumber(state, out[0]);
+    lua_pushnumber(state, out[1]);
+    lua_pushnumber(state, out[2]);
+    return 3;
 }
 
 static int api_rendericon_xywh(lua_State* state) {
@@ -2330,6 +2360,7 @@ static struct ApiFuncTemplate render3d_functions[] = {
     BOLTFUNC(texturedata, render3d),
     BOLTFUNC(vertexanimation, render3d),
     BOLTFUNC(animated, render3d),
+    BOLTFUNC(cameraposition, render3d),
     BOLTALIAS(vertexcolour, vertexcolor, render3d),
     BOLTALIAS(projmatrix, projectionmatrix, render3d),
 };
@@ -2351,6 +2382,7 @@ static struct ApiFuncTemplate renderparticles_functions[] = {
     BOLTFUNC(projmatrix, renderparticles),
     BOLTFUNC(viewprojmatrix, renderparticles),
     BOLTFUNC(inverseviewmatrix, renderparticles),
+    BOLTFUNC(cameraposition, renderparticles),
     BOLTALIAS(vertexcolour, vertexcolor, renderparticles),
     BOLTALIAS(projmatrix, projectionmatrix, renderparticles),
 };
@@ -2373,6 +2405,7 @@ static struct ApiFuncTemplate renderbillboard_functions[] = {
     BOLTFUNC(projmatrix, renderbillboard),
     BOLTFUNC(viewprojmatrix, renderbillboard),
     BOLTFUNC(inverseviewmatrix, renderbillboard),
+    BOLTFUNC(cameraposition, renderbillboard),
     BOLTALIAS(vertexcolour, vertexcolor, renderbillboard),
     BOLTALIAS(projmatrix, projectionmatrix, renderbillboard),
 };

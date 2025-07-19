@@ -198,6 +198,15 @@ struct TextureFunctions {
     uint8_t* (*data)(void* userdata, size_t x, size_t y);
 };
 
+/// Struct containing "vtable" callback information for events which have a camera position.
+struct CameraFunctions {
+    /// Userdata which will be passed to the functions contained in this struct.
+    void* userdata;
+
+    /// Returns the camera position in world coordinates, according to the entity being rendered.
+    void (*position)(void* userdata, double* out);
+};
+
 /// Struct containing "vtable" callback information for RenderGameView events.
 struct RenderGameViewFunctions {
     /// Userdata which will be passed to the functions contained in this struct.
@@ -409,6 +418,7 @@ struct Render3D {
     struct Vertex3DFunctions vertex_functions;
     struct TextureFunctions texture_functions;
     struct MatrixFunctions matrix_functions;
+    struct CameraFunctions camera_functions;
 };
 
 struct RenderParticles {
@@ -416,6 +426,7 @@ struct RenderParticles {
     struct VertexParticleFunctions vertex_functions;
     struct MatrixFunctions matrix_functions;
     struct TextureFunctions texture_functions;
+    struct CameraFunctions camera_functions;
 };
 
 struct RenderBillboard {
@@ -424,6 +435,7 @@ struct RenderBillboard {
     struct VertexBillboardFunctions vertex_functions;
     struct MatrixFunctions matrix_functions;
     struct TextureFunctions texture_functions;
+    struct CameraFunctions camera_functions;
 };
 
 struct ItemIconVertex {

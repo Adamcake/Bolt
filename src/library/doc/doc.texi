@@ -3156,6 +3156,18 @@ end
 @end verbatim
 @end example
 
+@node render3d-cameraposition
+@subsection cameraposition
+
+Returns the X, Y and Z of the camera position, in world coordinates,
+during this render.
+
+@example lua
+@verbatim
+local x, y, z = event:cameraposition()
+@end verbatim
+@end example
+
 @node objects-renderparticles
 @section Render Particles Event
 
@@ -3393,6 +3405,18 @@ Returns a @ref{objects-transform} representing the inverse of the view
 matrix (a.k.a. the camera matrix) for this particle render. This can be
 used to transform points from eye-space to world-space.
 
+@node renderparticles-cameraposition
+@subsection cameraposition
+
+Returns the X, Y and Z of the camera position, in world coordinates,
+during this render.
+
+@example lua
+@verbatim
+local x, y, z = event:cameraposition()
+@end verbatim
+@end example
+
 @node objects-renderbillboard
 @section Render Billboard Event
 
@@ -3618,6 +3642,18 @@ coordinates into screen coordinates.
 Returns a @ref{objects-transform} representing the inverse of the view
 matrix (a.k.a. the camera matrix) for this particle render. This can be
 used to transform points from eye-space to world-space.
+
+@node renderbillboard-cameraposition
+@subsection cameraposition
+
+Returns the X, Y and Z of the camera position, in world coordinates,
+during this render.
+
+@example lua
+@verbatim
+local x, y, z = event:cameraposition()
+@end verbatim
+@end example
 
 @node objects-rendericon
 @section Render Icon Event

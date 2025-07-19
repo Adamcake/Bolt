@@ -314,6 +314,7 @@ static size_t glplugin_texture_id(void* userdata);
 static void glplugin_texture_size(void* userdata, size_t* out);
 static uint8_t glplugin_texture_compare(void* userdata, size_t x, size_t y, size_t len, const unsigned char* data);
 static uint8_t* glplugin_texture_data(void* userdata, size_t x, size_t y);
+static void glplugin_camera_position(void* userdata, double* out);
 static void glplugin_gameview_size(void* userdata, int* w, int* h);
 static void glplugin_surface_init(struct SurfaceFunctions* out, unsigned int width, unsigned int height, const void* data);
 static void glplugin_surface_destroy(void* userdata);
@@ -461,6 +462,10 @@ struct GLPluginDrawElementsMatrixBillboardUserData {
     const GLfloat* projection_matrix;
     const GLfloat* viewproj_matrix;
     const GLfloat* inv_view_matrix;
+};
+
+struct GLPluginCameraUserData {
+    const GLfloat* camera_position;
 };
 
 struct GLPluginRenderGameViewUserData {
@@ -2296,6 +2301,9 @@ static void drawelements_handle_particles(GLsizei count, const unsigned short* i
     struct GLPluginTextureUserData tex_userdata;
     tex_userdata.tex = tex;
 
+    struct GLPluginCameraUserData camera_userdata;
+    camera_userdata.camera_position = (GLfloat*)(ubo_view_buf + c->bound_program->offset_uCameraPosition);
+
     struct RenderParticles render;
     render.vertex_count = count;
     render.vertex_functions.userdata = &vertex_userdata;
@@ -2317,6 +2325,8 @@ static void drawelements_handle_particles(GLsizei count, const unsigned short* i
     render.texture_functions.size = glplugin_texture_size;
     render.texture_functions.compare = glplugin_texture_compare;
     render.texture_functions.data = glplugin_texture_data;
+    render.camera_functions.userdata = &camera_userdata;
+    render.camera_functions.position = glplugin_camera_position;
 
     _bolt_plugin_handle_renderparticles(&render);
 }
@@ -2361,6 +2371,9 @@ static void drawelements_handle_billboard(GLsizei count, const unsigned short* i
     struct GLPluginTextureUserData tex_userdata;
     tex_userdata.tex = tex;
 
+    struct GLPluginCameraUserData camera_userdata;
+    camera_userdata.camera_position = (GLfloat*)(ubo_view_buf + c->bound_program->offset_uCameraPosition);
+
     struct RenderBillboard render;
     render.vertex_count = count;
     render.vertices_per_icon = 6;
@@ -2382,6 +2395,8 @@ static void drawelements_handle_billboard(GLsizei count, const unsigned short* i
     render.texture_functions.size = glplugin_texture_size;
     render.texture_functions.compare = glplugin_texture_compare;
     render.texture_functions.data = glplugin_texture_data;
+    render.camera_functions.userdata = &camera_userdata;
+    render.camera_functions.position = glplugin_camera_position;
 
     _bolt_plugin_handle_renderbillboard(&render);
 }
@@ -2643,6 +2658,9 @@ static void drawelements_handle_3d_normal(GLsizei count, const unsigned short* i
     matrix_userdata.viewproj_matrix = (GLfloat*)(ubo_view_buf + c->bound_program->offset_uViewProjMatrix);
     matrix_userdata.inv_view_matrix = (GLfloat*)(ubo_view_buf + c->bound_program->offset_uInvViewMatrix);
 
+    struct GLPluginCameraUserData camera_userdata;
+    camera_userdata.camera_position = (GLfloat*)(ubo_view_buf + c->bound_program->offset_uCameraPosition);
+
     struct Render3D render;
     render.vertex_count = count;
     render.is_animated = c->bound_program->block_index_VertexTransformData != -1;
@@ -2664,6 +2682,8 @@ static void drawelements_handle_3d_normal(GLsizei count, const unsigned short* i
     render.matrix_functions.proj_matrix = glplugin_matrix3d_projectionmatrix;
     render.matrix_functions.viewproj_matrix = glplugin_matrix3d_viewprojmatrix;
     render.matrix_functions.inverse_view_matrix = glplugin_matrix3d_inv_viewmatrix;
+    render.camera_functions.userdata = &camera_userdata;
+    render.camera_functions.position = glplugin_camera_position;
 
     _bolt_plugin_handle_render3d(&render);
 }
@@ -3303,6 +3323,13 @@ static uint8_t* glplugin_texture_data(void* userdata, size_t x, size_t y) {
     const struct GLPluginTextureUserData* data = userdata;
     const struct GLTexture2D* tex = data->tex;
     return tex->data + (tex->width * y * 4) + (x * 4);
+}
+
+static void glplugin_camera_position(void* userdata, double* out) {
+    const struct GLPluginCameraUserData* data = userdata;
+    out[0] = (double)data->camera_position[0];
+    out[1] = (double)data->camera_position[1];
+    out[2] = (double)data->camera_position[2];
 }
 
 static void glplugin_gameview_size(void* userdata, int* w, int* h) {
