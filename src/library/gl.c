@@ -2812,8 +2812,8 @@ static void surface_draw(const struct GLContext* c, const struct PluginSurfaceUs
     if (scissor_test) lgl->Enable(GL_SCISSOR_TEST);
     if (cull_face) lgl->Enable(GL_CULL_FACE);
     lgl->Viewport(c->viewport_x, c->viewport_y, c->viewport_w, c->viewport_h);
-    const struct GLTexture2D* original_tex = c->texture_units[c->active_texture].recent;
-    lgl->BindTexture(GL_TEXTURE_2D, original_tex ? original_tex->id : 0);
+    const struct TextureUnit* unit = &c->texture_units[c->active_texture];
+    lgl->BindTexture(unit->target, unit->recent->id);
     gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, c->current_draw_framebuffer);
     gl.BindVertexArray(c->bound_vao->id);
     gl.UseProgram(c->bound_program ? c->bound_program->id : 0);
