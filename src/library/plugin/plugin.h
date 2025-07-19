@@ -11,10 +11,6 @@
 #include "../../sha256/sha256.h"
 #define CHARHASHSIZE (SHA256_BLOCK_SIZE * 2)
 
-struct RenderBatch2D;
-struct Plugin;
-struct lua_State;
-
 #define GRAB_TYPE_NONE 0
 #define GRAB_TYPE_START 1
 #define GRAB_TYPE_STOP 2
@@ -202,6 +198,15 @@ struct TextureFunctions {
     uint8_t* (*data)(void* userdata, size_t x, size_t y);
 };
 
+/// Struct containing "vtable" callback information for RenderGameView events.
+struct RenderGameViewFunctions {
+    /// Userdata which will be passed to the functions contained in this struct.
+    void* userdata;
+
+    /// Returns the width and height of the game view being rendered.
+    void (*size)(void* userdata, int* w, int* h);
+};
+
 /// Struct containing "vtable" callback information for surfaces.
 struct SurfaceFunctions {
     /// Userdata which will be passed to the functions contained in this struct.
@@ -221,11 +226,15 @@ struct SurfaceFunctions {
     /// indicated by dx,dy,dw,dh. All values are in pixels.
     void (*draw_to_surface)(void* userdata, void* target, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh);
 
-    /// Sets the tint this surface will be drawn with when calling draw_to_screen or draw_to_surface.
+    /// Draws a rectangle from the surface, indicated by sx,sy,sw,sh, to a rectangle of the game view,
+    /// indicated by dx,dy,dw,dh, during a RenderGameView event. All values are in pixels.
+    void (*draw_to_gameview)(void* userdata, void* event_userdata, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh);
+
+    /// Sets the tint this surface will be drawn with when calling the draw_to functions.
     /// Values are in the range [0.0 - 1.0]. Defaults are 1.0.
     void (*set_tint)(void* userdata, double r, double g, double b);
 
-    /// Sets the transparency this surface will be drawn with when calling draw_to_screen or draw_to_surface.
+    /// Sets the transparency this surface will be drawn with when calling the draw_to functions.
     /// Value is in the range [0.0 - 1.0] with 0.0 being invisible and 1.0 being fully opaque. Default is 1.0.
     void (*set_alpha)(void* userdata, double alpha);
 };
@@ -248,6 +257,9 @@ struct ShaderProgramFunctions {
 
     /// Draws to a surface using this shader program.
     void (*draw_to_surface)(void* userdata, void* surface_, void* buffer_, uint32_t count);
+
+    /// Draws to the game view during a RenderGameView event using this shader program.
+    void (*draw_to_gameview)(void* userdata, void* event_userdata, void* buffer, uint32_t count);
 
     /// Associates some values with a uniform in this shader program by its location.
     void (*set_uniform_floats)(void* userdata, int location, uint8_t count, double* values);
@@ -467,6 +479,10 @@ struct RenderMinimapEvent {
     uint16_t target_h;
 };
 
+struct RenderGameViewEvent {
+    struct RenderGameViewFunctions functions;
+};
+
 struct SwapBuffersEvent {
     // empty structs cause ICEs and problems with lua when allocating 0 bytes
     void* _;
@@ -547,32 +563,17 @@ void _bolt_plugin_shm_resize(struct BoltSHM* shm, size_t length, uint64_t new_id
 /// HANDLE object, created by the host using DuplicateHandle, and is unused on non-Windows systems.
 void _bolt_plugin_shm_remap(struct BoltSHM* shm, size_t length, void* handle);
 
-/// Sends a RenderBatch2D to all plugins.
+/* The following handlers send the relevant event to all plugins in no particular order */
 void _bolt_plugin_handle_render2d(const struct RenderBatch2D*);
-
-/// Sends a Render3D to all plugins.
 void _bolt_plugin_handle_render3d(const struct Render3D*);
-
-/// Sends a RenderParticles to all plugins.
 void _bolt_plugin_handle_renderparticles(const struct RenderParticles*);
-
-/// Sends a RenderBillboard to all plugins.
 void _bolt_plugin_handle_renderbillboard(const struct RenderBillboard*);
-
-/// Sends a RenderIconEvent for the "rendericon" handler to all plugins.
 void _bolt_plugin_handle_rendericon(const struct RenderIconEvent*);
-
-/// Sends a RenderIconEvent for the "renderbigicon" handler to all plugins.
 void _bolt_plugin_handle_renderbigicon(const struct RenderIconEvent*);
-
-/// Sends a MinimapTerrainEvent to all plugins.
 void _bolt_plugin_handle_minimapterrain(const struct MinimapTerrainEvent*);
-
-/// Sends a RenderBatch2D for the minimap image to all plugins.
 void _bolt_plugin_handle_minimaprender2d(const struct RenderBatch2D*);
-
-/// Sends a RenderMinimapEvent to all plugins.
 void _bolt_plugin_handle_renderminimap(const struct RenderMinimapEvent*);
+void _bolt_plugin_handle_rendergameview(const struct RenderGameViewEvent*);
 
 /// Gets the value from the monotonic microsecond counter, returning true on success or false on failure.
 /// Can only fail on Windows, and even then there are no known cases where it would fail.

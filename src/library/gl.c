@@ -132,6 +132,7 @@ struct TextureUnit {
     struct GLTexture2D* texture_2d;
     struct GLTexture2D* texture_2d_multisample;
     struct GLTexture2D* recent; // useful for guessing which of the above a shader is intending to use
+    GLenum target;
 };
 
 /// Context-specific information - this is thread-specific on EGL, not sure about elsewhere
@@ -156,6 +157,7 @@ struct GLContext {
     GLint depth_of_field_sSourceTex;
     GLint target_3d_tex;
     GLint player_model_tex;
+    GLint depth_tex;
     GLint game_view_x;
     GLint game_view_y;
     GLint game_view_w;
@@ -166,6 +168,7 @@ struct GLContext {
     uint8_t recalculate_sSceneHDRTex;
     uint8_t does_blit_3d_target;
     uint8_t depth_of_field_enabled;
+    uint8_t recalculate_depth_tex;
     GLint viewport_x;
     GLint viewport_y;
     GLsizei viewport_w;
@@ -189,18 +192,18 @@ static uint8_t egl_main_context_makecurrent_pending = 0;
 
 static struct GLProcFunctions gl = {0};
 static const struct GLLibFunctions* lgl = NULL;
-static GLuint program_direct_screen;
-static GLint program_direct_screen_sampler;
-static GLint program_direct_screen_d_xywh;
-static GLint program_direct_screen_s_xywh;
-static GLint program_direct_screen_src_wh_dest_wh;
-static GLint program_direct_screen_rgba;
-static GLuint program_direct_surface;
-static GLint program_direct_surface_sampler;
-static GLint program_direct_surface_d_xywh;
-static GLint program_direct_surface_s_xywh;
-static GLint program_direct_surface_src_wh_dest_wh;
-static GLint program_direct_surface_rgba;
+struct ProgramDirectData {
+    GLuint id;
+    GLint sampler;
+    GLint d_xywh;
+    GLint s_xywh;
+    GLint src_wh_dest_wh;
+    GLint rgba;
+};
+static struct ProgramDirectData program_direct_screen;
+static struct ProgramDirectData program_direct_surface;
+
+// this stuff should probably be moved to custom shader API in plugin.c now that it actually exists
 static GLuint program_region;
 static GLint program_region_xywh;
 static GLint program_region_dest_wh;
@@ -214,6 +217,7 @@ static uint8_t player_model_tex_seen = false;
 
 // "direct" program is basically a blit but with transparency.
 // there are different vertex shaders for targeting the screen vs targeting a surface.
+// the only difference is that "screen" inverts Y, whereas surface-to-surface doesn't.
 static const GLchar program_direct_screen_vs[] = GLSLHEADER
 "layout (location = 0) in vec2 aPos;"
 "out vec2 vPos;"
@@ -314,6 +318,7 @@ static size_t _bolt_gl_plugin_texture_id(void* userdata);
 static void _bolt_gl_plugin_texture_size(void* userdata, size_t* out);
 static uint8_t _bolt_gl_plugin_texture_compare(void* userdata, size_t x, size_t y, size_t len, const unsigned char* data);
 static uint8_t* _bolt_gl_plugin_texture_data(void* userdata, size_t x, size_t y);
+static void _bolt_gl_plugin_gameview_size(void* userdata, int* w, int* h);
 static void _bolt_gl_plugin_surface_init(struct SurfaceFunctions* out, unsigned int width, unsigned int height, const void* data);
 static void _bolt_gl_plugin_surface_destroy(void* userdata);
 static void _bolt_gl_plugin_surface_resize(void* userdata, unsigned int width, unsigned int height);
@@ -321,6 +326,7 @@ static void _bolt_gl_plugin_surface_clear(void* userdata, double r, double g, do
 static void _bolt_gl_plugin_surface_subimage(void* userdata, int x, int y, int w, int h, const void* pixels, uint8_t is_bgra);
 static void _bolt_gl_plugin_surface_drawtoscreen(void* userdata, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh);
 static void _bolt_gl_plugin_surface_drawtosurface(void* userdata, void* target, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh);
+static void _bolt_gl_plugin_surface_drawtogameview(void* userdata, void* _gameview, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh);
 static void _bolt_gl_plugin_surface_set_tint(void* userdata, double r, double g, double b);
 static void _bolt_gl_plugin_surface_set_alpha(void* userdata, double alpha);
 static void _bolt_gl_plugin_draw_region_outline(void* userdata, int16_t x, int16_t y, uint16_t width, uint16_t height);
@@ -339,6 +345,7 @@ static void _bolt_gl_plugin_shaderprogram_set_uniform_ints(void* userdata, int l
 static void _bolt_gl_plugin_shaderprogram_set_uniform_matrix(void* userdata, int location, uint8_t transpose, uint8_t size, double* values);
 static void _bolt_gl_plugin_shaderprogram_set_uniform_surface(void* userdata, int location, void* target);
 static void _bolt_gl_plugin_shaderprogram_drawtosurface(void* userdata, void* surface_, void* buffer_, uint32_t count);
+static void _bolt_gl_plugin_shaderprogram_drawtogameview(void* userdata, void* gameview_, void* buffer_, uint32_t count);
 static void _bolt_gl_plugin_shaderbuffer_init(struct ShaderBufferFunctions* out, const void* data, uint32_t len);
 static void _bolt_gl_plugin_shaderbuffer_destroy(void* userdata);
 
@@ -457,6 +464,13 @@ struct GLPluginDrawElementsMatrixBillboardUserData {
     const GLfloat* projection_matrix;
     const GLfloat* viewproj_matrix;
     const GLfloat* inv_view_matrix;
+};
+
+struct GLPluginRenderGameViewUserData {
+    GLuint target_fb;
+    GLint depth_tex;
+    GLint width;
+    GLint height;
 };
 
 struct GLPluginTextureUserData {
@@ -786,15 +800,14 @@ static void _bolt_glcontext_init(struct GLContext* context, void* egl_context, v
     context->id = (uintptr_t)egl_context;
     context->texture_units = calloc(MAX_TEXTURE_UNITS, sizeof(struct TextureUnit));
     context->player_model_tex = -1;
+    context->depth_tex = -1;
     context->game_view_part_framebuffer = -1;
     context->game_view_sSourceTex = -1;
-    context->does_blit_3d_target = false;
-    context->recalculate_sSceneHDRTex = false;
-    context->depth_of_field_enabled = false;
+    context->recalculate_depth_tex = true;
     context->blend_rgb_s = GL_ONE;
-    context->blend_rgb_d = GL_ZERO;
+    //context->blend_rgb_d = GL_ZERO;
     context->blend_alpha_s = GL_ONE;
-    context->blend_alpha_d = GL_ZERO;
+    //context->blend_alpha_d = GL_ZERO;
     if (shared) {
         context->programs = shared->programs;
         context->buffers = shared->buffers;
@@ -1069,30 +1082,30 @@ static void _bolt_gl_init() {
     gl.ShaderSource(direct_fs, 1, &source, &size);
     gl.CompileShader(direct_fs);
 
-    program_direct_screen = gl.CreateProgram();
-    gl.AttachShader(program_direct_screen, direct_screen_vs);
-    gl.AttachShader(program_direct_screen, direct_fs);
-    gl.LinkProgram(program_direct_screen);
-    program_direct_screen_sampler = gl.GetUniformLocation(program_direct_screen, "tex");
-    program_direct_screen_d_xywh = gl.GetUniformLocation(program_direct_screen, "d_xywh");
-    program_direct_screen_s_xywh = gl.GetUniformLocation(program_direct_screen, "s_xywh");
-    program_direct_screen_src_wh_dest_wh = gl.GetUniformLocation(program_direct_screen, "src_wh_dest_wh");
-    program_direct_screen_rgba = gl.GetUniformLocation(program_direct_screen, "rgba");
+    program_direct_screen.id = gl.CreateProgram();
+    gl.AttachShader(program_direct_screen.id, direct_screen_vs);
+    gl.AttachShader(program_direct_screen.id, direct_fs);
+    gl.LinkProgram(program_direct_screen.id);
+    program_direct_screen.sampler = gl.GetUniformLocation(program_direct_screen.id, "tex");
+    program_direct_screen.d_xywh = gl.GetUniformLocation(program_direct_screen.id, "d_xywh");
+    program_direct_screen.s_xywh = gl.GetUniformLocation(program_direct_screen.id, "s_xywh");
+    program_direct_screen.src_wh_dest_wh = gl.GetUniformLocation(program_direct_screen.id, "src_wh_dest_wh");
+    program_direct_screen.rgba = gl.GetUniformLocation(program_direct_screen.id, "rgba");
 
-    program_direct_surface = gl.CreateProgram();
-    gl.AttachShader(program_direct_surface, direct_surface_vs);
-    gl.AttachShader(program_direct_surface, direct_fs);
-    gl.LinkProgram(program_direct_surface);
-    program_direct_surface_sampler = gl.GetUniformLocation(program_direct_surface, "tex");
-    program_direct_surface_d_xywh = gl.GetUniformLocation(program_direct_surface, "d_xywh");
-    program_direct_surface_s_xywh = gl.GetUniformLocation(program_direct_surface, "s_xywh");
-    program_direct_surface_src_wh_dest_wh = gl.GetUniformLocation(program_direct_surface, "src_wh_dest_wh");
-    program_direct_surface_rgba = gl.GetUniformLocation(program_direct_surface, "rgba");
+    program_direct_surface.id = gl.CreateProgram();
+    gl.AttachShader(program_direct_surface.id, direct_surface_vs);
+    gl.AttachShader(program_direct_surface.id, direct_fs);
+    gl.LinkProgram(program_direct_surface.id);
+    program_direct_surface.sampler = gl.GetUniformLocation(program_direct_surface.id, "tex");
+    program_direct_surface.d_xywh = gl.GetUniformLocation(program_direct_surface.id, "d_xywh");
+    program_direct_surface.s_xywh = gl.GetUniformLocation(program_direct_surface.id, "s_xywh");
+    program_direct_surface.src_wh_dest_wh = gl.GetUniformLocation(program_direct_surface.id, "src_wh_dest_wh");
+    program_direct_surface.rgba = gl.GetUniformLocation(program_direct_surface.id, "rgba");
 
-    gl.DetachShader(program_direct_screen, direct_screen_vs);
-    gl.DetachShader(program_direct_screen, direct_fs);
-    gl.DetachShader(program_direct_surface, direct_surface_vs);
-    gl.DetachShader(program_direct_surface, direct_fs);
+    gl.DetachShader(program_direct_screen.id, direct_screen_vs);
+    gl.DetachShader(program_direct_screen.id, direct_fs);
+    gl.DetachShader(program_direct_surface.id, direct_surface_vs);
+    gl.DetachShader(program_direct_surface.id, direct_fs);
     gl.DeleteShader(direct_screen_vs);
     gl.DeleteShader(direct_surface_vs);
     gl.DeleteShader(direct_fs);
@@ -1133,8 +1146,8 @@ static void _bolt_gl_init() {
 
 void _bolt_gl_close() {
     gl.DeleteBuffers(1, &buffer_vertices_square);
-    gl.DeleteProgram(program_direct_screen);
-    gl.DeleteProgram(program_direct_surface);
+    gl.DeleteProgram(program_direct_screen.id);
+    gl.DeleteProgram(program_direct_surface.id);
     gl.DeleteVertexArrays(1, &program_direct_vao);
     _bolt_destroy_context((void*)egl_main_context);
 }
@@ -2075,6 +2088,21 @@ void _bolt_gl_onDrawArrays(GLenum mode, GLint first, GLsizei count) {
                 target_tex->icon = source_tex->icon;
                 source_tex->icon.model_count = 0;
             }
+
+            if (c->game_view_sSceneHDRTex == source_tex->id && c->depth_tex > 0 && !c->recalculate_depth_tex) {
+                struct GLPluginRenderGameViewUserData userdata;
+                userdata.target_fb = c->current_draw_framebuffer;
+                userdata.depth_tex = c->depth_tex;
+                userdata.width = c->game_view_w;
+                userdata.height = c->game_view_h;
+
+                struct RenderGameViewEvent event;
+                event.functions.userdata = &userdata;
+                event.functions.size = _bolt_gl_plugin_gameview_size;
+                _bolt_plugin_handle_rendergameview(&event);
+
+                c->recalculate_depth_tex = true;
+            }
         } else if (c->bound_program->loc_sSourceTex != -1) {
             gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_sSourceTex, &source_tex_unit);
             struct GLTexture2D* source_tex = c->texture_units[source_tex_unit].texture_2d;
@@ -2122,6 +2150,7 @@ void _bolt_gl_onBindTexture(GLenum target, GLuint texture) {
             unit->texture_2d_multisample = unit->recent;
             break;
     }
+    unit->target = target;
 }
 
 void _bolt_gl_onTexSubImage2D(GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void* pixels) {
@@ -2206,6 +2235,17 @@ void _bolt_gl_onBlendFunc(GLenum sfactor, GLenum dfactor) {
 
 /* DrawElements sub-functions */
 
+static void drawelements_update_depth_tex(struct GLContext* c) {
+    if (c->recalculate_depth_tex) {
+        GLint depth_tex = 0;
+        gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &depth_tex);
+        if (depth_tex) {
+            c->depth_tex = depth_tex;
+            c->recalculate_depth_tex = false;
+        }
+    }
+}
+
 static void drawelements_handle_2d(GLsizei count, const unsigned short* indices, struct GLContext* c, const struct GLAttrBinding* attributes) {
     GLint diffuse_map, ubo_gui_index;
     gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uDiffuseMap, &diffuse_map);
@@ -2254,6 +2294,7 @@ static void drawelements_handle_3d(GLsizei count, const unsigned short* indices,
 }
 
 static void drawelements_handle_particles(GLsizei count, const unsigned short* indices, struct GLContext* c, const struct GLAttrBinding* attributes) {
+    drawelements_update_depth_tex(c);
     GLint atlas, settings_atlas, seconds, ubo_binding, ubo_view_index, ubo_particle_index;
     gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uTextureAtlas, &atlas);
     gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uTextureAtlasSettings, &settings_atlas);
@@ -2610,6 +2651,7 @@ static void drawelements_handle_3d_silhouette(struct GLContext* c) {
 }
 
 static void drawelements_handle_3d_normal(GLsizei count, const unsigned short* indices, struct GLContext* c, const struct GLAttrBinding* attributes) {
+    drawelements_update_depth_tex(c);
     GLint atlas, settings_atlas, ubo_binding, ubo_view_index, ubo_batch_index, ubo_model_index;
     gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uTextureAtlas, &atlas);
     gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uTextureAtlasSettings, &settings_atlas);
@@ -2742,6 +2784,95 @@ DEFGETMATRIX(TYPE, inv_view, STRUCT)
 #define DEFALLMATRIXGETTERS(TYPE, STRUCT) \
 DEFGETMATRIX(TYPE, model, STRUCT) \
 DEFNORMALMATRIXGETTERS(TYPE, STRUCT)
+
+static void surface_draw(const struct GLContext* c, const struct PluginSurfaceUserdata* userdata, struct ProgramDirectData* program, GLuint target_fb, int target_width, int target_height, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh) {
+    GLboolean depth_test, scissor_test, cull_face;
+    lgl->GetBooleanv(GL_DEPTH_TEST, &depth_test);
+    lgl->GetBooleanv(GL_SCISSOR_TEST, &scissor_test);
+    lgl->GetBooleanv(GL_CULL_FACE, &cull_face);
+
+    gl.UseProgram(program->id);
+    lgl->BindTexture(GL_TEXTURE_2D, userdata->renderbuffer);
+    gl.BindVertexArray(program_direct_vao);
+    gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, target_fb);
+    gl.Uniform1i(program->sampler, c->active_texture);
+    gl.Uniform4i(program->d_xywh, dx, dy, dw, dh);
+    gl.Uniform4i(program->s_xywh, sx, sy, sw, sh);
+    gl.Uniform4i(program->src_wh_dest_wh, userdata->width, userdata->height, target_width, target_height);
+    gl.Uniform4fv(program->rgba, 1, userdata->rgba);
+    lgl->Viewport(0, 0, target_width, target_height);
+    lgl->Disable(GL_DEPTH_TEST);
+    lgl->Disable(GL_SCISSOR_TEST);
+    lgl->Disable(GL_CULL_FACE);
+    gl.BlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+    lgl->DrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+    gl.BlendFuncSeparate(c->blend_rgb_s, c->blend_rgb_d, c->blend_alpha_s, c->blend_alpha_d);
+    if (depth_test) lgl->Enable(GL_DEPTH_TEST);
+    if (scissor_test) lgl->Enable(GL_SCISSOR_TEST);
+    if (cull_face) lgl->Enable(GL_CULL_FACE);
+    lgl->Viewport(c->viewport_x, c->viewport_y, c->viewport_w, c->viewport_h);
+    const struct GLTexture2D* original_tex = c->texture_units[c->active_texture].recent;
+    lgl->BindTexture(GL_TEXTURE_2D, original_tex ? original_tex->id : 0);
+    gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, c->current_draw_framebuffer);
+    gl.BindVertexArray(c->bound_vao->id);
+    gl.UseProgram(c->bound_program ? c->bound_program->id : 0);
+}
+
+static void shaderprogram_draw(const struct PluginProgramUserdata* program, const struct PluginShaderBufferUserdata* buffer, uint32_t count, GLuint target_fb, GLsizei width, GLsizei height) {
+    const struct GLContext* c = _bolt_context();
+    GLint array_binding;
+    lgl->GetIntegerv(GL_ARRAY_BUFFER_BINDING, &array_binding);
+    GLboolean depth_test, scissor_test, cull_face;
+    lgl->GetBooleanv(GL_DEPTH_TEST, &depth_test);
+    lgl->GetBooleanv(GL_SCISSOR_TEST, &scissor_test);
+    lgl->GetBooleanv(GL_CULL_FACE, &cull_face);
+
+    gl.UseProgram(program->program);
+    gl.BindVertexArray(program->vao);
+    gl.BindBuffer(GL_ARRAY_BUFFER, buffer->buffer);
+    for (uint8_t i = 0; i < MAX_PROGRAM_BINDINGS; i += 1) {
+        if (program->bindings_enabled & (1 << i)) {
+            const struct PluginProgramAttrBinding* binding = &program->bindings[i];
+            gl.EnableVertexAttribArray(i);
+            if (binding->is_double) {
+                gl.VertexAttribLPointer(i, binding->size, binding->type, binding->stride, (const void*)binding->offset);
+            } else {
+                gl.VertexAttribPointer(i, binding->size, binding->type, false, binding->stride, (const void*)binding->offset);
+            }
+        } else {
+            gl.DisableVertexAttribArray(i);
+        }
+    }
+    uint32_t active_texture = 0;
+    size_t iter = 0;
+    void* item;
+    while (hashmap_iter(program->uniforms, &iter, &item)) {
+        uniform_upload(item, &active_texture);
+    }
+    gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, target_fb);
+    lgl->Viewport(0, 0, width, height);
+    lgl->Disable(GL_DEPTH_TEST);
+    lgl->Disable(GL_SCISSOR_TEST);
+    lgl->Disable(GL_CULL_FACE);
+    lgl->DrawArrays(GL_TRIANGLES, 0, count);
+
+    if (active_texture > 0) {
+        for (size_t i = 0; i < active_texture; i += 1) {
+            gl.ActiveTexture(GL_TEXTURE0 + i);
+            lgl->BindTexture(c->texture_units[i].target, c->texture_units[i].recent->id);
+        }
+        gl.ActiveTexture(GL_TEXTURE0 + c->active_texture);
+    }
+    if (depth_test) lgl->Enable(GL_DEPTH_TEST);
+    if (scissor_test) lgl->Enable(GL_SCISSOR_TEST);
+    if (cull_face) lgl->Enable(GL_CULL_FACE);
+    lgl->Viewport(c->viewport_x, c->viewport_y, c->viewport_w, c->viewport_h);
+    gl.BindBuffer(GL_ARRAY_BUFFER, array_binding);
+    gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, c->current_draw_framebuffer);
+    gl.BindVertexArray(c->bound_vao->id);
+    gl.UseProgram(c->bound_program ? c->bound_program->id : 0);    
+}
 
 /* plugin GL function callbacks */
 
@@ -3179,6 +3310,12 @@ static uint8_t* _bolt_gl_plugin_texture_data(void* userdata, size_t x, size_t y)
     return tex->data + (tex->width * y * 4) + (x * 4);
 }
 
+static void _bolt_gl_plugin_gameview_size(void* userdata, int* w, int* h) {
+    struct GLPluginRenderGameViewUserData* gameview = userdata;
+    *w = gameview->width;
+    *h = gameview->height;
+}
+
 static void _bolt_gl_plugin_surface_init(struct SurfaceFunctions* functions, unsigned int width, unsigned int height, const void* data) {
     struct PluginSurfaceUserdata* userdata = malloc(sizeof(struct PluginSurfaceUserdata));
     struct GLContext* c = _bolt_context();
@@ -3199,6 +3336,7 @@ static void _bolt_gl_plugin_surface_init(struct SurfaceFunctions* functions, uns
     functions->subimage = _bolt_gl_plugin_surface_subimage;
     functions->draw_to_screen = _bolt_gl_plugin_surface_drawtoscreen;
     functions->draw_to_surface = _bolt_gl_plugin_surface_drawtosurface;
+    functions->draw_to_gameview = _bolt_gl_plugin_surface_drawtogameview;
     functions->set_tint = _bolt_gl_plugin_surface_set_tint;
     functions->set_alpha = _bolt_gl_plugin_surface_set_alpha;
 
@@ -3241,77 +3379,21 @@ static void _bolt_gl_plugin_surface_subimage(void* _userdata, int x, int y, int 
     lgl->BindTexture(GL_TEXTURE_2D, original_tex ? original_tex->id : 0);
 }
 
-static void _bolt_gl_plugin_surface_drawtoscreen(void* _userdata, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh) {
-    struct PluginSurfaceUserdata* userdata = _userdata;
-    struct GLContext* c = _bolt_context();
-    GLboolean depth_test, scissor_test, cull_face;
-    lgl->GetBooleanv(GL_DEPTH_TEST, &depth_test);
-    lgl->GetBooleanv(GL_SCISSOR_TEST, &scissor_test);
-    lgl->GetBooleanv(GL_CULL_FACE, &cull_face);
-
-    gl.UseProgram(program_direct_screen);
-    lgl->BindTexture(GL_TEXTURE_2D, userdata->renderbuffer);
-    gl.BindVertexArray(program_direct_vao);
-    gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-    gl.Uniform1i(program_direct_screen_sampler, c->active_texture);
-    gl.Uniform4i(program_direct_screen_d_xywh, dx, dy, dw, dh);
-    gl.Uniform4i(program_direct_screen_s_xywh, sx, sy, sw, sh);
-    gl.Uniform4i(program_direct_screen_src_wh_dest_wh, userdata->width, userdata->height, gl_width, gl_height);
-    gl.Uniform4fv(program_direct_screen_rgba, 1, userdata->rgba);
-    lgl->Viewport(0, 0, gl_width, gl_height);
-    lgl->Disable(GL_DEPTH_TEST);
-    lgl->Disable(GL_SCISSOR_TEST);
-    lgl->Disable(GL_CULL_FACE);
-    lgl->BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    lgl->DrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-
-    gl.BlendFuncSeparate(c->blend_rgb_s, c->blend_rgb_d, c->blend_alpha_s, c->blend_alpha_d);
-    if (depth_test) lgl->Enable(GL_DEPTH_TEST);
-    if (scissor_test) lgl->Enable(GL_SCISSOR_TEST);
-    if (cull_face) lgl->Enable(GL_CULL_FACE);
-    lgl->Viewport(c->viewport_x, c->viewport_y, c->viewport_w, c->viewport_h);
-    const struct GLTexture2D* original_tex = c->texture_units[c->active_texture].texture_2d;
-    lgl->BindTexture(GL_TEXTURE_2D, original_tex ? original_tex->id : 0);
-    gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, c->current_draw_framebuffer);
-    gl.BindVertexArray(c->bound_vao->id);
-    gl.UseProgram(c->bound_program ? c->bound_program->id : 0);
+static void _bolt_gl_plugin_surface_drawtoscreen(void* userdata, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh) {
+    const struct GLContext* c = _bolt_context();
+    surface_draw(c, userdata, &program_direct_screen, 0, gl_width, gl_height, sx, sy, sw, sh, dx, dy, dw, dh);
 }
 
-static void _bolt_gl_plugin_surface_drawtosurface(void* _userdata, void* _target, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh) {
-    struct PluginSurfaceUserdata* userdata = _userdata;
-    struct PluginSurfaceUserdata* target = _target;
-    struct GLContext* c = _bolt_context();
-    GLboolean depth_test, scissor_test, cull_face;
-    lgl->GetBooleanv(GL_DEPTH_TEST, &depth_test);
-    lgl->GetBooleanv(GL_SCISSOR_TEST, &scissor_test);
-    lgl->GetBooleanv(GL_CULL_FACE, &cull_face);
+static void _bolt_gl_plugin_surface_drawtosurface(void* userdata, void* _target, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh) {
+    const struct PluginSurfaceUserdata* target = _target;
+    const struct GLContext* c = _bolt_context();
+    surface_draw(c, userdata, &program_direct_surface, target->framebuffer, target->width, target->height, sx, sy, sw, sh, dx, dy, dw, dh);
+}
 
-    gl.UseProgram(program_direct_surface);
-    lgl->BindTexture(GL_TEXTURE_2D, userdata->renderbuffer);
-    gl.BindVertexArray(program_direct_vao);
-    gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, target->framebuffer);
-    gl.Uniform1i(program_direct_surface_sampler, c->active_texture);
-    gl.Uniform4i(program_direct_surface_d_xywh, dx, dy, dw, dh);
-    gl.Uniform4i(program_direct_surface_s_xywh, sx, sy, sw, sh);
-    gl.Uniform4i(program_direct_surface_src_wh_dest_wh, userdata->width, userdata->height, target->width, target->height);
-    gl.Uniform4fv(program_direct_screen_rgba, 1, userdata->rgba);
-    lgl->Viewport(0, 0, target->width, target->height);
-    lgl->Disable(GL_DEPTH_TEST);
-    lgl->Disable(GL_SCISSOR_TEST);
-    lgl->Disable(GL_CULL_FACE);
-    gl.BlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-    lgl->DrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-
-    gl.BlendFuncSeparate(c->blend_rgb_s, c->blend_rgb_d, c->blend_alpha_s, c->blend_alpha_d);
-    if (depth_test) lgl->Enable(GL_DEPTH_TEST);
-    if (scissor_test) lgl->Enable(GL_SCISSOR_TEST);
-    if (cull_face) lgl->Enable(GL_CULL_FACE);
-    lgl->Viewport(c->viewport_x, c->viewport_y, c->viewport_w, c->viewport_h);
-    const struct GLTexture2D* original_tex = c->texture_units[c->active_texture].texture_2d;
-    lgl->BindTexture(GL_TEXTURE_2D, original_tex ? original_tex->id : 0);
-    gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, c->current_draw_framebuffer);
-    gl.BindVertexArray(c->bound_vao->id);
-    gl.UseProgram(c->bound_program ? c->bound_program->id : 0);
+static void _bolt_gl_plugin_surface_drawtogameview(void* userdata, void* _gameview, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh) {
+    const struct GLPluginRenderGameViewUserData* gameview = _gameview;
+    const struct GLContext* c = _bolt_context();
+    surface_draw(c, userdata, &program_direct_screen, gameview->target_fb, gameview->width, gameview->height, sx, sy, sw, sh, dx, dy, dw, dh);
 }
 
 static void _bolt_gl_plugin_surface_set_tint(void* userdata, double r, double g, double b) {
@@ -3443,6 +3525,7 @@ static uint8_t _bolt_gl_plugin_shaderprogram_init(struct ShaderProgramFunctions*
     gl.GenVertexArrays(1, &userdata->vao);
     out->set_attribute = _bolt_gl_plugin_shaderprogram_set_attribute;
     out->draw_to_surface = _bolt_gl_plugin_shaderprogram_drawtosurface;
+    out->draw_to_gameview = _bolt_gl_plugin_shaderprogram_drawtogameview;
     out->set_uniform_floats = _bolt_gl_plugin_shaderprogram_set_uniform_floats;
     out->set_uniform_ints = _bolt_gl_plugin_shaderprogram_set_uniform_ints;
     out->set_uniform_matrix = _bolt_gl_plugin_shaderprogram_set_uniform_matrix;
@@ -3567,58 +3650,14 @@ static void _bolt_gl_plugin_shaderprogram_drawtosurface(void* userdata, void* su
     const struct PluginProgramUserdata* program = (struct PluginProgramUserdata*)userdata;
     const struct PluginSurfaceUserdata* surface = surface_;
     const struct PluginShaderBufferUserdata* buffer = buffer_;
-    const struct GLContext* c = _bolt_context();
-    GLint array_binding;
-    lgl->GetIntegerv(GL_ARRAY_BUFFER_BINDING, &array_binding);
-    GLboolean depth_test, scissor_test, cull_face;
-    lgl->GetBooleanv(GL_DEPTH_TEST, &depth_test);
-    lgl->GetBooleanv(GL_SCISSOR_TEST, &scissor_test);
-    lgl->GetBooleanv(GL_CULL_FACE, &cull_face);
+    shaderprogram_draw(program, buffer, count, surface->framebuffer, surface->width, surface->height);
+}
 
-    gl.UseProgram(program->program);
-    gl.BindVertexArray(program->vao);
-    gl.BindBuffer(GL_ARRAY_BUFFER, buffer->buffer);
-    for (uint8_t i = 0; i < MAX_PROGRAM_BINDINGS; i += 1) {
-        if (program->bindings_enabled & (1 << i)) {
-            const struct PluginProgramAttrBinding* binding = &program->bindings[i];
-            gl.EnableVertexAttribArray(i);
-            if (binding->is_double) {
-                gl.VertexAttribLPointer(i, binding->size, binding->type, binding->stride, (const void*)binding->offset);
-            } else {
-                gl.VertexAttribPointer(i, binding->size, binding->type, false, binding->stride, (const void*)binding->offset);
-            }
-        } else {
-            gl.DisableVertexAttribArray(i);
-        }
-    }
-    uint32_t active_texture = 0;
-    size_t iter = 0;
-    void* item;
-    while (hashmap_iter(program->uniforms, &iter, &item)) {
-        uniform_upload(item, &active_texture);
-    }
-    gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, surface->framebuffer);
-    lgl->Viewport(0, 0, surface->width, surface->height);
-    lgl->Disable(GL_DEPTH_TEST);
-    lgl->Disable(GL_SCISSOR_TEST);
-    lgl->Disable(GL_CULL_FACE);
-    lgl->DrawArrays(GL_TRIANGLES, 0, count);
-
-    if (active_texture > 0) {
-        for (size_t i = 0; i < active_texture; i += 1) {
-            gl.ActiveTexture(GL_TEXTURE0 + i);
-            lgl->BindTexture(GL_TEXTURE_2D, c->texture_units[i].texture_2d->id);
-        }
-        gl.ActiveTexture(GL_TEXTURE0 + c->active_texture);
-    }
-    if (depth_test) lgl->Enable(GL_DEPTH_TEST);
-    if (scissor_test) lgl->Enable(GL_SCISSOR_TEST);
-    if (cull_face) lgl->Enable(GL_CULL_FACE);
-    lgl->Viewport(c->viewport_x, c->viewport_y, c->viewport_w, c->viewport_h);
-    gl.BindBuffer(GL_ARRAY_BUFFER, array_binding);
-    gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, c->current_draw_framebuffer);
-    gl.BindVertexArray(c->bound_vao->id);
-    gl.UseProgram(c->bound_program ? c->bound_program->id : 0);
+static void _bolt_gl_plugin_shaderprogram_drawtogameview(void* userdata, void* gameview_, void* buffer_, uint32_t count) {
+    const struct PluginProgramUserdata* program = (struct PluginProgramUserdata*)userdata;
+    const struct GLPluginRenderGameViewUserData* gameview = gameview_;
+    const struct PluginShaderBufferUserdata* buffer = buffer_;
+    shaderprogram_draw(program, buffer, count, gameview->target_fb, gameview->width, gameview->height);
 }
 
 static void _bolt_gl_plugin_shaderbuffer_init(struct ShaderBufferFunctions* out, const void* data, uint32_t len) {

@@ -211,6 +211,7 @@ DEFINE_CALLBACK(renderbigicon)
 DEFINE_CALLBACK(minimapterrain)
 DEFINE_CALLBACK(minimaprender2d)
 DEFINE_CALLBACK(renderminimap)
+DEFINE_CALLBACK(rendergameview)
 DEFINE_CALLBACK(mousemotion)
 DEFINE_CALLBACK(mousebutton)
 DEFINE_CALLBACK(mousebuttonup)
@@ -952,6 +953,15 @@ static int api_renderminimap_targetsize(lua_State* state) {
     return 2;
 }
 
+static int api_rendergameview_size(lua_State* state) {
+    const struct RenderGameViewEvent* event = require_self_userdata(state, "size");
+    int w, h;
+    event->functions.size(event->functions.userdata, &w, &h);
+    lua_pushinteger(state, w);
+    lua_pushinteger(state, h);
+    return 2;
+}
+
 static int api_point_transform(lua_State* state) {
     const struct Point3D* point = require_self_userdata(state, "transform");
     const struct Transform3D* transform = require_userdata(state, 2, "transform");
@@ -1119,6 +1129,21 @@ static int api_surface_drawtosurface(lua_State* state) {
     const int dw = luaL_checkinteger(state, 9);
     const int dh = luaL_checkinteger(state, 10);
     functions->draw_to_surface(functions->userdata, target->userdata, sx, sy, sw, sh, dx, dy, dw, dh);
+    return 0;
+}
+
+static int api_surface_drawtogameview(lua_State* state) {
+    const struct SurfaceFunctions* functions = require_self_userdata(state, "drawtogameview");
+    const struct RenderGameViewEvent* gameview = require_userdata(state, 2, "drawtogameview");
+    const int sx = luaL_checkinteger(state, 3);
+    const int sy = luaL_checkinteger(state, 4);
+    const int sw = luaL_checkinteger(state, 5);
+    const int sh = luaL_checkinteger(state, 6);
+    const int dx = luaL_checkinteger(state, 7);
+    const int dy = luaL_checkinteger(state, 8);
+    const int dw = luaL_checkinteger(state, 9);
+    const int dh = luaL_checkinteger(state, 10);
+    functions->draw_to_gameview(functions->userdata, gameview->functions.userdata, sx, sy, sw, sh, dx, dy, dw, dh);
     return 0;
 }
 
@@ -2131,6 +2156,19 @@ static int api_shaderprogram_drawtosurface(lua_State* state) {
     return 0;
 }
 
+static int api_shaderprogram_drawtogameview(lua_State* state) {
+    const struct ShaderProgramFunctions* program = require_self_userdata(state, "drawtogameview");
+    const struct RenderGameViewEvent* gameview = require_userdata(state, 2, "drawtogameview");
+    const struct ShaderBufferFunctions* buffer = require_userdata(state, 3, "drawtogameview");
+    const lua_Integer vertex_count = luaL_checkinteger(state, 4);
+    if (vertex_count > UINT32_MAX) {
+        lua_pushfstring(state, "drawtogameview: too many vertices: %lu, maximum is %u", vertex_count, UINT32_MAX);
+        lua_error(state);
+    }
+    program->draw_to_gameview(program->userdata, gameview->functions.userdata, buffer->userdata, vertex_count);
+    return 0;
+}
+
 /* below here is API function-list builders, declared in plugin_api.h */
 
 struct ApiFuncTemplate {
@@ -2190,6 +2228,7 @@ static struct ApiFuncTemplate bolt_functions[] = {
     BOLTFUNC(onminimapterrain),
     BOLTFUNC(onminimaprender2d),
     BOLTFUNC(onrenderminimap),
+    BOLTFUNC(onrendergameview),
     BOLTFUNC(onswapbuffers),
     BOLTFUNC(onmousemotion),
     BOLTFUNC(onmousebutton),
@@ -2334,6 +2373,10 @@ static struct ApiFuncTemplate renderminimap_functions[] = {
     BOLTFUNC(targetsize, renderminimap),
 };
 
+static struct ApiFuncTemplate rendergameview_functions[] = {
+    BOLTFUNC(size, rendergameview),
+};
+
 static struct ApiFuncTemplate point_functions[] = {
     BOLTFUNC(transform, point),
     BOLTFUNC(get, point),
@@ -2390,6 +2433,7 @@ static struct ApiFuncTemplate shaderprogram_functions[] = {
     BOLTFUNC(setuniformmatrix4f, shaderprogram),
     BOLTFUNC(setuniformsurface, shaderprogram),
     BOLTFUNC(drawtosurface, shaderprogram),
+    BOLTFUNC(drawtogameview, shaderprogram),
 };
 
 static struct ApiFuncTemplate surface_functions[] = {
@@ -2397,6 +2441,7 @@ static struct ApiFuncTemplate surface_functions[] = {
     BOLTFUNC(subimage, surface),
     BOLTFUNC(drawtoscreen, surface),
     BOLTFUNC(drawtosurface, surface),
+    BOLTFUNC(drawtogameview, surface),
     BOLTFUNC(drawtowindow, surface),
     BOLTFUNC(settint, surface),
     BOLTFUNC(setalpha, surface),
@@ -2531,6 +2576,7 @@ DEFPUSHMETA(renderbillboard)
 DEFPUSHMETA(rendericon)
 DEFPUSHMETA(minimapterrain)
 DEFPUSHMETA(renderminimap)
+DEFPUSHMETA(rendergameview)
 DEFPUSHMETA(point)
 DEFPUSHMETA(transform)
 DEFPUSHMETAGC(buffer)

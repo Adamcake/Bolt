@@ -48,6 +48,7 @@ void _bolt_api_push_metatable_renderbillboard(lua_State*);
 void _bolt_api_push_metatable_rendericon(lua_State*);
 void _bolt_api_push_metatable_minimapterrain(lua_State*);
 void _bolt_api_push_metatable_renderminimap(lua_State*);
+void _bolt_api_push_metatable_rendergameview(lua_State*);
 void _bolt_api_push_metatable_point(lua_State*);
 void _bolt_api_push_metatable_transform(lua_State*);
 void _bolt_api_push_metatable_buffer(lua_State*);

@@ -933,6 +933,21 @@ end)
 
 @eventobjectwarning{}
 
+@node functions-onrendergameview
+@section onrendergameview
+
+@eventhandler{game view rendering events, @ref{objects-rendergameview}}
+
+@example lua
+@verbatim
+bolt.onrendergameview(function (event)
+  -- ...
+end)
+@end verbatim
+@end example
+
+@eventobjectwarning{}
+
 @node functions-onswapbuffers
 @section onswapbuffers
 
@@ -1264,6 +1279,24 @@ image will be scaled smoothly.
 @example lua
 @verbatim
 mysurface:drawtosurface(myothersurface, 0, 0, 100, 100, 0, 0, 1920, 1080)
+@end verbatim
+@end example
+
+@node surface-drawtogameview
+@subsection drawtogameview
+
+Draws a section of the surface onto a section of the game view. Can only
+be called during a rendergameview event, as the event object needs to be
+passed to this function. Parameters are target surface, then source
+X,Y,W,H, then destination X,Y,W,H, all in pixels. Any transparency will
+be blended additively and, if the size of the source and destination
+rectangles is different, the image will be scaled smoothly.
+
+@example lua
+@verbatim
+bolt.onrendergameview(function (event)
+  mysurface:drawtogameview(event, 0, 0, 100, 100, 0, 0, 100, 100)
+end)
 @end verbatim
 @end example
 
@@ -2571,6 +2604,16 @@ vertices to draw. Each 3 vertices will make a triangle. If the number of
 vertices isn't a multiple of 3, then the last 1 or 2 will usually be
 ignored.
 
+@node shaderprogram-drawtogameview
+@subsection drawtogameview
+
+Invokes this shader program to draw to the game view. This can only be
+called during a rendergameview event, as the event object needs to be
+passed to this function. Parameters are a rendergameview event object,
+a shader buffer, and an integer indicating the number of vertices to
+draw. Each 3 vertices will make a triangle. If the number of vertices
+isn't a multiple of 3, then the last 1 or 2 will usually be ignored.
+
 @node objects-shaderbuffer
 @section Shader Buffer
 
@@ -3746,6 +3789,38 @@ screen. To get the minimap contents, see @ref{objects-minimapterrain}
 and @ref{functions-onminimaprender2d}.
 
 @eventobjectwarning{}
+
+@node objects-rendergameview
+@section Render Game View
+
+A rendergameview event comes from @ref{functions-onrendergameview}. It
+occurs when the game view is finalised and drawn to the screen, which
+will happen once per frame unless the game view is not visible (e.g.
+player is in the lobby or viewing the map.)
+
+During this event, it's possible to render surfaces to the game view
+using @ref{surface-drawtogameview}. This will mean the surface will be
+drawn as an overlay onto the 3D game view, but below any UI elements.
+When using the custom shader API, it's also possible to draw directly to
+the game view using a shader program during this event, using
+@ref{shaderprogram-drawtogameview}, which has the added bonus of being
+able to bind the game's depth buffer as a sampler2D. Sampling the game's
+depth buffer can be used to achieve a pseudo-3D effect in an overlay.
+See that function's documentation for more info.
+
+@eventobjectwarning{}
+
+@node rendergameview-size
+@subsection size
+
+Returns the width and height of the game view being rendered, in pixels.
+This will also be the width and height of the depth buffer.
+
+@example lua
+@verbatim
+local width, height = event:size()
+@end verbatim
+@end example
 
 @node renderminimap-sourcexywh
 @subsection xywh
