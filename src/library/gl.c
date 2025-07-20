@@ -1830,7 +1830,6 @@ static void glBlitFramebuffer(GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1
         gl.GetFramebufferAttachmentParameteriv(GL_READ_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &read_tex_id);
         if (c->depth_tex == read_tex_id) {
             gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &c->depth_tex);
-            printf("replacing depth tex %i with depth tex %i\n", c->depth_tex, c->depth_tex);
         }
     }
 
