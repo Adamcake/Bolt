@@ -1825,6 +1825,17 @@ static void glBlitFramebuffer(GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1
     gl.BlitFramebuffer(srcX0, srcY0, srcX1, srcY1, dstX0, dstY0, dstX1, dstY1, mask, filter);
     struct GLContext* c = _bolt_context();
 
+    if ((mask & GL_DEPTH_BUFFER_BIT) && c->depth_tex > 0) {
+        GLint read_tex_id = 0;
+        gl.GetFramebufferAttachmentParameteriv(GL_READ_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &read_tex_id);
+        if (c->depth_tex == read_tex_id) {
+            gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &c->depth_tex);
+            printf("replacing depth tex %i with depth tex %i\n", c->depth_tex, c->depth_tex);
+        }
+    }
+
+    if (!(mask & GL_COLOR_BUFFER_BIT)) return;
+
     GLint draw_tex_id = 0;
     GLint read_tex_id = 0;
     gl.GetFramebufferAttachmentParameteriv(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &read_tex_id);
@@ -3777,6 +3788,9 @@ static void glplugin_shaderprogram_set_uniform_depthbuffer(void* userdata, void*
         .sub.sampler = gameview->depth_tex,
     };
     hashmap_set(program->uniforms, &uniform);
+
+    const struct GLTexture2D* tex = context_get_texture(_bolt_context(), gameview->depth_tex);
+    printf("sampler=%i is_multisample=%i\n", tex->id, tex->is_multisample);
 }
 
 static void glplugin_shaderprogram_drawtosurface(void* userdata, void* surface_, void* buffer_, uint32_t count) {
