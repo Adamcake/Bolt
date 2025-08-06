@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21) # Minimum CEF requirement, but building with the latest cmake is strongly recommended
-project(Bolt VERSION 0.18 LANGUAGES C CXX)
+project(Bolt VERSION 0.19 LANGUAGES C CXX)
 
 if(NOT WIN32)
     # name of application in metadata, defaulting to "BoltLauncher", but usually overridden to "com.adamcake.Bolt" by flatpak for example
@@ -65,6 +65,19 @@ if(NOT WIN32)
         "    </screenshot>"
         "</screenshots>"
         "<releases>"
+        "    <release version=\"0.19.0\" date=\"2025-08-06\">"
+        "        <url type=\"details\">https://github.com/Adamcake/Bolt/releases/tag/0.19.0</url>"
+        "        <description>"
+        "            <p>Fix for compatibility with glibc >=2.42</p>"
+        "            <p>This release also adds some new plugin library features:</p>"
+        "            <ul>"
+        "                <li>Added onrenderbillboard events - this allows plugins to see certain 3D objects which they previously couldn't</li>"
+        "                <li>Added onrendergameview events - plugins can now draw directly to the game view once per frame and can sample the 3D depth buffer</li>"
+        "                <li>Added cameraposition function to all events where the camera position can be queried</li>"
+        "                <li>Fixed a bug where 3D events would occasionally stop being fired after doing certain things, like resizing the game window</li>"
+        "            </ul>"
+        "        </description>"
+        "    </release>"
         "    <release version=\"0.18.0\" date=\"2025-07-07\">"
         "        <url type=\"details\">https://github.com/Adamcake/Bolt/releases/tag/0.18.0</url>"
         "        <description>"
