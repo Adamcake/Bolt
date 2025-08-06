@@ -2620,14 +2620,14 @@ myprogram:setuniformsurface(location, mysurface)
 @subsection setuniformdepthbuffer
 
 Sets the depth buffer as a uniform value. This will usually be used for
-sampler2D variables. This function requires a rendergameview event
-object and, as such, it may only be called during a callback for that
-event.
+sampler2D variables. This function works like all other setuniform
+functions, but requiring a rendergameview event as the second argument,
+and, as such, it may only be called during an onrendergameview event.
 
 @example lua
 @verbatim
 bolt.onrendergameview(function (event)
-  myprogram:setuniformdepthbuffer(event, location)
+  myprogram:setuniformdepthbuffer(location, event)
 end)
 @end verbatim
 @end example
@@ -2637,8 +2637,9 @@ depth buffer. The depth buffer is like a normal surface, but not exactly
 the same: a normal surface has internal contents of format GL_RGBA,
 whereas the depth buffer has contents of format GL_DEPTH_COMPONENT32F.
 This means that while it can be sampled in a sampler2D like any other
-surface, the R, G and B components will always be the same value, and
-the alpha component will always be 1.
+surface, the R component will contain the depth value for that pixel,
+the G and B components will be undefined, and the A component will
+usually be 1.0.
 
 The depth component of any given pixel represents the Z-value of
 whatever was drawn on that pixel, and is used by the game to ensure that
