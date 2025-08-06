@@ -219,6 +219,8 @@ static GLint gameview_overlay_width = 0;
 static GLint gameview_overlay_height = 0;
 static uint8_t gameview_overlay_inited = false;
 
+static size_t frames_without_3d = 0;
+
 #define GLSLHEADER "#version 330 core\n"
 #define GLSLPLUGINEXTENSIONHEADER "#extension GL_ARB_explicit_uniform_location : require\n"
 
@@ -1944,6 +1946,19 @@ void _bolt_gl_onSwapBuffers(uint32_t window_width, uint32_t window_height) {
     player_model_tex_seen = false;
     pending_gameview_overlay_tex = 0;
     if (_bolt_plugin_is_inited()) _bolt_plugin_end_frame(window_width, window_height);
+    
+    frames_without_3d += 1;
+    if (frames_without_3d > 10) {
+        // we may have lost the 3D pipeline, flush everything and recalculate it
+        struct GLContext* c = _bolt_context();
+        c->game_view_part_framebuffer = c->current_read_framebuffer;
+        c->recalculate_sSceneHDRTex = true;
+        c->game_view_sSceneHDRTex = -1;
+        c->game_view_sSourceTex = -1;
+        c->does_blit_3d_target = false;
+        c->depth_of_field_enabled = false;
+        frames_without_3d = 0;
+    }
 }
 
 void _bolt_gl_onCreateContext(void* context, void* shared_context, const struct GLLibFunctions* libgl, void* (*GetProcAddress)(const char*), bool is_important) {
@@ -2353,7 +2368,9 @@ static void drawelements_handle_3d(GLsizei count, const unsigned short* indices,
 }
 
 static void drawelements_handle_particles(GLsizei count, const unsigned short* indices, struct GLContext* c, const struct GLAttrBinding* attributes) {
+    frames_without_3d = 0;
     drawelements_update_depth_tex(c);
+
     GLint atlas, settings_atlas, seconds, ubo_binding, ubo_view_index, ubo_particle_index;
     gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uTextureAtlas, &atlas);
     gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uTextureAtlasSettings, &settings_atlas);
@@ -2720,7 +2737,9 @@ static void drawelements_handle_3d_silhouette(struct GLContext* c) {
 }
 
 static void drawelements_handle_3d_normal(GLsizei count, const unsigned short* indices, struct GLContext* c, const struct GLAttrBinding* attributes) {
+    frames_without_3d = 0;
     drawelements_update_depth_tex(c);
+
     GLint atlas, settings_atlas, ubo_binding, ubo_view_index, ubo_batch_index, ubo_model_index;
     gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uTextureAtlas, &atlas);
     gl.GetUniformiv(c->bound_program->id, c->bound_program->loc_uTextureAtlasSettings, &settings_atlas);
