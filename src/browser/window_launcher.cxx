@@ -739,6 +739,49 @@ void Browser::Launcher::OnWindowBoundsChanged(CefRefPtr<CefWindow> window, const
 	this->last_y = new_bounds.y;
 }
 
+bool Browser::Launcher::OnProcessMessageReceived(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, CefProcessId, CefRefPtr<CefProcessMessage> message) {
+	const CefString name = message->GetName();
+	
+	if (name == "__bolt_exception") {
+		constexpr int max_dist = 80;
+		const CefRefPtr<CefListValue> args = message->GetArgumentList();
+		
+		const std::string source_line = args->GetString(2);
+		const size_t first_non_whitespace = source_line.find_first_not_of(" \t");
+		const size_t last_non_whitespace = source_line.find_last_not_of(" \t");
+		const std::string_view source_view_trimmed(source_line.begin() + first_non_whitespace, source_line.begin() + last_non_whitespace + 1);
+		const int exc_start_column = args->GetInt(3) - first_non_whitespace;
+		const int exc_end_column = args->GetInt(4) - first_non_whitespace;
+		const bool do_trim_start = exc_start_column > max_dist;
+		const bool do_trim_end = source_view_trimmed.size() - exc_end_column > max_dist;
+		const std::string_view code_trimmed(
+			source_view_trimmed.data() + (do_trim_start ? exc_start_column - max_dist : 0),
+			source_view_trimmed.data() + (do_trim_end ? exc_end_column + max_dist : source_view_trimmed.size())
+		);
+
+		fmt::print("[B] unhandled exception in {}: {}\n", args->GetString(0).ToString(), args->GetString(1).ToString());
+		for (int i = 5; i < args->GetSize(); i += 1) {
+			const CefRefPtr<CefListValue> frame_details = args->GetList(i);
+			fmt::print("[B] in {}:{}:{}\n", frame_details->GetString(0).ToString(), frame_details->GetInt(1), frame_details->GetInt(2));
+		}
+		fmt::print("[B] {}{}{}\n[B] {}", do_trim_start ? "..." : "", code_trimmed, do_trim_end ? "..." : "", do_trim_start ? "---" : "");
+		int i = 0;
+		while (i < exc_start_column && i < max_dist) {
+			fmt::print("-");
+			i += 1;
+		}
+		i = 0;
+		while (i < exc_end_column - exc_start_column) {
+			fmt::print("^");
+			i += 1;
+		}
+		fmt::print("\n");
+		return true;
+	}
+	
+	return false;
+}
+
 CefRefPtr<CefResourceRequestHandler> SaveFileFromPost(CefRefPtr<CefRequest> request, const std::filesystem::path::value_type* path) {
 	CefRefPtr<CefPostData> post_data = request->GetPostData();
 	QSENDBADREQUESTIF(!post_data || post_data->GetElementCount() != 1);

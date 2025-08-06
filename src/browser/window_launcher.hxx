@@ -41,6 +41,8 @@ namespace Browser {
 
 		void OnWindowBoundsChanged(CefRefPtr<CefWindow>, const CefRect&) override;
 
+		bool OnProcessMessageReceived(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, CefProcessId, CefRefPtr<CefProcessMessage>) override;
+
 		/*
 		Game launch functions implemented in os-specific files
 		*/

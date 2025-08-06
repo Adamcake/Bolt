@@ -1,10 +1,20 @@
 #include "app.hxx"
 #include "include/cef_base.h"
+#include "include/cef_process_message.h"
 #include "include/cef_v8.h"
 #include "include/cef_values.h"
 #include "include/internal/cef_types.h"
 
-#include <fmt/core.h>
+/*
+The functions in this file run in chromium's render process, which is subject to the full extent
+of its sandboxing measures. The seccomp sandbox in particular is the one to watch out for. Don't
+do anything that might lead to a syscall, so that means no file operations, no stdout etc. no
+IPC, no sockets, no downloading. Except of course when using CEF's API as documented.
+
+Of course, there is no seccomp on windows, which is why the OpenFileMapping stuff is able to work.
+Yes, you read that right,it's theoretically possible for web pages in chromium-based browsers to
+access your whole filesystem on a windows PC, using OpenFileMappingW. Do try not to think about it.
+*/
 
 #if defined(_WIN32)
 #include <Windows.h>
@@ -54,8 +64,6 @@ void PostPluginMessage(CefRefPtr<CefV8Context> context, CefRefPtr<CefProcessMess
 			CefV8ValueList value_list = {dict, CefV8Value::CreateString("*")};
 			post_message->ExecuteFunctionWithContext(context, nullptr, value_list);
 		}
-	} else {
-		fmt::print("[R] warning: window.postMessage is not a function, plugin message will be ignored\n");
 	}
 }
 
@@ -82,7 +90,6 @@ CefRefPtr<CefLoadHandler> Browser::App::GetLoadHandler() {
 }
 
 void Browser::App::OnBrowserCreated(CefRefPtr<CefBrowser> browser, CefRefPtr<CefDictionaryValue> dict) {
-	fmt::print("[R] OnBrowserCreated for browser {}\n", browser->GetIdentifier());
 	if (dict) {
 		if (dict->HasKey("launcher")) set_launcher_ui = dict->GetBool("launcher");
 		if (dict->HasKey("customjs")) {
@@ -105,55 +112,41 @@ void Browser::App::OnContextCreated(CefRefPtr<CefBrowser> browser, CefRefPtr<Cef
 
 void Browser::App::OnUncaughtException(
 	CefRefPtr<CefBrowser>,
-	CefRefPtr<CefFrame>,
+	CefRefPtr<CefFrame> frame,
 	CefRefPtr<CefV8Context>,
 	CefRefPtr<CefV8Exception> exception,
 	CefRefPtr<CefV8StackTrace> trace
 ) {
-	fmt::print("[R] unhandled exception in {}: {}\n", exception->GetScriptResourceName().ToString(), exception->GetMessage().ToString());
-	for (int i = 0; i < trace->GetFrameCount(); i += 1) {
-		CefRefPtr<CefV8StackFrame> frame = trace->GetFrame(i);
-		fmt::print("[R] in {}:{}:{}\n", frame->GetScriptName().ToString(), frame->GetLineNumber(), frame->GetColumn());
+	CefRefPtr<CefProcessMessage> message = CefProcessMessage::Create("__bolt_exception");
+	const int frame_count = trace->GetFrameCount();
+	CefRefPtr<CefListValue> args = message->GetArgumentList();
+	args->SetSize(frame_count + 5);
+	args->SetString(0, exception->GetScriptResourceName());
+	args->SetString(1, exception->GetMessage());
+	args->SetString(2, exception->GetSourceLine());
+	args->SetInt(3, exception->GetStartColumn());
+	args->SetInt(4, exception->GetEndColumn());
+	for (int i = 0; i < frame_count; i += 1) {
+		const CefRefPtr<CefV8StackFrame> frame = trace->GetFrame(i);
+		CefRefPtr<CefListValue> frame_details = CefListValue::Create();
+		frame_details->SetSize(3);
+		frame_details->SetString(0, frame->GetScriptName());
+		frame_details->SetInt(1, frame->GetLineNumber());
+		frame_details->SetInt(2, frame->GetColumn());
+		args->SetList(i + 5, frame_details);
 	}
-
-	constexpr int max_dist = 80;
-	std::string source_line = exception->GetSourceLine().ToString();
-	const size_t first_non_whitespace = source_line.find_first_not_of(" \t");
-	const size_t last_non_whitespace = source_line.find_last_not_of(" \t");
-	const std::string_view source_view_trimmed(source_line.begin() + first_non_whitespace, source_line.begin() + last_non_whitespace + 1);
-	const int exc_start_column = exception->GetStartColumn() - first_non_whitespace;
-	const int exc_end_column = exception->GetEndColumn() - first_non_whitespace;
-	const bool do_trim_start = exc_start_column > max_dist;
-	const bool do_trim_end = source_view_trimmed.size() - exc_end_column > max_dist;
-	const std::string_view code_trimmed(
-		source_view_trimmed.data() + (do_trim_start ? exc_start_column - max_dist : 0),
-		source_view_trimmed.data() + (do_trim_end ? exc_end_column + max_dist : source_view_trimmed.size())
-	);
-
-	fmt::print("[R] {}{}{}\n[R] {}", do_trim_start ? "..." : "", code_trimmed, do_trim_end ? "..." : "", do_trim_start ? "---" : "");
-	int i = 0;
-	while (i < exc_start_column && i < max_dist) {
-		fmt::print("-");
-		i += 1;
-	}
-	i = 0;
-	while (i < exc_end_column - exc_start_column) {
-		fmt::print("^");
-		i += 1;
-	}
-	fmt::print("\n");
+	frame->SendProcessMessage(PID_BROWSER, message);
 }
 
 bool Browser::App::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefProcessId, CefRefPtr<CefProcessMessage> message) {
 	CefString name = message->GetName();
 
-	if (name == "__bolt_refresh" || name == "__bolt_new_client" || name == "__bolt_no_more_clients" || name == "__bolt_open_launcher" || name == "__bolt_pluginbrowser_close") {
+	if (name == "__bolt_refresh" || name == "__bolt_no_more_clients" || name == "__bolt_open_launcher" || name == "__bolt_pluginbrowser_close") {
 		frame->SendProcessMessage(PID_BROWSER, message);
 		return true;
 	}
 
 	if (name == "__bolt_clientlist") {
-		fmt::print("[R] handling client list\n");
 		CefRefPtr<CefV8Context> context = frame->GetV8Context();
 		context->Enter();
 		CefRefPtr<CefV8Value> post_message = context->GetGlobal()->GetValue("postMessage");
@@ -190,8 +183,6 @@ bool Browser::App::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRe
 			dict->SetValue("clients", clients, V8_PROPERTY_ATTRIBUTE_READONLY);
 			CefV8ValueList value_list = {dict, CefV8Value::CreateString("*")};
 			post_message->ExecuteFunctionWithContext(context, nullptr, value_list);
-		} else {
-			fmt::print("[R] warning: window.postMessage is not a function, {} will be ignored\n", name.ToString());
 		}
 		context->Exit();
 		return true;
@@ -240,12 +231,10 @@ bool Browser::App::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRe
 					}
 					shm_fd = shm_open(path.c_str(), O_RDWR, 0644);
 					shm_file = mmap(NULL, size, PROT_READ, MAP_SHARED, shm_fd, 0);
-					fmt::print("[R] shm named-remap '{}' -> {}, {}\n", path, shm_fd, (unsigned long long)shm_file);
 				} else if (shm_inited) {
 					shm_file = mremap(shm_file, shm_length, size, MREMAP_MAYMOVE);
-					fmt::print("[R] shm unnamed-remap -> {} ({})\n", (unsigned long long)shm_file, errno);
 				} else {
-					fmt::print("[R] warning: shm not set up and wasn't provided with enough information to do setup; {} will be ignored\n", name.ToString());
+					// shm not set up and wasn't provided with enough information to do setup - shouldn't happen
 					return true;
 				}
 #endif
@@ -272,12 +261,8 @@ bool Browser::App::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRe
 			CefRefPtr<CefV8Value> post_message = context->GetGlobal()->GetValue("postMessage");
 			if (post_message->IsFunction()) {
 				post_message->ExecuteFunctionWithContext(context, nullptr, value_list);
-			} else {
-				fmt::print("[R] warning: window.postMessage is not a function, {} will be ignored\n", name.ToString());
 			}
 			context->Exit();
-		} else {
-			fmt::print("[R] warning: too few arguments, {} will be ignored\n", name.ToString());
 		}
 
 		return true;
@@ -289,7 +274,6 @@ bool Browser::App::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRe
 void Browser::App::OnLoadEnd(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, int) {
 	if (CefCurrentlyOn(TID_RENDERER)) {
 		if (frame->IsMain()) {
-			fmt::print("[R] OnLoadEnd for browser {}\n", browser->GetIdentifier());
 			this->loaded = true;
 			if (this->pending_plugin_messages.size()) {
 				CefRefPtr<CefV8Context> context = frame->GetV8Context();
@@ -305,7 +289,7 @@ void Browser::App::OnLoadEnd(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> 
 }
 
 void Browser::App::OnLoadError(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, ErrorCode, const CefString&, const CefString&) {
-	fmt::print("[R] OnLoadError\n");
+	// TODO: this should probably be a fatal error for plugins? or at least inform them?
 }
 
 bool Browser::App::Execute(const CefString&, CefRefPtr<CefV8Value>, const CefV8ValueList&, CefRefPtr<CefV8Value>& retval, CefString&) {

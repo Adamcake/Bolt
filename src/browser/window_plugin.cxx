@@ -108,6 +108,10 @@ bool Browser::PluginWindow::OnProcessMessageReceived(CefRefPtr<CefBrowser> brows
 		this->SendCaptureDone();
 		return true;
 	}
+	if (name == "__bolt_exception") {
+		// TODO: either make this fatal for the plugin, or inform the plugin via an event handler
+		return true;
+	}
 	return false;
 }
 
