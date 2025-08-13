@@ -154,6 +154,10 @@ export function launchRuneLite(
 					.map((x: Record<string, string>) => x.assets)
 					.flat()
 					.find((x: Record<string, string>) => x.name.toLowerCase() == 'runelite.jar');
+				if (!runelite) {
+					launch();
+					return;
+				}
 				if (runelite.id != bolt.runeLiteInstalledId) {
 					logger.info('Downloading RuneLite...');
 					const xmlRl = new XMLHttpRequest();
