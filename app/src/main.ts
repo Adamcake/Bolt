@@ -39,11 +39,11 @@ function initBolt() {
 	bolt.platform = params.get('platform') as Platform | null;
 	bolt.isFlathub = params.get('flathub') === '1';
 	bolt.hasLibArchive = params.get('has_libarchive') === '1';
-	bolt.rs3DebInstalledHash = params.get('rs3_deb_installed_hash');
-	bolt.rs3ExeInstalledHash = params.get('rs3_exe_installed_hash');
-	bolt.rs3AppInstalledHash = params.get('rs3_app_installed_hash');
-	bolt.osrsExeInstalledHash = params.get('osrs_exe_installed_hash');
-	bolt.osrsAppInstalledHash = params.get('osrs_app_installed_hash');
+	bolt.rs3debInstalledHash = params.get('rs3_deb_installed_hash');
+	bolt.rs3exeInstalledHash = params.get('rs3_exe_installed_hash');
+	bolt.rs3appInstalledHash = params.get('rs3_app_installed_hash');
+	bolt.osrsexeInstalledHash = params.get('osrs_exe_installed_hash');
+	bolt.osrsappInstalledHash = params.get('osrs_app_installed_hash');
 	bolt.runeLiteInstalledId = params.get('runelite_installed_id');
 	bolt.hdosInstalledVersion = params.get('hdos_installed_version');
 

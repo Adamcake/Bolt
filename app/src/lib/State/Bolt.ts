@@ -28,11 +28,11 @@ export interface Bolt {
 	env: BoltEnv;
 	platform: Platform | null;
 	// TODO: simplify installed hash system (1 variable instead of multiple?)
-	rs3DebInstalledHash: string | null;
-	rs3ExeInstalledHash: string | null;
-	rs3AppInstalledHash: string | null;
-	osrsExeInstalledHash: string | null;
-	osrsAppInstalledHash: string | null;
+	rs3debInstalledHash: string | null;
+	rs3exeInstalledHash: string | null;
+	rs3appInstalledHash: string | null;
+	osrsexeInstalledHash: string | null;
+	osrsappInstalledHash: string | null;
 	runeLiteInstalledId: string | null;
 	hdosInstalledVersion: string | null;
 	isFlathub: boolean;
@@ -46,11 +46,11 @@ declare const s: () => BoltEnv;
 export const bolt: Bolt = {
 	env: ParseUtils.decodeBolt(s()),
 	platform: null,
-	rs3DebInstalledHash: null,
-	rs3ExeInstalledHash: null,
-	rs3AppInstalledHash: null,
-	osrsExeInstalledHash: null,
-	osrsAppInstalledHash: null,
+	rs3debInstalledHash: null,
+	rs3exeInstalledHash: null,
+	rs3appInstalledHash: null,
+	osrsexeInstalledHash: null,
+	osrsappInstalledHash: null,
 	runeLiteInstalledId: null,
 	hdosInstalledVersion: null,
 	isFlathub: false,
