@@ -638,7 +638,7 @@ static void context_destroy(void* egl_context) {
 static float f16_to_f32(uint16_t bits) {
     const uint16_t bits_exp_component = (bits & 0b0111110000000000);
     if (bits_exp_component == 0) return 0.0f; // truncate subnormals to 0
-    const uint32_t sign_component = (bits & 0b1000000000000000) << 16;
+    const uint32_t sign_component = (uint32_t)(bits & 0b1000000000000000) << 16;
     const uint32_t exponent = (bits_exp_component >> 10) + (127 - 15); // adjust exp bias
     const uint32_t mantissa = bits & 0b0000001111111111;
     const union { uint32_t b; float f; } u = {.b = sign_component | (exponent << 23) | (mantissa << 13)};
@@ -1533,7 +1533,7 @@ static void glCompressedTexSubImage2D(GLenum target, GLint level, GLint xoffset,
         unpack565(c0, c0_rgb);
         unpack565(c1, c1_rgb);
         const uint8_t c0_greater = c0 > c1;
-        const uint32_t ctable = cptr[4] + (cptr[5] << 8) + (cptr[6] << 16) + (cptr[7] << 24);
+        const uint32_t ctable = (uint32_t)cptr[4] + ((uint32_t)cptr[5] << 8) + ((uint32_t)cptr[6] << 16) + ((uint32_t)cptr[7] << 24);
         const uint8_t alpha0 = ptr[0];
         const uint8_t alpha1 = ptr[1];
         const uint8_t a0_greater = alpha0 > alpha1;
