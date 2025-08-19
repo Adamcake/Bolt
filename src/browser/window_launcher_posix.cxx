@@ -422,6 +422,8 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchOsrsExe(CefRefPtr<
 		setenv("GAMEID", "1343370", true);
 		// tell umu to use the latest GE Proton it can find, which will perform better in most cases
 		setenv("PROTONPATH", "GE-Proton", true);
+		// allow proton to run multiple official clients at once
+		setenv("PROTON_VERB", "runinprefix", true);
 		BoltExec(argv);
 	}
 
