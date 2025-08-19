@@ -1850,7 +1850,7 @@ static void glBlitFramebuffer(GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1
         c->does_blit_3d_target = false;
         c->depth_of_field_enabled = false;
         c->game_view_x = dstX0;
-        c->game_view_y = dstY0;
+        c->game_view_y = gl_height - dstY1;
         printf("new game_view_part_framebuffer %u...\n", c->current_read_framebuffer);
     } else if (srcX0 == 0 && dstX0 == 0 && srcY0 == 0 && dstY0 == 0 && srcX1 == dstX1 && srcY1 == dstY1 && c->current_draw_framebuffer != 0) {
         struct GLTexture2D* target_tex = context_get_texture(c, draw_tex_id);
