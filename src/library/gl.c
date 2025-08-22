@@ -1704,6 +1704,9 @@ static void* glMapBufferRange(GLenum target, GLintptr offset, GLsizeiptr length,
         buffer->mapping_offset = offset;
         buffer->mapping_len = length;
         buffer->mapping_access_type = access;
+        if ((access & (GL_MAP_INVALIDATE_RANGE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT)) == 0) {
+            memcpy(buffer->mapping, (uint8_t*)buffer->data + offset, length);
+        }
         LOG("glMapBufferRange end (intercepted)\n");
         return buffer->mapping;
     } else {
@@ -1721,6 +1724,12 @@ static GLboolean glUnmapBuffer(GLuint target) {
         GLint buffer_id;
         lgl->GetIntegerv(binding_type, &buffer_id);
         struct GLArrayBuffer* buffer = context_get_buffer(c, buffer_id);
+        // technically it's wrong to do an implicit flush here unless GL_MAP_FLUSH_EXPLICIT_BIT is unset,
+        // but it seems to happen all the time on some hardware and that behaviour is depended on by the game
+        // engine, so that's what we have to do too. in mitigation, at least it's probably safe to assume that
+        // there are no cases where they write something and *don't* expect it to be uploaded at some point.
+        gl.BufferSubData(target, buffer->mapping_offset, buffer->mapping_len, buffer->mapping);
+        memcpy((uint8_t*)buffer->data + buffer->mapping_offset, buffer->mapping, buffer->mapping_len);
         free(buffer->mapping);
         buffer->mapping = NULL;
         LOG("glUnmapBuffer end (intercepted)\n");
