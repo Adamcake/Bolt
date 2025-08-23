@@ -394,7 +394,11 @@ endif()
 if(NOT BOLT_CEF_DLLWRAPPER)
     set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CEF_ROOT}/cmake")
     find_package(CEF REQUIRED)
-    add_subdirectory(${CEF_LIBCEF_DLL_WRAPPER_PATH} libcef_dll_wrapper)
+    if(NOT TARGET libcef_dll_wrapper)
+        # Some distros (like Fedora) define the libcef_dll_wrapper target in FindCEF.cmake
+        # We check if the target already exists before attempting to add it as a subdirectory
+        add_subdirectory(${CEF_LIBCEF_DLL_WRAPPER_PATH} libcef_dll_wrapper)
+    endif()
 endif()
 
 # select implementations for OS-specific behaviour
