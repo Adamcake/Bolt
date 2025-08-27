@@ -473,7 +473,12 @@ if(UNIX AND NOT APPLE)
         set_target_properties(bolt PROPERTIES INSTALL_RPATH "$ORIGIN")
     endif()
 
-    target_link_libraries(bolt PUBLIC "${BOLT_LIBCEF_DIRECTORY}/libcef.so")
+    if(TARGET CEF::Library)
+        message(STATUS "Linking with FindPackage version of CEF::Library")
+        target_link_libraries(bolt PUBLIC CEF::Library)
+    else()
+        target_link_libraries(bolt PUBLIC "${BOLT_LIBCEF_DIRECTORY}/libcef.so")
+    endif()
 
     find_package(PkgConfig REQUIRED)
 
