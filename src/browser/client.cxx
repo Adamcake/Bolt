@@ -430,7 +430,7 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 				.resizeable = true,
 				.frame = true,
 				.has_custom_js = true,
-				.custom_js = CefString(custom_js),
+				.custom_js = CefString(custom_js, header.custom_js_length),
 			};
 			plugin->windows.push_back(new Browser::PluginWindow(this, details, url, plugin, fd, &this->send_lock, header.window_id, header.plugin_id, false));
 			delete[] url;
