@@ -2282,13 +2282,11 @@ void _bolt_gl_onClear(GLbitfield mask) {
         GLint draw_tex;
         gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
         struct GLTexture2D* tex = context_get_texture(c, draw_tex);
-        if (tex) {
-            tex->is_minimap_tex_big = 0;
-            for (size_t i = 0; i < tex->icon.model_count; i += 1) {
-                free(tex->icon.models[i].vertices);
-            }
-            tex->icon.model_count = 0;
+        tex->is_minimap_tex_big = 0;
+        for (size_t i = 0; i < tex->icon.model_count; i += 1) {
+            free(tex->icon.models[i].vertices);
         }
+        tex->icon.model_count = 0;
     }
 }
 
