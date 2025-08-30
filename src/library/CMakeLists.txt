@@ -9,8 +9,13 @@ if(UNIX AND NOT APPLE)
     add_library(${BOLT_PLUGIN_LIB_NAME} SHARED so/main.c plugin/plugin.c plugin/plugin_api.c gl.c
     rwlock/rwlock_posix.c ipc_posix.c plugin/plugin_posix.c ../../modules/hashmap/hashmap.c
     ../miniz/miniz.c ../sha256/sha256.c ../../modules/spng/spng/spng.c)
-    target_link_libraries(${BOLT_PLUGIN_LIB_NAME} luajit-5.1)
-    target_include_directories(${BOLT_PLUGIN_LIB_NAME} PUBLIC "${BOLT_LUAJIT_INCLUDE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/../miniz")
+
+    find_package(PkgConfig REQUIRED)
+
+    pkg_check_modules(LUAJIT REQUIRED IMPORTED_TARGET luajit)
+    target_link_libraries(${BOLT_PLUGIN_LIB_NAME} PUBLIC PkgConfig::LUAJIT)
+
+    target_include_directories(${BOLT_PLUGIN_LIB_NAME} PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../miniz")
     install(TARGETS ${BOLT_PLUGIN_LIB_NAME} DESTINATION "${BOLT_LIBDIR}")
 endif()
 if (WIN32)
