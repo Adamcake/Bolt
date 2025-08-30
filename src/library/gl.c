@@ -407,7 +407,6 @@ struct GLPluginDrawElementsVertex3DUserData {
     struct GLContext* c;
     const unsigned short* indices;
     int atlas_scale;
-    const struct GLTexture2D* atlas;
     const struct GLTexture2D* settings_atlas;
     const struct GLAttrBinding* xy_xz;
     const struct GLAttrBinding* xyz_bone;
@@ -422,7 +421,6 @@ struct GLPluginDrawElementsVertexParticlesUserData {
     struct GLContext* c;
     const unsigned short* indices;
     int atlas_scale;
-    const struct GLTexture2D* atlas;
     const struct GLTexture2D* settings_atlas;
     const struct GLAttrBinding* origin;
     const struct GLAttrBinding* offset;
@@ -442,7 +440,6 @@ struct GLPluginDrawElementsVertexBillboardUserData {
     struct GLContext* c;
     const unsigned short* indices;
     int atlas_scale;
-    const struct GLTexture2D* atlas;
     const struct GLTexture2D* settings_atlas;
     const struct GLAttrBinding* vertex_position;
     const struct GLAttrBinding* billboard_size;
@@ -2398,7 +2395,6 @@ static void drawelements_handle_particles(GLsizei count, const unsigned short* i
     vertex_userdata.c = c;
     vertex_userdata.indices = indices;
     vertex_userdata.atlas_scale = roundf(atlas_scale);
-    vertex_userdata.atlas = tex;
     vertex_userdata.settings_atlas = tex_settings;
     vertex_userdata.origin = &attributes[c->bound_program->loc_aParticleOrigin_CreationTime];
     vertex_userdata.offset = &attributes[c->bound_program->loc_aParticleOffset];
@@ -2480,7 +2476,6 @@ static void drawelements_handle_billboard(GLsizei count, const unsigned short* i
     vertex_userdata.c = c;
     vertex_userdata.indices = indices;
     vertex_userdata.atlas_scale = roundf(atlas_scale);
-    vertex_userdata.atlas = tex;
     vertex_userdata.settings_atlas = tex_settings;
     vertex_userdata.vertex_position = &attributes[c->bound_program->loc_aVertexPositionDepthOffset];
     vertex_userdata.billboard_size = &attributes[c->bound_program->loc_aBillboardSize];
@@ -2764,7 +2759,6 @@ static void drawelements_handle_3d_normal(GLsizei count, const unsigned short* i
     vertex_userdata.c = c;
     vertex_userdata.indices = indices;
     vertex_userdata.atlas_scale = roundf(atlas_scale);
-    vertex_userdata.atlas = tex;
     vertex_userdata.settings_atlas = tex_settings;
     vertex_userdata.xy_xz = &attributes[c->bound_program->loc_aMaterialSettingsSlotXY_TilePositionXZ];
     vertex_userdata.xyz_bone = &attributes[c->bound_program->loc_aVertexPosition_BoneLabel];
@@ -2900,7 +2894,7 @@ static void cross(float* x, float* y, float* out) {
     out[2] = (x[0] * y[1]) - (y[0] * x[1]);
 }
 
-static const GLfloat* particles_get_transform(unsigned short vertex, const struct GLProgram* program, struct GLPluginDrawElementsVertexParticlesUserData* userdata) {
+static const GLfloat* particles_get_transform(unsigned short vertex, const struct GLProgram* program, const struct GLPluginDrawElementsVertexParticlesUserData* userdata) {
     size_t i;
     for (i = 0; i < 7; i += 1) {
         if (vertex >= userdata->ranges[i * 2] && vertex < userdata->ranges[i * 2 + 1]) break;
@@ -3026,7 +3020,7 @@ static void shaderprogram_draw(const struct PluginProgramUserdata* program, cons
 /* plugin GL function callbacks */
 
 static void glplugin_drawelements_vertex2d_xy(size_t index, void* userdata, int32_t* out) {
-    struct GLPluginDrawElementsVertex2DUserData* data = userdata;
+    const struct GLPluginDrawElementsVertex2DUserData* data = userdata;
     if (attr_get_binding_int(data->c, data->position, data->indices[index], 2, out)) {
         // this line would seem like it introduces an off-by-one error, but the same error actually exists in the game engine
         // causing the UI to be drawn one pixel higher than the top of the screen, so we're just accounting for that here.
@@ -3041,7 +3035,7 @@ static void glplugin_drawelements_vertex2d_xy(size_t index, void* userdata, int3
 }
 
 static void glplugin_drawelements_vertex2d_atlas_details(size_t index, void* userdata, int32_t* out, uint8_t* wrapx, uint8_t* wrapy) {
-    struct GLPluginDrawElementsVertex2DUserData* data = userdata;
+    const struct GLPluginDrawElementsVertex2DUserData* data = userdata;
     float xy[2];
     float wh[2];
     attr_get_binding(data->c, data->atlas_min, data->indices[index], 2, xy);
@@ -3055,7 +3049,7 @@ static void glplugin_drawelements_vertex2d_atlas_details(size_t index, void* use
 }
 
 static void glplugin_drawelements_vertex2d_uv(size_t index, void* userdata, double* out, uint8_t* discard) {
-    struct GLPluginDrawElementsVertex2DUserData* data = userdata;
+    const struct GLPluginDrawElementsVertex2DUserData* data = userdata;
     float uv[2];
     attr_get_binding(data->c, data->tex_uv, data->indices[index], 2, uv);
     out[0] = (double)uv[0];
@@ -3064,7 +3058,7 @@ static void glplugin_drawelements_vertex2d_uv(size_t index, void* userdata, doub
 }
 
 static void glplugin_drawelements_vertex2d_colour(size_t index, void* userdata, double* out) {
-    struct GLPluginDrawElementsVertex2DUserData* data = userdata;
+    const struct GLPluginDrawElementsVertex2DUserData* data = userdata;
     float colour[4];
     attr_get_binding(data->c, data->colour, data->indices[index], 4, colour);
     // these are ABGR for some reason
@@ -3075,7 +3069,7 @@ static void glplugin_drawelements_vertex2d_colour(size_t index, void* userdata, 
 }
 
 static void glplugin_drawelements_vertex3d_xyz(size_t index, void* userdata, struct Point3D* out) {
-    struct GLPluginDrawElementsVertex3DUserData* data = userdata;
+    const struct GLPluginDrawElementsVertex3DUserData* data = userdata;
     out->integer = true;
     if (!attr_get_binding_int(data->c, data->xyz_bone, data->indices[index], 3, out->xyzh.ints)) {
         float pos[3];
@@ -3089,21 +3083,21 @@ static void glplugin_drawelements_vertex3d_xyz(size_t index, void* userdata, str
 }
 
 static size_t glplugin_drawelements_vertex3d_atlas_meta(size_t index, void* userdata) {
-    struct GLPluginDrawElementsVertex3DUserData* data = userdata;
+    const struct GLPluginDrawElementsVertex3DUserData* data = userdata;
     int material_xy[2];
     attr_get_binding_int(data->c, data->xy_xz, data->indices[index], 2, material_xy);
     return ((size_t)material_xy[1] << 16) | (size_t)material_xy[0];
 }
 
 static void glplugin_drawelements_vertex3d_meta_xywh(size_t meta, void* userdata, int32_t* out) {
-    struct GLPluginDrawElementsVertex3DUserData* data = userdata;
+    const struct GLPluginDrawElementsVertex3DUserData* data = userdata;
     const size_t slot_x = meta & 0xFF;
     const size_t slot_y = meta >> 16;
     xywh_from_meta_atlas(data->settings_atlas, slot_x, slot_y, data->atlas_scale, out);
 }
 
 static void glplugin_drawelements_vertex3d_uv(size_t index, void* userdata, double* out) {
-    struct GLPluginDrawElementsVertex3DUserData* data = userdata;
+    const struct GLPluginDrawElementsVertex3DUserData* data = userdata;
     float uv[2];
     attr_get_binding(data->c, data->tex_uv, data->indices[index], 2, uv);
     out[0] = (double)uv[0];
@@ -3111,7 +3105,7 @@ static void glplugin_drawelements_vertex3d_uv(size_t index, void* userdata, doub
 }
 
 static void glplugin_drawelements_vertex3d_colour(size_t index, void* userdata, double* out) {
-    struct GLPluginDrawElementsVertex3DUserData* data = userdata;
+    const struct GLPluginDrawElementsVertex3DUserData* data = userdata;
     float colour[4];
     attr_get_binding(data->c, data->colour, data->indices[index], 4, colour);
     out[0] = (double)colour[0];
@@ -3121,7 +3115,7 @@ static void glplugin_drawelements_vertex3d_colour(size_t index, void* userdata, 
 }
 
 static uint8_t glplugin_drawelements_vertex3d_boneid(size_t index, void* userdata) {
-    struct GLPluginDrawElementsVertex3DUserData* data = userdata;
+    const struct GLPluginDrawElementsVertex3DUserData* data = userdata;
     uint32_t ret[4];
     if (!attr_get_binding_int(data->c, data->xyz_bone, data->indices[index], 4, (int32_t*)&ret)) {
         float retf[4];
@@ -3182,7 +3176,7 @@ static void glplugin_drawelements_vertex3d_transform(size_t vertex, void* userda
 }
 
 static void glplugin_drawelements_vertexparticles_xyz(size_t index, void* userdata, struct Point3D* out) {
-    struct GLPluginDrawElementsVertexParticlesUserData* data = userdata;
+    const struct GLPluginDrawElementsVertexParticlesUserData* data = userdata;
     const unsigned short vertex = data->indices[index];
     float xyz[3];
     attr_get_binding(data->c, data->origin, vertex, 3, xyz);
@@ -3209,7 +3203,7 @@ static void glplugin_drawelements_vertexparticles_xyz(size_t index, void* userda
 }
 
 static void glplugin_drawelements_vertexparticles_world_offset(size_t index, void* userdata, double* out) {
-    struct GLPluginDrawElementsVertexParticlesUserData* data = userdata;
+    const struct GLPluginDrawElementsVertexParticlesUserData* data = userdata;
     const unsigned short vertex = data->indices[index];
     float offset[2];
     float velocity[3];
@@ -3298,8 +3292,8 @@ static void glplugin_drawelements_vertexparticles_eye_offset(size_t index, void*
 
 // I ported this function from a vertex shader through great suffering. Don't try to understand it. Seriously.
 static void glplugin_drawelements_vertexparticles_uv(size_t index, void* userdata, double* out) {
+    const struct GLPluginDrawElementsVertexParticlesUserData* data = userdata;
     struct GLContext* c = _bolt_context();
-    struct GLPluginDrawElementsVertexParticlesUserData* data = userdata;
     const unsigned short vertex = data->indices[index];
     int32_t uv_animation_data[4];
     float offset[2];
@@ -3375,7 +3369,7 @@ DEFALLMATRIXGETTERS(matrixbillboard, GLPluginDrawElementsMatrixBillboardUserData
 DEFALLMATRIXGETTERS(matrix3d, GLPlugin3DMatrixUserData)
 
 static void glplugin_drawelements_vertexbillboard_xyz(size_t index, void* userdata, struct Point3D* out) {
-    struct GLPluginDrawElementsVertexBillboardUserData* data = userdata;
+    const struct GLPluginDrawElementsVertexBillboardUserData* data = userdata;
     out->integer = true;
     if (!attr_get_binding_int(data->c, data->vertex_position, data->indices[index], 3, out->xyzh.ints)) {
         float pos[3];
@@ -3389,7 +3383,7 @@ static void glplugin_drawelements_vertexbillboard_xyz(size_t index, void* userda
 }
 
 static void glplugin_drawelements_vertexbillboard_eye_offset(size_t index, void* userdata, double* out) {
-    struct GLPluginDrawElementsVertexBillboardUserData* data = userdata;
+    const struct GLPluginDrawElementsVertexBillboardUserData* data = userdata;
     float xy[2];
     attr_get_binding(data->c, data->billboard_size, data->indices[index], 2, xy);
     out[0] = (double)xy[0];
@@ -3397,7 +3391,7 @@ static void glplugin_drawelements_vertexbillboard_eye_offset(size_t index, void*
 }
 
 static void glplugin_drawelements_vertexbillboard_uv(size_t index, void* userdata, double* out) {
-    struct GLPluginDrawElementsVertexBillboardUserData* data = userdata;
+    const struct GLPluginDrawElementsVertexBillboardUserData* data = userdata;
     int xyuv[4];
     attr_get_binding_int(data->c, data->material_xy_uv, data->indices[index], 4, xyuv);
     out[0] = (double)xyuv[2];
@@ -3419,7 +3413,7 @@ static void glplugin_drawelements_vertexbillboard_meta_xywh(size_t meta, void* u
 }
 
 static void glplugin_drawelements_vertexbillboard_colour(size_t index, void* userdata, double* out) {
-    struct GLPluginDrawElementsVertexBillboardUserData* data = userdata;
+    const struct GLPluginDrawElementsVertexBillboardUserData* data = userdata;
     float rgba[4];
     attr_get_binding(data->c, data->vertex_colour, data->indices[index], 4, rgba);
     out[0] = (double)rgba[0];
@@ -3467,14 +3461,14 @@ static void glplugin_camera_position(void* userdata, double* out) {
 }
 
 static void glplugin_gameview_size(void* userdata, int* w, int* h) {
-    struct GLPluginRenderGameViewUserData* gameview = userdata;
+    const struct GLPluginRenderGameViewUserData* gameview = userdata;
     *w = gameview->width;
     *h = gameview->height;
 }
 
 static void glplugin_surface_init(struct SurfaceFunctions* functions, unsigned int width, unsigned int height, const void* data) {
     struct PluginSurfaceUserdata* userdata = malloc(sizeof(struct PluginSurfaceUserdata));
-    struct GLContext* c = _bolt_context();
+    const struct GLContext* c = _bolt_context();
     userdata->width = width;
     userdata->height = height;
     for (size_t i = 0; i < 4; i += 1) {
@@ -3518,8 +3512,8 @@ static void glplugin_surface_resize(void* _userdata, unsigned int width, unsigne
 }
 
 static void glplugin_surface_clear(void* _userdata, double r, double g, double b, double a) {
-    struct PluginSurfaceUserdata* userdata = _userdata;
-    struct GLContext* c = _bolt_context();
+    const struct PluginSurfaceUserdata* userdata = _userdata;
+    const struct GLContext* c = _bolt_context();
     gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, userdata->framebuffer);
     lgl->ClearColor(r, g, b, a);
     lgl->Clear(GL_COLOR_BUFFER_BIT);
@@ -3527,8 +3521,8 @@ static void glplugin_surface_clear(void* _userdata, double r, double g, double b
 }
 
 static void glplugin_surface_subimage(void* _userdata, int x, int y, int w, int h, const void* pixels, uint8_t is_bgra) {
-    struct PluginSurfaceUserdata* userdata = _userdata;
-    struct GLContext* c = _bolt_context();
+    const struct PluginSurfaceUserdata* userdata = _userdata;
+    const struct GLContext* c = _bolt_context();
     lgl->BindTexture(GL_TEXTURE_2D, userdata->renderbuffer);
     lgl->TexSubImage2D(GL_TEXTURE_2D, 0, x, y, w, h, is_bgra ? GL_BGRA : GL_RGBA, GL_UNSIGNED_BYTE, pixels);
     const struct GLTexture2D* original_tex = c->texture_units[c->active_texture].texture_2d;
@@ -3593,15 +3587,15 @@ static void glplugin_draw_region_outline(void* userdata, int16_t x, int16_t y, u
 }
 
 static void glplugin_read_screen_pixels(int16_t x, int16_t y, uint32_t width, uint32_t height, void* data) {
-    struct GLContext* c = _bolt_context();
+    const struct GLContext* c = _bolt_context();
     gl.BindFramebuffer(GL_READ_FRAMEBUFFER, 0);
     lgl->ReadPixels(x, gl_height - (y + height), width, height, GL_RGB, GL_UNSIGNED_BYTE, data);
     gl.BindFramebuffer(GL_READ_FRAMEBUFFER, c->current_read_framebuffer);
 }
 
 static void glplugin_copy_screen(void* userdata, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh) {
-    struct GLContext* c = _bolt_context();
-    struct PluginSurfaceUserdata* surface = userdata;
+    const struct GLContext* c = _bolt_context();
+    const struct PluginSurfaceUserdata* surface = userdata;
     gl.BindFramebuffer(GL_READ_FRAMEBUFFER, 0);
     gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, surface->framebuffer);
     gl.BlitFramebuffer(sx, gl_height - sy, sx + sw, gl_height - (sy + sh), dx, dy, dx + dw, dy + dh, GL_COLOR_BUFFER_BIT, GL_NEAREST);
@@ -3610,7 +3604,7 @@ static void glplugin_copy_screen(void* userdata, int sx, int sy, int sw, int sh,
 }
 
 static void glplugin_game_view_rect(int* x, int* y, int* w, int* h) {
-    struct GLContext* c = _bolt_context();
+    const struct GLContext* c = _bolt_context();
     *x = c->game_view_x;
     *y = c->game_view_y;
     *w = c->game_view_w;
@@ -3618,7 +3612,7 @@ static void glplugin_game_view_rect(int* x, int* y, int* w, int* h) {
 }
 
 static void glplugin_player_position(int32_t* x, int32_t* y, int32_t* z) {
-    struct GLContext* c = _bolt_context();
+    const struct GLContext* c = _bolt_context();
     *x = c->player_model_x;
     *y = c->player_model_y;
     *z = c->player_model_z;
@@ -3696,7 +3690,7 @@ static void glplugin_shader_destroy(void* userdata) {
 }
 
 static void glplugin_shaderprogram_destroy(void* userdata) {
-    struct PluginProgramUserdata* program = (struct PluginProgramUserdata*)userdata;
+    const struct PluginProgramUserdata* program = (struct PluginProgramUserdata*)userdata;
     hashmap_free(program->uniforms);
     gl.DeleteProgram(program->program);
     gl.DeleteVertexArrays(1, &program->vao);
