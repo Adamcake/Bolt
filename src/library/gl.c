@@ -3815,8 +3815,6 @@ static void glplugin_shaderprogram_set_uniform_depthbuffer(void* userdata, void*
         .sub.sampler = gameview->depth_tex,
     };
     hashmap_set(program->uniforms, &uniform);
-
-    const struct GLTexture2D* tex = context_get_texture(_bolt_context(), gameview->depth_tex);
 }
 
 static void glplugin_shaderprogram_drawtosurface(void* userdata, void* surface_, void* buffer_, uint32_t count) {
