@@ -828,44 +828,29 @@ static GLenum buffer_binding_enum(GLuint target) {
     }
 }
 
-static struct GLProgram* context_get_program(struct GLContext* c, GLuint index) {
-    struct HashMap* map = c->programs;
-    const GLuint* index_ptr = &index;
+static void* map_get(struct HashMap* map, GLuint index) {
+    const GLuint* const index_ptr = &index;
     _bolt_rwlock_lock_read(&map->rwlock);
-    struct GLProgram** program = (struct GLProgram**)hashmap_get(map->map, &index_ptr);
-    struct GLProgram* ret = program ? *program : NULL;
+    void* const* const val = (void**)hashmap_get(map->map, &index_ptr);
+    void* const ret = val ? *val : NULL;
     _bolt_rwlock_unlock_read(&map->rwlock);
     return ret;
+}
+
+static struct GLProgram* context_get_program(struct GLContext* c, GLuint index) {
+    return map_get(c->programs, index);
 }
 
 static struct GLArrayBuffer* context_get_buffer(struct GLContext* c, GLuint index) {
-    struct HashMap* map = c->buffers;
-    const GLuint* index_ptr = &index;
-    _bolt_rwlock_lock_read(&map->rwlock);
-    struct GLArrayBuffer** buffer = (struct GLArrayBuffer**)hashmap_get(map->map, &index_ptr);
-    struct GLArrayBuffer* ret = buffer ? *buffer : NULL;
-    _bolt_rwlock_unlock_read(&map->rwlock);
-    return ret;
+    return map_get(c->buffers, index);
 }
 
 static struct GLTexture2D* context_get_texture(struct GLContext* c, GLuint index) {
-    struct HashMap* map = c->textures;
-    const GLuint* index_ptr = &index;
-    _bolt_rwlock_lock_read(&map->rwlock);
-    struct GLTexture2D** tex = (struct GLTexture2D**)hashmap_get(map->map, &index_ptr);
-    struct GLTexture2D* ret = tex ? *tex : NULL;
-    _bolt_rwlock_unlock_read(&map->rwlock);
-    return ret;
+    return map_get(c->textures, index);
 }
 
 static struct GLVertexArray* context_get_vao(struct GLContext* c, GLuint index) {
-    struct HashMap* map = c->vaos;
-    const GLuint* index_ptr = &index;
-    _bolt_rwlock_lock_read(&map->rwlock);
-    struct GLVertexArray** vao = (struct GLVertexArray**)hashmap_get(map->map, &index_ptr);
-    struct GLVertexArray* ret = vao ? *vao : NULL;
-    _bolt_rwlock_unlock_read(&map->rwlock);
-    return ret;
+    return map_get(c->vaos, index);
 }
 
 static void attr_set_binding(struct GLContext* c, struct GLAttrBinding* binding, unsigned int buffer, int size, const void* offset, unsigned int stride, uint32_t type, uint8_t normalise) {
