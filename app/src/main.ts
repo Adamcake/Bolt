@@ -10,6 +10,7 @@ import { clientList } from '$lib/Util/store';
 import AuthApp from '@/AuthApp.svelte';
 import BoltApp from '@/BoltApp.svelte';
 import { get } from 'svelte/store';
+import { mount } from 'svelte';
 
 let app: BoltApp | AuthApp;
 const appConfig = {
@@ -21,7 +22,7 @@ const appConfig = {
 // window.opener is set when the current window is a popup (the auth window)
 // id_token is set after sending the consent request, aka the user is still authenticating
 if (window.opener || window.location.search.includes('&id_token')) {
-	app = new AuthApp(appConfig);
+	app = mount(AuthApp, appConfig);
 } else {
 	initBolt();
 	initConfig();
@@ -29,7 +30,7 @@ if (window.opener || window.location.search.includes('&id_token')) {
 	refreshStoredSessions().finally(() => {
 		GlobalState.initialized.set(true);
 	});
-	app = new BoltApp(appConfig);
+	app = mount(BoltApp, appConfig);
 }
 
 export default app;

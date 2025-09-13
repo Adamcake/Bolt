@@ -26,7 +26,7 @@
 <button
 	id="data_dir_button"
 	class="p-2 hover:opacity-75"
-	on:click={() => {
+	onclick={() => {
 		openDataDir();
 	}}
 >

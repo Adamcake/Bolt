@@ -1,5 +1,4 @@
 <script lang="ts">
-	import PluginModal from '$lib/Components/PluginModal.svelte';
 	import { BoltService } from '$lib/Services/BoltService';
 	import { bolt, Platform } from '$lib/State/Bolt';
 	import { GlobalState } from '$lib/State/GlobalState';
@@ -12,19 +11,20 @@
 	import { Client, clientMap, Game } from '$lib/Util/interfaces';
 	import { logger } from '$lib/Util/Logger';
 	import { writable, type Writable } from 'svelte/store';
-	import LaunchConfirmModal from './LaunchConfirmModal.svelte';
+	import LaunchConfirmModal from './Modals/LaunchConfirmModal.svelte';
+	import PluginModal from './Modals/PluginModal.svelte';
 
 	let confirmModal: LaunchConfirmModal;
 	let pluginModal: PluginModal;
 	let { config, initialized } = GlobalState;
-	$: selectedUserId = $config.selected.user_id;
-	$: selectedAccountId = $config.userDetails[selectedUserId ?? '']?.account_id;
-	$: accounts = BoltService.findSession($config.selected.user_id)?.accounts ?? [];
+	let selectedUserId = $derived($config.selected.user_id);
+	let selectedAccountId = $derived($config.userDetails[selectedUserId ?? '']?.account_id);
+	let accounts = $derived(BoltService.findSession($config.selected.user_id)?.accounts ?? []);
 
 	// messages about game downtime, retrieved from game server
 	let psa: Writable<string | null> = writable(null);
 	let gameEnabled: Writable<boolean> = writable(true);
-	$: {
+	$effect(() => {
 		if ($config.check_announcements) {
 			const gameName = $config.selected.game == Game.osrs ? 'osrs' : bolt.env.provider;
 			const url: string = `${bolt.env.psa_url}${gameName}/${gameName}.json`;
@@ -40,7 +40,7 @@
 			$psa = null;
 			$gameEnabled = true;
 		}
-	}
+	});
 
 	// when play is clicked, check the selected_play store for all relevant details
 	// calls the appropriate launch functions
@@ -101,9 +101,7 @@
 </script>
 
 <LaunchConfirmModal bind:this={confirmModal}></LaunchConfirmModal>
-{#if bolt.hasBoltPlugins}
-	<PluginModal bind:this={pluginModal}></PluginModal>
-{/if}
+<PluginModal bind:this={pluginModal}></PluginModal>
 
 <div class="bg-grad flex h-full flex-col border-slate-300 p-5 duration-200 dark:border-slate-800">
 	{#if $psa}
@@ -120,7 +118,7 @@
 		<button
 			class="w-52 rounded-lg bg-emerald-500 p-2 font-bold text-black duration-200 enabled:hover:opacity-75 disabled:bg-gray-500"
 			disabled={!$initialized}
-			on:click={() => {
+			onclick={() => {
 				if ($gameEnabled) {
 					launch($config.selected.game, $config.selected.client);
 				} else {
@@ -148,7 +146,7 @@
 				disabled={!bolt.hasBoltPlugins}
 				title={bolt.hasBoltPlugins ? null : 'This feature is disabled'}
 				class="w-52 rounded-lg p-2 font-bold text-black duration-200 enabled:bg-blue-500 enabled:hover:opacity-75 disabled:bg-gray-500"
-				on:click={() => {
+				onclick={() => {
 					pluginModal.open();
 				}}
 			>
@@ -162,7 +160,7 @@
 				class="mx-auto w-52 cursor-pointer rounded-lg border-2 border-slate-300 bg-inherit p-2 text-inherit duration-200 hover:opacity-75 dark:border-slate-800"
 				disabled={!$initialized || $config.selected.user_id === null}
 				value={selectedAccountId}
-				on:change={handleAccountChange}
+				onchange={handleAccountChange}
 			>
 				<option value={undefined} disabled class="dark:bg-slate-900">Select an account</option>
 				{#each accounts as account}

@@ -84,6 +84,7 @@ const downloadWithProgress = async (
 
 	const content = new Uint8Array(downloadSize);
 	let received = 0;
+	// eslint-disable-next-line no-constant-condition
 	while (true) {
 		const readable = await reader.read();
 		if (readable.done) break;
