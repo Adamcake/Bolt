@@ -33,7 +33,7 @@
 		rows="4"
 		placeholder={bolt.env.default_config_uri}
 		bind:value={$config.rs_config_uri}
-	/>
+	></textarea>
 </div>
 <div class="p-2">
 	<label for="rs_custom_launch_command">Launch command:</label>
@@ -45,5 +45,5 @@
 		cols="35"
 		placeholder={'%command%'}
 		bind:value={$config.rs_launch_command}
-	/>
+	></textarea>
 </div>

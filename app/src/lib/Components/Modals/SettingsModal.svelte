@@ -30,19 +30,19 @@
 		>
 			<button
 				class={openTab === Tab.general ? activeClass : inactiveClass}
-				on:click={() => {
+				onclick={() => {
 					openTab = Tab.general;
 				}}>General</button
 			>
 			<button
 				class={openTab === Tab.osrs ? activeClass : inactiveClass}
-				on:click={() => {
+				onclick={() => {
 					openTab = Tab.osrs;
 				}}>OSRS</button
 			>
 			<button
 				class={openTab === Tab.rs3 ? activeClass : inactiveClass}
-				on:click={() => {
+				onclick={() => {
 					openTab = Tab.rs3;
 				}}>RS3</button
 			>

@@ -21,7 +21,7 @@
 <div class="mt-5 flex">
 	<button
 		class="mx-auto mr-2 rounded-lg bg-blue-500 p-2 font-bold text-black duration-200 hover:opacity-75"
-		on:click={() => {
+		onclick={() => {
 			const { origin, redirect, clientid } = bolt.env;
 			AuthService.openLoginWindow(origin, redirect, clientid);
 		}}
@@ -31,7 +31,7 @@
 	<button
 		class="mx-auto rounded-lg border-2 border-blue-500 p-2 font-bold duration-200 hover:opacity-75"
 		disabled={!$config.selected.user_id}
-		on:click={async () => {
+		onclick={async () => {
 			if (!$config.selected.user_id) return;
 			await BoltService.logout($config.selected.user_id);
 			BoltService.saveCredentials();
