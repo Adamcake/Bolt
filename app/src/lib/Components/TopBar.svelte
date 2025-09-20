@@ -6,7 +6,7 @@
 	import { BoltService } from '$lib/Services/BoltService';
 	import { bolt } from '$lib/State/Bolt';
 	import { GlobalState } from '$lib/State/GlobalState';
-	import { Game } from '$lib/Util/interfaces';
+	import { Game } from '$lib/Util/Interfaces';
 
 	const { config, sessions } = GlobalState;
 	let settingsModal: SettingsModal;

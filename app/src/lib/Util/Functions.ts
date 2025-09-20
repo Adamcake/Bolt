@@ -1,7 +1,7 @@
 import { BoltService } from '$lib/Services/BoltService';
 import { bolt } from '$lib/State/Bolt';
 import { GlobalState } from '$lib/State/GlobalState';
-import { type Direct6Token } from '$lib/Util/interfaces';
+import { type Direct6Token } from '$lib/Util/Interfaces';
 import { logger } from '$lib/Util/Logger';
 import { get } from 'svelte/store';
 

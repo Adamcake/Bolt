@@ -2,6 +2,9 @@
 	import { GlobalState } from '$lib/State/GlobalState';
 	import clickOutside from '$lib/Util/ClickOutside';
 
+	const { config } = GlobalState;
+	let darkTheme = $derived($config.use_dark_theme);
+
 	interface Props {
 		class?: string;
 		position?: 'top' | 'right' | 'bottom' | 'left';
@@ -9,9 +12,6 @@
 		children?: import('svelte').Snippet;
 		content?: import('svelte').Snippet;
 	}
-	const { config } = GlobalState;
-	let darkTheme = $derived($config.use_dark_theme);
-
 	let {
 		class: className = '',
 		position = 'bottom',
@@ -21,7 +21,7 @@
 	}: Props = $props();
 
 	let isOpen = $state(false);
-	let openButton: HTMLButtonElement = $state();
+	let openButton: HTMLButtonElement | undefined = $state();
 
 	export function open() {
 		isOpen = true;

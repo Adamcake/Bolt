@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { BoltService } from '$lib/Services/BoltService';
 	import { GlobalState } from '$lib/State/GlobalState';
-	import { launchRuneLite } from '$lib/Util/functions';
+	import { launchRuneLite } from '$lib/Util/Functions';
 
 	const { config } = GlobalState;
 

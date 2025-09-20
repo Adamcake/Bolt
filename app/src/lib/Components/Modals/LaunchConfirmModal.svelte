@@ -1,6 +1,6 @@
 <script lang="ts">
 	import Modal from '$lib/Components/CommonUI/Modal.svelte';
-	import { Client, Game } from '$lib/Util/interfaces';
+	import { Client, Game } from '$lib/Util/Interfaces';
 
 	let modal: Modal;
 	let launchGame: Game;

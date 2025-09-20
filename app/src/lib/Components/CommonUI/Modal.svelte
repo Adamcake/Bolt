@@ -1,14 +1,15 @@
 <script lang="ts">
 	import { GlobalState } from '$lib/State/GlobalState';
 
+	const { config } = GlobalState;
+	let darkTheme = $derived($config.use_dark_theme);
+
 	interface Props {
 		class?: string;
 		canSelfClose?: boolean;
 		onClose?: () => void;
 		children?: import('svelte').Snippet;
 	}
-	const { config } = GlobalState;
-	let darkTheme = $derived($config.use_dark_theme);
 
 	let {
 		class: className = '',

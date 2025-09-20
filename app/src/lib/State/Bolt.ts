@@ -1,5 +1,5 @@
 import { ParseUtils } from '$lib/Util/ParseUtils';
-import type { PluginMeta } from '$lib/Util/interfaces';
+import type { PluginMeta } from '$lib/Util/Interfaces';
 
 export const enum Platform {
 	Windows = 'windows',

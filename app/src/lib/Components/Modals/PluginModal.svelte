@@ -2,14 +2,14 @@
 	import Modal from '$lib/Components/CommonUI/Modal.svelte';
 	import { bolt } from '$lib/State/Bolt';
 	import { BoltService } from '$lib/Services/BoltService';
-	import { requestNewClientListPromise } from '$lib/Util/functions';
+	import { requestNewClientListPromise } from '$lib/Util/Functions';
 	import {
 		type PluginConfig,
 		type PluginMeta,
 		type PluginUpdaterConfig
-	} from '$lib/Util/interfaces';
+	} from '$lib/Util/Interfaces';
 	import { logger } from '$lib/Util/Logger';
-	import { clientList } from '$lib/Util/store';
+	import { clientList } from '$lib/Util/Store';
 	import { GlobalState } from '$lib/State/GlobalState';
 
 	let modal: Modal;

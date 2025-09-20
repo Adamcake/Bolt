@@ -7,8 +7,8 @@
 		launchOfficialClient,
 		launchRS3Linux,
 		launchRuneLite
-	} from '$lib/Util/functions';
-	import { Client, clientMap, Game } from '$lib/Util/interfaces';
+	} from '$lib/Util/Functions';
+	import { Client, clientMap, Game } from '$lib/Util/Interfaces';
 	import { logger } from '$lib/Util/Logger';
 	import { writable, type Writable } from 'svelte/store';
 	import LaunchConfirmModal from './Modals/LaunchConfirmModal.svelte';
