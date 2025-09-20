@@ -26,6 +26,6 @@
 	</p>
 	<button
 		class="m-5 rounded-lg border-2 border-blue-500 p-2 duration-200 hover:opacity-75"
-		on:click={() => modal.close()}>I Understand</button
+		onclick={() => modal.close()}>I Understand</button
 	>
 </Modal>

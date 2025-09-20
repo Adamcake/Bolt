@@ -1,5 +1,5 @@
 <script lang="ts">
-	import DisclaimerModal from '$lib/Components/DisclaimerModal.svelte';
+	import DisclaimerModal from '$lib/Components/Modals/DisclaimerModal.svelte';
 	import Launch from '$lib/Components/Launch.svelte';
 	import LogView from '$lib/Components/LogView.svelte';
 	import MainLayout from '$lib/Components/MainLayout.svelte';
@@ -12,7 +12,7 @@
 </script>
 
 <svelte:window
-	on:beforeunload={() => {
+	onbeforeunload={() => {
 		BoltService.saveConfig();
 		if (bolt.hasBoltPlugins) BoltService.savePluginConfig(true);
 	}}
