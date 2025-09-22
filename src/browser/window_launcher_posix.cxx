@@ -418,12 +418,18 @@ CefRefPtr<CefResourceRequestHandler> Browser::Launcher::LaunchOsrsExe(CefRefPtr<
 	pid_t pid = fork();
 	if (pid == 0) {
 		SETUPCHILD()
-		// game id from steam for OSRS. This allows umu to apply any necessary protonfixes
+
+		const std::filesystem::path wineprefix = this->data_dir / "osrs_official_wine_prefix";
+
+		// Place default WINEPREFIX inside bolt data directory
+		setenv("WINEPREFIX", wineprefix.c_str(), false);
+
+		// These are only relevant when someone is using umu-launcher.
+		// Do not allow gameid override since that should not need to happen.
 		setenv("GAMEID", "1343370", true);
-		// tell umu to use the latest GE Proton it can find, which will perform better in most cases
-		setenv("PROTONPATH", "GE-Proton", true);
-		// allow proton to run multiple official clients at once
-		setenv("PROTON_VERB", "runinprefix", true);
+		setenv("PROTONPATH", "GE-Latest", false);
+		setenv("PROTON_VERB", "runinprefix", false);
+
 		BoltExec(argv);
 	}
 
