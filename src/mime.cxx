@@ -1,14 +1,17 @@
 #include "mime.hxx"
 
-#include <map>
+#include <unordered_map>
 #include <string>
 
 // Map of mime types for files loaded from disk
-const std::map<std::string, const char*> map({
+const std::unordered_map<std::string, const char*> map({
 	{".txt", "text/plain"},
 	{".html", "text/html"},
 	{".js", "text/javascript"},
 	{".css", "text/css"},
+	{".htm", "text/html"},
+	{".json", "application/json"},
+	{".xml", "application/xml"},
 
 	{".avif", "image/avif"},
 	{".avifs", "image/avif"},
@@ -29,10 +32,20 @@ const std::map<std::string, const char*> map({
 	{".ogg", "audio/ogg"},
 	{".opus", "audio/opus"},
 	{".wav", "audio/wav"},
+	{".ogx", "application/ogg"},
 
 	{".otf", "font/otf"},
 	{".woff", "font/woff"},
 	{".woff2", "font/woff2"},
+	{".ttf", "font/ttf"},
+
+	{".zip", "application/zip"},
+	{".gz", "application/gzip"},
+	{".tar", "application/x-tar"},
+	{".7z", "application/x-7z-compressed"},
+	{".rar", "application/vnd.rar"},
+	{".bz", "application/x-bzip"},
+	{".bz2", "application/x-bzip2"},
 });
 
 const char* GetMimeType(std::filesystem::path& path) {
