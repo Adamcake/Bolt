@@ -16,6 +16,7 @@
 
 	let messageText: string | null = $state(null);
 	let messageIsError: boolean = $state(false);
+	let pluginList: { [key: string] : PluginMeta } = $state(bolt.pluginConfig);
 
 	const platformFileSep: string = bolt.platform === 'windows' ? '\\' : '/';
 	const configFileName: string = 'bolt.json';
@@ -25,6 +26,11 @@
 	export function open() {
 		showURLEntry = false;
 		modal.open();
+	}
+
+	const close = () => {
+		bolt.pluginConfig = pluginList;
+		BoltService.savePluginConfig(true);
 	}
 
 	const setMessageInfo = (msg: string) => {
@@ -69,8 +75,7 @@
 	};
 
 	const getPluginConfigPromiseFromID = (id: string): Promise<PluginConfig> | null => {
-		const list = bolt.pluginConfig;
-		const meta = list[id];
+		const meta = pluginList[id];
 		if (!meta) return null;
 		const path = meta.path;
 		if (path) return getPluginConfigPromiseFromPath(path);
@@ -78,7 +83,7 @@
 	};
 
 	const getNewPluginID = () => {
-		const ids = Object.keys(bolt.pluginConfig);
+		const ids = Object.keys(pluginList);
 		let id;
 		do {
 			id = crypto.randomUUID();
@@ -93,7 +98,7 @@
 		getPluginConfigPromiseFromPath(folderPath)
 			.then((plugin: PluginConfig) => {
 				selectedPlugin = getNewPluginID();
-				bolt.pluginConfig[selectedPlugin] = {
+				pluginList[selectedPlugin] = {
 					name: plugin.name ?? unnamedPluginName,
 					path: folderPath,
 					version: plugin.version
@@ -147,7 +152,7 @@
 					const plugin = await getPluginConfigPromiseFromDataDir(id);
 					if (plugin) {
 						selectedPlugin = id;
-						bolt.pluginConfig[selectedPlugin] = {
+						pluginList[selectedPlugin] = {
 							name: plugin.name ?? unnamedPluginName,
 							version: plugin.version,
 							updaterURL: url,
@@ -336,7 +341,7 @@
 			isClientSelected = false;
 		}
 	});
-	let selectedPluginMeta = $derived(bolt.pluginConfig[selectedPlugin]);
+	let selectedPluginMeta = $derived(pluginList[selectedPlugin]);
 	let managementPluginPromise = $derived(getPluginConfigPromiseFromID(selectedPlugin));
 	$effect(() => {
 		if (managementPluginPromise) {
@@ -364,7 +369,7 @@
 <Modal
 	bind:this={modal}
 	class="h-[90%] w-[90%] text-center"
-	onClose={() => BoltService.savePluginConfig(true)}
+	onClose={() => close() }
 >
 	<div
 		class="left-0 float-left h-full w-[min(180px,_50%)] overflow-hidden border-r-2 border-slate-300 pt-2 dark:border-slate-800"
@@ -408,7 +413,7 @@
 				class="mx-auto mb-4 w-[min(280px,_45%)] cursor-pointer rounded-lg border-2 border-slate-300 bg-inherit p-2 text-inherit duration-200 hover:opacity-75 dark:border-slate-800"
 				onchange={() => (messageText = null)}
 			>
-				{#each Object.entries(bolt.pluginConfig) as [id, plugin]}
+				{#each Object.entries(pluginList) as [id, plugin]}
 					<option class="dark:bg-slate-900" value={id}>{plugin.name ?? unnamedPluginName}</option>
 				{/each}
 			</select>
@@ -464,8 +469,8 @@
 					>
 					<br /><br />
 				{/if}
-				{#if Object.entries(bolt.pluginConfig).length !== 0}
-					{#if Object.keys(bolt.pluginConfig).includes(selectedPlugin) && managementPluginPromise !== null}
+				{#if Object.entries(pluginList).length !== 0}
+					{#if Object.keys(pluginList).includes(selectedPlugin) && managementPluginPromise !== null}
 						{#await managementPluginPromise}
 							<p>loading...</p>
 						{:then plugin}
@@ -489,7 +494,7 @@
 						<button
 							class="mx-auto mb-1 w-[min(144px,_25%)] select-none rounded-lg bg-blue-500 p-2 font-bold text-black duration-200 hover:opacity-75"
 							onclick={() => {
-								const path = bolt.pluginConfig[selectedPlugin].path;
+								const path = pluginList[selectedPlugin].path;
 								if (path) {
 									fetch('/browse-directory?'.concat(new URLSearchParams({ path }).toString()));
 								} else {
@@ -530,8 +535,7 @@
 							onclick={() => {
 								managementPluginPromise = null;
 								GlobalState.pluginConfigHasPendingChanges = true;
-								let list = bolt.pluginConfig;
-								const meta = list[selectedPlugin];
+								const meta = pluginList[selectedPlugin];
 								if (meta) {
 									fetch(
 										'/uninstall-plugin?'.concat(
@@ -542,8 +546,7 @@
 										)
 									);
 									setMessageInfo(`plugin '${meta.name}' uninstalled`);
-									delete list[selectedPlugin];
-									bolt.pluginConfig = list;
+									delete pluginList[selectedPlugin];
 								}
 							}}
 						>
@@ -561,7 +564,7 @@
 				{#await managementPluginPromise}
 					<p>loading...</p>
 				{:then plugin}
-					{#if plugin && plugin.main && Object.keys(bolt.pluginConfig).includes(selectedPlugin)}
+					{#if plugin && plugin.main && Object.keys(pluginList).includes(selectedPlugin)}
 						<button
 							class="mx-auto mb-1 w-auto select-none rounded-lg bg-emerald-500 p-2 font-bold text-black duration-200 hover:opacity-75"
 							onclick={() =>
@@ -574,7 +577,7 @@
 						>
 							Start {plugin.name}
 						</button>
-					{:else if Object.entries(bolt.pluginConfig).length === 0}
+					{:else if Object.entries(pluginList).length === 0}
 						<p>(no plugins installed)</p>
 					{:else}
 						<p>can't start plugin: does not appear to be configured</p>
@@ -585,9 +588,9 @@
 					{#each $clientList as client}
 						{#if client.uid === selectedClientId}
 							{#each client.plugins as activePlugin}
-								{#if Object.keys(bolt.pluginConfig).includes(activePlugin.id)}
+								{#if Object.keys(pluginList).includes(activePlugin.id)}
 									<p>
-										{bolt.pluginConfig[activePlugin.id].name ?? activePlugin.id}
+										{pluginList[activePlugin.id].name ?? activePlugin.id}
 										<button
 											class="select-none rounded-sm bg-rose-500 shadow-lg hover:opacity-75"
 											onclick={() => {
