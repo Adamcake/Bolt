@@ -103,6 +103,7 @@
 					path: folderPath,
 					version: plugin.version
 				};
+				bolt.pluginConfig = pluginList;
 				GlobalState.pluginConfigHasPendingChanges = true;
 			})
 			.catch((reason) =>
@@ -158,6 +159,7 @@
 							updaterURL: url,
 							sha256: config.sha256
 						};
+						bolt.pluginConfig = pluginList;
 						GlobalState.pluginConfigHasPendingChanges = true;
 						setMessageInfo(`plugin '${plugin.name}' installed`);
 					} else {
