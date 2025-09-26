@@ -1,13 +1,25 @@
 <script lang="ts">
-	import { createEventDispatcher } from 'svelte';
+	import { GlobalState } from '$lib/State/GlobalState';
 
-	let className = '';
-	export { className as class };
-	export let canSelfClose = true;
+	const { config } = GlobalState;
+	let darkTheme = $derived($config.use_dark_theme);
+
+	interface Props {
+		class?: string;
+		canSelfClose?: boolean;
+		onClose?: () => void;
+		children?: import('svelte').Snippet;
+	}
+
+	let {
+		class: className = '',
+		canSelfClose = true,
+		onClose = () => {},
+		children
+	}: Props = $props();
 
 	let dialog: HTMLDialogElement;
-	let isOpen = false;
-	const dispatch = createEventDispatcher<{ close: undefined }>();
+	let isOpen = $state(false);
 
 	export function open() {
 		dialog.showModal();
@@ -15,36 +27,35 @@
 	}
 
 	export function close() {
-		dispatch('close');
+		onClose();
 		dialog.close();
 		isOpen = false;
 	}
 </script>
 
-<!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
 <dialog
 	bind:this={dialog}
-	on:keydown={(e) => {
+	onkeydown={(e) => {
 		if (e.key !== 'Escape') return;
 		e.preventDefault();
 		if (canSelfClose) close();
 	}}
-	on:mousedown|self={() => {
-		if (canSelfClose) close();
+	onmousedown={(e: MouseEvent) => {
+		if (dialog === (e.target as Node)) close();
 	}}
-	class:backdrop:cursor-pointer={canSelfClose}
+	class:dark={darkTheme}
 	class="{className} backdrop max-h-[90%] max-w-[90%] overflow-auto rounded-xl text-inherit focus-visible:outline-none"
 >
 	{#if canSelfClose}
 		<button
 			class="absolute right-3 top-3 rounded-full bg-rose-500 p-[2px] shadow-lg duration-200 hover:rotate-90 hover:opacity-75"
-			on:click={close}
+			onclick={close}
 		>
 			<img src="svgs/xmark-solid.svg" class="h-5 w-5" alt="Close" />
 		</button>
 	{/if}
 	{#if isOpen}
-		<slot />
+		{@render children?.()}
 	{/if}
 </dialog>
 

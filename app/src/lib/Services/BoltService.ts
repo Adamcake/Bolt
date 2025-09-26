@@ -1,7 +1,7 @@
 import { AuthService, type AuthTokens } from '$lib/Services/AuthService';
 import { UserService, type Account, type Session } from '$lib/Services/UserService';
 import { GlobalState } from '$lib/State/GlobalState';
-import { error, ok, type Result } from '$lib/Util/interfaces';
+import { error, ok, type Result } from '$lib/Util/Interfaces';
 import { logger } from '$lib/Util/Logger';
 import { get } from 'svelte/store';
 import { bolt } from '$lib/State/Bolt';

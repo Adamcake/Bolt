@@ -3,7 +3,7 @@ import { CookieService } from '$lib/Services/CookieService';
 import { bolt } from '$lib/State/Bolt';
 import { ParseUtils } from '$lib/Util/ParseUtils';
 import { StringUtils } from '$lib/Util/StringUtils';
-import { error, ok, type Result } from '$lib/Util/interfaces';
+import { error, ok, type Result } from '$lib/Util/Interfaces';
 
 export interface AuthTokens {
 	access_token: string;

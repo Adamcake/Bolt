@@ -1,6 +1,6 @@
 import type { AuthTokens } from '$lib/Services/AuthService';
 import { bolt } from '$lib/State/Bolt';
-import { error, ok, type Result } from '$lib/Util/interfaces';
+import { error, ok, type Result } from '$lib/Util/Interfaces';
 
 export interface User {
 	id: string;

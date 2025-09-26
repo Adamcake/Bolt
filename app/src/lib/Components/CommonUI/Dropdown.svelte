@@ -1,13 +1,27 @@
 <script lang="ts">
+	import { GlobalState } from '$lib/State/GlobalState';
 	import clickOutside from '$lib/Util/ClickOutside';
 
-	let className = '';
-	export { className as class };
-	export let position: 'top' | 'right' | 'bottom' | 'left' = 'bottom';
-	export let align: 'start' | 'center' | 'end' = 'start';
+	const { config } = GlobalState;
+	let darkTheme = $derived($config.use_dark_theme);
 
-	let isOpen = false;
-	let openButton: HTMLButtonElement;
+	interface Props {
+		class?: string;
+		position?: 'top' | 'right' | 'bottom' | 'left';
+		align?: 'start' | 'center' | 'end';
+		children?: import('svelte').Snippet;
+		content?: import('svelte').Snippet;
+	}
+	let {
+		class: className = '',
+		position = 'bottom',
+		align = 'start',
+		children,
+		content
+	}: Props = $props();
+
+	let isOpen = $state(false);
+	let openButton: HTMLButtonElement | undefined = $state();
 
 	export function open() {
 		isOpen = true;
@@ -18,19 +32,20 @@
 	}
 
 	function toggle() {
-		isOpen ? close() : open();
+		if (isOpen) close();
+		else open();
 	}
 </script>
 
-<div class="relative h-fit w-fit {className}">
-	<button bind:this={openButton} on:click={toggle}><slot /></button>
+<div class:dark={darkTheme} class="relative h-fit w-fit {className}">
+	<button bind:this={openButton} onclick={toggle}>{@render children?.()}</button>
 
 	{#if isOpen}
 		<div
 			class="dropdown-color absolute z-20 rounded-lg border-2 {position} {align}"
 			use:clickOutside={{ callback: close, ignore: [openButton] }}
 		>
-			<slot name="content" />
+			{@render content?.()}
 		</div>
 	{/if}
 </div>

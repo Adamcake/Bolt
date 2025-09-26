@@ -1,17 +1,19 @@
 <script lang="ts">
 	import { BoltService } from '$lib/Services/BoltService';
 	import { GlobalState } from '$lib/State/GlobalState';
-	import { launchRuneLite } from '$lib/Util/functions';
+	import { launchRuneLite } from '$lib/Util/Functions';
 
 	const { config } = GlobalState;
 
-	$: selectedSession = BoltService.findSession($config.selected.user_id);
-	$: selectedAccount = BoltService.findAccount(
-		selectedSession?.accounts ?? [],
-		$config.userDetails[$config.selected.user_id ?? '']?.account_id
+	let selectedSession = $derived(BoltService.findSession($config.selected.user_id));
+	let selectedAccount = $derived(
+		BoltService.findAccount(
+			selectedSession?.accounts ?? [],
+			$config.userDetails[$config.selected.user_id ?? '']?.account_id
+		)
 	);
 
-	let currentlyPickingFile = false;
+	let currentlyPickingFile = $state(false);
 
 	async function openFilePicker() {
 		currentlyPickingFile = true;
@@ -41,7 +43,7 @@
 <button
 	disabled={!selectedSession?.session_id || !selectedAccount?.accountId}
 	class="p-2 pb-5 hover:opacity-75"
-	on:click={() => launchConfigure()}
+	onclick={() => launchConfigure()}
 >
 	<div class="flex">
 		<img
@@ -71,7 +73,7 @@
 	<button
 		class="mt-1 rounded-lg border-2 border-blue-500 p-1 duration-200 enabled:hover:opacity-75"
 		disabled={currentlyPickingFile || !$config.runelite_use_custom_jar}
-		on:click={() => {
+		onclick={() => {
 			openFilePicker();
 		}}
 	>
@@ -88,7 +90,7 @@
 		cols="35"
 		placeholder={'%command%'}
 		bind:value={$config.osrs_launch_command}
-	/>
+	></textarea>
 </div>
 <div class="p-2">
 	<label for="runelite_custom_launch_command">RuneLite launch command:</label>
@@ -100,7 +102,7 @@
 		cols="35"
 		placeholder={'%command%'}
 		bind:value={$config.runelite_launch_command}
-	/>
+	></textarea>
 </div>
 <div class="p-2">
 	<label for="hdos_custom_launch_command">HDOS launch command:</label>
@@ -112,5 +114,5 @@
 		cols="35"
 		placeholder={'%command%'}
 		bind:value={$config.hdos_launch_command}
-	/>
+	></textarea>
 </div>
