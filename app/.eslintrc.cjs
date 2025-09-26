@@ -28,9 +28,13 @@ module.exports = {
 			}
 		}
 	],
-	// this rule is for naming conventions, such as snake_case or camelCase enforcement
-	// rules: {
-	// 	'@typescript-eslint/naming-convention': 'error'
-	// },
+	rules: {
+		'@typescript-eslint/no-unused-vars': [
+			'error',
+			{
+				caughtErrors: 'none'
+			}
+		]
+	},
 	ignorePatterns: ['dist/', '*.cjs']
 };

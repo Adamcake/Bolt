@@ -16,7 +16,7 @@
 
 	let messageText: string | null = $state(null);
 	let messageIsError: boolean = $state(false);
-	let pluginList: { [key: string] : PluginMeta } = $state(bolt.pluginConfig);
+	let pluginList: { [key: string]: PluginMeta } = $state(bolt.pluginConfig);
 
 	const platformFileSep: string = bolt.platform === 'windows' ? '\\' : '/';
 	const configFileName: string = 'bolt.json';
@@ -31,7 +31,7 @@
 	const close = () => {
 		bolt.pluginConfig = pluginList;
 		BoltService.savePluginConfig(true);
-	}
+	};
 
 	const setMessageInfo = (msg: string) => {
 		console.log(msg);
@@ -368,11 +368,7 @@
 	let selectedPluginPath = $derived(selectedPluginMeta ? selectedPluginMeta.path : null);
 </script>
 
-<Modal
-	bind:this={modal}
-	class="h-[90%] w-[90%] text-center"
-	onClose={() => close() }
->
+<Modal bind:this={modal} class="h-[90%] w-[90%] text-center" onClose={() => close()}>
 	<div
 		class="left-0 float-left h-full w-[min(180px,_50%)] overflow-hidden border-r-2 border-slate-300 pt-2 dark:border-slate-800"
 	>

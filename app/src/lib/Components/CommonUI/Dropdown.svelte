@@ -32,7 +32,8 @@
 	}
 
 	function toggle() {
-		isOpen ? close() : open();
+		if (isOpen) close();
+		else open();
 	}
 </script>
 

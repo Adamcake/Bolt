@@ -18,7 +18,7 @@
 	let activeClass =
 		'border-2 border-blue-500 bg-blue-500 hover:opacity-75 font-bold text-black duration-200 rounded-lg p-1 w-3/4';
 	let inactiveClass = 'border-2 border-blue-500 hover:opacity-75 duration-200 rounded-lg p-1 w-3/4';
-	
+
 	export function open() {
 		modal.open();
 	}
