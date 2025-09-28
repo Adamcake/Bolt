@@ -1,6 +1,6 @@
 <script lang="ts">
 	import Modal from '$lib/Components/CommonUI/Modal.svelte';
-	import { Client, Game } from '$lib/Util/interfaces';
+	import { Client, Game } from '$lib/Util/Interfaces';
 
 	let modal: Modal;
 	let launchGame: Game;
@@ -22,13 +22,13 @@
 		<div class="align-bottom">
 			<button
 				class="mx-1 mb-2 mt-5 w-[45%] rounded-lg bg-blue-500 p-2 font-bold text-black duration-200 hover:opacity-75"
-				on:click={() => {
+				onclick={() => {
 					modal.close();
 				}}>No</button
 			>
 			<button
 				class="mx-1 mb-2 mt-5 w-[45%] rounded-lg bg-emerald-500 p-2 font-bold text-black duration-200 hover:opacity-75"
-				on:click={() => {
+				onclick={() => {
 					launchFunction(launchGame, launchClient);
 					modal.close();
 				}}>Yes</button

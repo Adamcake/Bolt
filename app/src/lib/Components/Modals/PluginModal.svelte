@@ -2,20 +2,21 @@
 	import Modal from '$lib/Components/CommonUI/Modal.svelte';
 	import { bolt } from '$lib/State/Bolt';
 	import { BoltService } from '$lib/Services/BoltService';
-	import { requestNewClientListPromise } from '$lib/Util/functions';
+	import { requestNewClientListPromise } from '$lib/Util/Functions';
 	import {
 		type PluginConfig,
 		type PluginMeta,
 		type PluginUpdaterConfig
-	} from '$lib/Util/interfaces';
+	} from '$lib/Util/Interfaces';
 	import { logger } from '$lib/Util/Logger';
-	import { clientList } from '$lib/Util/store';
+	import { clientList } from '$lib/Util/Store';
 	import { GlobalState } from '$lib/State/GlobalState';
 
 	let modal: Modal;
 
-	let messageText: string | null = null;
-	let messageIsError: boolean = false;
+	let messageText: string | null = $state(null);
+	let messageIsError: boolean = $state(false);
+	let pluginList: { [key: string]: PluginMeta } = $state(bolt.pluginConfig);
 
 	const platformFileSep: string = bolt.platform === 'windows' ? '\\' : '/';
 	const configFileName: string = 'bolt.json';
@@ -26,6 +27,11 @@
 		showURLEntry = false;
 		modal.open();
 	}
+
+	const close = () => {
+		bolt.pluginConfig = pluginList;
+		BoltService.savePluginConfig(true);
+	};
 
 	const setMessageInfo = (msg: string) => {
 		console.log(msg);
@@ -69,8 +75,7 @@
 	};
 
 	const getPluginConfigPromiseFromID = (id: string): Promise<PluginConfig> | null => {
-		const list = bolt.pluginConfig;
-		const meta = list[id];
+		const meta = pluginList[id];
 		if (!meta) return null;
 		const path = meta.path;
 		if (path) return getPluginConfigPromiseFromPath(path);
@@ -78,7 +83,7 @@
 	};
 
 	const getNewPluginID = () => {
-		const ids = Object.keys(bolt.pluginConfig);
+		const ids = Object.keys(pluginList);
 		let id;
 		do {
 			id = crypto.randomUUID();
@@ -93,11 +98,12 @@
 		getPluginConfigPromiseFromPath(folderPath)
 			.then((plugin: PluginConfig) => {
 				selectedPlugin = getNewPluginID();
-				bolt.pluginConfig[selectedPlugin] = {
+				pluginList[selectedPlugin] = {
 					name: plugin.name ?? unnamedPluginName,
 					path: folderPath,
 					version: plugin.version
 				};
+				bolt.pluginConfig = pluginList;
 				GlobalState.pluginConfigHasPendingChanges = true;
 			})
 			.catch((reason) =>
@@ -147,12 +153,13 @@
 					const plugin = await getPluginConfigPromiseFromDataDir(id);
 					if (plugin) {
 						selectedPlugin = id;
-						bolt.pluginConfig[selectedPlugin] = {
+						pluginList[selectedPlugin] = {
 							name: plugin.name ?? unnamedPluginName,
 							version: plugin.version,
 							updaterURL: url,
 							sha256: config.sha256
 						};
+						bolt.pluginConfig = pluginList;
 						GlobalState.pluginConfigHasPendingChanges = true;
 						setMessageInfo(`plugin '${plugin.name}' installed`);
 					} else {
@@ -166,7 +173,7 @@
 	};
 
 	// json file picker
-	let disableButtons: boolean = false;
+	let disableButtons: boolean = $state(false);
 	const jsonFilePicker = () => {
 		disableButtons = true;
 		var xml = new XMLHttpRequest();
@@ -195,11 +202,6 @@
 
 	// get connected client list
 	requestNewClientListPromise();
-	$: {
-		if (!$clientList.some((x) => x.uid === selectedClientId)) {
-			isClientSelected = false;
-		}
-	}
 
 	// function to start a plugin
 	const startPlugin = (client: number, id: string, path: string | null, main: string) => {
@@ -325,45 +327,48 @@
 	};
 
 	// plugin management interface - currently-selected plugin
-	var selectedPlugin: string;
-	$: selectedPluginMeta = bolt.pluginConfig[selectedPlugin];
-	$: selectedPluginPath = selectedPluginMeta ? selectedPluginMeta.path : null;
-	$: managementPluginPromise = getPluginConfigPromiseFromID(selectedPlugin);
-	$: if (managementPluginPromise) {
-		managementPluginPromise.then((x) => {
-			// if the name in bolt.json has been changed, update it in the PluginMeta and our plugin config file
-			let dirty = false;
-			if (x.name !== selectedPluginMeta.name) {
-				selectedPluginMeta.name = x.name;
-				dirty = true;
-			}
-			if (x.version !== selectedPluginMeta.version) {
-				selectedPluginMeta.version = x.version;
-				dirty = true;
-			}
-			if (dirty) {
-				selectedPluginMeta = selectedPluginMeta;
-				GlobalState.pluginConfigHasPendingChanges = true;
-			}
-		});
-	}
+	var selectedPlugin: string = $state('');
 
 	const openAboutPlugins = () =>
 		fetch('/open-external-url', { method: 'POST', body: 'https://bolt.adamcake.com/plugins' });
 
 	// connected clients list
-	var isClientSelected: boolean = false;
-	var selectedClientId: number;
+	var isClientSelected: boolean = $state(false);
+	var selectedClientId: number = $state(0);
 
-	let showURLEntry: boolean = false;
-	let textURLEntry: string;
+	let showURLEntry: boolean = $state(false);
+	let textURLEntry: string = $state('');
+	$effect(() => {
+		if (!$clientList.some((x) => x.uid === selectedClientId)) {
+			isClientSelected = false;
+		}
+	});
+	let selectedPluginMeta = $derived(pluginList[selectedPlugin]);
+	let managementPluginPromise = $derived(getPluginConfigPromiseFromID(selectedPlugin));
+	$effect(() => {
+		if (managementPluginPromise) {
+			managementPluginPromise.then((x) => {
+				// if the name in bolt.json has been changed, update it in the PluginMeta and our plugin config file
+				let dirty = false;
+				if (x.name !== selectedPluginMeta.name) {
+					selectedPluginMeta.name = x.name;
+					dirty = true;
+				}
+				if (x.version !== selectedPluginMeta.version) {
+					selectedPluginMeta.version = x.version;
+					dirty = true;
+				}
+				if (dirty) {
+					selectedPluginMeta = selectedPluginMeta;
+					GlobalState.pluginConfigHasPendingChanges = true;
+				}
+			});
+		}
+	});
+	let selectedPluginPath = $derived(selectedPluginMeta ? selectedPluginMeta.path : null);
 </script>
 
-<Modal
-	bind:this={modal}
-	class="h-[90%] w-[90%] text-center"
-	on:close={() => BoltService.savePluginConfig(true)}
->
+<Modal bind:this={modal} class="h-[90%] w-[90%] text-center" onClose={() => close()}>
 	<div
 		class="left-0 float-left h-full w-[min(180px,_50%)] overflow-hidden border-r-2 border-slate-300 pt-2 dark:border-slate-800"
 	>
@@ -371,7 +376,7 @@
 			class="mx-auto mb-2 w-[95%] select-none rounded-lg border-2 {isClientSelected
 				? 'border-blue-500 text-black dark:text-white'
 				: 'border-black bg-blue-500 text-black'} p-2 font-bold hover:opacity-75"
-			on:click={() => (isClientSelected = false)}
+			onclick={() => (isClientSelected = false)}
 		>
 			Manage Plugins
 		</button>
@@ -381,7 +386,7 @@
 		{:else}
 			{#each $clientList as client}
 				<button
-					on:click={() => {
+					onclick={() => {
 						selectedClientId = client.uid;
 						isClientSelected = true;
 						showURLEntry = false;
@@ -404,9 +409,9 @@
 			<select
 				bind:value={selectedPlugin}
 				class="mx-auto mb-4 w-[min(280px,_45%)] cursor-pointer rounded-lg border-2 border-slate-300 bg-inherit p-2 text-inherit duration-200 hover:opacity-75 dark:border-slate-800"
-				on:change={() => (messageText = null)}
+				onchange={() => (messageText = null)}
 			>
-				{#each Object.entries(bolt.pluginConfig) as [id, plugin]}
+				{#each Object.entries(pluginList) as [id, plugin]}
 					<option class="dark:bg-slate-900" value={id}>{plugin.name ?? unnamedPluginName}</option>
 				{/each}
 			</select>
@@ -414,7 +419,7 @@
 				<span class="align-middle">
 					<button
 						class="mx-1 aspect-square w-9 select-none rounded-md bg-blue-500 p-1 text-[20px] font-bold duration-200 enabled:hover:opacity-75 disabled:bg-gray-500"
-						on:click={() => {
+						onclick={() => {
 							showURLEntry = !showURLEntry;
 							textURLEntry = '';
 						}}
@@ -425,7 +430,7 @@
 					</button>
 					<button
 						class="aspect-square w-9 select-none rounded-md bg-blue-500 p-1 text-[20px] font-bold duration-200 enabled:hover:opacity-75 disabled:bg-gray-500"
-						on:click={jsonFilePicker}
+						onclick={jsonFilePicker}
 						disabled={disableButtons}
 						title="Install plugin from local directory"
 					>
@@ -440,10 +445,10 @@
 						id="plugin-updater-url-input"
 						class="w-[50%] max-w-[60%] resize-x rounded border-2 border-slate-300 bg-slate-100 text-slate-950 dark:border-slate-800"
 						bind:value={textURLEntry}
-					/>
+					></textarea>
 					<button
 						title="Confirm"
-						on:click={() => {
+						onclick={() => {
 							addPluginFromUpdaterURL(textURLEntry);
 							showURLEntry = false;
 							textURLEntry = '';
@@ -453,7 +458,7 @@
 					>
 					<button
 						title="Close URL entry"
-						on:click={() => {
+						onclick={() => {
 							showURLEntry = false;
 							textURLEntry = '';
 						}}
@@ -462,8 +467,8 @@
 					>
 					<br /><br />
 				{/if}
-				{#if Object.entries(bolt.pluginConfig).length !== 0}
-					{#if Object.keys(bolt.pluginConfig).includes(selectedPlugin) && managementPluginPromise !== null}
+				{#if Object.entries(pluginList).length !== 0}
+					{#if Object.keys(pluginList).includes(selectedPlugin) && managementPluginPromise !== null}
 						{#await managementPluginPromise}
 							<p>loading...</p>
 						{:then plugin}
@@ -486,8 +491,8 @@
 						{/await}
 						<button
 							class="mx-auto mb-1 w-[min(144px,_25%)] select-none rounded-lg bg-blue-500 p-2 font-bold text-black duration-200 hover:opacity-75"
-							on:click={() => {
-								const path = bolt.pluginConfig[selectedPlugin].path;
+							onclick={() => {
+								const path = pluginList[selectedPlugin].path;
 								if (path) {
 									fetch('/browse-directory?'.concat(new URLSearchParams({ path }).toString()));
 								} else {
@@ -504,7 +509,7 @@
 						&nbsp;
 						<button
 							class="mx-auto mb-1 w-[min(144px,_25%)] select-none rounded-lg bg-blue-500 p-2 font-bold text-black duration-200 hover:opacity-75"
-							on:click={() =>
+							onclick={() =>
 								fetch(
 									'/browse-plugin-config?'.concat(
 										new URLSearchParams({ id: selectedPlugin }).toString()
@@ -517,7 +522,7 @@
 						{#if selectedPluginMeta.updaterURL}
 							<button
 								class="m-1 mx-auto w-[min(144px,_25%)] select-none rounded-lg p-2 font-bold text-black duration-200 enabled:bg-blue-500 enabled:hover:opacity-75 disabled:bg-gray-500"
-								on:click={() => updatePlugin(selectedPluginMeta, selectedPlugin)}
+								onclick={() => updatePlugin(selectedPluginMeta, selectedPlugin)}
 							>
 								Check updates
 							</button>
@@ -525,11 +530,10 @@
 						{/if}
 						<button
 							class="m-1 mx-auto w-[min(144px,_25%)] select-none rounded-lg p-2 font-bold text-black duration-200 enabled:bg-rose-500 enabled:hover:opacity-75 disabled:bg-gray-500"
-							on:click={() => {
+							onclick={() => {
 								managementPluginPromise = null;
 								GlobalState.pluginConfigHasPendingChanges = true;
-								let list = bolt.pluginConfig;
-								const meta = list[selectedPlugin];
+								const meta = pluginList[selectedPlugin];
 								if (meta) {
 									fetch(
 										'/uninstall-plugin?'.concat(
@@ -540,8 +544,7 @@
 										)
 									);
 									setMessageInfo(`plugin '${meta.name}' uninstalled`);
-									delete list[selectedPlugin];
-									bolt.pluginConfig = list;
+									delete pluginList[selectedPlugin];
 								}
 							}}
 						>
@@ -559,10 +562,10 @@
 				{#await managementPluginPromise}
 					<p>loading...</p>
 				{:then plugin}
-					{#if plugin && plugin.main && Object.keys(bolt.pluginConfig).includes(selectedPlugin)}
+					{#if plugin && plugin.main && Object.keys(pluginList).includes(selectedPlugin)}
 						<button
 							class="mx-auto mb-1 w-auto select-none rounded-lg bg-emerald-500 p-2 font-bold text-black duration-200 hover:opacity-75"
-							on:click={() =>
+							onclick={() =>
 								startPlugin(
 									selectedClientId,
 									selectedPlugin,
@@ -572,7 +575,7 @@
 						>
 							Start {plugin.name}
 						</button>
-					{:else if Object.entries(bolt.pluginConfig).length === 0}
+					{:else if Object.entries(pluginList).length === 0}
 						<p>(no plugins installed)</p>
 					{:else}
 						<p>can't start plugin: does not appear to be configured</p>
@@ -583,12 +586,12 @@
 					{#each $clientList as client}
 						{#if client.uid === selectedClientId}
 							{#each client.plugins as activePlugin}
-								{#if Object.keys(bolt.pluginConfig).includes(activePlugin.id)}
+								{#if Object.keys(pluginList).includes(activePlugin.id)}
 									<p>
-										{bolt.pluginConfig[activePlugin.id].name ?? activePlugin.id}
+										{pluginList[activePlugin.id].name ?? activePlugin.id}
 										<button
 											class="select-none rounded-sm bg-rose-500 shadow-lg hover:opacity-75"
-											on:click={() => {
+											onclick={() => {
 												stopPlugin(selectedClientId, activePlugin.uid);
 											}}
 										>
@@ -620,7 +623,7 @@
 	<div class="absolute bottom-2 right-4">
 		<button
 			class="m-0 cursor-pointer select-none border-none bg-transparent p-0 text-sm text-gray-500 underline"
-			on:click={openAboutPlugins}>about plugins</button
+			onclick={openAboutPlugins}>about plugins</button
 		>
 	</div>
 </Modal>

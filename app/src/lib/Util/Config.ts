@@ -1,7 +1,7 @@
 import { GlobalState } from '$lib/State/GlobalState';
-import { Client, Game } from '$lib/Util/interfaces';
+import { Client, Game } from '$lib/Util/Interfaces';
 import { logger } from '$lib/Util/Logger';
-import { onWritableChange } from '$lib/Util/onWritableChange';
+import { onWritableChange } from '$lib/Util/OnWritableChange';
 
 type UserDetails = {
 	account_id: string;

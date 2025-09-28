@@ -3,7 +3,7 @@
 	import { AuthService, type AuthTokens } from '$lib/Services/AuthService';
 	import { CookieService } from '$lib/Services/CookieService';
 	import { bolt } from '$lib/State/Bolt';
-	import type { BoltMessage } from '$lib/Util/interfaces';
+	import type { BoltMessage } from '$lib/Util/Interfaces';
 	import { onDestroy, onMount } from 'svelte';
 
 	const parentWindow = window.opener as {

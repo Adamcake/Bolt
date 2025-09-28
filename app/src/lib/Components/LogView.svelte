@@ -1,7 +1,11 @@
 <script lang="ts">
 	import { Severity, type Log } from '$lib/Util/Logger';
 
-	export let logs: Log[];
+	interface Props {
+		logs: Log[];
+	}
+
+	let { logs }: Props = $props();
 </script>
 
 <div

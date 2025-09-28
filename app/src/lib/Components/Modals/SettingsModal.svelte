@@ -4,11 +4,6 @@
 	import OsrsSettingsTab from '$lib/Components/Settings/OsrsSettingsTab.svelte';
 	import Rs3SettingsTab from '$lib/Components/Settings/Rs3SettingsTab.svelte';
 
-	let modal: Modal;
-	export function open() {
-		modal.open();
-	}
-
 	// settings categories
 	enum Tab {
 		general,
@@ -16,11 +11,17 @@
 		rs3
 	}
 
+	let modal: Modal;
+
 	// variables for swapping options and styling
 	let openTab: Tab = Tab.general;
 	let activeClass =
 		'border-2 border-blue-500 bg-blue-500 hover:opacity-75 font-bold text-black duration-200 rounded-lg p-1 w-3/4';
 	let inactiveClass = 'border-2 border-blue-500 hover:opacity-75 duration-200 rounded-lg p-1 w-3/4';
+
+	export function open() {
+		modal.open();
+	}
 </script>
 
 <Modal bind:this={modal} class="h-3/4 w-3/4 select-none">
@@ -30,19 +31,19 @@
 		>
 			<button
 				class={openTab === Tab.general ? activeClass : inactiveClass}
-				on:click={() => {
+				onclick={() => {
 					openTab = Tab.general;
 				}}>General</button
 			>
 			<button
 				class={openTab === Tab.osrs ? activeClass : inactiveClass}
-				on:click={() => {
+				onclick={() => {
 					openTab = Tab.osrs;
 				}}>OSRS</button
 			>
 			<button
 				class={openTab === Tab.rs3 ? activeClass : inactiveClass}
-				on:click={() => {
+				onclick={() => {
 					openTab = Tab.rs3;
 				}}>RS3</button
 			>
