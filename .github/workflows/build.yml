@@ -324,9 +324,8 @@ jobs:
           build-dir: build # Makes it so that the build directory is set to ./build
           generator: Ninja
           options: | 
-            BOLT_LUAJIT_INCLUDE_DIR=/usr/include/luajit-2.1
             CMAKE_BUILD_TYPE=Release
-          build-args: --config Release -j 4
+          build-args: --config Release -j ${{ env.NUMBER_OF_PROCESSORS }}
       
       - name: Create Release
         run: |
