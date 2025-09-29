@@ -53,7 +53,7 @@ if(NOT WIN32)
         "<name>Bolt Launcher</name>"
         "<developer_name>Adamcake</developer_name>"
         "<summary>Third-party ${BOLT_PROGRAM_NAME}</summary>"
-        "<description><p>Bolt is third-party port of the ${BOLT_PROGRAM_NAME} for ${BOLT_GAME_NAME}.</p></description>"
+        "<description><p>Bolt is an unofficial alternative to the ${BOLT_PROGRAM_NAME} for ${BOLT_GAME_NAME}.</p></description>"
         "<screenshots>"
         "    <screenshot xml:lang=\"en\" type=\"default\">"
         "        <image>https://raw.githubusercontent.com/adamcake/Bolt/master/screenshot/dark.png</image>"
