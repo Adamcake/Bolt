@@ -61,6 +61,7 @@ namespace Browser {
 		bool OnBeforePopup(
 			CefRefPtr<CefBrowser>,
 			CefRefPtr<CefFrame>,
+			int,
 			const CefString&,
 			const CefString&,
 			CefLifeSpanHandler::WindowOpenDisposition,
