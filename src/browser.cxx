@@ -217,6 +217,7 @@ CefRefPtr<CefLifeSpanHandler> Browser::Window::GetLifeSpanHandler() {
 bool Browser::Window::OnBeforePopup(
 	CefRefPtr<CefBrowser> browser,
 	CefRefPtr<CefFrame> frame,
+	int popup_id,
 	const CefString& target_url,
 	const CefString& target_frame_name,
 	CefLifeSpanHandler::WindowOpenDisposition target_disposition,
