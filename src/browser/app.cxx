@@ -1,5 +1,4 @@
 #include "app.hxx"
-#include "include/cef_base.h"
 #include "include/cef_process_message.h"
 #include "include/cef_v8.h"
 #include "include/cef_values.h"
@@ -32,16 +31,6 @@ static bool set_launcher_ui = false;
 static bool has_custom_js = false;
 static CefString custom_js;
 
-class ArrayBufferReleaseCallbackFree: public CefV8ArrayBufferReleaseCallback {
-	void ReleaseBuffer(void* buffer) override {
-		::free(buffer);
-	}
-	IMPLEMENT_REFCOUNTING(ArrayBufferReleaseCallbackFree);
-	DISALLOW_COPY_AND_ASSIGN(ArrayBufferReleaseCallbackFree);
-	public:
-		ArrayBufferReleaseCallbackFree() {}
-};
-
 // assumes the context has already been entered
 void PostPluginMessage(CefRefPtr<CefV8Context> context, CefRefPtr<CefProcessMessage> message) {
 	CefRefPtr<CefV8Value> post_message = context->GetGlobal()->GetValue("postMessage");
@@ -52,10 +41,10 @@ void PostPluginMessage(CefRefPtr<CefV8Context> context, CefRefPtr<CefProcessMess
 			// just byte arrays with no encoding or anything
 			CefRefPtr<CefBinaryValue> data = list->GetBinary(i);
 			size_t size = data->GetSize();
-			CefRefPtr<CefV8ArrayBufferReleaseCallback> cb = new ArrayBufferReleaseCallbackFree();
 			void* buffer = malloc(size);
 			data->GetData(buffer, size, 0);
-			CefRefPtr<CefV8Value> content = CefV8Value::CreateArrayBuffer(buffer, size, cb);
+			CefRefPtr<CefV8Value> content = CefV8Value::CreateArrayBufferWithCopy(buffer, size);
+			free(buffer);
 
 			// equivalent to: `window.postMessage({type: 'pluginMessage', content: ArrayBuffer...}, '*')`
 			CefRefPtr<CefV8Value> dict = CefV8Value::CreateObject(nullptr, nullptr);
@@ -242,7 +231,6 @@ bool Browser::App::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRe
 				shm_inited = true;
 			}
 
-			CefRefPtr<CefV8ArrayBufferReleaseCallback> cb = new ArrayBufferReleaseCallbackFree();
 			void* buffer = malloc(size);
 			memcpy(buffer, shm_file, size);
 
@@ -251,7 +239,8 @@ bool Browser::App::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRe
 
 			CefRefPtr<CefV8Context> context = frame->GetV8Context();
 			context->Enter();
-			CefRefPtr<CefV8Value> content = CefV8Value::CreateArrayBuffer(buffer, size, cb);
+			CefRefPtr<CefV8Value> content = CefV8Value::CreateArrayBufferWithCopy(buffer, size);
+			free(buffer);
 			CefRefPtr<CefV8Value> dict = CefV8Value::CreateObject(nullptr, nullptr);
 			dict->SetValue("type", CefV8Value::CreateString("screenCapture"), V8_PROPERTY_ATTRIBUTE_READONLY);
 			dict->SetValue("content", content, V8_PROPERTY_ATTRIBUTE_READONLY);
