@@ -10,8 +10,8 @@
 
 namespace Browser {
 	/// Struct for sending some bytes from memory as an HTTP response. Store individual instances on the heap.
-	/// https://github.com/chromiumembedded/cef/blob/6478/include/cef_resource_request_handler.h
-	/// https://github.com/chromiumembedded/cef/blob/6478/include/cef_resource_handler.h
+	/// https://github.com/chromiumembedded/cef/blob/7258/include/cef_resource_request_handler.h
+	/// https://github.com/chromiumembedded/cef/blob/7258/include/cef_resource_handler.h
 	struct ResourceHandler: public CefResourceRequestHandler, CefResourceHandler {
 		ResourceHandler(const unsigned char* data, size_t len, int status, const char* mime):
 			data(data), data_len(len), status(status), mime(mime), has_location(false), cursor(0), file_manager(nullptr) { }
@@ -57,9 +57,9 @@ namespace Browser {
 	};
 
 	/// Struct for bridging a CefURLRequestClient to a CefResourceHandler
-	/// https://github.com/chromiumembedded/cef/blob/6478/include/cef_resource_request_handler.h
-	/// https://github.com/chromiumembedded/cef/blob/6478/include/cef_resource_handler.h
-	/// https://github.com/chromiumembedded/cef/blob/6478/include/cef_urlrequest.h#L137
+	/// https://github.com/chromiumembedded/cef/blob/7258/include/cef_resource_request_handler.h
+	/// https://github.com/chromiumembedded/cef/blob/7258/include/cef_resource_handler.h
+	/// https://github.com/chromiumembedded/cef/blob/7258/include/cef_urlrequest.h#L137
 	struct DefaultURLHandler: public CefResourceRequestHandler, CefResourceHandler, CefURLRequestClient {
 		DefaultURLHandler(CefRefPtr<CefRequest>);
 

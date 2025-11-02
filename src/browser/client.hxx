@@ -31,8 +31,8 @@ typedef FileManager::Launcher CLIENT_FILEHANDLER;
 
 namespace Browser {
 	/// Implementation of CefClient, CefBrowserProcessHandler.
-	/// https://github.com/chromiumembedded/cef/blob/6478/include/cef_client.h
-	/// https://github.com/chromiumembedded/cef/blob/6478/include/cef_browser_process_handler.h
+	/// https://github.com/chromiumembedded/cef/blob/7258/include/cef_client.h
+	/// https://github.com/chromiumembedded/cef/blob/7258/include/cef_browser_process_handler.h
 	/// Despite being a CefClient, this class is mostly just an entrypoint stand-in and doesn't do much
 	/// actual important work; the individual browser instances can self-manage most CefClient duties.
 	struct Client: public CefClient, CefBrowserProcessHandler, CLIENT_FILEHANDLER {

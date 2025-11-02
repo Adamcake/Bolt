@@ -16,10 +16,10 @@ namespace Browser {
 	///
 	/// This struct also acts as the CefClient, CefWindowDelegate and CefBrowserViewDelegate and
 	/// CefLifeSpanHandler for the window.
-	/// https://github.com/chromiumembedded/cef/blob/6478/include/cef_client.h
-	/// https://github.com/chromiumembedded/cef/blob/6478/include/cef_life_span_handler.h
-	/// https://github.com/chromiumembedded/cef/blob/6478/include/views/cef_window_delegate.h
-	/// https://github.com/chromiumembedded/cef/blob/6478/include/views/cef_browser_view_delegate.h
+	/// https://github.com/chromiumembedded/cef/blob/7258/include/cef_client.h
+	/// https://github.com/chromiumembedded/cef/blob/7258/include/cef_life_span_handler.h
+	/// https://github.com/chromiumembedded/cef/blob/7258/include/views/cef_window_delegate.h
+	/// https://github.com/chromiumembedded/cef/blob/7258/include/views/cef_browser_view_delegate.h
 	struct Window: CefClient, CefLifeSpanHandler, CefWindowDelegate, CefBrowserViewDelegate {
 		/// Calls this->Init internally
 		Window(CefRefPtr<Browser::Client> client, Details, CefString, bool);
