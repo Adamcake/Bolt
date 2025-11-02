@@ -725,8 +725,8 @@ void Browser::Launcher::UpdateClientList(bool need_lock_mutex) const {
 #endif
 
 void Browser::Launcher::Refresh() const {
-	// override the default behaviour, which would be to call ReloadIgnoreCache() (a.k.a. ctrl+f5)
-	// because if certain config files have changed, we need to set different URL params than before
+	// we can't just call ReloadIgnoreCache() (a.k.a. ctrl+f5) here, we need to rebuild the URL in case
+	// it has changed - especially due to the credentials file changing, which happens every 30 minutes
 	this->browser->GetMainFrame()->LoadURL(this->BuildURL());
 }
 

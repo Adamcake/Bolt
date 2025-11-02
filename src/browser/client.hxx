@@ -30,18 +30,12 @@ typedef FileManager::Launcher CLIENT_FILEHANDLER;
 #endif
 
 namespace Browser {
-	/// Implementation of CefClient, CefBrowserProcessHandler, CefLifeSpanHandler, CefRequestHandler.
+	/// Implementation of CefClient, CefBrowserProcessHandler.
 	/// https://github.com/chromiumembedded/cef/blob/6478/include/cef_client.h
 	/// https://github.com/chromiumembedded/cef/blob/6478/include/cef_browser_process_handler.h
-	/// https://github.com/chromiumembedded/cef/blob/6478/include/cef_life_span_handler.h
-	/// https://github.com/chromiumembedded/cef/blob/6478/include/cef_request_handler.h
-	/// If building wqith plugin support, also a CefWindowDelegate for the purpose of hosting a dummy IPC frame
-	/// https://github.com/chromiumembedded/cef/blob/6478/include/views/cef_window_delegate.h
-	struct Client: public CefClient, CefBrowserProcessHandler, CefLifeSpanHandler, CefRequestHandler, CLIENT_FILEHANDLER
-#if defined(BOLT_PLUGINS)
-	, CefWindowDelegate
-#endif
-	{
+	/// Despite being a CefClient, this class is mostly just an entrypoint stand-in and doesn't do much
+	/// actual important work; the individual browser instances can self-manage most CefClient duties.
+	struct Client: public CefClient, CefBrowserProcessHandler, CLIENT_FILEHANDLER {
 		Client(CefRefPtr<Browser::App>, std::filesystem::path config_dir, std::filesystem::path data_dir, std::filesystem::path runtime_dir);
 
 		/// Either opens a launcher window, or focuses an existing one. No more than one launcher window
@@ -103,9 +97,6 @@ namespace Browser {
 		/// Filters the list of plugins and their associated browsers for the client identified by the given fd,
 		/// to remove deleted plugins and browsers. Usually called when a browser is closed.
 		void CleanupClientPlugins(int fd);
-
-		/* CefWindowDelegate overrides */
-		void OnWindowCreated(CefRefPtr<CefWindow>) override;
 #endif
 
 #if defined(BOLT_DEV_LAUNCHER_DIRECTORY)
@@ -117,28 +108,8 @@ namespace Browser {
 		const unsigned char* GetIcon16() const;
 		const unsigned char* GetIcon64() const;
 
-		/* CefClient overrides */
-		CefRefPtr<CefLifeSpanHandler> GetLifeSpanHandler() override;
-		CefRefPtr<CefRequestHandler> GetRequestHandler() override;
-		bool OnProcessMessageReceived(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, CefProcessId, CefRefPtr<CefProcessMessage>) override;
-
 		/* CefBrowserProcessHandler overrides */
 		void OnContextInitialized() override;
-
-		/* CefLifeSpanHandler overrides */
-		void OnAfterCreated(CefRefPtr<CefBrowser>) override;
-		void OnBeforeClose(CefRefPtr<CefBrowser>) override;
-
-		/* CefRequestHandler overrides */
-		CefRefPtr<CefResourceRequestHandler> GetResourceRequestHandler(
-			CefRefPtr<CefBrowser>,
-			CefRefPtr<CefFrame>,
-			CefRefPtr<CefRequest>,
-			bool,
-			bool,
-			const CefString&,
-			bool&
-		) override;
 
 		private:
 			DISALLOW_COPY_AND_ASSIGN(Client);
@@ -181,9 +152,6 @@ namespace Browser {
 			std::mutex send_lock; // would be great to have this per-GameClient but C++ doesn't like that
 			std::thread ipc_thread;
 			BoltSocketType ipc_fd;
-			CefRefPtr<CefBrowserView> ipc_view;
-			CefRefPtr<CefWindow> ipc_window;
-			CefRefPtr<CefBrowser> ipc_browser;
 			uint64_t next_client_uid;
 			uint64_t next_plugin_uid;
 			std::mutex game_clients_lock;

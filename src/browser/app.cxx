@@ -130,7 +130,12 @@ void Browser::App::OnUncaughtException(
 bool Browser::App::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefProcessId, CefRefPtr<CefProcessMessage> message) {
 	CefString name = message->GetName();
 
-	if (name == "__bolt_refresh" || name == "__bolt_no_more_clients" || name == "__bolt_open_launcher" || name == "__bolt_pluginbrowser_close") {
+	if (name == "__bolt_pluginbrowser_close") {
+		// pinging a message from browser -> renderer -> browser is the only way I can find of delaying a task
+		// without being on a different thread than the one I want to run it on. in this case, destroying a
+		// browser while still in the Create function of that browser. this would cause a segfault if we tried
+		// to do it directly so it needs to be delayed until some arbitrary later time. so, in that specific
+		// case, a message is sent here and we send the same message straight back.
 		frame->SendProcessMessage(PID_BROWSER, message);
 		return true;
 	}

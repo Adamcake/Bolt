@@ -7,10 +7,8 @@
 #include "window_plugin.hxx"
 #include "../library/event.h"
 #include <cstring>
-#define BOLT_IPC_URL "https://bolt-blankpage/"
 #endif
 
-#include "include/cef_life_span_handler.h"
 #include "include/cef_app.h"
 #include "include/cef_values.h"
 #include "include/internal/cef_types.h"
@@ -30,6 +28,24 @@ constexpr bool SHOW_DEVTOOLS = true;
 #else
 constexpr bool SHOW_DEVTOOLS = false;
 #endif
+
+struct TryExitTask: public CefTask {
+	TryExitTask(CefRefPtr<Browser::Client> client): client(client) {}
+	void Execute() override { client->TryExit(true); }
+	private:
+		CefRefPtr<Browser::Client> client;
+		IMPLEMENT_REFCOUNTING(TryExitTask);
+		DISALLOW_COPY_AND_ASSIGN(TryExitTask);
+};
+
+struct OpenLauncherTask: public CefTask {
+	OpenLauncherTask(CefRefPtr<Browser::Client> client): client(client) {}
+	void Execute() override { client->OpenLauncher(); }
+	private:
+		CefRefPtr<Browser::Client> client;
+		IMPLEMENT_REFCOUNTING(OpenLauncherTask);
+		DISALLOW_COPY_AND_ASSIGN(OpenLauncherTask);
+};
 
 Browser::Client::Client(CefRefPtr<Browser::App> app,std::filesystem::path config_dir, std::filesystem::path data_dir, std::filesystem::path runtime_dir):
 #if defined(BOLT_DEV_LAUNCHER_DIRECTORY)
@@ -53,6 +69,7 @@ Browser::Client::Client(CefRefPtr<Browser::App> app,std::filesystem::path config
 }
 
 void Browser::Client::OpenLauncher() {
+	fmt::print("[B] OpenLauncher\n");
 	std::lock_guard<std::mutex> _(this->launcher_lock);
 	if (this->launcher) {
 		this->launcher->Focus();
@@ -88,11 +105,7 @@ void Browser::Client::TryExit(bool check_launcher) {
 	fmt::print("[B] TryExit, launcher={}, exit={}\n", launcher_open, can_exit);
 #endif
 	if (can_exit) {
-#if defined(BOLT_PLUGINS)
-		this->ipc_window->Close();
-#else
 		this->Exit();
-#endif
 	}
 }
 
@@ -136,113 +149,13 @@ void Browser::Client::OnFileChange() {
 }
 #endif
 
-CefRefPtr<CefLifeSpanHandler> Browser::Client::GetLifeSpanHandler() {
-	return this;
-}
-
-CefRefPtr<CefRequestHandler> Browser::Client::GetRequestHandler() {
-	return this;
-}
-
 void Browser::Client::OnContextInitialized() {
 	fmt::print("[B] OnContextInitialized\n");
 	// After main() enters its event loop, this function will be called on the main thread when CEF
 	// context is ready to go, so, as suggested by CEF examples, Bolt treats this as an entry point.
-#if defined(BOLT_PLUGINS)
-	// create an IPC dummy window, in which case OnAfterCreated becomes the normal entry point
-	this->ipc_view = CefBrowserView::CreateBrowserView(this, BOLT_IPC_URL, CefBrowserSettings {}, nullptr, nullptr, nullptr);
-	CefWindow::CreateTopLevelWindow(this);
-#else
 	this->launcher_lock.lock();
 	this->launcher = new Browser::Launcher(this, this->LauncherDetails(), this->show_devtools, this, this->config_dir, this->data_dir);
 	this->launcher_lock.unlock();
-#endif
-}
-
-void Browser::Client::OnAfterCreated(CefRefPtr<CefBrowser> browser) {
-	// usually only called for IPC dummy window
-	fmt::print("[B] Client::OnAfterCreated for browser {}\n", browser->GetIdentifier());
-#if defined(BOLT_PLUGINS)
-	CefRefPtr<CefBrowser> ipc_browser = this->ipc_view->GetBrowser();
-	if (ipc_browser && ipc_browser->IsSame(browser)) {
-		this->ipc_browser = browser;
-		this->launcher_lock.lock();
-		this->launcher = new Browser::Launcher(this, this->LauncherDetails(), this->show_devtools, this, this->config_dir, this->data_dir);
-		this->launcher_lock.unlock();
-	}
-#endif
-}
-
-void Browser::Client::OnBeforeClose(CefRefPtr<CefBrowser> browser) {
-	// usually only called for IPC dummy window
-	fmt::print("[B] Client::OnBeforeClose for browser {}\n", browser->GetIdentifier());
-#if defined(BOLT_PLUGINS)
-	if (this->ipc_browser && this->ipc_browser->IsSame(browser)) {
-		this->ipc_browser = nullptr;
-		this->ipc_window = nullptr;
-		this->ipc_view = nullptr;
-		this->Exit();
-		return;
-	}
-#endif
-}
-
-bool Browser::Client::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefProcessId, CefRefPtr<CefProcessMessage> message) {
-	CefString name = message->GetName();
-
-#if defined(BOLT_PLUGINS)
-	if (browser->IsSame(this->ipc_browser)) {
-		if (name == "__bolt_no_more_clients") {
-			fmt::print("[B] no more clients\n");
-			this->TryExit(true);
-			return true;
-		}
-
-		if (name == "__bolt_open_launcher") {
-			fmt::print("[B] open_launcher request\n");
-			this->OpenLauncher();
-			return true;
-		}
-	}
-#endif
-
-	if (name == "__bolt_refresh") {
-		this->launcher_lock.lock();
-		fmt::print("[B] bolt_refresh message received, refreshing browser {}\n", browser->GetIdentifier());
-		if (this->launcher) {
-			this->launcher->CloseChildrenExceptDevtools();
-		}
-		this->launcher_lock.unlock();
-		browser->ReloadIgnoreCache();
-		return true;
-	}
-
-	return false;
-}
-
-CefRefPtr<CefResourceRequestHandler> Browser::Client::GetResourceRequestHandler(
-	CefRefPtr<CefBrowser> browser,
-	CefRefPtr<CefFrame> frame,
-	CefRefPtr<CefRequest> request,
-	bool is_navigation,
-	bool is_download,
-	const CefString& request_initiator,
-	bool& disable_default_handling
-) {
-#if defined(BOLT_PLUGINS)
-	// check if this is the IPC dummy window spawning
-	if (request->GetURL() == BOLT_IPC_URL) {
-		return new Browser::ResourceHandler(nullptr, 0, 204, "text/plain");
-	}
-#endif
-
-	CefRefPtr<CefResourceRequestHandler> ret = nullptr;
-	this->launcher_lock.lock();
-	if (this->launcher) {
-		ret = this->launcher->GetResourceRequestHandler(browser, frame, request, is_navigation, is_download, request_initiator, disable_default_handling);
-	}
-	this->launcher_lock.unlock();
-	return ret;
 }
 
 Browser::Details Browser::Client::LauncherDetails() {
@@ -366,7 +279,7 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 	}
 
 	if (msg_type == IPC_MSG_DUPLICATEPROCESS) {
-		this->ipc_browser->GetMainFrame()->SendProcessMessage(PID_RENDERER, CefProcessMessage::Create("__bolt_open_launcher"));
+		CefPostTask(TID_UI, new OpenLauncherTask(this));
 		return true;
 	}
 
@@ -555,7 +468,8 @@ bool Browser::Client::IPCHandleMessage(int fd) {
 }
 
 void Browser::Client::IPCHandleNoMoreClients() {
-	this->ipc_browser->GetMainFrame()->SendProcessMessage(PID_RENDERER, CefProcessMessage::Create("__bolt_no_more_clients"));
+	fmt::print("[B] no more clients\n");
+	CefPostTask(TID_UI, new TryExitTask(this));
 }
 
 void Browser::Client::ListGameClients(CefRefPtr<CefListValue> list, bool need_lock_mutex) {
@@ -711,12 +625,6 @@ void Browser::Client::CleanupClientPlugins(int fd) {
 		break;
 	}
 	this->game_clients_lock.unlock();
-}
-
-void Browser::Client::OnWindowCreated(CefRefPtr<CefWindow> window) {
-	// used only for dummy IPC window; real browsers have their own OnWindowCreated override
-	this->ipc_window = window;
-	window->AddChildView(this->ipc_view);
 }
 
 Browser::Client::ActivePlugin::ActivePlugin(uint64_t uid, std::string id, std::filesystem::path path, bool watch): Directory(path, watch), uid(uid), id(id), deleted(false) { }

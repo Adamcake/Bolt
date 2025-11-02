@@ -51,12 +51,6 @@ void Browser::Window::Init(CefString url, CefRefPtr<CefDictionaryValue> extra_in
 	CefWindow::CreateTopLevelWindow(this);
 }
 
-void Browser::Window::Refresh() const {
-	if (this->browser) {
-		this->browser->GetMainFrame()->SendProcessMessage(PID_RENDERER, CefProcessMessage::Create("__bolt_refresh"));
-	}
-}
-
 void Browser::Window::OnWindowCreated(CefRefPtr<CefWindow> window) {
 	fmt::print("[B] OnWindowCreated {} this={}\n", window->GetID(), reinterpret_cast<uintptr_t>(this));
 	this->client->OnBoltWindowCreated(window);

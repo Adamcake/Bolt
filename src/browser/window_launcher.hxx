@@ -22,7 +22,7 @@ namespace Browser {
 		) override;
 		void OnBrowserDestroyed(CefRefPtr<CefBrowserView>, CefRefPtr<CefBrowser>) override;
 
-		void Refresh() const override;
+		void Refresh() const;
 
 		/// Attempts to open the given URL externally in the user's browser
 		void OpenExternalUrl(char* url) const;
