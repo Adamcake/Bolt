@@ -2,6 +2,7 @@
 #include "browser.hxx"
 #include "include/cef_life_span_handler.h"
 #include "include/cef_task.h"
+#include "include/cef_base.h"
 #include "include/views/cef_window.h"
 
 #include <algorithm>
@@ -115,6 +116,22 @@ bool Browser::Window::CanClose(CefRefPtr<CefWindow> win) {
 CefSize Browser::Window::GetPreferredSize(CefRefPtr<CefView>) {
 	return CefSize(this->details.preferred_width, this->details.preferred_height);
 }
+
+#if defined(__linux__)
+#define BOLT_WMCLASS "BoltLauncher"
+bool Browser::Window::GetLinuxWindowProperties(CefRefPtr<CefWindow>, CefLinuxWindowProperties& properties) {
+	// here's a quick lesson on how to correctly economise on heap usage.
+	// instead of allocating four different strings with the same content, we only actually need one:
+	cef_string_from_utf8(BOLT_WMCLASS, sizeof(BOLT_WMCLASS) - sizeof(*BOLT_WMCLASS), &properties.wayland_app_id);
+	// for the second string, copy the data ptr and length, but don't have a destructor (otherwise the same data would be freed four times):
+	properties.wm_class_class = { .str = properties.wayland_app_id.str, .length = properties.wayland_app_id.length, .dtor = nullptr };
+	// and for the third and fourth, make exact copies of the second one:
+	properties.wm_class_name = properties.wm_class_class;
+	properties.wm_role_name = properties.wm_class_class;
+	// and just like that, startup is slightly faster. you're welcome.
+	return true;
+}
+#endif
 
 CefRefPtr<CefBrowserViewDelegate> Browser::Window::GetDelegateForPopupBrowserView(CefRefPtr<CefBrowserView>, const CefBrowserSettings&, CefRefPtr<CefClient>, bool is_devtools) {
 	fmt::print("[B] GetDelegateForPopupBrowserView this={}\n", reinterpret_cast<uintptr_t>(this));

@@ -123,10 +123,6 @@ namespace Browser {
 			std::filesystem::path data_dir;
 			std::filesystem::path runtime_dir;
 
-#if defined(CEF_X11)
-			xcb_connection_t* xcb;
-#endif
-
 #if defined(BOLT_PLUGINS)
 			struct ActivePlugin: ::FileManager::Directory {
 				ActivePlugin(uint64_t uid, std::string id, std::filesystem::path path, bool watch);

@@ -19,10 +19,6 @@
 #include <fcntl.h>
 #include <fmt/core.h>
 
-#if defined(CEF_X11)
-#include <xcb/xcb.h>
-#endif
-
 #if defined(BOLT_DEV_SHOW_DEVTOOLS)
 constexpr bool SHOW_DEVTOOLS = true;
 #else
@@ -61,10 +57,6 @@ Browser::Client::Client(CefRefPtr<Browser::App> app,std::filesystem::path config
 #if defined(BOLT_PLUGINS)
 	this->IPCBind();
 	this->ipc_thread = std::thread(&Browser::Client::IPCRun, this);
-#endif
-
-#if defined(CEF_X11)
-	this->xcb = xcb_connect(nullptr, nullptr);
 #endif
 }
 
@@ -111,9 +103,6 @@ void Browser::Client::TryExit(bool check_launcher) {
 
 void Browser::Client::Exit() {
 	this->StopFileManager();
-#if defined(CEF_X11)
-	xcb_disconnect(this->xcb);
-#endif
 #if defined(BOLT_PLUGINS)
 	this->IPCStop();
 #endif
@@ -128,15 +117,6 @@ void Browser::Client::OnBoltWindowCreated(CefRefPtr<CefWindow> window) {
 	CefRefPtr<CefImage> image_big = CefImage::CreateImage();
 	image_big->AddBitmap(1.0, 64, 64, CEF_COLOR_TYPE_RGBA_8888, CEF_ALPHA_TYPE_POSTMULTIPLIED, this->GetIcon64(), 64 * 64 * 4);
 	window->SetWindowAppIcon(image_big);
-
-#if defined(CEF_X11)
-	// note: the wm_class array includes a '\0' at the end, which should not be included in the actual WM_CLASS
-	constexpr char wm_class[] = "BoltLauncher\0BoltLauncher";
-	constexpr size_t wm_class_size = sizeof(wm_class) - 1;
-	const unsigned long handle = window->GetWindowHandle();
-	xcb_change_property(this->xcb, XCB_PROP_MODE_REPLACE, handle, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, wm_class_size, wm_class);
-	xcb_flush(this->xcb);
-#endif
 }
 
 #if defined(BOLT_DEV_LAUNCHER_DIRECTORY)
