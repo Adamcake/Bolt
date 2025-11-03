@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.21) # Minimum CEF requirement, but building with the latest cmake is strongly recommended
 project(Bolt VERSION 0.19 LANGUAGES C CXX)
 
+# The name of the executable - "{}.exe" on windows, both "/usr/bin/{}" and "/opt/bolt-launcher/{}" on other platforms
+set(BOLT_EXE_NAME bilt)
+
 if(NOT WIN32)
     # name of application in metadata, defaulting to "BoltLauncher", but usually overridden to "com.adamcake.Bolt" by flatpak for example
     if(NOT BOLT_META_NAME)
@@ -22,7 +25,7 @@ if(NOT WIN32)
         "GenericName=Bolt Launcher"
         "Comment=Third-party ${BOLT_PROGRAM_NAME}"
         "Keywords=games;"
-        "Exec=bolt"
+        "Exec=${BOLT_EXE_NAME}"
         "Icon=${BOLT_META_NAME}"
         "Categories=Game;"
         "StartupWMClass=BoltLauncher"
@@ -357,7 +360,7 @@ if(NOT WIN32)
 
     # Short shell script to be installed in /usr/local/bin, gets renamed to "bolt" later
     file(RELATIVE_PATH BOLT_SCRIPT_CD_PATH "${CMAKE_INSTALL_PREFIX}/${BOLT_BINDIR}" "${CMAKE_INSTALL_PREFIX}/${BOLT_CEF_INSTALLDIR}/bolt-launcher")
-    file(GENERATE OUTPUT bolt-run.sh CONTENT "#!/bin/sh -eu\ncd \"$(dirname \"$0\")/${BOLT_SCRIPT_CD_PATH}\"\nexec ./bolt \"$@\"\n")
+    file(GENERATE OUTPUT bolt-run.sh CONTENT "#!/bin/sh -eu\ncd \"$(dirname \"$0\")/${BOLT_SCRIPT_CD_PATH}\"\nexec ./${BOLT_EXE_NAME} \"$@\"\n")
 
     # auto-generated helper for running from build dir; this file does not get installed
     # appends to LD_LIBRARY_PATH only if the plugin library is being built, otherwise the dir won't exist
@@ -373,7 +376,7 @@ if(NOT WIN32)
         "export XDG_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/config"
         "export XDG_DATA_HOME=${CMAKE_CURRENT_BINARY_DIR}/data"
         "cd ${CMAKE_CURRENT_BINARY_DIR}/${BOLT_CEF_INSTALLDIR}/bolt-launcher"
-        "exec ./bolt \"$@\""
+        "exec ./${BOLT_EXE_NAME} \"$@\""
         ""
     )
     file(GENERATE OUTPUT bolt.sh CONTENT ${BOLT_STAGING_SCRIPT} FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
@@ -453,7 +456,7 @@ if(NOT BOLT_DEV_LAUNCHER_DIRECTORY)
 endif()
 
 # This line needs to be updated manually with any new/deleted object files; cmake discourages GLOBbing source files
-add_executable(bolt
+add_executable("${BOLT_EXE_NAME}"
     modules/fmt/src/format.cc src/main.cxx src/browser.cxx src/browser/app.cxx src/browser/client.cxx
     src/browser/client_posix.cxx src/browser/resource_handler.cxx src/browser/window_launcher.cxx
     ${WINDOW_LAUNCHER_OS_SPECIFIC} src/mime.cxx src/file_manager/directory.cxx client_cmake_gen.cxx
@@ -462,12 +465,12 @@ add_executable(bolt
     src/browser/request.cxx
 )
 if(BOLT_STUB_INJECT_CXX)
-    add_dependencies(bolt BOLT_STUB_INJECT_DEPENDENCY)
+    add_dependencies("${BOLT_EXE_NAME}" BOLT_STUB_INJECT_DEPENDENCY)
 endif()
 
 # Various build properties
 if(BOLT_PLUGIN_LIB_NAME)
-    target_compile_definitions(bolt PUBLIC BOLT_LIB_NAME="${BOLT_PLUGIN_LIB_NAME}" BOLT_PLUGINS)
+    target_compile_definitions("${BOLT_EXE_NAME}" PUBLIC BOLT_LIB_NAME="${BOLT_PLUGIN_LIB_NAME}" BOLT_PLUGINS)
 endif()
 if(NOT BOLT_CEF_INCLUDEPATH)
     set(BOLT_CEF_INCLUDEPATH ${CEF_ROOT})
@@ -476,58 +479,58 @@ if(NOT BOLT_LIBCEF_DIRECTORY)
     set(BOLT_DO_INSTALL_LIBCEF 1)
     set(BOLT_LIBCEF_DIRECTORY "${CEF_ROOT}/${CMAKE_BUILD_TYPE}")
 endif()
-target_include_directories(bolt PUBLIC ${BOLT_CEF_INCLUDEPATH} modules/fmt/include)
-set_target_properties(bolt PROPERTIES CXX_STANDARD 20 CXX_EXTENSIONS OFF)
+target_include_directories("${BOLT_EXE_NAME}" PUBLIC ${BOLT_CEF_INCLUDEPATH} modules/fmt/include)
+set_target_properties("${BOLT_EXE_NAME}" PROPERTIES CXX_STANDARD 20 CXX_EXTENSIONS OFF)
 if(BOLT_CEF_DLLWRAPPER)
-    target_link_libraries(bolt PUBLIC "${BOLT_CEF_DLLWRAPPER}")
+    target_link_libraries("${BOLT_EXE_NAME}" PUBLIC "${BOLT_CEF_DLLWRAPPER}")
 else()
-    target_link_libraries(bolt PUBLIC libcef_dll_wrapper)
+    target_link_libraries("${BOLT_EXE_NAME}" PUBLIC libcef_dll_wrapper)
 endif()
 if(BOLT_CEF_RESOURCEDIR_OVERRIDE)
-    target_compile_definitions(bolt PUBLIC BOLT_RESOURCES_PATH="${BOLT_CEF_RESOURCEDIR_OVERRIDE}" BOLT_LOCALES_PATH="${BOLT_CEF_RESOURCEDIR_OVERRIDE}/locales")
+    target_compile_definitions("${BOLT_EXE_NAME}" PUBLIC BOLT_RESOURCES_PATH="${BOLT_CEF_RESOURCEDIR_OVERRIDE}" BOLT_LOCALES_PATH="${BOLT_CEF_RESOURCEDIR_OVERRIDE}/locales")
 endif()
 
 if(UNIX AND NOT APPLE)
     if(NOT BOLT_SKIP_RPATH)
-        set_target_properties(bolt PROPERTIES INSTALL_RPATH "$ORIGIN")
+        set_target_properties("${BOLT_EXE_NAME}" PROPERTIES INSTALL_RPATH "$ORIGIN")
     endif()
 
     if(TARGET CEF::Library)
         message(STATUS "Linking with FindPackage version of CEF::Library")
-        target_link_libraries(bolt PUBLIC CEF::Library)
+        target_link_libraries("${BOLT_EXE_NAME}" PUBLIC CEF::Library)
     else()
-        target_link_libraries(bolt PUBLIC "${BOLT_LIBCEF_DIRECTORY}/libcef.so")
+        target_link_libraries("${BOLT_EXE_NAME}" PUBLIC "${BOLT_LIBCEF_DIRECTORY}/libcef.so")
     endif()
 
     find_package(PkgConfig REQUIRED)
 
     pkg_check_modules(X11 REQUIRED IMPORTED_TARGET x11)
-    target_link_libraries(bolt PUBLIC PkgConfig::X11)
+    target_link_libraries("${BOLT_EXE_NAME}" PUBLIC PkgConfig::X11)
 
     pkg_check_modules(XCB REQUIRED IMPORTED_TARGET xcb)
-    target_link_libraries(bolt PUBLIC PkgConfig::XCB)
+    target_link_libraries("${BOLT_EXE_NAME}" PUBLIC PkgConfig::XCB)
 
     pkg_check_modules(LIBARCHIVE REQUIRED IMPORTED_TARGET libarchive)
-    target_link_libraries(bolt PUBLIC PkgConfig::LIBARCHIVE)
-    target_compile_definitions(bolt PUBLIC HAS_LIBARCHIVE)
+    target_link_libraries("${BOLT_EXE_NAME}" PUBLIC PkgConfig::LIBARCHIVE)
+    target_compile_definitions("${BOLT_EXE_NAME}" PUBLIC HAS_LIBARCHIVE BOLT_WINDOW_CLASS="${BOLT_META_NAME}" BOLT_EXE_NAME="${BOLT_EXE_NAME}")
 elseif(WIN32)
-    set_target_properties(bolt PROPERTIES WIN32_EXECUTABLE TRUE)
-    target_link_libraries(bolt PUBLIC "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/libcef.lib")
-    target_link_libraries(bolt PUBLIC "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/cef_sandbox.lib")
+    set_target_properties("${BOLT_EXE_NAME}" PROPERTIES WIN32_EXECUTABLE TRUE)
+    target_link_libraries("${BOLT_EXE_NAME}" PUBLIC "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/libcef.lib")
+    target_link_libraries("${BOLT_EXE_NAME}" PUBLIC "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/cef_sandbox.lib")
     if(MSVC)
-        target_compile_options(bolt PUBLIC ${BOLT_WINDOWS_MSVC_OPTIONS})
-        set_property(TARGET bolt PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+        target_compile_options("${BOLT_EXE_NAME}" PUBLIC ${BOLT_WINDOWS_MSVC_OPTIONS})
+        set_property(TARGET "${BOLT_EXE_NAME}" PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     else()
-        target_compile_options(bolt PUBLIC ${BOLT_WINDOWS_NONMSVC_OPTIONS})
-        target_link_options(bolt PUBLIC ${BOLT_WINDOWS_NONMSVC_LINKOPTIONS})
+        target_compile_options("${BOLT_EXE_NAME}" PUBLIC ${BOLT_WINDOWS_NONMSVC_OPTIONS})
+        target_link_options("${BOLT_EXE_NAME}" PUBLIC ${BOLT_WINDOWS_NONMSVC_LINKOPTIONS})
     endif()
     if(NOT BOLT_SKIP_LIBRARIES)
-        target_link_libraries(bolt PUBLIC "Ws2_32.lib")
+        target_link_libraries("${BOLT_EXE_NAME}" PUBLIC "Ws2_32.lib")
     endif()
     if(BOLT_LIBARCHIVE_DIR)
-        target_compile_definitions(bolt PUBLIC HAS_LIBARCHIVE)
-        target_link_libraries(bolt PUBLIC "${BOLT_LIBARCHIVE_DIR}/lib/archive.lib")
-        target_include_directories(bolt PUBLIC "${BOLT_LIBARCHIVE_DIR}/include")
+        target_compile_definitions("${BOLT_EXE_NAME}" PUBLIC HAS_LIBARCHIVE)
+        target_link_libraries("${BOLT_EXE_NAME}" PUBLIC "${BOLT_LIBARCHIVE_DIR}/lib/archive.lib")
+        target_include_directories("${BOLT_EXE_NAME}" PUBLIC "${BOLT_LIBARCHIVE_DIR}/include")
     endif()
 elseif(APPLE)
     # TODO: mac support
@@ -535,26 +538,26 @@ endif()
 
 # compilation setting for enabling chromium dev tools
 if(BOLT_DEV_SHOW_DEVTOOLS)
-    target_compile_definitions(bolt PUBLIC BOLT_DEV_SHOW_DEVTOOLS)
+    target_compile_definitions("${BOLT_EXE_NAME}" PUBLIC BOLT_DEV_SHOW_DEVTOOLS)
 endif()
 
 # flag indicating flathub is creating this build, used only for some minor UI changes
 if(BOLT_FLATHUB_BUILD)
-    target_compile_definitions(bolt PUBLIC BOLT_FLATHUB_BUILD=1)
+    target_compile_definitions("${BOLT_EXE_NAME}" PUBLIC BOLT_FLATHUB_BUILD=1)
 else()
-    target_compile_definitions(bolt PUBLIC BOLT_FLATHUB_BUILD=0)
+    target_compile_definitions("${BOLT_EXE_NAME}" PUBLIC BOLT_FLATHUB_BUILD=0)
 endif()
 
 # compilation setting for directory-watching for launcher UI
 if(BOLT_DEV_LAUNCHER_DIRECTORY)
-    target_compile_definitions(bolt PUBLIC BOLT_DEV_LAUNCHER_DIRECTORY="${BOLT_HTML_DIR}")
+    target_compile_definitions("${BOLT_EXE_NAME}" PUBLIC BOLT_DEV_LAUNCHER_DIRECTORY="${BOLT_HTML_DIR}")
 endif()
 
 # Install commands for target dir layout - as per https://bitbucket.org/chromiumembedded/cef/wiki/Tutorial.md
 if(APPLE)
     # TODO: mac support
 else()
-    install(TARGETS bolt DESTINATION "${BOLT_CEF_INSTALLDIR}/bolt-launcher")
+    install(TARGETS "${BOLT_EXE_NAME}" DESTINATION "${BOLT_CEF_INSTALLDIR}/bolt-launcher")
     if(NOT BOLT_CEF_RESOURCEDIR_OVERRIDE)
         install(DIRECTORY "${CEF_ROOT}/Resources/" DESTINATION "${BOLT_CEF_INSTALLDIR}/bolt-launcher" USE_SOURCE_PERMISSIONS)
     endif()
@@ -570,7 +573,7 @@ endif()
 
 # Finally, install shell script and metadata
 if(NOT WIN32)
-    install(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/bolt-run.sh" RENAME bolt DESTINATION ${BOLT_BINDIR})
+    install(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/bolt-run.sh" RENAME "${BOLT_EXE_NAME}" DESTINATION ${BOLT_BINDIR})
     install(FILES "${CMAKE_CURRENT_BINARY_DIR}/bolt.desktop" DESTINATION "${BOLT_SHAREDIR}/applications/" RENAME "${BOLT_META_NAME}.desktop")
     install(FILES "${CMAKE_CURRENT_BINARY_DIR}/bolt.game.desktop" DESTINATION "${BOLT_SHAREDIR}/applications/" RENAME "${BOLT_META_NAME}.${BOLT_GAME_NAME}.desktop")
     install(FILES "${CMAKE_CURRENT_BINARY_DIR}/metainfo.xml" DESTINATION "${BOLT_SHAREDIR}/metainfo/" RENAME "${BOLT_META_NAME}.metainfo.xml")
