@@ -118,17 +118,10 @@ CefSize Browser::Window::GetPreferredSize(CefRefPtr<CefView>) {
 }
 
 #if defined(__linux__)
-#define BOLT_WMCLASS "BoltLauncher"
 bool Browser::Window::GetLinuxWindowProperties(CefRefPtr<CefWindow>, CefLinuxWindowProperties& properties) {
-	// here's a quick lesson on how to correctly economise on heap usage.
-	// instead of allocating four different strings with the same content, we only actually need one:
-	cef_string_from_utf8(BOLT_WMCLASS, sizeof(BOLT_WMCLASS) - sizeof(*BOLT_WMCLASS), &properties.wayland_app_id);
-	// for the second string, copy the data ptr and length, but don't have a destructor (otherwise the same data would be freed four times):
+	cef_string_from_utf8(BOLT_WINDOW_CLASS, sizeof(BOLT_WINDOW_CLASS) - sizeof(*BOLT_WINDOW_CLASS), &properties.wayland_app_id);
 	properties.wm_class_class = { .str = properties.wayland_app_id.str, .length = properties.wayland_app_id.length, .dtor = nullptr };
-	// and for the third and fourth, make exact copies of the second one:
-	properties.wm_class_name = properties.wm_class_class;
-	properties.wm_role_name = properties.wm_class_class;
-	// and just like that, startup is slightly faster. you're welcome.
+	cef_string_from_utf8(BOLT_EXE_NAME, sizeof(BOLT_EXE_NAME) - sizeof(*BOLT_EXE_NAME), &properties.wm_class_name);
 	return true;
 }
 #endif
