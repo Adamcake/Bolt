@@ -28,7 +28,7 @@ if(NOT WIN32)
         "Exec=${BOLT_EXE_NAME}"
         "Icon=${BOLT_META_NAME}"
         "Categories=Game;"
-        "StartupWMClass=BoltLauncher"
+        "StartupWMClass=${BOLT_META_NAME}"
         ""
     )
     file(GENERATE OUTPUT bolt.desktop CONTENT "${BOLT_DESKTOP_INFO}")
