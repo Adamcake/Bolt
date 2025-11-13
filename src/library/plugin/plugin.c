@@ -1072,7 +1072,7 @@ static void handle_ipc_OSRCAPTUREDONE(struct BoltIPCOsrCaptureDoneHeader* header
 }
 
 void _bolt_plugin_handle_messages() {
-    enum BoltIPCMessageTypeToHost msg_type;
+    enum BoltIPCMessageTypeToClient msg_type;
     while (_bolt_ipc_poll(fd)) {
         if (_bolt_ipc_receive(fd, &msg_type, sizeof(msg_type)) != 0) break;
         switch (msg_type) {

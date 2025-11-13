@@ -2057,22 +2057,13 @@ void _bolt_gl_onDrawElements(GLenum mode, GLsizei count, GLenum type, const void
     const unsigned short* indices = (unsigned short*)((uint8_t*)element_buffer->data + (uintptr_t)indices_offset);
     if (type == GL_UNSIGNED_SHORT && mode == GL_TRIANGLES && count > 0) {
         if (c->bound_program->is_2d && !c->bound_program->is_minimap) {
-            return drawelements_handle_2d(count, indices, c, attributes);
-        }
-        if (c->bound_program->is_3d) {
-            return drawelements_handle_3d(count, indices, c, attributes);
-        }
-        if (c->bound_program->is_particle) {
-            GLint draw_tex = 0;
-            if (c->current_draw_framebuffer) {
-                gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
-            }
-            if (draw_tex == c->target_3d_tex) {
-                return drawelements_handle_particles(count, indices, c, attributes);
-            }
-        }
-        if (c->bound_program->is_billboard) {
-            return drawelements_handle_billboard(count, indices, c, attributes);
+            drawelements_handle_2d(count, indices, c, attributes);
+        } else if (c->bound_program->is_3d) {
+            drawelements_handle_3d(count, indices, c, attributes);
+        } else if (c->bound_program->is_particle) {
+            drawelements_handle_particles(count, indices, c, attributes);
+        } else if (c->bound_program->is_billboard) {
+            drawelements_handle_billboard(count, indices, c, attributes);
         }
     }
 }
@@ -2370,6 +2361,11 @@ static void drawelements_handle_3d(GLsizei count, const unsigned short* indices,
 }
 
 static void drawelements_handle_particles(GLsizei count, const unsigned short* indices, struct GLContext* c, const struct GLAttrBinding* attributes) {
+    GLint draw_tex = 0;
+    if (!c->current_draw_framebuffer) return;
+    gl.GetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &draw_tex);
+    if (draw_tex != c->target_3d_tex) return;
+
     frames_without_3d = 0;
     drawelements_update_depth_tex(c);
 
