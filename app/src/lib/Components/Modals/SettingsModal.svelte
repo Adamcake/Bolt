@@ -3,6 +3,7 @@
 	import GeneralSettingsTab from '$lib/Components/Settings/GeneralSettingsTab.svelte';
 	import OsrsSettingsTab from '$lib/Components/Settings/OsrsSettingsTab.svelte';
 	import Rs3SettingsTab from '$lib/Components/Settings/Rs3SettingsTab.svelte';
+	import { BoltService } from '$lib/Services/BoltService';
 
 	// settings categories
 	enum Tab {
@@ -22,9 +23,11 @@
 	export function open() {
 		modal.open();
 	}
+
+	const close = () => BoltService.saveConfig();
 </script>
 
-<Modal bind:this={modal} class="h-3/4 w-3/4 select-none">
+<Modal bind:this={modal} class="h-3/4 w-3/4 select-none" onClose={close}>
 	<div class="grid h-full grid-cols-4">
 		<div
 			class="flex flex-col items-center gap-2 border-r-2 border-slate-300 pt-10 dark:border-slate-800"

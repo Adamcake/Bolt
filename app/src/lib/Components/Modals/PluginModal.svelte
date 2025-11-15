@@ -30,7 +30,7 @@
 
 	const close = () => {
 		bolt.pluginConfig = pluginList;
-		BoltService.savePluginConfig(true);
+		BoltService.savePluginConfig();
 	};
 
 	const setMessageInfo = (msg: string) => {
@@ -368,7 +368,7 @@
 	let selectedPluginPath = $derived(selectedPluginMeta ? selectedPluginMeta.path : null);
 </script>
 
-<Modal bind:this={modal} class="h-[90%] w-[90%] text-center" onClose={() => close()}>
+<Modal bind:this={modal} class="h-[90%] w-[90%] text-center" onClose={close}>
 	<div
 		class="left-0 float-left h-full w-[min(180px,_50%)] overflow-hidden border-r-2 border-slate-300 pt-2 dark:border-slate-800"
 	>

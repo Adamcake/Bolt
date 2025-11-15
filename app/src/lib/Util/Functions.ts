@@ -1,4 +1,3 @@
-import { BoltService } from '$lib/Services/BoltService';
 import { bolt } from '$lib/State/Bolt';
 import { GlobalState } from '$lib/State/GlobalState';
 import { type Direct6Token } from '$lib/Util/Interfaces';
@@ -104,8 +103,6 @@ export function launchRS3Linux(
 	jx_character_id: string,
 	jx_display_name: string
 ) {
-	BoltService.saveConfig();
-
 	const launch = (hash?: string, deb?: Uint8Array) => {
 		const params: Record<string, string> = {};
 		const config = get(GlobalState.config);
@@ -185,7 +182,6 @@ export function launchRuneLite(
 	jx_display_name: string,
 	configure: boolean
 ) {
-	BoltService.saveConfig();
 	const launchPath = configure ? '/launch-runelite-jar-configure?' : '/launch-runelite-jar?';
 	const config = get(GlobalState.config);
 
@@ -277,7 +273,6 @@ export function launchHdos(
 	jx_character_id: string,
 	jx_display_name: string
 ) {
-	BoltService.saveConfig();
 	const config = get(GlobalState.config);
 
 	const launch = (version?: string, jar?: Uint8Array) => {
@@ -362,7 +357,6 @@ export function launchOfficialClient(
 	jx_character_id: string,
 	jx_display_name: string
 ) {
-	BoltService.saveConfig();
 	const metaPath: string = `${osrs ? 'osrs' : bolt.env.provider}-${windows ? 'win' : 'mac'}`;
 	const metaGameName: 'osrs' | 'rs3' = osrs ? 'osrs' : 'rs3';
 	const metaFileType: 'exe' | 'app' = windows ? 'exe' : 'app';

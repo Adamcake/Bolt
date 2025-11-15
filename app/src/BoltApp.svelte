@@ -4,19 +4,10 @@
 	import LogView from '$lib/Components/LogView.svelte';
 	import MainLayout from '$lib/Components/MainLayout.svelte';
 	import TopBar from '$lib/Components/TopBar.svelte';
-	import { BoltService } from '$lib/Services/BoltService';
-	import { bolt } from '$lib/State/Bolt';
 	import { logger } from '$lib/Util/Logger';
 
 	const logs = logger.logs;
 </script>
-
-<svelte:window
-	onbeforeunload={() => {
-		BoltService.saveConfig();
-		if (bolt.hasBoltPlugins) BoltService.savePluginConfig(true);
-	}}
-/>
 
 <MainLayout>
 	<DisclaimerModal />
