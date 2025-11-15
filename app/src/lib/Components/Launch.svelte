@@ -10,7 +10,6 @@
 	} from '$lib/Util/Functions';
 	import { Client, clientMap, Game } from '$lib/Util/Interfaces';
 	import { logger } from '$lib/Util/Logger';
-	import { writable, type Writable } from 'svelte/store';
 	import LaunchConfirmModal from './Modals/LaunchConfirmModal.svelte';
 	import PluginModal from './Modals/PluginModal.svelte';
 
@@ -22,8 +21,8 @@
 	let accounts = $derived(BoltService.findSession($config.selected.user_id)?.accounts ?? []);
 
 	// messages about game downtime, retrieved from game server
-	let psa: Writable<string | null> = writable(null);
-	let gameEnabled: Writable<boolean> = writable(true);
+	let { psa = $bindable() } = $props();
+	let gameEnabled: boolean = true;
 	$effect(() => {
 		if ($config.check_announcements) {
 			const gameName = $config.selected.game == Game.osrs ? 'osrs' : bolt.env.provider;
@@ -33,12 +32,12 @@
 			fetch(url, { method: 'GET', cache: 'no-store' })
 				.then((response) => response.json())
 				.then((response) => {
-					$psa = response.psaEnabled && response.psaMessage ? response.psaMessage : null;
-					$gameEnabled = !(response.playDisabled ?? false);
+					psa = response.psaEnabled && response.psaMessage ? response.psaMessage : null;
+					gameEnabled = !(response.playDisabled ?? false);
 				});
 		} else {
-			$psa = null;
-			$gameEnabled = true;
+			psa = null;
+			gameEnabled = true;
 		}
 	});
 
@@ -104,11 +103,6 @@
 <PluginModal bind:this={pluginModal}></PluginModal>
 
 <div class="bg-grad flex h-full flex-col border-slate-300 p-5 duration-200 dark:border-slate-800">
-	{#if $psa}
-		<div class="absolute left-[2%] w-[96%] rounded-lg bg-blue-400 px-2 text-black">
-			{$psa}
-		</div>
-	{/if}
 	<div class="flex flex-col items-center gap-4">
 		<img
 			src="svgs/rocket-solid.svg"
@@ -119,7 +113,7 @@
 			class="w-52 rounded-lg bg-emerald-500 p-2 font-bold text-black duration-200 enabled:hover:opacity-75 disabled:bg-gray-500"
 			disabled={!$initialized}
 			onclick={() => {
-				if ($gameEnabled) {
+				if (gameEnabled) {
 					launch($config.selected.game, $config.selected.client);
 				} else {
 					confirmModal.open(launch, $config.selected.game, $config.selected.client);

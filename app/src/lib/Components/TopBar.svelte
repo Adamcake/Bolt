@@ -10,6 +10,7 @@
 
 	const { config, sessions } = GlobalState;
 	let settingsModal: SettingsModal;
+	let { psa } = $props();
 </script>
 
 <SettingsModal bind:this={settingsModal}></SettingsModal>
@@ -77,6 +78,11 @@
 			>
 				Login
 			</button>
+		{/if}
+		{#if psa}
+			<div class="fixed left-[2%] top-20 w-[96%] rounded-lg bg-blue-400 px-2 text-black">
+				{psa}
+			</div>
 		{/if}
 	</div>
 </div>

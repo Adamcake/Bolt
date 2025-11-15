@@ -7,14 +7,15 @@
 	import { logger } from '$lib/Util/Logger';
 
 	const logs = logger.logs;
+	let psa: string | null = null;
 </script>
 
 <MainLayout>
 	<DisclaimerModal />
-	<TopBar></TopBar>
+	<TopBar {psa}></TopBar>
 	<div class="mt-16 grid h-full grid-flow-col grid-cols-3">
 		<div></div>
-		<Launch></Launch>
+		<Launch bind:psa></Launch>
 		<div></div>
 	</div>
 	<LogView logs={$logs} />
