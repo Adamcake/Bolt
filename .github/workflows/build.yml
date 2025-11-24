@@ -299,11 +299,11 @@ jobs:
         if: steps.restore-cef-cache.outputs.cache-hit != 'true'
         run: |
           # Download cef and set up the directory structure
-          curl -o cef/cef.tar.gz 'https://adamcake.com/cef/cef-${{ env.LINUX_CEF_VERSION }}-linux-x86_64-minimal-ungoogled.tar.gz'
+          curl -o cef/cef.tar.xz 'https://adamcake.com/cef/cef-${{ env.LINUX_CEF_VERSION }}-linux-x86_64-minimal-ungoogled.tar.xz'
           mkdir -p cef/dist
 
           # Extract the cef tarball and copy the contents to the dist directory
-          tar -xzf cef/cef.tar.gz --directory cef/dist
+          tar -xf cef/cef.tar.xz --directory cef/dist
 
           cef_content_dir=$(ls -d cef/dist/* | head -n 1)
           mv "$cef_content_dir"/* cef/dist/
