@@ -1,3 +1,8 @@
+# ⚠️⚠️⚠️
+Migrated to codeberg. https://codeberg.org/Adamcake/Bolt
+
+You can download releases from here if you must, but there may be a newer version available on codeberg since this repo is no longer updated. New issues and PRs also need to go there.
+
 # Table of Contents
 - [Table of Contents](#table-of-contents)
 - [Bolt](#bolt)
